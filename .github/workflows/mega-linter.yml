@@ -1,0 +1,42 @@
+---
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+
+name: MegaLinter
+
+"on":
+  pull_request: null
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  megalinter:
+    name: MegaLinter
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      # Git Checkout
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+        with:
+          fetch-depth: 0
+
+      # MegaLinter
+      - name: MegaLinter
+        id: ml
+        # Use the Go flavor.
+        uses: oxsecurity/megalinter/flavors/go@62c799d895af9bcbca5eacfebca29d527f125a57  # 9.1.0
+        env:
+          # All available variables are described in documentation
+          # https://megalinter.io/configuration/
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Allow GITHUB_TOKEN for working around rate limits (aquasecurity/trivy#7668).
+          REPOSITORY_TRIVY_UNSECURED_ENV_VARIABLES: GITHUB_TOKEN

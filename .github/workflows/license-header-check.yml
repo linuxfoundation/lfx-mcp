@@ -1,0 +1,15 @@
+---
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+name: License Header Check
+
+"on": [pull_request]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  license-header-check:
+    name: License Header Check
+    uses: linuxfoundation/lfx-public-workflows/.github/workflows/license-header-check.yml@main

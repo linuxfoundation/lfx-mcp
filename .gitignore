@@ -1,0 +1,148 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+
+# Binaries and executables
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+lfx-mcp
+
+# Go build artifacts
+*.test
+*.prof
+*.pprof
+
+# Go coverage files
+coverage.out
+coverage.html
+coverage.txt
+*.coverage
+c.out
+
+# Go module cache (when using vendor)
+/vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Claude AI assistant
+.claude
+
+# Environment and configuration files
+.env
+.env.local
+.env.*.local
+*.env
+config.local.yaml
+config.local.yml
+secrets.yaml
+secrets.yml
+
+# Docker files
+.dockerignore.bak
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Kubernetes temporary files
+*.kubeconfig
+kubeconfig
+.kube/
+k8s-secrets.yaml
+k8s-secrets.yml
+
+# Helm temporary files
+*.tgz
+charts/*.tgz
+.helm/
+
+# Helm local values overrides
+values.local.yaml
+values.override.yaml
+charts/*/values.local.yaml
+charts/*/values.override.yaml
+
+# Log files
+*.log
+logs/
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+.cache/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Security and sensitive files
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+ca-certificates.crt
+tls.crt
+tls.key
+
+# Backup files
+*.bak
+*.backup
+*.old
+*~
+
+# Profiling and debugging
+*.pprof
+pprof/
+*.memprof
+*.cpuprof
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Archive files
+*.tar
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# CI/CD temporary files
+.github/workflows/*.tmp
+.gitlab-ci.tmp
+.travis.tmp
+/check-headers.sh
+
+# Local development overrides
+docker-compose.dev.yml
+docker-compose.local.yml
+Makefile.local
+
+# Generated documentation
+docs/_build/
+site/
+
+# Lint files
+megalinter-reports

@@ -1,0 +1,23 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+---
+GITHUB_COMMENT_REPORTER: false
+DISABLE_LINTERS:
+  # Prefer Revive.
+  - GO_GOLANGCI_LINT
+  # yamllint is sufficient for us.
+  - YAML_PRETTIER
+DISABLE_ERRORS_LINTERS:
+  # This may be informative but doesn't need to break the build.
+  - COPYPASTE_JSCPD
+  # TBD! Need to work through these.
+  - REPOSITORY_TRIVY
+  - REPOSITORY_CHECKOV
+  - REPOSITORY_DEVSKIM
+  - SPELL_CSPELL
+  - SPELL_LYCHEE
+YAML_YAMLLINT_CONFIG_FILE: .yamllint
+SPELL_CSPELL_ANALYZE_FILE_NAMES: false
+# Ignore YAML files with templating macros; these typically fail linting and/or
+# schema checking.
+FILTER_REGEX_EXCLUDE: '(templates/.*\.yml|templates/.*\.yaml)'

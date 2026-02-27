@@ -79,6 +79,8 @@ A simple greeting tool that demonstrates the MCP tool interface.
 lfx-mcp/
 ├── cmd/
 │   └── lfx-mcp-server/     # Main application entry point
+├── internal/
+│   └── tools/              # MCP tool implementations
 ├── bin/                    # Built binaries (created by make build)
 ├── go.mod                  # Go module definition
 ├── Makefile               # Build automation
@@ -87,27 +89,47 @@ lfx-mcp/
 
 ### Adding New Tools
 
-1. Define your tool's input struct with JSON schema tags:
+Tools are implemented in the `internal/tools` package for better organization and scalability.
+
+1. Create a new file in `internal/tools/` (e.g., `my_tool.go`):
    ```go
+   package tools
+
+   import (
+       "context"
+       "github.com/modelcontextprotocol/go-sdk/mcp"
+   )
+
+   // MyToolArgs defines the input parameters.
    type MyToolArgs struct {
        Param1 string `json:"param1" jsonschema:"Description of parameter 1"`
        Param2 int    `json:"param2,omitempty" jsonschema:"Optional parameter 2"`
    }
-   ```
 
-2. Use `mcp.AddTool` to register your tool:
-   ```go
-   mcp.AddTool(server, &mcp.Tool{
-       Name:        "my_tool",
-       Description: "Description of what the tool does",
-   }, func(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallToolResult, any, error) {
+   // RegisterMyTool registers the tool with the MCP server.
+   func RegisterMyTool(server *mcp.Server) {
+       mcp.AddTool(server, &mcp.Tool{
+           Name:        "my_tool",
+           Description: "Description of what the tool does",
+       }, handleMyTool)
+   }
+
+   // handleMyTool implements the tool logic.
+   func handleMyTool(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallToolResult, any, error) {
        // Your tool implementation here
        return &mcp.CallToolResult{
            Content: []mcp.Content{
                &mcp.TextContent{Text: "Tool result"},
            },
        }, nil, nil
-   })
+   }
+   ```
+
+2. Register your tool in `cmd/lfx-mcp-server/main.go`:
+   ```go
+   // Register tools.
+   tools.RegisterHelloWorld(server)
+   tools.RegisterMyTool(server)  // Add your new tool
    ```
 
 ### Testing

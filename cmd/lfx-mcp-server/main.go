@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/linuxfoundation/lfx-mcp/internal/tools"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -30,36 +31,8 @@ func runStdioServer() {
 		Version: "0.1.0",
 	}, nil)
 
-	// Add hello world tool.
-	type HelloWorldArgs struct {
-		Name    string `json:"name,omitempty" jsonschema:"Name to greet (optional, defaults to 'World')"`
-		Message string `json:"message,omitempty" jsonschema:"Custom greeting message (optional)"`
-	}
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "hello_world",
-		Description: "A simple hello world tool that greets the user with an optional custom message",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, args HelloWorldArgs) (*mcp.CallToolResult, any, error) {
-		// Extract name parameter with default.
-		name := "World"
-		if args.Name != "" {
-			name = args.Name
-		}
-
-		// Generate greeting.
-		var greeting string
-		if args.Message != "" {
-			greeting = fmt.Sprintf("%s, %s!", args.Message, name)
-		} else {
-			greeting = fmt.Sprintf("Hello, %s!", name)
-		}
-
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: greeting},
-			},
-		}, nil, nil
-	})
+	// Register tools.
+	tools.RegisterHelloWorld(server)
 
 	// Run the server on stdio transport.
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {

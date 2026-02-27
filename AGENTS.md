@@ -22,6 +22,8 @@ The service follows a simple, clean architecture pattern optimized for MCP tool 
 lfx-mcp/
 ├── cmd/
 │   └── lfx-mcp-server/     # Main application entry point
+├── internal/
+│   └── tools/              # MCP tool implementations
 ├── bin/                    # Built binaries (gitignored)
 ├── go.mod                  # Go module definition
 ├── Makefile               # Build automation
@@ -87,27 +89,49 @@ make clean
 
 ## Adding New Tools
 
-The MCP Go SDK provides a simple pattern for adding tools. Each tool is defined with:
+The MCP Go SDK provides a simple pattern for adding tools. Tools are implemented in the `internal/tools` package and registered with the server.
 
-1. **Input Struct**: Defines parameters with JSON schema tags
-2. **Handler Function**: Implements the tool logic
-3. **Registration**: Uses `mcp.AddTool` to register with the server
+### Tool Implementation Steps
+
+1. **Create a new file** in `internal/tools/` (e.g., `my_tool.go`)
+2. **Define the input struct** with JSON schema tags
+3. **Implement the handler function** with tool logic
+4. **Create a registration function** to register with the server
+5. **Call the registration function** in `main.go`
 
 ### Example Tool Implementation
 
+**File: `internal/tools/my_tool.go`**
+
 ```go
-// 1. Define input structure with schema tags
+// Copyright The Linux Foundation and contributors.
+// SPDX-License-Identifier: Apache-2.0
+
+package tools
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// MyToolArgs defines the input parameters for the my_tool tool.
 type MyToolArgs struct {
     Param1 string `json:"param1" jsonschema:"Description of parameter 1"`
     Param2 int    `json:"param2,omitempty" jsonschema:"Optional parameter 2"`
 }
 
-// 2. Register the tool in main.go
-mcp.AddTool(server, &mcp.Tool{
-    Name:        "my_tool",
-    Description: "Brief description of what the tool does",
-}, func(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallToolResult, any, error) {
-    // 3. Implement tool logic here
+// RegisterMyTool registers the my_tool tool with the MCP server.
+func RegisterMyTool(server *mcp.Server) {
+    mcp.AddTool(server, &mcp.Tool{
+        Name:        "my_tool",
+        Description: "Brief description of what the tool does",
+    }, handleMyTool)
+}
+
+// handleMyTool implements the my_tool tool logic.
+func handleMyTool(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallToolResult, any, error) {
     result := fmt.Sprintf("Processed: %s with value %d", args.Param1, args.Param2)
     
     return &mcp.CallToolResult{
@@ -115,7 +139,26 @@ mcp.AddTool(server, &mcp.Tool{
             &mcp.TextContent{Text: result},
         },
     }, nil, nil
-})
+}
+```
+
+**Register in `cmd/lfx-mcp-server/main.go`:**
+
+```go
+import (
+    "github.com/linuxfoundation/lfx-mcp/internal/tools"
+    "github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+func runStdioServer() {
+    // ... server setup ...
+    
+    // Register tools.
+    tools.RegisterHelloWorld(server)
+    tools.RegisterMyTool(server)  // Add your new tool
+    
+    // ... run server ...
+}
 ```
 
 ### JSON Schema Tags
@@ -307,11 +350,13 @@ func(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallT
 
 ## Contributing Guidelines
 
-1. **Add Tools**: Follow the established pattern in `main.go`
-2. **Schema Tags**: Always include descriptive `jsonschema` tags
-3. **Testing**: Test new tools with the test script
-4. **Documentation**: Update README.md for user-facing changes
-5. **Code Quality**: Run `make check` before commits
+1. **Add Tools**: Create new tools in `internal/tools/` following the established pattern
+2. **Tool Organization**: One tool per file (e.g., `hello_world.go`, `my_tool.go`)
+3. **Registration Pattern**: Each tool should have a `Register<ToolName>(server)` function
+4. **Schema Tags**: Always include descriptive `jsonschema` tags
+5. **Testing**: Test new tools with the test script (`./test_server.sh`)
+6. **Documentation**: Update README.md for user-facing changes
+7. **Code Quality**: Run `make check` before commits
 
 ## Future Extensions
 

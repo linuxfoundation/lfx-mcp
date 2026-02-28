@@ -1,3 +1,5 @@
+// Copyright The Linux Foundation and each contributor to LFX.
+// SPDX-License-Identifier: MIT
 module github.com/linuxfoundation/lfx-mcp
 
 go 1.26.0

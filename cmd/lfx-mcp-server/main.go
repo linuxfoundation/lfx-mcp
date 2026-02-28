@@ -18,31 +18,19 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var (
+	httpMode = flag.Bool("http", false, "Enable HTTP transport (default: stdio)")
+	port     = flag.Int("port", 8080, "Port to listen on for HTTP transport")
+)
+
 func main() {
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
-	}
+	flag.Parse()
 
-	command := os.Args[1]
-	switch command {
-	case "stdio":
-		runStdioServer()
-	case "http":
+	if *httpMode {
 		runHTTPServer()
-	default:
-		printUsage()
-		os.Exit(1)
+	} else {
+		runStdioServer()
 	}
-}
-
-func printUsage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s <command> [options]\n\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "Commands:\n")
-	fmt.Fprintf(os.Stderr, "  stdio    Start MCP server on stdio transport\n")
-	fmt.Fprintf(os.Stderr, "  http     Start MCP server on HTTP transport\n\n")
-	fmt.Fprintf(os.Stderr, "HTTP Options:\n")
-	fmt.Fprintf(os.Stderr, "  --port   Port to listen on (default: 8080)\n")
 }
 
 func runStdioServer() {
@@ -64,13 +52,6 @@ func runStdioServer() {
 }
 
 func runHTTPServer() {
-	// Parse HTTP-specific flags.
-	httpFlags := flag.NewFlagSet("http", flag.ExitOnError)
-	port := httpFlags.Int("port", 8080, "Port to listen on")
-	if err := httpFlags.Parse(os.Args[2:]); err != nil {
-		log.Fatalf("Failed to parse flags: %v", err)
-	}
-
 	// Create server factory function for stateless mode.
 	createServer := func(_ *http.Request) *mcp.Server {
 		server := mcp.NewServer(&mcp.Implementation{

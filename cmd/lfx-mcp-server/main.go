@@ -22,6 +22,7 @@ import (
 var (
 	httpMode = flag.Bool("http", false, "Enable HTTP transport (default: stdio)")
 	port     = flag.Int("port", 8080, "Port to listen on for HTTP transport")
+	host     = flag.String("host", "127.0.0.1", "Host to bind to for HTTP transport")
 )
 
 func main() {
@@ -34,10 +35,8 @@ func main() {
 	}
 }
 
-func runStdioServer() {
-	ctx := context.Background()
-
-	// Create the MCP server.
+// newServer creates and configures a new MCP server with registered tools.
+func newServer() *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "lfx-mcp-server",
 		Version: "0.1.0",
@@ -45,6 +44,15 @@ func runStdioServer() {
 
 	// Register tools.
 	tools.RegisterHelloWorld(server)
+
+	return server
+}
+
+func runStdioServer() {
+	ctx := context.Background()
+
+	// Create the MCP server.
+	server := newServer()
 
 	// Run the server on stdio transport.
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
@@ -55,15 +63,7 @@ func runStdioServer() {
 func runHTTPServer() {
 	// Create server factory function for stateless mode.
 	createServer := func(_ *http.Request) *mcp.Server {
-		server := mcp.NewServer(&mcp.Implementation{
-			Name:    "lfx-mcp-server",
-			Version: "0.1.0",
-		}, nil)
-
-		// Register tools.
-		tools.RegisterHelloWorld(server)
-
-		return server
+		return newServer()
 	}
 
 	// Create streamable HTTP handler with stateless mode.
@@ -75,28 +75,35 @@ func runHTTPServer() {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", handler)
 
-	addr := fmt.Sprintf(":%d", *port)
+	addr := fmt.Sprintf("%s:%d", *host, *port)
 	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	// Setup graceful shutdown.
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
+	errCh := make(chan error, 1)
+
 	// Start server in goroutine.
 	go func() {
 		log.Printf("Starting HTTP server on %s", addr)
-		log.Printf("MCP endpoint available at http://localhost%s/mcp", addr)
+		log.Printf("MCP endpoint available at http://%s/mcp", addr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("HTTP server failed: %v", err)
+			errCh <- err
 		}
 	}()
 
-	// Wait for shutdown signal.
-	<-shutdown
-	log.Println("Shutting down HTTP server...")
+	// Wait for shutdown signal or server error.
+	select {
+	case <-shutdown:
+		log.Println("Shutting down HTTP server...")
+	case err := <-errCh:
+		log.Printf("HTTP server failed: %v", err)
+	}
 
 	// Create shutdown context with timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

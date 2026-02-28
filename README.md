@@ -63,10 +63,16 @@ The server will start an HTTP endpoint at `http://localhost:8080/mcp` that accep
 **Options:**
 - `-http`: Enable HTTP transport (default: stdio)
 - `-port`: Port to listen on for HTTP transport (default: 8080)
+- `-host`: Host to bind to for HTTP transport (default: 127.0.0.1)
 
 **Example with custom port:**
 ```bash
 ./bin/lfx-mcp-server -http -port 9090
+```
+
+**Example binding to all interfaces:**
+```bash
+./bin/lfx-mcp-server -http -host 0.0.0.0 -port 8080
 ```
 
 **Example HTTP request:**
@@ -201,7 +207,6 @@ curl -X POST http://localhost:8080/mcp \
 ```
 
 Responses are returned as Server-Sent Events (SSE) with `event: message` and `data:` fields.
-```
 
 ## License
 

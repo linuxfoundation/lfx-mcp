@@ -265,20 +265,20 @@ This tests:
 
 ### Available Targets
 
-| Target | Description |
-|--------|-------------|
-| `all` | Clean, check, and build (default) |
-| `build` | Compile the binary |
-| `clean` | Remove build artifacts |
-| `fmt` | Format Go code |
-| `vet` | Run go vet |
-| `lint` | Run golangci-lint |
-| `check` | Run fmt, vet, and lint |
-| `run` | Build and run in stdio mode |
-| `test` | Run Go tests |
-| `test-coverage` | Run tests with coverage |
-| `deps` | Download and tidy dependencies |
-| `install-tools` | Install development tools |
+| Target          | Description                       |
+|-----------------|-----------------------------------|
+| `all`           | Clean, check, and build (default) |
+| `build`         | Compile the binary                |
+| `clean`         | Remove build artifacts            |
+| `fmt`           | Format Go code                    |
+| `vet`           | Run go vet                        |
+| `lint`          | Run golangci-lint                 |
+| `check`         | Run fmt, vet, and lint            |
+| `run`           | Build and run in stdio mode       |
+| `test`          | Run Go tests                      |
+| `test-coverage` | Run tests with coverage           |
+| `deps`          | Download and tidy dependencies    |
+| `install-tools` | Install development tools         |
 
 ### Build Flags
 
@@ -290,10 +290,10 @@ The Makefile uses optimized build flags:
 
 Currently, the server doesn't require environment variables, but future LFX integrations may add:
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `LFX_API_URL` | LFX API base URL | - | Future |
-| `DEBUG` | Enable debug logging | false | No |
+| Variable      | Description          | Default | Required |
+|---------------|----------------------|---------|----------|
+| `LFX_API_URL` | LFX API base URL     | -       | Future   |
+| `DEBUG`       | Enable debug logging | false   | No       |
 
 ...and various other parameters needed to configure OAuth2 authentication.
 

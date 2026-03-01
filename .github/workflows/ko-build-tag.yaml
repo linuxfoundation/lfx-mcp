@@ -51,14 +51,14 @@ jobs:
         id: build
         run: |
           set -euo pipefail
-          IMAGE_REF=$(ko build github.com/linuxfoundation/lfx-mcp/cmd/lfx-mcp-server \
+          ko build github.com/linuxfoundation/lfx-mcp/cmd/lfx-mcp-server \
             -B \
             --platform linux/amd64,linux/arm64 \
             -t ${{ github.ref_name }} \
             -t ${{ steps.prepare.outputs.app_version }} \
             -t latest \
             --sbom spdx \
-            --image-refs /tmp/image-refs.txt)
+            --image-refs /tmp/image-refs.txt
 
           DIGEST=$(cat /tmp/image-refs.txt | cut -d'@' -f2)
           IMAGE_NAME=$(cat /tmp/image-refs.txt | cut -d'@' -f1)

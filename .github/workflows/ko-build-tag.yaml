@@ -1,0 +1,101 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+---
+name: Publish Tagged Release
+
+"on":
+  push:
+    tags:
+      - v*
+
+env:
+  COSIGN_VERSION: v3.0.2
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish Tagged Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      app_version: ${{ steps.prepare.outputs.app_version }}
+      digest: ${{ steps.build.outputs.digest }}
+      image_name: ${{ steps.build.outputs.image_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Prepare versions
+        id: prepare
+        run: |
+          set -euo pipefail
+          APP_VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
+          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Ko
+        uses: ko-build/setup-ko@d006021bd0c28d1ce33a07e7943d48b079944c8d # v0.9
+        with:
+          version: v0.18.0
+
+      - name: Build and publish lfx-mcp-server image
+        id: build
+        run: |
+          set -euo pipefail
+          ko build github.com/linuxfoundation/lfx-mcp/cmd/lfx-mcp-server \
+            -B \
+            --platform linux/amd64,linux/arm64 \
+            -t ${{ github.ref_name }} \
+            -t ${{ steps.prepare.outputs.app_version }} \
+            -t latest \
+            --sbom spdx \
+            --image-refs /tmp/image-refs.txt
+
+          DIGEST=$(cat /tmp/image-refs.txt | cut -d'@' -f2)
+          IMAGE_NAME=$(cat /tmp/image-refs.txt | cut -d'@' -f1)
+
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "image_name=$IMAGE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+        with:
+          cosign-release: "${{ env.COSIGN_VERSION }}"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign the container image
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes '${{ steps.build.outputs.image_name }}@${{ steps.build.outputs.digest }}'
+
+  create-provenance:
+    needs:
+      - publish
+    permissions:
+      actions: read
+      id-token: write
+      packages: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ${{ needs.publish.outputs.image_name }}
+      digest: ${{ needs.publish.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}

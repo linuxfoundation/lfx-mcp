@@ -112,7 +112,7 @@ A simple greeting tool that demonstrates the MCP tool interface.
 
 ### Project Structure
 
-```
+```text
 lfx-mcp/
 ├── cmd/
 │   └── lfx-mcp-server/     # Main application entry point

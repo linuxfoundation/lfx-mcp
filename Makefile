@@ -1,7 +1,7 @@
 # Copyright The Linux Foundation and each contributor to LFX.
 # SPDX-License-Identifier: MIT
 
-.PHONY: all build clean check fmt vet lint test run help docker-build
+.PHONY: all build clean check fmt vet lint test test-coverage run help deps install-tools docker-build
 
 # Build variables
 BINARY_NAME=lfx-mcp-server

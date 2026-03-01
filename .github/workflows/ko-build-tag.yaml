@@ -34,7 +34,7 @@ jobs:
         id: prepare
         run: |
           set -euo pipefail
-          APP_VERSION=$(echo ${{ github.ref_name }} | sed 's/v//g')
+          APP_VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
           echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Setup Go

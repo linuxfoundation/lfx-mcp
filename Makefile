@@ -1,7 +1,7 @@
-# Copyright The Linux Foundation and contributors.
-# SPDX-License-Identifier: Apache-2.0
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
 
-.PHONY: all build clean check fmt vet lint test run help
+.PHONY: all build clean check fmt vet lint test run help docker-build
 
 # Build variables
 BINARY_NAME=lfx-mcp-server
@@ -11,6 +11,10 @@ GO_FILES=$(shell find . -name "*.go" -type f)
 
 # Build flags
 LDFLAGS=-ldflags="-s -w"
+
+# Docker variables
+DOCKER_IMAGE=linuxfoundation/lfx-mcp
+DOCKER_TAG=latest
 
 # Default target
 all: clean check build
@@ -77,6 +81,12 @@ install-tools:
 	@echo "Installing development tools..."
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
+# Build Docker image
+docker-build:
+	@echo "Building Docker image..."
+	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f Dockerfile .
+	@echo "Docker image built: $(DOCKER_IMAGE):$(DOCKER_TAG)"
+
 # Show help
 help:
 	@echo "Available targets:"
@@ -92,4 +102,5 @@ help:
 	@echo "  run            - Build and run the server"
 	@echo "  deps           - Download and tidy dependencies"
 	@echo "  install-tools  - Install development tools"
+	@echo "  docker-build   - Build Docker image"
 	@echo "  help           - Show this help message"

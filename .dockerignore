@@ -1,0 +1,38 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+
+.git
+.gitignore
+.dockerignore
+**/bin
+
+# Local and temporary files
+**/.DS_Store
+.idea
+.vscode
+**/*.swp
+**/*.out
+**/*~
+**/*.pem
+**/.env
+**/*.env
+
+# MegaLinter reports
+/megalinter-reports/
+
+# Documentation
+**/README.md
+**/*.md
+LICENSE*
+
+# Test files
+**/*_test.go
+
+# Development files
+Makefile
+test_server.sh
+check-headers.sh
+
+# Build artifacts
+coverage.out
+coverage.html

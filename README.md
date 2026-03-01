@@ -10,6 +10,7 @@ This project implements an MCP server that exposes LFX platform functionality th
 
 - **Hello World Tool**: A simple demonstration tool for testing MCP connectivity
 - **Stdio Transport**: Communication via standard input/output streams
+- **HTTP Transport**: Streamable HTTP endpoint for web-based MCP clients
 - **Extensible Architecture**: Clean structure for adding new tools and resources
 
 ## Quick Start
@@ -39,13 +40,49 @@ This project implements an MCP server that exposes LFX platform functionality th
 
 ### Running the Server
 
-To start the MCP server with stdio transport:
+#### Stdio Transport (Default)
+
+To start the MCP server with stdio transport (default behavior):
 
 ```bash
-./bin/lfx-mcp-server stdio
+./bin/lfx-mcp-server
 ```
 
 The server will listen for MCP messages on stdin and respond on stdout.
+
+#### HTTP Transport
+
+To start the MCP server with HTTP transport:
+
+```bash
+./bin/lfx-mcp-server -http
+```
+
+The server will start an HTTP endpoint at `http://localhost:8080/mcp` that accepts MCP requests over streamable HTTP (Server-Sent Events). This is useful for web-based MCP clients.
+
+**Options:**
+- `-http`: Enable HTTP transport (default: stdio)
+- `-port`: Port to listen on for HTTP transport (default: 8080)
+- `-host`: Host to bind to for HTTP transport (default: 127.0.0.1)
+
+**Example with custom port:**
+```bash
+./bin/lfx-mcp-server -http -port 9090
+```
+
+**Example binding to all interfaces:**
+```bash
+./bin/lfx-mcp-server -http -host 0.0.0.0 -port 8080
+```
+
+**Example HTTP request:**
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"web-client","version":"1.0.0"}}}'
+```
+
+The HTTP transport uses stateless mode, creating a new MCP session for each request. This allows horizontal scaling without session management.
 
 ## Available Tools
 
@@ -134,6 +171,8 @@ Tools are implemented in the `internal/tools` package for better organization an
 
 ### Testing
 
+#### Testing Stdio Transport
+
 To test the server manually, you can send JSON-RPC messages via stdio:
 
 ```bash
@@ -145,8 +184,29 @@ To test the server manually, you can send JSON-RPC messages via stdio:
 # Test calling the hello_world tool
 (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'; 
  echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"LFX User","message":"Welcome"}}}'; 
- sleep 1) | ./bin/lfx-mcp-server stdio
+ sleep 1) | ./bin/lfx-mcp-server
 ```
+
+#### Testing HTTP Transport
+
+Start the HTTP server and send requests using curl:
+
+```bash
+# Start the server in the background
+./bin/lfx-mcp-server -http -port 8080 &
+
+# Test tools list
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+# Test calling hello_world tool
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"LFX","message":"Welcome"}}}'
+```
+
+Responses are returned as Server-Sent Events (SSE) with `event: message` and `data:` fields.
 
 ## License
 

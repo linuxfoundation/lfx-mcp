@@ -1,6 +1,7 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package tools provides MCP tool implementations for the LFX MCP server.
 package tools
 
 import (
@@ -25,7 +26,7 @@ func RegisterHelloWorld(server *mcp.Server) {
 }
 
 // handleHelloWorld implements the hello_world tool logic.
-func handleHelloWorld(ctx context.Context, req *mcp.CallToolRequest, args HelloWorldArgs) (*mcp.CallToolResult, any, error) {
+func handleHelloWorld(_ context.Context, _ *mcp.CallToolRequest, args HelloWorldArgs) (*mcp.CallToolResult, any, error) {
 	// Extract name parameter with default.
 	name := "World"
 	if args.Name != "" {

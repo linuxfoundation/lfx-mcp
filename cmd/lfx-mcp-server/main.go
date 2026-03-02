@@ -231,8 +231,9 @@ func runHTTPServer(cfg Config) {
 			scopes[i] = strings.TrimSpace(scopes[i])
 		}
 
+		resourceURL := fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
 		metadata := &oauthex.ProtectedResourceMetadata{
-			Resource:             cfg.OAuth.ResourceURL,
+			Resource:             resourceURL,
 			AuthorizationServers: []string{authServerURL},
 			ScopesSupported:      scopes,
 		}

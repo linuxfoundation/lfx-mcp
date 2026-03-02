@@ -8,7 +8,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -31,6 +31,7 @@ type Config struct {
 	HTTP  HTTPConfig  `koanf:"http"`
 	Auth0 Auth0Config `koanf:"auth0"`
 	Tools []string    `koanf:"tools"`
+	Debug bool        `koanf:"debug"`
 }
 
 // HTTPConfig holds HTTP-specific configuration.
@@ -45,6 +46,10 @@ type Auth0Config struct {
 	ResourceURL string `koanf:"resource_url"`
 }
 
+const errKey = "error"
+
+var logger *slog.Logger
+
 func main() {
 	k := koanf.New(".")
 
@@ -56,9 +61,11 @@ func main() {
 	f.String("auth0.domain", "", "Auth0 domain (e.g., dev-lfx.us.auth0.com)")
 	f.String("auth0.resource_url", "", "LFX API domain")
 	f.String("tools", "", "Comma-separated list of tools to enable (default: none)")
+	f.Bool("debug", false, "Enable debug logging")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
-		log.Fatalf("Failed to parse flags: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Load configuration from environment variables with LFX_MCP_ prefix.
@@ -74,19 +81,34 @@ func main() {
 			return key, v
 		},
 	}), nil); err != nil {
-		log.Fatalf("Failed to load environment variables: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to load environment variables: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Load configuration from flags (flags override environment variables).
 	if err := k.Load(basicflag.Provider(f, "."), nil); err != nil {
-		log.Fatalf("Failed to load flags: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to load flags: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Unmarshal configuration.
 	var cfg Config
 	if err := k.Unmarshal("", &cfg); err != nil {
-		log.Fatalf("Failed to unmarshal config: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to unmarshal config: %v\n", err)
+		os.Exit(1)
 	}
+
+	// Initialize logger with JSON handler.
+	logOptions := &slog.HandlerOptions{}
+
+	// Optional debug logging.
+	if cfg.Debug {
+		logOptions.Level = slog.LevelDebug
+		logOptions.AddSource = true
+	}
+
+	logger = slog.New(slog.NewJSONHandler(os.Stdout, logOptions))
+	slog.SetDefault(logger)
 
 	// Parse tools flag if provided as comma-separated string.
 	if toolsFlag := f.Lookup("tools"); toolsFlag != nil && toolsFlag.Value.String() != "" {
@@ -104,10 +126,10 @@ func main() {
 	// Validate OAuth configuration for HTTP mode.
 	if cfg.Mode == "http" {
 		if cfg.Auth0.Domain == "" {
-			log.Println("Warning: auth0.domain not configured - OAuth metadata endpoint will not be available")
+			logger.Warn("auth0.domain not configured - OAuth metadata endpoint will not be available")
 		}
 		if cfg.Auth0.ResourceURL == "" {
-			log.Println("Warning: auth0.resource_url not configured - LFX API clients will not be available")
+			logger.Warn("auth0.resource_url not configured - LFX API clients will not be available")
 		}
 	}
 
@@ -118,7 +140,8 @@ func main() {
 	case "http":
 		runHTTPServer(cfg)
 	default:
-		log.Fatalf("Invalid mode: %s (must be 'stdio' or 'http')", cfg.Mode)
+		logger.With(errKey, fmt.Errorf("invalid mode: %s", cfg.Mode)).Error("invalid mode (must be 'stdio' or 'http')")
+		os.Exit(1)
 	}
 }
 
@@ -153,7 +176,8 @@ func runStdioServer(cfg Config) {
 
 	// Run the server on stdio transport.
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
-		log.Fatalf("Server failed: %v", err)
+		logger.With(errKey, err).Error("server failed")
+		os.Exit(1)
 	}
 }
 
@@ -190,7 +214,7 @@ func runHTTPServer(cfg Config) {
 			ResourceMetadataURL: resourceMetadataURL,
 		})
 		mcpHandler = authMiddleware(handler)
-		log.Println("OAuth bearer token required for /mcp endpoint (proxied to upstream)")
+		logger.Info("OAuth bearer token required for /mcp endpoint (proxied to upstream)")
 	}
 
 	mux.Handle("/mcp", mcpHandler)
@@ -207,7 +231,7 @@ func runHTTPServer(cfg Config) {
 		}
 
 		mux.Handle("/.well-known/oauth-protected-resource", auth.ProtectedResourceMetadataHandler(metadata))
-		log.Printf("OAuth Protected Resource Metadata endpoint available at http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)
+		logger.With("url", fmt.Sprintf("http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)).Info("OAuth Protected Resource Metadata endpoint available")
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)
@@ -225,8 +249,8 @@ func runHTTPServer(cfg Config) {
 
 	// Start server in goroutine.
 	go func() {
-		log.Printf("Starting HTTP server on %s", addr)
-		log.Printf("MCP endpoint available at http://%s/mcp", addr)
+		logger.With("addr", addr).Info("Starting HTTP server")
+		logger.With("url", fmt.Sprintf("http://%s/mcp", addr)).Info("MCP endpoint available")
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}
@@ -235,9 +259,9 @@ func runHTTPServer(cfg Config) {
 	// Wait for shutdown signal or server error.
 	select {
 	case <-shutdown:
-		log.Println("Shutting down HTTP server...")
+		logger.Info("Shutting down HTTP server")
 	case err := <-errCh:
-		log.Printf("HTTP server failed: %v", err)
+		logger.With(errKey, err).Error("HTTP server failed")
 	}
 
 	// Create shutdown context with timeout.
@@ -246,8 +270,9 @@ func runHTTPServer(cfg Config) {
 
 	// Attempt graceful shutdown.
 	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Fatalf("Server shutdown failed: %v", err)
+		logger.With(errKey, err).Error("Server shutdown failed")
+		os.Exit(1)
 	}
 
-	log.Println("HTTP server stopped")
+	logger.Info("HTTP server stopped")
 }

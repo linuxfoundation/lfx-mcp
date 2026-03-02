@@ -43,6 +43,7 @@ Client (Claude, etc.) → JSON-RPC 2.0 → stdio transport → MCP Server → To
 2. **Extensibility**: Easy to add new tools through the `mcp.AddTool` pattern
 3. **Type Safety**: Strong typing with automatic schema generation
 4. **Testability**: Simple stdio testing via JSON-RPC messages
+5. **Observability**: Structured JSON logging with optional debug mode
 
 ## Development Workflow
 
@@ -68,8 +69,14 @@ make build
 # Integration tests
 ./test_server.sh
 
+# Integration tests with debug logging
+./test_server.sh --debug
+
 # Manual testing
 make run  # Starts server in stdio mode
+
+# Manual testing with debug logging
+./bin/lfx-mcp-server -debug
 ```
 
 #### 3. Code Quality Checks
@@ -85,6 +92,81 @@ make check   # Run all checks
 
 ```bash
 make clean
+```
+
+## Logging
+
+The server uses Go's standard `slog` package for structured logging with the following characteristics:
+
+### Log Configuration
+
+- **Format**: JSON (always)
+- **Output**: stdout
+- **Default Level**: INFO
+- **Debug Mode**: Enabled via `-debug` flag or `LFX_MCP_DEBUG=true` environment variable
+
+### Debug Logging
+
+When debug logging is enabled:
+- Log level is set to DEBUG
+- Source file and line numbers are included in each log entry
+- Additional diagnostic information is emitted
+
+**Enable debug logging:**
+
+```bash
+# Via command-line flag
+./bin/lfx-mcp-server -debug
+
+# Via environment variable
+LFX_MCP_DEBUG=true ./bin/lfx-mcp-server
+
+# Both work in HTTP mode too
+./bin/lfx-mcp-server -mode=http -debug
+```
+
+### Log Structure
+
+All logs are emitted as JSON objects to stdout:
+
+```json
+{"time":"2024-01-15T10:30:45.123Z","level":"INFO","msg":"Starting HTTP server","addr":"127.0.0.1:8080"}
+{"time":"2024-01-15T10:30:45.456Z","level":"ERROR","msg":"server failed","error":"connection refused"}
+```
+
+With debug logging enabled, source information is included:
+
+```json
+{"time":"2024-01-15T10:30:45.789Z","level":"DEBUG","source":{"file":"main.go","line":150},"msg":"processing request"}
+```
+
+### Using the Logger
+
+The logger is initialized in `main.go` and set as the default slog logger. Use it throughout the codebase:
+
+```go
+import "log/slog"
+
+// Info level
+slog.Info("operation completed", "key", "value")
+
+// Error level with structured fields
+slog.Error("operation failed", "error", err, "context", "additional info")
+
+// Debug level (only shown when debug mode is enabled)
+slog.Debug("detailed diagnostic", "request_id", reqID)
+
+// Using logger with context
+logger.With("component", "tool_handler").Info("processing tool call")
+```
+
+### Error Logging Convention
+
+```go
+const errKey = "error"
+
+// Log errors with the "error" key
+logger.With(errKey, err).Error("operation failed")
 ```
 
 ## Adding New Tools

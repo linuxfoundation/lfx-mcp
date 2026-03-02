@@ -68,6 +68,10 @@ The server supports configuration via both command-line flags and environment va
 - `-mode`: Transport mode: `stdio` or `http` (default: `stdio`)
 - `-http.port`: Port to listen on for HTTP transport (default: `8080`)
 - `-http.host`: Host to bind to for HTTP transport (default: `127.0.0.1`)
+- `-debug`: Enable debug logging with source location tracking (default: `false`)
+- `-tools`: Comma-separated list of tools to enable (default: none)
+- `-auth0.domain`: Auth0 domain for OAuth (e.g., `dev-lfx.us.auth0.com`)
+- `-auth0.resource_url`: LFX API domain for OAuth
 
 **Environment Variables:**
 
@@ -75,6 +79,10 @@ All environment variables use the `LFX_MCP_` prefix with underscore separators c
 - `LFX_MCP_MODE`: Transport mode (`stdio` or `http`)
 - `LFX_MCP_HTTP_PORT`: HTTP server port
 - `LFX_MCP_HTTP_HOST`: HTTP server host
+- `LFX_MCP_DEBUG`: Enable debug logging (`true` or `false`)
+- `LFX_MCP_TOOLS`: Comma-separated list of tools to enable
+- `LFX_MCP_AUTH0_DOMAIN`: Auth0 domain for OAuth
+- `LFX_MCP_AUTH0_RESOURCE_URL`: LFX API domain for OAuth
 
 **Examples:**
 
@@ -92,8 +100,51 @@ With environment variables:
 # Start in HTTP mode on custom port
 LFX_MCP_MODE=http LFX_MCP_HTTP_PORT=9090 ./bin/lfx-mcp-server
 
+# Enable debug logging
+LFX_MCP_DEBUG=true ./bin/lfx-mcp-server -mode=stdio
+
 # Override environment with command-line flag
 LFX_MCP_HTTP_PORT=9090 ./bin/lfx-mcp-server -mode=http -http.port=8888
+```
+
+### Logging
+
+The server uses structured JSON logging via Go's `slog` package. All logs are written to stdout in JSON format for easy parsing and integration with log aggregation systems.
+
+**Log Levels:**
+- `INFO` (default): Standard operational messages
+- `DEBUG`: Detailed diagnostic information with source location tracking
+
+**Enabling Debug Logging:**
+
+Debug logging can be enabled via command-line flag or environment variable:
+
+```bash
+# Via command-line flag
+./bin/lfx-mcp-server -debug
+
+# Via environment variable
+LFX_MCP_DEBUG=true ./bin/lfx-mcp-server
+```
+
+When debug logging is enabled, the following additional information is included:
+- Source file locations for each log statement
+- Detailed request/response information
+- Internal state transitions
+
+**Log Format:**
+
+All logs are emitted as JSON objects with the following structure:
+
+```json
+{"time":"2024-01-15T10:30:45.123Z","level":"INFO","msg":"Starting HTTP server","addr":"127.0.0.1:8080"}
+{"time":"2024-01-15T10:30:45.456Z","level":"ERROR","msg":"server failed","error":"connection refused"}
+```
+
+Debug logs include source information:
+
+```json
+{"time":"2024-01-15T10:30:45.789Z","level":"DEBUG","source":{"file":"main.go","line":150},"msg":"processing request"}
 ```
 
 **Example HTTP request:**
@@ -202,6 +253,11 @@ To test the server manually, you can send JSON-RPC messages via stdio:
  echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'; 
  sleep 1) | ./bin/lfx-mcp-server
 
+# With debug logging enabled
+(echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'; 
+ echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'; 
+ sleep 1) | ./bin/lfx-mcp-server -debug
+
 # Test calling the hello_world tool
 (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'; 
  echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"LFX User","message":"Welcome"}}}'; 
@@ -215,6 +271,9 @@ Start the HTTP server and send requests using curl:
 ```bash
 # Start the server in the background
 ./bin/lfx-mcp-server -mode=http -http.port=8080 &
+
+# Or with debug logging
+./bin/lfx-mcp-server -mode=http -http.port=8080 -debug &
 
 # Test tools list
 curl -X POST http://localhost:8080/mcp \

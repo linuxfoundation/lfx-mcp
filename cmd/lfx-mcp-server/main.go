@@ -1,5 +1,5 @@
 // Copyright The Linux Foundation and contributors.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 
 // Package main provides the LFX MCP server binary with support for stdio and HTTP transports.
 package main
@@ -20,19 +20,28 @@ import (
 	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/v2"
 	"github.com/linuxfoundation/lfx-mcp/internal/tools"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
 )
 
 // Config holds all configuration for the LFX MCP server.
 type Config struct {
-	Mode string     `koanf:"mode"`
-	HTTP HTTPConfig `koanf:"http"`
+	Mode  string      `koanf:"mode"`
+	HTTP  HTTPConfig  `koanf:"http"`
+	Auth0 Auth0Config `koanf:"auth0"`
 }
 
 // HTTPConfig holds HTTP-specific configuration.
 type HTTPConfig struct {
 	Host string `koanf:"host"`
 	Port int    `koanf:"port"`
+}
+
+// Auth0Config holds Auth0 authentication configuration.
+type Auth0Config struct {
+	Domain      string `koanf:"domain"`
+	ResourceURL string `koanf:"resource_url"`
 }
 
 func main() {
@@ -43,6 +52,8 @@ func main() {
 	f.String("mode", "stdio", "Transport mode: stdio or http")
 	f.String("http.host", "127.0.0.1", "Host to bind to for HTTP transport")
 	f.Int("http.port", 8080, "Port to listen on for HTTP transport")
+	f.String("auth0.domain", "", "Auth0 domain (e.g., dev-lfx.us.auth0.com)")
+	f.String("auth0.resource_url", "", "LFX API domain")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
@@ -71,12 +82,22 @@ func main() {
 		log.Fatalf("Failed to unmarshal config: %v", err)
 	}
 
+	// Validate OAuth configuration for HTTP mode.
+	if cfg.Mode == "http" {
+		if cfg.Auth0.Domain == "" {
+			log.Println("Warning: auth0.domain not configured - OAuth metadata endpoint will not be available")
+		}
+		if cfg.Auth0.ResourceURL == "" {
+			log.Println("Warning: auth0.resource_url not configured - LFX API clients will not be available")
+		}
+	}
+
 	// Run server based on mode.
 	switch cfg.Mode {
 	case "stdio":
 		runStdioServer()
 	case "http":
-		runHTTPServer(cfg.HTTP)
+		runHTTPServer(cfg)
 	default:
 		log.Fatalf("Invalid mode: %s (must be 'stdio' or 'http')", cfg.Mode)
 	}
@@ -107,7 +128,7 @@ func runStdioServer() {
 	}
 }
 
-func runHTTPServer(cfg HTTPConfig) {
+func runHTTPServer(cfg Config) {
 	// Create server factory function for stateless mode.
 	createServer := func(_ *http.Request) *mcp.Server {
 		return newServer()
@@ -122,7 +143,22 @@ func runHTTPServer(cfg HTTPConfig) {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", handler)
 
-	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	// Add Protected Resource Metadata endpoint if Auth0 is configured.
+	if cfg.Auth0.Domain != "" && cfg.Auth0.ResourceURL != "" {
+		resourceURL := fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
+		authServerURL := fmt.Sprintf("https://%s/.well-known/openid-configuration", cfg.Auth0.Domain)
+
+		metadata := &oauthex.ProtectedResourceMetadata{
+			Resource:             resourceURL,
+			AuthorizationServers: []string{authServerURL},
+			ScopesSupported:      []string{"openid", "profile", "email"},
+		}
+
+		mux.Handle("/.well-known/oauth-protected-resource", auth.ProtectedResourceMetadataHandler(metadata))
+		log.Printf("OAuth Protected Resource Metadata endpoint available at http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)
+	}
+
+	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           mux,

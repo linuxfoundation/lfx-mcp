@@ -1,5 +1,5 @@
 // Copyright The Linux Foundation and contributors.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 
 // Package tools provides MCP tool implementations for the LFX MCP server.
 package tools

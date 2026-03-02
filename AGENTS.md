@@ -105,7 +105,7 @@ The MCP Go SDK provides a simple pattern for adding tools. Tools are implemented
 
 ```go
 // Copyright The Linux Foundation and contributors.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 
 package tools
 

@@ -30,6 +30,7 @@ type Config struct {
 	Mode  string      `koanf:"mode"`
 	HTTP  HTTPConfig  `koanf:"http"`
 	Auth0 Auth0Config `koanf:"auth0"`
+	Tools []string    `koanf:"tools"`
 }
 
 // HTTPConfig holds HTTP-specific configuration.
@@ -54,6 +55,7 @@ func main() {
 	f.Int("http.port", 8080, "Port to listen on for HTTP transport")
 	f.String("auth0.domain", "", "Auth0 domain (e.g., dev-lfx.us.auth0.com)")
 	f.String("auth0.resource_url", "", "LFX API domain")
+	f.String("tools", "", "Comma-separated list of tools to enable (default: none)")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
@@ -65,6 +67,10 @@ func main() {
 		TransformFunc: func(k, v string) (string, any) {
 			key := strings.Replace(strings.ToLower(
 				strings.TrimPrefix(k, "LFX_MCP_")), "_", ".", -1)
+			// Handle comma-separated list for tools.
+			if key == "tools" && v != "" {
+				return key, strings.Split(v, ",")
+			}
 			return key, v
 		},
 	}), nil); err != nil {
@@ -82,6 +88,19 @@ func main() {
 		log.Fatalf("Failed to unmarshal config: %v", err)
 	}
 
+	// Parse tools flag if provided as comma-separated string.
+	if toolsFlag := f.Lookup("tools"); toolsFlag != nil && toolsFlag.Value.String() != "" {
+		cfg.Tools = strings.Split(toolsFlag.Value.String(), ",")
+	}
+
+	// Configure user_info tool if Auth0 is configured.
+	if cfg.Auth0.Domain != "" {
+		tools.SetUserInfoConfig(&tools.UserInfoConfig{
+			Auth0Domain: cfg.Auth0.Domain,
+			HTTPClient:  &http.Client{Timeout: 30 * time.Second},
+		})
+	}
+
 	// Validate OAuth configuration for HTTP mode.
 	if cfg.Mode == "http" {
 		if cfg.Auth0.Domain == "" {
@@ -95,7 +114,7 @@ func main() {
 	// Run server based on mode.
 	switch cfg.Mode {
 	case "stdio":
-		runStdioServer()
+		runStdioServer(cfg)
 	case "http":
 		runHTTPServer(cfg)
 	default:
@@ -104,23 +123,33 @@ func main() {
 }
 
 // newServer creates and configures a new MCP server with registered tools.
-func newServer() *mcp.Server {
+func newServer(cfg Config) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "lfx-mcp-server",
 		Version: "0.1.0",
 	}, nil)
 
-	// Register tools.
-	tools.RegisterHelloWorld(server)
+	// Register tools based on configuration.
+	enabledTools := make(map[string]bool)
+	for _, tool := range cfg.Tools {
+		enabledTools[strings.TrimSpace(tool)] = true
+	}
+
+	if enabledTools["hello_world"] {
+		tools.RegisterHelloWorld(server)
+	}
+	if enabledTools["user_info"] {
+		tools.RegisterUserInfo(server)
+	}
 
 	return server
 }
 
-func runStdioServer() {
+func runStdioServer(cfg Config) {
 	ctx := context.Background()
 
 	// Create the MCP server.
-	server := newServer()
+	server := newServer(cfg)
 
 	// Run the server on stdio transport.
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
@@ -131,7 +160,7 @@ func runStdioServer() {
 func runHTTPServer(cfg Config) {
 	// Create server factory function for stateless mode.
 	createServer := func(_ *http.Request) *mcp.Server {
-		return newServer()
+		return newServer(cfg)
 	}
 
 	// Create streamable HTTP handler with stateless mode.
@@ -141,7 +170,30 @@ func runHTTPServer(cfg Config) {
 
 	// Setup HTTP server with handler mounted on /mcp.
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", handler)
+
+	// Apply OAuth bearer token middleware if Auth0 is configured.
+	// Note: We don't verify tokens here - we just proxy the Authorization header
+	// to upstream LFX APIs which perform the actual verification.
+	// TODO: extract principal for logging.
+	var mcpHandler http.Handler = handler
+	if cfg.Auth0.Domain != "" && cfg.Auth0.ResourceURL != "" {
+		resourceMetadataURL := fmt.Sprintf("http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)
+
+		// Pass-through verifier - accepts any token without validation.
+		verifyToken := func(ctx context.Context, token string, req *http.Request) (*auth.TokenInfo, error) {
+			return &auth.TokenInfo{
+				UserID: "_anonymous", // Placeholder until we extract from token.
+			}, nil
+		}
+
+		authMiddleware := auth.RequireBearerToken(verifyToken, &auth.RequireBearerTokenOptions{
+			ResourceMetadataURL: resourceMetadataURL,
+		})
+		mcpHandler = authMiddleware(handler)
+		log.Println("OAuth bearer token required for /mcp endpoint (proxied to upstream)")
+	}
+
+	mux.Handle("/mcp", mcpHandler)
 
 	// Add Protected Resource Metadata endpoint if Auth0 is configured.
 	if cfg.Auth0.Domain != "" && cfg.Auth0.ResourceURL != "" {

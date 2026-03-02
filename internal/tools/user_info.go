@@ -21,7 +21,7 @@ type UserInfoArgs struct {
 
 // UserInfoConfig holds configuration for the user_info tool.
 type UserInfoConfig struct {
-	Auth0Domain string
+	OAuthDomain string
 	HTTPClient  *http.Client
 }
 
@@ -36,7 +36,7 @@ func SetUserInfoConfig(cfg *UserInfoConfig) {
 func RegisterUserInfo(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "user_info",
-		Description: "Get the authenticated user's Auth0 profile information by proxying to the Auth0 /userinfo endpoint",
+		Description: "Get the authenticated user's OpenID Connect profile by proxying to the /userinfo endpoint",
 	}, handleUserInfo)
 }
 
@@ -51,10 +51,10 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, args UserInfo
 		}, nil, nil
 	}
 
-	if userInfoConfig.Auth0Domain == "" {
+	if userInfoConfig.OAuthDomain == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: auth0.domain not configured"},
+				&mcp.TextContent{Text: "Error: oauth.domain not configured"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -79,8 +79,8 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, args UserInfo
 		}, nil, nil
 	}
 
-	// Call Auth0 userinfo endpoint.
-	userInfoURL := fmt.Sprintf("https://%s/userinfo", userInfoConfig.Auth0Domain)
+	// Call OAuth userinfo endpoint.
+	userInfoURL := fmt.Sprintf("https://%s/userinfo", userInfoConfig.OAuthDomain)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, userInfoURL, nil)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -102,7 +102,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, args UserInfo
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error calling Auth0 userinfo: %v", err)},
+				&mcp.TextContent{Text: fmt.Sprintf("Error calling OAuth userinfo: %v", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -123,7 +123,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, args UserInfo
 	if resp.StatusCode != http.StatusOK {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Auth0 returned status %d: %s", resp.StatusCode, string(body))},
+				&mcp.TextContent{Text: fmt.Sprintf("OAuth returned status %d: %s", resp.StatusCode, string(body))},
 			},
 			IsError: true,
 		}, nil, nil

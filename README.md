@@ -70,8 +70,9 @@ The server supports configuration via both command-line flags and environment va
 - `-http.host`: Host to bind to for HTTP transport (default: `127.0.0.1`)
 - `-debug`: Enable debug logging with source location tracking (default: `false`)
 - `-tools`: Comma-separated list of tools to enable (default: none)
-- `-auth0.domain`: Auth0 domain for OAuth (e.g., `dev-lfx.us.auth0.com`)
-- `-auth0.resource_url`: LFX API domain for OAuth
+- `-oauth.domain`: Issuer domain for IdP
+- `-oauth.resource_url`: LFX API domain for OAuth audience
+- `-oauth.scopes`: OAuth scopes as comma-separated list (default: `openid,profile`)
 
 **Environment Variables:**
 
@@ -81,8 +82,9 @@ All environment variables use the `LFX_MCP_` prefix with underscore separators c
 - `LFX_MCP_HTTP_HOST`: HTTP server host
 - `LFX_MCP_DEBUG`: Enable debug logging (`true` or `false`)
 - `LFX_MCP_TOOLS`: Comma-separated list of tools to enable
-- `LFX_MCP_AUTH0_DOMAIN`: Auth0 domain for OAuth
-- `LFX_MCP_AUTH0_RESOURCE_URL`: LFX API domain for OAuth
+- `LFX_MCP_OAUTH_DOMAIN`: Issuer domain for IdP
+- `LFX_MCP_OAUTH_RESOURCE_URL`: LFX API domain
+- `LFX_MCP_OAUTH_SCOPES`: OAuth scopes as comma-separated list (default: `openid,profile`)
 
 **Examples:**
 

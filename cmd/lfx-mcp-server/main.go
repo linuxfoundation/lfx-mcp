@@ -29,7 +29,7 @@ import (
 type Config struct {
 	Mode  string      `koanf:"mode"`
 	HTTP  HTTPConfig  `koanf:"http"`
-	Auth0 Auth0Config `koanf:"auth0"`
+	OAuth OAuthConfig `koanf:"oauth"`
 	Tools []string    `koanf:"tools"`
 	Debug bool        `koanf:"debug"`
 }
@@ -40,10 +40,11 @@ type HTTPConfig struct {
 	Port int    `koanf:"port"`
 }
 
-// Auth0Config holds Auth0 authentication configuration.
-type Auth0Config struct {
+// OAuthConfig holds OAuth authentication configuration.
+type OAuthConfig struct {
 	Domain      string `koanf:"domain"`
 	ResourceURL string `koanf:"resource_url"`
+	Scopes      string `koanf:"scopes"`
 }
 
 const errKey = "error"
@@ -58,8 +59,9 @@ func main() {
 	f.String("mode", "stdio", "Transport mode: stdio or http")
 	f.String("http.host", "127.0.0.1", "Host to bind to for HTTP transport")
 	f.Int("http.port", 8080, "Port to listen on for HTTP transport")
-	f.String("auth0.domain", "", "Auth0 domain (e.g., dev-lfx.us.auth0.com)")
-	f.String("auth0.resource_url", "", "LFX API domain")
+	f.String("oauth.domain", "", "Issuer domain for OAuth")
+	f.String("oauth.resource_url", "", "LFX API domain")
+	f.String("oauth.scopes", "openid,profile", "OAuth scopes (comma-separated)")
 	f.String("tools", "", "Comma-separated list of tools to enable (default: none)")
 	f.Bool("debug", false, "Enable debug logging")
 
@@ -115,21 +117,21 @@ func main() {
 		cfg.Tools = strings.Split(toolsFlag.Value.String(), ",")
 	}
 
-	// Configure user_info tool if Auth0 is configured.
-	if cfg.Auth0.Domain != "" {
+	// Configure user_info tool if OAuth is configured.
+	if cfg.OAuth.Domain != "" {
 		tools.SetUserInfoConfig(&tools.UserInfoConfig{
-			Auth0Domain: cfg.Auth0.Domain,
+			OAuthDomain: cfg.OAuth.Domain,
 			HTTPClient:  &http.Client{Timeout: 30 * time.Second},
 		})
 	}
 
 	// Validate OAuth configuration for HTTP mode.
 	if cfg.Mode == "http" {
-		if cfg.Auth0.Domain == "" {
-			logger.Warn("auth0.domain not configured - OAuth metadata endpoint will not be available")
+		if cfg.OAuth.Domain == "" {
+			logger.Warn("oauth.domain not configured - OAuth metadata endpoint will not be available")
 		}
-		if cfg.Auth0.ResourceURL == "" {
-			logger.Warn("auth0.resource_url not configured - LFX API clients will not be available")
+		if cfg.OAuth.ResourceURL == "" {
+			logger.Warn("oauth.resource_url not configured - LFX API clients will not be available")
 		}
 	}
 
@@ -195,12 +197,12 @@ func runHTTPServer(cfg Config) {
 	// Setup HTTP server with handler mounted on /mcp.
 	mux := http.NewServeMux()
 
-	// Apply OAuth bearer token middleware if Auth0 is configured.
+	// Apply OAuth bearer token middleware if OAuth is configured.
 	// Note: We don't verify tokens here - we just proxy the Authorization header
 	// to upstream LFX APIs which perform the actual verification.
 	// TODO: extract principal for logging.
 	var mcpHandler http.Handler = handler
-	if cfg.Auth0.Domain != "" && cfg.Auth0.ResourceURL != "" {
+	if cfg.OAuth.Domain != "" && cfg.OAuth.ResourceURL != "" {
 		resourceMetadataURL := fmt.Sprintf("http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)
 
 		// Pass-through verifier - accepts any token without validation.
@@ -219,15 +221,20 @@ func runHTTPServer(cfg Config) {
 
 	mux.Handle("/mcp", mcpHandler)
 
-	// Add Protected Resource Metadata endpoint if Auth0 is configured.
-	if cfg.Auth0.Domain != "" && cfg.Auth0.ResourceURL != "" {
-		resourceURL := fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
-		authServerURL := fmt.Sprintf("https://%s/.well-known/openid-configuration", cfg.Auth0.Domain)
+	// Add Protected Resource Metadata endpoint if OAuth is configured.
+	if cfg.OAuth.Domain != "" && cfg.OAuth.ResourceURL != "" {
+		authServerURL := fmt.Sprintf("https://%s/", cfg.OAuth.Domain)
+
+		// Parse scopes from comma-separated string.
+		scopes := strings.Split(cfg.OAuth.Scopes, ",")
+		for i := range scopes {
+			scopes[i] = strings.TrimSpace(scopes[i])
+		}
 
 		metadata := &oauthex.ProtectedResourceMetadata{
-			Resource:             resourceURL,
+			Resource:             cfg.OAuth.ResourceURL,
 			AuthorizationServers: []string{authServerURL},
-			ScopesSupported:      []string{"openid", "profile", "email"},
+			ScopesSupported:      scopes,
 		}
 
 		mux.Handle("/.well-known/oauth-protected-resource", auth.ProtectedResourceMetadataHandler(metadata))

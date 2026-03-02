@@ -12,26 +12,73 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/knadh/koanf/providers/basicflag"
+	"github.com/knadh/koanf/providers/env/v2"
+	"github.com/knadh/koanf/v2"
 	"github.com/linuxfoundation/lfx-mcp/internal/tools"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-var (
-	httpMode = flag.Bool("http", false, "Enable HTTP transport (default: stdio)")
-	port     = flag.Int("port", 8080, "Port to listen on for HTTP transport")
-	host     = flag.String("host", "127.0.0.1", "Host to bind to for HTTP transport")
-)
+// Config holds all configuration for the LFX MCP server.
+type Config struct {
+	Mode string     `koanf:"mode"`
+	HTTP HTTPConfig `koanf:"http"`
+}
+
+// HTTPConfig holds HTTP-specific configuration.
+type HTTPConfig struct {
+	Host string `koanf:"host"`
+	Port int    `koanf:"port"`
+}
 
 func main() {
-	flag.Parse()
+	k := koanf.New(".")
 
-	if *httpMode {
-		runHTTPServer()
-	} else {
+	// Define flags.
+	f := flag.NewFlagSet("lfx-mcp-server", flag.ExitOnError)
+	f.String("mode", "stdio", "Transport mode: stdio or http")
+	f.String("http.host", "127.0.0.1", "Host to bind to for HTTP transport")
+	f.Int("http.port", 8080, "Port to listen on for HTTP transport")
+
+	if err := f.Parse(os.Args[1:]); err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
+
+	// Load configuration from environment variables with LFX_MCP_ prefix.
+	if err := k.Load(env.Provider(".", env.Opt{
+		Prefix: "LFX_MCP_",
+		TransformFunc: func(k, v string) (string, any) {
+			key := strings.Replace(strings.ToLower(
+				strings.TrimPrefix(k, "LFX_MCP_")), "_", ".", -1)
+			return key, v
+		},
+	}), nil); err != nil {
+		log.Fatalf("Failed to load environment variables: %v", err)
+	}
+
+	// Load configuration from flags (flags override environment variables).
+	if err := k.Load(basicflag.Provider(f, "."), nil); err != nil {
+		log.Fatalf("Failed to load flags: %v", err)
+	}
+
+	// Unmarshal configuration.
+	var cfg Config
+	if err := k.Unmarshal("", &cfg); err != nil {
+		log.Fatalf("Failed to unmarshal config: %v", err)
+	}
+
+	// Run server based on mode.
+	switch cfg.Mode {
+	case "stdio":
 		runStdioServer()
+	case "http":
+		runHTTPServer(cfg.HTTP)
+	default:
+		log.Fatalf("Invalid mode: %s (must be 'stdio' or 'http')", cfg.Mode)
 	}
 }
 
@@ -60,7 +107,7 @@ func runStdioServer() {
 	}
 }
 
-func runHTTPServer() {
+func runHTTPServer(cfg HTTPConfig) {
 	// Create server factory function for stateless mode.
 	createServer := func(_ *http.Request) *mcp.Server {
 		return newServer()
@@ -75,7 +122,7 @@ func runHTTPServer() {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", handler)
 
-	addr := fmt.Sprintf("%s:%d", *host, *port)
+	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           mux,

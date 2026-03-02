@@ -55,24 +55,45 @@ The server will listen for MCP messages on stdin and respond on stdout.
 To start the MCP server with HTTP transport:
 
 ```bash
-./bin/lfx-mcp-server -http
+./bin/lfx-mcp-server -mode=http
 ```
 
 The server will start an HTTP endpoint at `http://localhost:8080/mcp` that accepts MCP requests over streamable HTTP (Server-Sent Events). This is useful for web-based MCP clients.
 
-**Options:**
-- `-http`: Enable HTTP transport (default: stdio)
-- `-port`: Port to listen on for HTTP transport (default: 8080)
-- `-host`: Host to bind to for HTTP transport (default: 127.0.0.1)
+### Configuration
 
-**Example with custom port:**
+The server supports configuration via both command-line flags and environment variables. Command-line flags take precedence over environment variables.
+
+**Command-line Flags:**
+- `-mode`: Transport mode: `stdio` or `http` (default: `stdio`)
+- `-http.port`: Port to listen on for HTTP transport (default: `8080`)
+- `-http.host`: Host to bind to for HTTP transport (default: `127.0.0.1`)
+
+**Environment Variables:**
+
+All environment variables use the `LFX_MCP_` prefix with underscore separators converted to dots:
+- `LFX_MCP_MODE`: Transport mode (`stdio` or `http`)
+- `LFX_MCP_HTTP_PORT`: HTTP server port
+- `LFX_MCP_HTTP_HOST`: HTTP server host
+
+**Examples:**
+
+With command-line flags:
 ```bash
-./bin/lfx-mcp-server -http -port 9090
+# Custom HTTP port
+./bin/lfx-mcp-server -mode=http -http.port=9090
+
+# Bind to all interfaces
+./bin/lfx-mcp-server -mode=http -http.host=0.0.0.0 -http.port=8080
 ```
 
-**Example binding to all interfaces:**
+With environment variables:
 ```bash
-./bin/lfx-mcp-server -http -host 0.0.0.0 -port 8080
+# Start in HTTP mode on custom port
+LFX_MCP_MODE=http LFX_MCP_HTTP_PORT=9090 ./bin/lfx-mcp-server
+
+# Override environment with command-line flag
+LFX_MCP_HTTP_PORT=9090 ./bin/lfx-mcp-server -mode=http -http.port=8888
 ```
 
 **Example HTTP request:**
@@ -179,7 +200,7 @@ To test the server manually, you can send JSON-RPC messages via stdio:
 # Test server initialization and tool listing
 (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'; 
  echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'; 
- sleep 1) | ./bin/lfx-mcp-server stdio
+ sleep 1) | ./bin/lfx-mcp-server
 
 # Test calling the hello_world tool
 (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'; 
@@ -193,7 +214,7 @@ Start the HTTP server and send requests using curl:
 
 ```bash
 # Start the server in the background
-./bin/lfx-mcp-server -http -port 8080 &
+./bin/lfx-mcp-server -mode=http -http.port=8080 &
 
 # Test tools list
 curl -X POST http://localhost:8080/mcp \

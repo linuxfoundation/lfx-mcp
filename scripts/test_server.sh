@@ -28,7 +28,7 @@ echo "=== Test 1: Server initialization and capabilities ==="
 ) |
 	LFX_MCP_TOOLS=hello_world ./bin/lfx-mcp-server stdio $DEBUG_FLAG 2>&1 |
 	grep -v '^{.*"level":' |
-	head -1 |
+	grep '"id":1' |
 	jq '.'
 
 echo ""
@@ -40,7 +40,7 @@ echo "=== Test 2: List available tools ==="
 ) |
 	LFX_MCP_TOOLS=hello_world ./bin/lfx-mcp-server stdio $DEBUG_FLAG 2>&1 |
 	grep -v '^{.*"level":' |
-	grep -E '"result".*"tools"' |
+	grep '"id":2' |
 	jq '.result.tools'
 
 echo ""
@@ -52,7 +52,7 @@ echo "=== Test 3: Call hello_world tool (default greeting) ==="
 ) |
 	LFX_MCP_TOOLS=hello_world ./bin/lfx-mcp-server stdio $DEBUG_FLAG 2>&1 |
 	grep -v '^{.*"level":' |
-	grep '"result".*"content"' |
+	grep '"id":2' |
 	jq '.result.content[0].text'
 
 echo ""
@@ -64,7 +64,7 @@ echo "=== Test 4: Call hello_world tool (with name) ==="
 ) |
 	LFX_MCP_TOOLS=hello_world ./bin/lfx-mcp-server stdio $DEBUG_FLAG 2>&1 |
 	grep -v '^{.*"level":' |
-	grep '"result".*"content"' |
+	grep '"id":2' |
 	jq '.result.content[0].text'
 
 echo ""
@@ -76,7 +76,7 @@ echo "=== Test 5: Call hello_world tool (with custom message) ==="
 ) |
 	LFX_MCP_TOOLS=hello_world ./bin/lfx-mcp-server stdio $DEBUG_FLAG 2>&1 |
 	grep -v '^{.*"level":' |
-	grep '"result".*"content"' |
+	grep '"id":2' |
 	jq '.result.content[0].text'
 
 echo ""
@@ -88,7 +88,7 @@ echo "=== Test 6: Error handling (invalid tool name) ==="
 ) |
 	LFX_MCP_TOOLS=hello_world ./bin/lfx-mcp-server stdio $DEBUG_FLAG 2>&1 |
 	grep -v '^{.*"level":' |
-	grep '"error"' |
+	grep '"id":2' |
 	jq '.error.message' || echo "\"Tool not found error handled correctly\""
 
 echo ""

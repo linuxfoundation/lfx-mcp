@@ -17,7 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/oauth2/jws"
+	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
 // TokenExchangeConfig holds configuration for OAuth2 token exchange (RFC 8693).
@@ -50,12 +51,12 @@ type TokenExchangeConfig struct {
 
 // TokenExchangeResponse represents the response from OAuth2 token exchange per RFC 8693.
 type TokenExchangeResponse struct {
-	AccessToken  string `json:"access_token"`
+	AccessToken     string `json:"access_token"`
 	IssuedTokenType string `json:"issued_token_type,omitempty"`
-	TokenType    string `json:"token_type"`
-	ExpiresIn    int    `json:"expires_in"`
-	Scope        string `json:"scope,omitempty"`
-	RefreshToken string `json:"refresh_token,omitempty"`
+	TokenType       string `json:"token_type"`
+	ExpiresIn       int    `json:"expires_in"`
+	Scope           string `json:"scope,omitempty"`
+	RefreshToken    string `json:"refresh_token,omitempty"`
 }
 
 // TokenExchangeClient handles OAuth2 token exchange per RFC 8693.
@@ -118,34 +119,33 @@ func (c *TokenExchangeClient) generateClientAssertion() (string, error) {
 	}
 
 	now := time.Now()
-	claims := &jws.ClaimSet{
-		Iss: c.config.ClientID,
-		Sub: c.config.ClientID,
-		Aud: c.config.TokenEndpoint,
-		Iat: now.Unix(),
-		Exp: now.Add(60 * time.Second).Unix(),
-	}
 
 	// Generate a random JTI (JWT ID).
 	jtiBytes := make([]byte, 16)
 	if _, err := rand.Read(jtiBytes); err != nil {
 		return "", fmt.Errorf("failed to generate JTI: %w", err)
 	}
-	claims.PrivateClaims = map[string]interface{}{
-		"jti": fmt.Sprintf("%x", jtiBytes),
-	}
 
-	header := &jws.Header{
-		Algorithm: "RS256",
-		Typ:       "JWT",
-	}
-
-	token, err := jws.Encode(header, claims, rsaKey)
+	// Build JWT token.
+	token, err := jwt.NewBuilder().
+		Issuer(c.config.ClientID).
+		Subject(c.config.ClientID).
+		Audience([]string{c.config.TokenEndpoint}).
+		IssuedAt(now).
+		Expiration(now.Add(60 * time.Second)).
+		JwtID(fmt.Sprintf("%x", jtiBytes)).
+		Build()
 	if err != nil {
-		return "", fmt.Errorf("failed to encode JWT: %w", err)
+		return "", fmt.Errorf("failed to build JWT: %w", err)
 	}
 
-	return token, nil
+	// Sign the token.
+	signed, err := jwt.Sign(token, jwt.WithKey(jwa.RS256, rsaKey))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign JWT: %w", err)
+	}
+
+	return string(signed), nil
 }
 
 // ExchangeToken exchanges a subject token for a new access token per RFC 8693.

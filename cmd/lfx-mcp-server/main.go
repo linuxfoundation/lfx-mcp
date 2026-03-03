@@ -107,8 +107,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load configuration from flags (flags override environment variables).
-	if err := k.Load(basicflag.Provider(f, "."), nil); err != nil {
+	// Load configuration from flags (only explicitly set flags override environment variables).
+	if err := k.Load(basicflag.ProviderWithValue(f, ".", func(key string, value string) (string, interface{}) {
+		return key, value
+	}, k), nil); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load flags: %v\n", err)
 		os.Exit(1)
 	}

@@ -96,21 +96,18 @@ make clean
 
 ## Logging
 
-The server uses Go's standard `slog` package for structured logging with the following characteristics:
+The server has two separate logging systems:
 
-### Log Configuration
+### 1. Server-Side Logging (for operators)
+
+Uses Go's standard `slog` package for operational logs. These logs are written to stdout (HTTP mode) or stderr (stdio mode).
+
+**Configuration:**
 
 - **Format**: JSON (always)
-- **Output**: stdout
+- **Output**: stdout (HTTP mode) or stderr (stdio mode)
 - **Default Level**: INFO
 - **Debug Mode**: Enabled via `-debug` flag or `LFXMCP_DEBUG=true` environment variable
-
-### Debug Logging
-
-When debug logging is enabled:
-- Log level is set to DEBUG
-- Source file and line numbers are included in each log entry
-- Additional diagnostic information is emitted
 
 **Enable debug logging:**
 
@@ -125,9 +122,45 @@ LFXMCP_DEBUG=true ./bin/lfx-mcp-server
 ./bin/lfx-mcp-server -mode=http -debug
 ```
 
-### Log Structure
+### 2. MCP Client Logging (for tool developers)
 
-All logs are emitted as JSON objects to stdout:
+Tools can send logs to the MCP client using `mcp.NewLoggingHandler`. These logs appear in the client's UI (e.g., Claude Desktop logs) and are controlled by the client's log level.
+
+**Usage in tools:**
+
+```go
+func handleMyTool(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallToolResult, any, error) {
+    // Create MCP logger that sends logs to the client.
+    logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+    
+    logger.Info("processing started", "param", args.Param)
+    logger.Debug("detailed info", "value", someValue)
+    logger.Warn("potential issue", "reason", "something unexpected")
+    
+    // ... tool implementation ...
+}
+```
+
+**How it works:**
+
+- The **client** controls the log level via the `SetLoggingLevel` MCP notification
+- Only logs at or above the client's level are sent over the protocol
+- Logs appear in the client's logging UI (not in server logs)
+- Log levels: debug, info, notice, warning, error, critical, alert, emergency
+
+**Key differences:**
+
+| Feature | Server Logging | MCP Client Logging |
+|---------|---------------|-------------------|
+| Audience | Server operators | Client users/developers |
+| Output | stdout/stderr | MCP protocol notifications |
+| Control | `-debug` flag | Client's `SetLoggingLevel` |
+| Format | JSON to files | JSON over protocol |
+| Use case | Debugging server | Debugging tool execution |
+
+### Server Log Structure
+
+Server-side logs are emitted as JSON objects:
 
 ```json
 {"time":"2024-01-15T10:30:45.123Z","level":"INFO","msg":"Starting HTTP server","addr":"127.0.0.1:8080"}
@@ -140,9 +173,9 @@ With debug logging enabled, source information is included:
 {"time":"2024-01-15T10:30:45.789Z","level":"DEBUG","source":{"file":"main.go","line":150},"msg":"processing request"}
 ```
 
-### Using the Logger
+### Using Server Logger
 
-The logger is initialized in `main.go` and set as the default slog logger. Use it throughout the codebase:
+The server logger is initialized in `main.go` and set as the default slog logger. Use it for operational logging:
 
 ```go
 import "log/slog"
@@ -165,9 +198,14 @@ logger.With("component", "tool_handler").Info("processing tool call")
 ```go
 const errKey = "error"
 
-// Log errors with the "error" key
+// Server-side error logging
 logger.With(errKey, err).Error("operation failed")
+
+// MCP client error logging (in tools)
+mcpLogger.Error("tool operation failed", "error", err)
 ```
+
+**Recommendation**: Use MCP client logging in tools for visibility to end users, and server-side logging for operational concerns.
 
 ## Adding New Tools
 

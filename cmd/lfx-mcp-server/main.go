@@ -175,6 +175,38 @@ func main() {
 	}
 }
 
+// mcpLoggingMiddleware creates middleware that logs all MCP method calls.
+func mcpLoggingMiddleware(serverLogger *slog.Logger) mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			start := time.Now()
+			sessionID := req.GetSession().ID()
+
+			// Call the actual handler.
+			result, err := next(ctx, method, req)
+
+			// Log completion.
+			duration := time.Since(start)
+			if err != nil {
+				serverLogger.Warn("mcp method call failed",
+					"session_id", sessionID,
+					"method", method,
+					"duration_ms", duration.Milliseconds(),
+					"error", err,
+				)
+			} else {
+				serverLogger.Info("mcp method call completed",
+					"session_id", sessionID,
+					"method", method,
+					"duration_ms", duration.Milliseconds(),
+				)
+			}
+
+			return result, err
+		}
+	}
+}
+
 // newServer creates and configures a new MCP server with registered tools.
 func newServer(cfg Config) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
@@ -183,6 +215,9 @@ func newServer(cfg Config) *mcp.Server {
 	}, &mcp.ServerOptions{
 		Logger: logger,
 	})
+
+	// Add middleware for logging all MCP method calls from clients.
+	server.AddReceivingMiddleware(mcpLoggingMiddleware(logger))
 
 	// Register tools based on configuration.
 	enabledTools := make(map[string]bool)
@@ -222,6 +257,7 @@ func runHTTPServer(cfg Config) {
 	// Create streamable HTTP handler with stateless mode.
 	handler := mcp.NewStreamableHTTPHandler(createServer, &mcp.StreamableHTTPOptions{
 		Stateless: true,
+		Logger:    logger,
 	})
 
 	// Setup HTTP server with handler mounted on /mcp.
@@ -332,6 +368,11 @@ func httpDebugLogging(logger *slog.Logger) func(http.Handler) http.Handler {
 				"method", r.Method,
 				"path", r.URL.Path,
 				"remote_addr", r.RemoteAddr,
+			}
+
+			// Add query parameters if present.
+			if query := r.URL.RawQuery; query != "" {
+				logAttrs = append(logAttrs, "query", query)
 			}
 
 			authHeader := r.Header.Get("Authorization")

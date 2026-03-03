@@ -7,6 +7,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -26,20 +27,29 @@ func RegisterHelloWorld(server *mcp.Server) {
 }
 
 // handleHelloWorld implements the hello_world tool logic.
-func handleHelloWorld(_ context.Context, _ *mcp.CallToolRequest, args HelloWorldArgs) (*mcp.CallToolResult, any, error) {
+func handleHelloWorld(_ context.Context, req *mcp.CallToolRequest, args HelloWorldArgs) (*mcp.CallToolResult, any, error) {
+	// Create MCP logger that sends logs to the client.
+	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+
 	// Extract name parameter with default.
 	name := "World"
 	if args.Name != "" {
 		name = args.Name
 	}
 
+	// Log tool execution with client-visible logs.
+	logger.Info("hello_world tool called", "name", name)
+
 	// Generate greeting.
 	var greeting string
 	if args.Message != "" {
 		greeting = fmt.Sprintf("%s, %s!", args.Message, name)
+		logger.Warn("custom message provided", "message", args.Message)
 	} else {
 		greeting = fmt.Sprintf("Hello, %s!", name)
 	}
+
+	logger.Debug("greeting generated", "greeting", greeting)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

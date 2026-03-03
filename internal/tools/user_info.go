@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -42,7 +43,11 @@ func RegisterUserInfo(server *mcp.Server) {
 
 // handleUserInfo implements the user_info tool logic.
 func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArgs) (*mcp.CallToolResult, any, error) {
+	// Create MCP logger that sends logs to the client.
+	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+
 	if userInfoConfig == nil {
+		logger.Error("user_info tool not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: user_info tool not configured"},
@@ -52,13 +57,16 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 	}
 
 	if userInfoConfig.OAuthDomain == "" {
+		logger.Error("OAuth domain not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: oauth.domain not configured"},
+				&mcp.TextContent{Text: "Error: OAuth domain not configured"},
 			},
 			IsError: true,
 		}, nil, nil
 	}
+
+	logger.Info("fetching user info from OAuth provider")
 
 	// Extract Authorization header from request meta.
 	authHeader := ""
@@ -81,8 +89,10 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 
 	// Call OAuth userinfo endpoint.
 	userInfoURL := fmt.Sprintf("https://%s/userinfo", userInfoConfig.OAuthDomain)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, userInfoURL, nil)
+	logger.Debug("sending request to userinfo endpoint", "url", userInfoURL)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", userInfoURL, nil)
 	if err != nil {
+		logger.Error("failed to create HTTP request", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error creating request: %v", err)},
@@ -111,6 +121,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logger.Error("failed to read response body", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error reading response: %v", err)},
@@ -132,6 +143,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 	// Parse and pretty-print JSON.
 	var userInfo map[string]interface{}
 	if err := json.Unmarshal(body, &userInfo); err != nil {
+		logger.Error("failed to parse JSON response", "error", err)
 		// Return raw response if not valid JSON.
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -140,14 +152,19 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 		}, nil, nil
 	}
 
+	// Return pretty-printed JSON.
 	prettyJSON, err := json.MarshalIndent(userInfo, "", "  ")
 	if err != nil {
+		logger.Error("failed to format JSON response", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: string(body)},
+				&mcp.TextContent{Text: fmt.Sprintf("Error formatting response: %v", err)},
 			},
+			IsError: true,
 		}, nil, nil
 	}
+
+	logger.Info("user info retrieved successfully", "sub", userInfo["sub"])
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

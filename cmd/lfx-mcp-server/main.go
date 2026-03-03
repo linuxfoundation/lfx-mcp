@@ -113,6 +113,7 @@ func main() {
 	}
 
 	// Initialize logger with JSON handler.
+	// In stdio mode, logs must go to stderr to avoid interfering with MCP protocol on stdout.
 	logOptions := &slog.HandlerOptions{}
 
 	// Optional debug logging.
@@ -121,7 +122,12 @@ func main() {
 		logOptions.AddSource = true
 	}
 
-	logger = slog.New(slog.NewJSONHandler(os.Stdout, logOptions))
+	logOutput := os.Stdout
+	if cfg.Mode == "stdio" {
+		logOutput = os.Stderr
+	}
+
+	logger = slog.New(slog.NewJSONHandler(logOutput, logOptions))
 	slog.SetDefault(logger)
 
 	// Parse comma-separated flags.
@@ -226,7 +232,7 @@ func runHTTPServer(cfg Config) {
 		resourceMetadataURL := fmt.Sprintf("http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)
 
 		// Pass-through verifier - accepts any token without validation.
-		verifyToken := func(_ctx context.Context, _token string, _req *http.Request) (*auth.TokenInfo, error) {
+		verifyToken := func(_ context.Context, _ string, _ *http.Request) (*auth.TokenInfo, error) {
 			return &auth.TokenInfo{
 				UserID: "_anonymous", // Placeholder until we extract from token.
 			}, nil

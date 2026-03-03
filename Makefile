@@ -33,7 +33,7 @@ clean:
 	@rm -rf $(BUILD_DIR)
 
 # Run all checks
-check: fmt vet lint
+check: fmt vet lint revive
 
 # Format Go code
 fmt:
@@ -52,6 +52,15 @@ lint:
 		golangci-lint run; \
 	else \
 		echo "golangci-lint not installed, skipping..."; \
+	fi
+
+# Run revive (if available)
+revive:
+	@echo "Running revive..."
+	@if command -v revive >/dev/null 2>&1; then \
+		revive ./...; \
+	else \
+		echo "revive not installed, skipping..."; \
 	fi
 
 # Run tests

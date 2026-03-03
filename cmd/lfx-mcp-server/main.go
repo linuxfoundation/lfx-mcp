@@ -27,37 +27,29 @@ import (
 
 // Config holds all configuration for the LFX MCP server.
 type Config struct {
-	Mode          string              `koanf:"mode"`
-	HTTP          HTTPConfig          `koanf:"http"`
-	OAuth         OAuthConfig         `koanf:"oauth"`
-	TokenExchange TokenExchangeConfig `koanf:"token_exchange"`
-	Tools         []string            `koanf:"tools"`
-	Debug         bool                `koanf:"debug"`
+	Mode                      string       `koanf:"mode"`
+	HTTP                      HTTPConfig   `koanf:"http"`
+	MCPAPI                    MCPAPIConfig `koanf:"mcp_api"`
+	ClientID                  string       `koanf:"client_id"`
+	ClientSecret              string       `koanf:"client_secret"`
+	ClientAssertionSigningKey string       `koanf:"client_assertion_signing_key"`
+	TokenEndpoint             string       `koanf:"token_endpoint"`
+	LFXAPIURL                 string       `koanf:"lfx_api_url"`
+	Tools                     []string     `koanf:"tools"`
+	Debug                     bool         `koanf:"debug"`
 }
 
-// HTTPConfig holds HTTP-specific configuration.
 // HTTPConfig holds HTTP transport configuration.
 type HTTPConfig struct {
-	Host      string `koanf:"host"`
-	Port      int    `koanf:"port"`
-	PublicURL string `koanf:"public_url"`
+	Host string `koanf:"host"`
+	Port int    `koanf:"port"`
 }
 
-// OAuthConfig holds OAuth authentication configuration.
-type OAuthConfig struct {
-	Domain      string `koanf:"domain"`
-	ResourceURL string `koanf:"resource_url"`
-	Scopes      string `koanf:"scopes"`
-}
-
-// TokenExchangeConfig holds OAuth2 token exchange configuration (RFC 8693).
-type TokenExchangeConfig struct {
-	TokenEndpoint             string `koanf:"token_endpoint"`
-	ClientID                  string `koanf:"client_id"`
-	ClientSecret              string `koanf:"client_secret"`
-	ClientAssertionSigningKey string `koanf:"client_assertion_signing_key"`
-	SubjectTokenType          string `koanf:"subject_token_type"`
-	Audience                  string `koanf:"audience"`
+// MCPAPIConfig holds MCP API configuration for OAuth Protected Resource Metadata.
+type MCPAPIConfig struct {
+	PublicURL   string   `koanf:"public_url"`
+	AuthServers []string `koanf:"auth_servers"`
+	Scopes      []string `koanf:"scopes"`
 }
 
 const errKey = "error"
@@ -72,16 +64,14 @@ func main() {
 	f.String("mode", "stdio", "Transport mode: stdio or http")
 	f.String("http.host", "127.0.0.1", "Host to bind to for HTTP transport")
 	f.Int("http.port", 8080, "Port to listen on for HTTP transport")
-	f.String("http.public_url", "", "Public URL for HTTP transport (for reverse proxies, e.g., https://example.com/mcp)")
-	f.String("oauth.domain", "", "Issuer domain for OAuth")
-	f.String("oauth.resource_url", "", "LFX API domain")
-	f.String("oauth.scopes", "openid,profile", "OAuth scopes (comma-separated)")
-	f.String("token_exchange.token_endpoint", "", "OAuth2 token endpoint URL for token exchange")
-	f.String("token_exchange.client_id", "", "M2M client ID for token exchange")
-	f.String("token_exchange.client_secret", "", "M2M client secret for token exchange (ignored if client_assertion_signing_key is set)")
-	f.String("token_exchange.client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")
-	f.String("token_exchange.subject_token_type", "", "Subject token type (e.g., LFX MCP API identifier)")
-	f.String("token_exchange.audience", "", "Target audience (e.g., LFX V2 API identifier)")
+	f.String("mcp_api.public_url", "", "Public URL for MCP API (for OAuth PRM; if not set, uses http://host:port/mcp)")
+	f.String("mcp_api.auth_servers", "", "Comma-separated list of authorization server URLs for OAuth PRM")
+	f.String("mcp_api.scopes", "openid,profile", "Comma-separated list of OAuth scopes for PRM")
+	f.String("client_id", "", "OAuth client ID for authentication")
+	f.String("client_secret", "", "OAuth client secret (ignored if client_assertion_signing_key is set)")
+	f.String("client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")
+	f.String("token_endpoint", "", "OAuth2 token endpoint URL for token exchange")
+	f.String("lfx_api_url", "", "LFX API URL (used as token exchange audience)")
 	f.String("tools", "", "Comma-separated list of tools to enable (default: none)")
 	f.Bool("debug", false, "Enable debug logging")
 
@@ -96,8 +86,8 @@ func main() {
 		TransformFunc: func(k, v string) (string, any) {
 			key := strings.Replace(strings.ToLower(
 				strings.TrimPrefix(k, "LFX_MCP_")), "_", ".", -1)
-			// Handle comma-separated list for tools.
-			if key == "tools" && v != "" {
+			// Handle comma-separated lists.
+			if (key == "tools" || key == "mcp_api.auth_servers" || key == "mcp_api.scopes") && v != "" {
 				return key, strings.Split(v, ",")
 			}
 			return key, v
@@ -134,26 +124,34 @@ func main() {
 	logger = slog.New(slog.NewJSONHandler(os.Stdout, logOptions))
 	slog.SetDefault(logger)
 
-	// Parse tools flag if provided as comma-separated string.
+	// Parse comma-separated flags.
 	if toolsFlag := f.Lookup("tools"); toolsFlag != nil && toolsFlag.Value.String() != "" {
 		cfg.Tools = strings.Split(toolsFlag.Value.String(), ",")
 	}
+	if authServersFlag := f.Lookup("mcp_api.auth_servers"); authServersFlag != nil && authServersFlag.Value.String() != "" {
+		cfg.MCPAPI.AuthServers = strings.Split(authServersFlag.Value.String(), ",")
+	}
+	if scopesFlag := f.Lookup("mcp_api.scopes"); scopesFlag != nil && scopesFlag.Value.String() != "" {
+		cfg.MCPAPI.Scopes = strings.Split(scopesFlag.Value.String(), ",")
+	}
 
-	// Configure user_info tool if OAuth is configured.
-	if cfg.OAuth.Domain != "" {
+	// Configure user_info tool if auth servers are configured.
+	if len(cfg.MCPAPI.AuthServers) > 0 {
+		// Use first auth server for user info lookups.
+		authServerURL := strings.TrimSuffix(cfg.MCPAPI.AuthServers[0], "/")
 		tools.SetUserInfoConfig(&tools.UserInfoConfig{
-			OAuthDomain: cfg.OAuth.Domain,
+			OAuthDomain: authServerURL,
 			HTTPClient:  &http.Client{Timeout: 30 * time.Second},
 		})
 	}
 
-	// Validate OAuth configuration for HTTP mode.
+	// Validate configuration for HTTP mode.
 	if cfg.Mode == "http" {
-		if cfg.OAuth.Domain == "" {
-			logger.Warn("oauth.domain not configured - OAuth metadata endpoint will not be available")
+		if len(cfg.MCPAPI.AuthServers) == 0 {
+			logger.Warn("mcp_api.auth_servers not configured - OAuth metadata endpoint will not be available")
 		}
-		if cfg.OAuth.ResourceURL == "" {
-			logger.Warn("oauth.resource_url not configured - LFX API clients will not be available")
+		if cfg.LFXAPIURL == "" {
+			logger.Warn("lfx_api_url not configured - token exchange will not be available")
 		}
 	}
 
@@ -219,12 +217,12 @@ func runHTTPServer(cfg Config) {
 	// Setup HTTP server with handler mounted on /mcp.
 	mux := http.NewServeMux()
 
-	// Apply OAuth bearer token middleware if OAuth is configured.
+	// Apply OAuth bearer token middleware if auth servers are configured.
 	// Note: We don't verify tokens here - we just proxy the Authorization header
 	// to upstream LFX APIs which perform the actual verification.
 	// TODO: extract principal for logging.
 	var mcpHandler http.Handler = handler
-	if cfg.OAuth.Domain != "" && cfg.OAuth.ResourceURL != "" {
+	if len(cfg.MCPAPI.AuthServers) > 0 {
 		resourceMetadataURL := fmt.Sprintf("http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)
 
 		// Pass-through verifier - accepts any token without validation.
@@ -243,25 +241,24 @@ func runHTTPServer(cfg Config) {
 
 	mux.Handle("/mcp", mcpHandler)
 
-	// Add Protected Resource Metadata endpoint if OAuth is configured.
-	if cfg.OAuth.Domain != "" && cfg.OAuth.ResourceURL != "" {
-		authServerURL := fmt.Sprintf("https://%s/", cfg.OAuth.Domain)
-
-		// Parse scopes from comma-separated string.
-		scopes := strings.Split(cfg.OAuth.Scopes, ",")
-		for i := range scopes {
-			scopes[i] = strings.TrimSpace(scopes[i])
+	// Add Protected Resource Metadata endpoint if auth servers are configured.
+	if len(cfg.MCPAPI.AuthServers) > 0 {
+		// Ensure auth server URLs end with /.
+		authServers := make([]string, len(cfg.MCPAPI.AuthServers))
+		for i, server := range cfg.MCPAPI.AuthServers {
+			authServers[i] = strings.TrimSuffix(server, "/") + "/"
 		}
 
-		// Use public URL if configured (for reverse proxies), otherwise use local HTTP address.
-		resourceURL := cfg.HTTP.PublicURL
+		// Determine resource URL (public URL takes precedence).
+		resourceURL := cfg.MCPAPI.PublicURL
 		if resourceURL == "" {
 			resourceURL = fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
 		}
+
 		metadata := &oauthex.ProtectedResourceMetadata{
 			Resource:             resourceURL,
-			AuthorizationServers: []string{authServerURL},
-			ScopesSupported:      scopes,
+			AuthorizationServers: authServers,
+			ScopesSupported:      cfg.MCPAPI.Scopes,
 		}
 
 		mux.Handle("/.well-known/oauth-protected-resource", auth.ProtectedResourceMetadataHandler(metadata))

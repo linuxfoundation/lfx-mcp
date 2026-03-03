@@ -70,8 +70,8 @@ echo "Starting server with OAuth configuration..."
 # Start server in background with HTTP mode.
 LFX_MCP_MODE=http \
 LFX_MCP_HTTP_PORT=8081 \
-LFX_MCP_OAUTH_DOMAIN="$AUTH0_DOMAIN" \
-LFX_MCP_OAUTH_RESOURCE_URL="$LFX_MCP_API_URL" \
+LFX_MCP_MCP_API_AUTH_SERVERS="https://$AUTH0_DOMAIN" \
+LFX_MCP_MCP_API_PUBLIC_URL="$LFX_MCP_API_URL" \
 LFX_MCP_TOOLS=hello_world \
 ./bin/lfx-mcp-server $DEBUG_FLAG &
 SERVER_PID=$!
@@ -171,20 +171,19 @@ echo "   - Use a test script with Device Authorization Grant"
 echo "   - Use Postman or similar OAuth client"
 echo ""
 echo "2. Set required environment variables:"
-echo "   export LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID='<client_id>'"
-echo "   export LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY_FILE='<path_to_pem>'"
+echo "   export LFX_MCP_CLIENT_ID='<client_id>'"
+echo "   export LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY_FILE='<path_to_pem>'"
 echo ""
 echo "3. Test token exchange with user_info tool:"
 echo "   # Start server with token exchange config"
 echo "   LFX_MCP_MODE=http \\"
 echo "   LFX_MCP_HTTP_PORT=8081 \\"
-echo "   LFX_MCP_OAUTH_DOMAIN=\"$AUTH0_DOMAIN\" \\"
-echo "   LFX_MCP_OAUTH_RESOURCE_URL=\"$LFX_MCP_API_URL\" \\"
-echo "   LFX_MCP_TOKEN_EXCHANGE_TOKEN_ENDPOINT=\"$TOKEN_ENDPOINT\" \\"
-echo "   LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID=\"\$LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID\" \\"
-echo "   LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY=\"\$(cat \$LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY_FILE)\" \\"
-echo "   LFX_MCP_TOKEN_EXCHANGE_SUBJECT_TOKEN_TYPE=\"$LFX_MCP_API_URL\" \\"
-echo "   LFX_MCP_TOKEN_EXCHANGE_AUDIENCE=\"$LFX_V2_API_URL/\" \\"
+echo "   LFX_MCP_MCP_API_AUTH_SERVERS=\"https://$AUTH0_DOMAIN\" \\"
+echo "   LFX_MCP_MCP_API_PUBLIC_URL=\"$LFX_MCP_API_URL\" \\"
+echo "   LFX_MCP_TOKEN_ENDPOINT=\"$TOKEN_ENDPOINT\" \\"
+echo "   LFX_MCP_CLIENT_ID=\"\$LFX_MCP_CLIENT_ID\" \\"
+echo "   LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY=\"\$(cat \$LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY_FILE)\" \\"
+echo "   LFX_MCP_LFX_API_URL=\"$LFX_V2_API_URL\" \\"
 echo "   LFX_MCP_TOOLS=user_info \\"
 echo "   LFX_MCP_DEBUG=true \\"
 echo "   ./bin/lfx-mcp-server"

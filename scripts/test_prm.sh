@@ -3,12 +3,12 @@
 
 set -e
 
-# Start server in background with Auth0 configured
+# Start server in background with MCP API configured
 ./bin/lfx-mcp-server \
   -mode=http \
   -http.port=8081 \
-  -auth0.domain=dev-lfx.us.auth0.com \
-  -auth0.resource_url=https://api-dev.lfx.linuxfoundation.org &
+  -mcp_api.auth_servers=https://dev-lfx.us.auth0.com \
+  -mcp_api.public_url=https://api-dev.lfx.linuxfoundation.org/mcp &
 
 SERVER_PID=$!
 echo "Started server with PID $SERVER_PID"

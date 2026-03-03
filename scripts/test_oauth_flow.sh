@@ -16,24 +16,24 @@ echo -e "${BLUE}=== LFX MCP OAuth Flow Test ===${NC}"
 echo ""
 
 # Check required environment variables.
-if [ -z "$LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID" ]; then
-    echo -e "${RED}Error: LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID is not set${NC}"
+if [ -z "$LFX_MCP_CLIENT_ID" ]; then
+    echo -e "${RED}Error: LFX_MCP_CLIENT_ID is not set${NC}"
     exit 1
 fi
 
-if [ -z "$LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY_FILE" ]; then
-    echo -e "${RED}Error: LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY_FILE is not set${NC}"
+if [ -z "$LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY_FILE" ]; then
+    echo -e "${RED}Error: LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY_FILE is not set${NC}"
     echo "Please set it to the path of your .pem file"
     exit 1
 fi
 
-if [ ! -f "$LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY_FILE" ]; then
-    echo -e "${RED}Error: Private key file not found: $LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY_FILE${NC}"
+if [ ! -f "$LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY_FILE" ]; then
+    echo -e "${RED}Error: Private key file not found: $LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY_FILE${NC}"
     exit 1
 fi
 
 # Load private key from file.
-PRIVATE_KEY=$(cat "$LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY_FILE")
+PRIVATE_KEY=$(cat "$LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY_FILE")
 
 # Set environment based on workspace (default to dev).
 WORKSPACE="${WORKSPACE:-dev}"
@@ -68,8 +68,8 @@ echo "  Auth0 Domain: $AUTH0_DOMAIN"
 echo "  Token Endpoint: $TOKEN_ENDPOINT"
 echo "  LFX MCP API: $LFX_MCP_API_URL"
 echo "  LFX V2 API: $LFX_V2_API_URL"
-echo "  Client ID: $LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID"
-echo "  Private Key File: $LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY_FILE"
+echo "  Client ID: $LFX_MCP_CLIENT_ID"
+echo "  Private Key File: $LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY_FILE"
 echo ""
 
 # Build the server if needed.
@@ -86,8 +86,8 @@ echo "Starting server with OAuth configuration..."
 # Start server in background with HTTP mode.
 LFX_MCP_MODE=http \
 LFX_MCP_HTTP_PORT=8081 \
-LFX_MCP_OAUTH_DOMAIN="$AUTH0_DOMAIN" \
-LFX_MCP_OAUTH_RESOURCE_URL="$LFX_MCP_API_URL" \
+LFX_MCP_MCP_API_AUTH_SERVERS="https://$AUTH0_DOMAIN" \
+LFX_MCP_MCP_API_PUBLIC_URL="$LFX_MCP_API_URL" \
 LFX_MCP_TOOLS=hello_world \
 ./bin/lfx-mcp-server &
 SERVER_PID=$!
@@ -132,7 +132,7 @@ MCP_TOKEN_RESPONSE=$(curl -s --request POST \
   --url "https://$AUTH0_DOMAIN/oauth/token" \
   --header 'content-type: application/x-www-form-urlencoded' \
   --data "grant_type=client_credentials" \
-  --data "client_id=$LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID" \
+  --data "client_id=$LFX_MCP_CLIENT_ID" \
   --data "client_secret=<placeholder>" \
   --data "audience=$LFX_MCP_API_URL")
 
@@ -150,13 +150,12 @@ if [ "$MCP_TOKEN" == "null" ] || [ -z "$MCP_TOKEN" ]; then
     echo "   # Start server with token exchange:"
     echo "   LFX_MCP_MODE=http \\"
     echo "   LFX_MCP_HTTP_PORT=8081 \\"
-    echo "   LFX_MCP_OAUTH_DOMAIN=\"$AUTH0_DOMAIN\" \\"
-    echo "   LFX_MCP_OAUTH_RESOURCE_URL=\"$LFX_MCP_API_URL\" \\"
-    echo "   LFX_MCP_TOKEN_EXCHANGE_TOKEN_ENDPOINT=\"$TOKEN_ENDPOINT\" \\"
-    echo "   LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID=\"$LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID\" \\"
-    echo "   LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY=\"\$(cat $LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY_FILE)\" \\"
-    echo "   LFX_MCP_TOKEN_EXCHANGE_SUBJECT_TOKEN_TYPE=\"$LFX_MCP_API_URL\" \\"
-    echo "   LFX_MCP_TOKEN_EXCHANGE_AUDIENCE=\"$LFX_V2_API_URL/\" \\"
+    echo "   LFX_MCP_MCP_API_AUTH_SERVERS=\"https://$AUTH0_DOMAIN\" \\"
+    echo "   LFX_MCP_MCP_API_PUBLIC_URL=\"$LFX_MCP_API_URL\" \\"
+    echo "   LFX_MCP_TOKEN_ENDPOINT=\"$TOKEN_ENDPOINT\" \\"
+    echo "   LFX_MCP_CLIENT_ID=\"$LFX_MCP_CLIENT_ID\" \\"
+    echo "   LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY=\"\$(cat $LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY_FILE)\" \\"
+    echo "   LFX_MCP_LFX_API_URL=\"$LFX_V2_API_URL\" \\"
     echo "   LFX_MCP_TOOLS=user_info \\"
     echo "   LFX_MCP_DEBUG=true \\"
     echo "   ./bin/lfx-mcp-server"
@@ -181,13 +180,12 @@ else
     echo "Starting server with token exchange configuration..."
     LFX_MCP_MODE=http \
     LFX_MCP_HTTP_PORT=8081 \
-    LFX_MCP_OAUTH_DOMAIN="$AUTH0_DOMAIN" \
-    LFX_MCP_OAUTH_RESOURCE_URL="$LFX_MCP_API_URL" \
-    LFX_MCP_TOKEN_EXCHANGE_TOKEN_ENDPOINT="$TOKEN_ENDPOINT" \
-    LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID="$LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID" \
-    LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY="$PRIVATE_KEY" \
-    LFX_MCP_TOKEN_EXCHANGE_SUBJECT_TOKEN_TYPE="$LFX_MCP_API_URL" \
-    LFX_MCP_TOKEN_EXCHANGE_AUDIENCE="$LFX_V2_API_URL/" \
+    LFX_MCP_MCP_API_AUTH_SERVERS="https://$AUTH0_DOMAIN" \
+    LFX_MCP_MCP_API_PUBLIC_URL="$LFX_MCP_API_URL" \
+    LFX_MCP_TOKEN_ENDPOINT="$TOKEN_ENDPOINT" \
+    LFX_MCP_CLIENT_ID="$LFX_MCP_CLIENT_ID" \
+    LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY="$PRIVATE_KEY" \
+    LFX_MCP_LFX_API_URL="$LFX_V2_API_URL" \
     LFX_MCP_TOOLS=user_info \
     ./bin/lfx-mcp-server &
     SERVER_PID=$!

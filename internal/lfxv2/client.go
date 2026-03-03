@@ -45,7 +45,7 @@ type Clients struct {
 }
 
 // NewClients initializes and returns LFX v2 API service clients.
-func NewClients(ctx context.Context, cfg ClientConfig) (*Clients, error) {
+func NewClients(_ctx context.Context, cfg ClientConfig) (*Clients, error) {
 	if cfg.APIDomain == "" {
 		return nil, fmt.Errorf("APIDomain is required")
 	}

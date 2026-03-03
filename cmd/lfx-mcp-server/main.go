@@ -226,7 +226,7 @@ func runHTTPServer(cfg Config) {
 		resourceMetadataURL := fmt.Sprintf("http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)
 
 		// Pass-through verifier - accepts any token without validation.
-		verifyToken := func(ctx context.Context, token string, req *http.Request) (*auth.TokenInfo, error) {
+		verifyToken := func(_ctx context.Context, _token string, _req *http.Request) (*auth.TokenInfo, error) {
 			return &auth.TokenInfo{
 				UserID: "_anonymous", // Placeholder until we extract from token.
 			}, nil

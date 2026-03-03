@@ -41,7 +41,7 @@ func RegisterUserInfo(server *mcp.Server) {
 }
 
 // handleUserInfo implements the user_info tool logic.
-func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, args UserInfoArgs) (*mcp.CallToolResult, any, error) {
+func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _args UserInfoArgs) (*mcp.CallToolResult, any, error) {
 	if userInfoConfig == nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{

@@ -27,11 +27,12 @@ import (
 
 // Config holds all configuration for the LFX MCP server.
 type Config struct {
-	Mode  string      `koanf:"mode"`
-	HTTP  HTTPConfig  `koanf:"http"`
-	OAuth OAuthConfig `koanf:"oauth"`
-	Tools []string    `koanf:"tools"`
-	Debug bool        `koanf:"debug"`
+	Mode          string              `koanf:"mode"`
+	HTTP          HTTPConfig          `koanf:"http"`
+	OAuth         OAuthConfig         `koanf:"oauth"`
+	TokenExchange TokenExchangeConfig `koanf:"token_exchange"`
+	Tools         []string            `koanf:"tools"`
+	Debug         bool                `koanf:"debug"`
 }
 
 // HTTPConfig holds HTTP-specific configuration.
@@ -45,6 +46,16 @@ type OAuthConfig struct {
 	Domain      string `koanf:"domain"`
 	ResourceURL string `koanf:"resource_url"`
 	Scopes      string `koanf:"scopes"`
+}
+
+// TokenExchangeConfig holds OAuth2 token exchange configuration (RFC 8693).
+type TokenExchangeConfig struct {
+	TokenEndpoint             string `koanf:"token_endpoint"`
+	ClientID                  string `koanf:"client_id"`
+	ClientSecret              string `koanf:"client_secret"`
+	ClientAssertionSigningKey string `koanf:"client_assertion_signing_key"`
+	SubjectTokenType          string `koanf:"subject_token_type"`
+	Audience                  string `koanf:"audience"`
 }
 
 const errKey = "error"
@@ -62,6 +73,12 @@ func main() {
 	f.String("oauth.domain", "", "Issuer domain for OAuth")
 	f.String("oauth.resource_url", "", "LFX API domain")
 	f.String("oauth.scopes", "openid,profile", "OAuth scopes (comma-separated)")
+	f.String("token_exchange.token_endpoint", "", "OAuth2 token endpoint URL for token exchange")
+	f.String("token_exchange.client_id", "", "M2M client ID for token exchange")
+	f.String("token_exchange.client_secret", "", "M2M client secret for token exchange (ignored if client_assertion_signing_key is set)")
+	f.String("token_exchange.client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")
+	f.String("token_exchange.subject_token_type", "", "Subject token type (e.g., LFX MCP API identifier)")
+	f.String("token_exchange.audience", "", "Target audience (e.g., LFX V2 API identifier)")
 	f.String("tools", "", "Comma-separated list of tools to enable (default: none)")
 	f.Bool("debug", false, "Enable debug logging")
 

@@ -73,6 +73,12 @@ The server supports configuration via both command-line flags and environment va
 - `-oauth.domain`: Issuer domain for IdP
 - `-oauth.resource_url`: LFX API domain for OAuth audience
 - `-oauth.scopes`: OAuth scopes as comma-separated list (default: `openid,profile`)
+- `-token_exchange.token_endpoint`: OAuth2 token endpoint URL for RFC 8693 token exchange (e.g., `https://example.auth0.com/oauth/token`)
+- `-token_exchange.client_id`: M2M client ID for token exchange
+- `-token_exchange.client_secret`: M2M client secret for token exchange (ignored if `client_assertion_signing_key` is set)
+- `-token_exchange.client_assertion_signing_key`: PEM-encoded RSA private key for client assertion (RFC 7523). Takes precedence over `client_secret` if both are provided
+- `-token_exchange.subject_token_type`: Subject token type for RFC 8693 (e.g., LFX MCP API identifier)
+- `-token_exchange.audience`: Target audience for exchanged token (e.g., LFX V2 API identifier)
 
 **Environment Variables:**
 
@@ -85,6 +91,12 @@ All environment variables use the `LFX_MCP_` prefix with underscore separators c
 - `LFX_MCP_OAUTH_DOMAIN`: Issuer domain for IdP
 - `LFX_MCP_OAUTH_RESOURCE_URL`: LFX API domain
 - `LFX_MCP_OAUTH_SCOPES`: OAuth scopes as comma-separated list (default: `openid,profile`)
+- `LFX_MCP_TOKEN_EXCHANGE_TOKEN_ENDPOINT`: OAuth2 token endpoint URL for RFC 8693 token exchange
+- `LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID`: M2M client ID for token exchange
+- `LFX_MCP_TOKEN_EXCHANGE_CLIENT_SECRET`: M2M client secret for token exchange (ignored if signing key is set)
+- `LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY`: PEM-encoded RSA private key for client assertion (RFC 7523)
+- `LFX_MCP_TOKEN_EXCHANGE_SUBJECT_TOKEN_TYPE`: Subject token type for RFC 8693 (e.g., LFX MCP API identifier)
+- `LFX_MCP_TOKEN_EXCHANGE_AUDIENCE`: Target audience for exchanged token (e.g., LFX V2 API identifier)
 
 **Examples:**
 

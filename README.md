@@ -83,22 +83,20 @@ The server supports configuration via both command-line flags and environment va
 
 **Environment Variables:**
 
-All environment variables use the `LFX_MCP_` prefix with underscore separators converted to dots:
-- `LFX_MCP_MODE`: Transport mode (`stdio` or `http`)
-- `LFX_MCP_HTTP_PORT`: HTTP server port
-- `LFX_MCP_HTTP_HOST`: HTTP server host
-- `LFX_MCP_HTTP_PUBLIC_URL`: Public URL for HTTP transport (for reverse proxies)
-- `LFX_MCP_DEBUG`: Enable debug logging (`true` or `false`)
-- `LFX_MCP_TOOLS`: Comma-separated list of tools to enable
-- `LFX_MCP_OAUTH_DOMAIN`: Issuer domain for IdP
-- `LFX_MCP_OAUTH_RESOURCE_URL`: LFX API domain
-- `LFX_MCP_OAUTH_SCOPES`: OAuth scopes as comma-separated list (default: `openid,profile`)
-- `LFX_MCP_TOKEN_EXCHANGE_TOKEN_ENDPOINT`: OAuth2 token endpoint URL for RFC 8693 token exchange
-- `LFX_MCP_TOKEN_EXCHANGE_CLIENT_ID`: M2M client ID for token exchange
-- `LFX_MCP_TOKEN_EXCHANGE_CLIENT_SECRET`: M2M client secret for token exchange (ignored if signing key is set)
-- `LFX_MCP_TOKEN_EXCHANGE_CLIENT_ASSERTION_SIGNING_KEY`: PEM-encoded RSA private key for client assertion (RFC 7523)
-- `LFX_MCP_TOKEN_EXCHANGE_SUBJECT_TOKEN_TYPE`: Subject token type for RFC 8693 (e.g., LFX MCP API identifier)
-- `LFX_MCP_TOKEN_EXCHANGE_AUDIENCE`: Target audience for exchanged token (e.g., LFX V2 API identifier)
+All environment variables use the `LFXMCP_` prefix. Variable names use underscores, which are automatically transformed to dots for nested configuration keys (e.g., `LFXMCP_HTTP_PORT` becomes `http.port`):
+- `LFXMCP_MODE`: Transport mode (`stdio` or `http`)
+- `LFXMCP_HTTP_HOST`: HTTP server host
+- `LFXMCP_HTTP_PORT`: HTTP server port
+- `LFXMCP_DEBUG`: Enable debug logging (`true` or `false`)
+- `LFXMCP_TOOLS`: Comma-separated list of tools to enable
+- `LFXMCP_MCP_API_AUTH_SERVERS`: Comma-separated list of authorization server URLs
+- `LFXMCP_MCP_API_PUBLIC_URL`: Public URL for MCP API (for OAuth PRM)
+- `LFXMCP_MCP_API_SCOPES`: OAuth scopes as comma-separated list (default: `openid,profile`)
+- `LFXMCP_CLIENT_ID`: OAuth client ID for authentication
+- `LFXMCP_CLIENT_SECRET`: OAuth client secret
+- `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY`: PEM-encoded RSA private key for client assertion
+- `LFXMCP_TOKEN_ENDPOINT`: OAuth2 token endpoint URL for token exchange
+- `LFXMCP_LFX_API_URL`: LFX API URL (used as token exchange audience)
 
 **Examples:**
 
@@ -114,13 +112,13 @@ With command-line flags:
 With environment variables:
 ```bash
 # Start in HTTP mode on custom port
-LFX_MCP_MODE=http LFX_MCP_HTTP_PORT=9090 ./bin/lfx-mcp-server
+LFXMCP_MODE=http LFXMCP_HTTP_PORT=9090 ./bin/lfx-mcp-server
 
 # Enable debug logging
-LFX_MCP_DEBUG=true ./bin/lfx-mcp-server -mode=stdio
+LFXMCP_DEBUG=true ./bin/lfx-mcp-server -mode=stdio
 
 # Override environment with command-line flag
-LFX_MCP_HTTP_PORT=9090 ./bin/lfx-mcp-server -mode=http -http.port=8888
+LFXMCP_HTTP_PORT=9090 ./bin/lfx-mcp-server -mode=http -http.port=8888
 ```
 
 ### Logging
@@ -140,7 +138,7 @@ Debug logging can be enabled via command-line flag or environment variable:
 ./bin/lfx-mcp-server -debug
 
 # Via environment variable
-LFX_MCP_DEBUG=true ./bin/lfx-mcp-server
+LFXMCP_DEBUG=true ./bin/lfx-mcp-server
 ```
 
 When debug logging is enabled, the following additional information is included:

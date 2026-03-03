@@ -80,12 +80,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load configuration from environment variables with LFX_MCP_ prefix.
+	// Load configuration from environment variables with LFXMCP_ prefix.
 	if err := k.Load(env.Provider(".", env.Opt{
-		Prefix: "LFX_MCP_",
+		Prefix: "LFXMCP_",
 		TransformFunc: func(k, v string) (string, any) {
-			key := strings.Replace(strings.ToLower(
-				strings.TrimPrefix(k, "LFX_MCP_")), "_", ".", -1)
+			key := strings.ToLower(strings.TrimPrefix(k, "LFXMCP_"))
+			// Replace underscores with dots for nested config (e.g., MCP_API_AUTH_SERVERS -> mcp_api.auth_servers).
+			key = strings.ReplaceAll(key, "mcp_api_", "mcp_api.")
+			key = strings.ReplaceAll(key, "http_", "http.")
 			// Handle comma-separated lists.
 			if (key == "tools" || key == "mcp_api.auth_servers" || key == "mcp_api.scopes") && v != "" {
 				return key, strings.Split(v, ",")

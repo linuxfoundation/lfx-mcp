@@ -103,7 +103,7 @@ The server uses Go's standard `slog` package for structured logging with the fol
 - **Format**: JSON (always)
 - **Output**: stdout
 - **Default Level**: INFO
-- **Debug Mode**: Enabled via `-debug` flag or `LFX_MCP_DEBUG=true` environment variable
+- **Debug Mode**: Enabled via `-debug` flag or `LFXMCP_DEBUG=true` environment variable
 
 ### Debug Logging
 
@@ -119,7 +119,7 @@ When debug logging is enabled:
 ./bin/lfx-mcp-server -debug
 
 # Via environment variable
-LFX_MCP_DEBUG=true ./bin/lfx-mcp-server
+LFXMCP_DEBUG=true ./bin/lfx-mcp-server
 
 # Both work in HTTP mode too
 ./bin/lfx-mcp-server -mode=http -debug
@@ -370,14 +370,39 @@ The Makefile uses optimized build flags:
 
 ## Environment Variables
 
-Currently, the server doesn't require environment variables, but future LFX integrations may add:
+The server supports configuration via environment variables with the `LFXMCP_` prefix. Environment variable names use underscores, which are automatically transformed to dots for nested configuration keys (e.g., `LFXMCP_HTTP_PORT` becomes `http.port`).
 
-| Variable      | Description          | Default | Required |
-|---------------|----------------------|---------|----------|
-| `LFX_API_URL` | LFX API base URL     | -       | Future   |
-| `DEBUG`       | Enable debug logging | false   | No       |
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `LFXMCP_MODE` | Transport mode (`stdio` or `http`) | stdio | No |
+| `LFXMCP_HTTP_HOST` | HTTP server host | 127.0.0.1 | No |
+| `LFXMCP_HTTP_PORT` | HTTP server port | 8080 | No |
+| `LFXMCP_HTTP_PUBLIC_URL` | Public URL for HTTP transport | - | No |
+| `LFXMCP_DEBUG` | Enable debug logging | false | No |
+| `LFXMCP_TOOLS` | Comma-separated list of tools to enable | - | No |
+| `LFXMCP_MCP_API_AUTH_SERVERS` | Comma-separated list of authorization server URLs | - | No |
+| `LFXMCP_MCP_API_PUBLIC_URL` | Public URL for MCP API (for OAuth PRM) | - | No |
+| `LFXMCP_MCP_API_SCOPES` | OAuth scopes as comma-separated list | openid,profile | No |
+| `LFXMCP_CLIENT_ID` | OAuth client ID for authentication | - | No |
+| `LFXMCP_CLIENT_SECRET` | OAuth client secret | - | No |
+| `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | PEM-encoded RSA private key for client assertion | - | No |
+| `LFXMCP_TOKEN_ENDPOINT` | OAuth2 token endpoint URL for token exchange | - | No |
+| `LFXMCP_LFX_API_URL` | LFX API URL (used as token exchange audience) | - | No |
 
-...and various other parameters needed to configure OAuth2 authentication.
+**Example:**
+
+```bash
+export LFXMCP_MODE=http
+export LFXMCP_HTTP_PORT=8080
+export LFXMCP_DEBUG=true
+export LFXMCP_TOOLS=hello_world,user_info
+export LFXMCP_MCP_API_AUTH_SERVERS=https://linuxfoundation-dev.auth0.com
+export LFXMCP_CLIENT_ID=your_client_id
+export LFXMCP_TOKEN_ENDPOINT=https://linuxfoundation-dev.auth0.com/oauth/token
+export LFXMCP_LFX_API_URL=https://lfx-api.dev.v2.cluster.linuxfound.info/
+
+./bin/lfx-mcp-server
+```
 
 ## Error Handling Patterns
 

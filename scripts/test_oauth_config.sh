@@ -68,11 +68,11 @@ echo -e "${BLUE}=== Test 1: Protected Resource Metadata (PRM) Endpoint ===${NC}"
 echo "Starting server with OAuth configuration..."
 
 # Start server in background with HTTP mode.
-LFX_MCP_MODE=http \
-LFX_MCP_HTTP_PORT=8081 \
-LFX_MCP_MCP_API_AUTH_SERVERS="https://$AUTH0_DOMAIN" \
-LFX_MCP_MCP_API_PUBLIC_URL="$LFX_MCP_API_URL" \
-LFX_MCP_TOOLS=hello_world \
+LFXMCP_MODE=http \
+LFXMCP_HTTP_PORT=8081 \
+LFXMCP_MCP_API_AUTH_SERVERS="https://$AUTH0_DOMAIN" \
+LFXMCP_MCP_API_PUBLIC_URL="$LFX_MCP_API_URL" \
+LFXMCP_TOOLS=hello_world \
 ./bin/lfx-mcp-server $DEBUG_FLAG &
 SERVER_PID=$!
 
@@ -171,21 +171,21 @@ echo "   - Use a test script with Device Authorization Grant"
 echo "   - Use Postman or similar OAuth client"
 echo ""
 echo "2. Set required environment variables:"
-echo "   export LFX_MCP_CLIENT_ID='<client_id>'"
-echo "   export LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY_FILE='<path_to_pem>'"
+echo "   export LFXMCP_CLIENT_ID='<client_id>'"
+echo "   export LFXMCP_CLIENT_ASSERTION_SIGNING_KEY_FILE='<path_to_pem>'"
 echo ""
 echo "3. Test token exchange with user_info tool:"
 echo "   # Start server with token exchange config"
-echo "   LFX_MCP_MODE=http \\"
-echo "   LFX_MCP_HTTP_PORT=8081 \\"
-echo "   LFX_MCP_MCP_API_AUTH_SERVERS=\"https://$AUTH0_DOMAIN\" \\"
-echo "   LFX_MCP_MCP_API_PUBLIC_URL=\"$LFX_MCP_API_URL\" \\"
-echo "   LFX_MCP_TOKEN_ENDPOINT=\"$TOKEN_ENDPOINT\" \\"
-echo "   LFX_MCP_CLIENT_ID=\"\$LFX_MCP_CLIENT_ID\" \\"
-echo "   LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY=\"\$(cat \$LFX_MCP_CLIENT_ASSERTION_SIGNING_KEY_FILE)\" \\"
-echo "   LFX_MCP_LFX_API_URL=\"$LFX_V2_API_URL\" \\"
-echo "   LFX_MCP_TOOLS=user_info \\"
-echo "   LFX_MCP_DEBUG=true \\"
+echo "   LFXMCP_MODE=http \\"
+echo "   LFXMCP_HTTP_PORT=8081 \\"
+echo "   LFXMCP_MCP_API_AUTH_SERVERS=\"https://$AUTH0_DOMAIN\" \\"
+echo "   LFXMCP_MCP_API_PUBLIC_URL=\"$LFX_MCP_API_URL\" \\"
+echo "   LFXMCP_TOKEN_ENDPOINT=\"$TOKEN_ENDPOINT\" \\"
+echo "   LFXMCP_CLIENT_ID=\"\$LFXMCP_CLIENT_ID\" \\"
+echo "   LFXMCP_CLIENT_ASSERTION_SIGNING_KEY=\"\$(cat \$LFXMCP_CLIENT_ASSERTION_SIGNING_KEY_FILE)\" \\"
+echo "   LFXMCP_LFX_API_URL=\"$LFX_V2_API_URL\" \\"
+echo "   LFXMCP_TOOLS=user_info \\"
+echo "   LFXMCP_DEBUG=true \\"
 echo "   ./bin/lfx-mcp-server"
 echo ""
 echo "   # Call user_info tool with your user token"

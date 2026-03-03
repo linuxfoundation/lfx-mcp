@@ -180,7 +180,9 @@ func newServer(cfg Config) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "lfx-mcp-server",
 		Version: "0.1.0",
-	}, nil)
+	}, &mcp.ServerOptions{
+		Logger: logger,
+	})
 
 	// Register tools based on configuration.
 	enabledTools := make(map[string]bool)
@@ -246,6 +248,9 @@ func runHTTPServer(cfg Config) {
 		mcpHandler = authMiddleware(handler)
 		logger.Info("OAuth bearer token required for /mcp endpoint (proxied to upstream)")
 	}
+
+	// Apply HTTP request logging at debug level.
+	mcpHandler = httpDebugLogging(logger)(mcpHandler)
 
 	mux.Handle("/mcp", mcpHandler)
 
@@ -314,4 +319,53 @@ func runHTTPServer(cfg Config) {
 	}
 
 	logger.Info("HTTP server stopped")
+}
+
+// httpDebugLogging returns HTTP middleware that logs requests at debug level.
+func httpDebugLogging(logger *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+
+			// Extract and trim JWT token if present.
+			logAttrs := []any{
+				"method", r.Method,
+				"path", r.URL.Path,
+				"remote_addr", r.RemoteAddr,
+			}
+
+			authHeader := r.Header.Get("Authorization")
+			if authHeader != "" {
+				// Check if it's a JWT token (bearer eyJ... with exactly 2 periods).
+				lowerAuth := strings.ToLower(authHeader)
+				if strings.HasPrefix(lowerAuth, "bearer eyj") {
+					// Extract token part after "Bearer ".
+					parts := strings.SplitN(authHeader, " ", 2)
+					if len(parts) == 2 {
+						token := parts[1]
+						periodCount := strings.Count(token, ".")
+						if periodCount == 2 {
+							// Trim everything after the second period (remove signature).
+							secondPeriod := strings.LastIndex(token, ".")
+							trimmedToken := token[:secondPeriod]
+							logAttrs = append(logAttrs, "bearer_token", trimmedToken)
+						}
+					}
+				}
+			}
+
+			// Log incoming request at DEBUG level.
+			logger.Debug("http request", logAttrs...)
+
+			// Call the next handler.
+			next.ServeHTTP(w, r)
+
+			// Log completion at DEBUG level.
+			logger.Debug("http request completed",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"duration_ms", time.Since(start).Milliseconds(),
+			)
+		})
+	}
 }

@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Copyright The Linux Foundation and contributors.
+# SPDX-License-Identifier: MIT
+
 # Test Protected Resource Metadata endpoint
 
 set -e

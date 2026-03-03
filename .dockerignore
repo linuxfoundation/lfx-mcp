@@ -30,7 +30,7 @@ LICENSE*
 
 # Development files
 Makefile
-test_server.sh
+scripts/
 check-headers.sh
 
 # Build artifacts

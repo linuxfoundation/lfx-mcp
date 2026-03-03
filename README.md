@@ -68,6 +68,7 @@ The server supports configuration via both command-line flags and environment va
 - `-mode`: Transport mode: `stdio` or `http` (default: `stdio`)
 - `-http.port`: Port to listen on for HTTP transport (default: `8080`)
 - `-http.host`: Host to bind to for HTTP transport (default: `127.0.0.1`)
+- `-http.public_url`: Public URL for HTTP transport (for reverse proxies, e.g., `https://example.com/mcp`)
 - `-debug`: Enable debug logging with source location tracking (default: `false`)
 - `-tools`: Comma-separated list of tools to enable (default: none)
 - `-oauth.domain`: Issuer domain for IdP
@@ -86,6 +87,7 @@ All environment variables use the `LFX_MCP_` prefix with underscore separators c
 - `LFX_MCP_MODE`: Transport mode (`stdio` or `http`)
 - `LFX_MCP_HTTP_PORT`: HTTP server port
 - `LFX_MCP_HTTP_HOST`: HTTP server host
+- `LFX_MCP_HTTP_PUBLIC_URL`: Public URL for HTTP transport (for reverse proxies)
 - `LFX_MCP_DEBUG`: Enable debug logging (`true` or `false`)
 - `LFX_MCP_TOOLS`: Comma-separated list of tools to enable
 - `LFX_MCP_OAUTH_DOMAIN`: Issuer domain for IdP

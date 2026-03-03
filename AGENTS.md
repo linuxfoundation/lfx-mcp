@@ -24,10 +24,10 @@ lfx-mcp/
 │   └── lfx-mcp-server/     # Main application entry point
 ├── internal/
 │   └── tools/              # MCP tool implementations
+├── scripts/                # Test and utility scripts
 ├── bin/                    # Built binaries (gitignored)
 ├── go.mod                  # Go module definition
 ├── Makefile               # Build automation
-├── test_server.sh         # Integration test script
 ├── README.md              # User documentation
 └── AGENTS.md              # This file (AI agent guidelines)
 ```
@@ -67,10 +67,10 @@ make build
 
 ```bash
 # Integration tests
-./test_server.sh
+./scripts/test_server.sh
 
 # Integration tests with debug logging
-./test_server.sh --debug
+./scripts/test_server.sh --debug
 
 # Manual testing
 make run  # Starts server in stdio mode
@@ -288,10 +288,10 @@ Test the server by sending JSON-RPC messages:
 
 ### Integration Test Script
 
-The `test_server.sh` script provides comprehensive testing:
+The `scripts/test_server.sh` script provides comprehensive testing:
 
 ```bash
-./test_server.sh
+./scripts/test_server.sh
 ```
 
 This tests:
@@ -436,7 +436,7 @@ func(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallT
 2. **Tool Organization**: One tool per file (e.g., `hello_world.go`, `my_tool.go`)
 3. **Registration Pattern**: Each tool should have a `Register<ToolName>(server)` function
 4. **Schema Tags**: Always include descriptive `jsonschema` tags
-5. **Testing**: Test new tools with the test script (`./test_server.sh`)
+5. **Testing**: Test new tools with the test script (`./scripts/test_server.sh`)
 6. **Documentation**: Update README.md for user-facing changes
 7. **Code Quality**: Run `make check` before commits
 

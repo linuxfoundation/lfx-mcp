@@ -36,9 +36,11 @@ type Config struct {
 }
 
 // HTTPConfig holds HTTP-specific configuration.
+// HTTPConfig holds HTTP transport configuration.
 type HTTPConfig struct {
-	Host string `koanf:"host"`
-	Port int    `koanf:"port"`
+	Host      string `koanf:"host"`
+	Port      int    `koanf:"port"`
+	PublicURL string `koanf:"public_url"`
 }
 
 // OAuthConfig holds OAuth authentication configuration.
@@ -70,6 +72,7 @@ func main() {
 	f.String("mode", "stdio", "Transport mode: stdio or http")
 	f.String("http.host", "127.0.0.1", "Host to bind to for HTTP transport")
 	f.Int("http.port", 8080, "Port to listen on for HTTP transport")
+	f.String("http.public_url", "", "Public URL for HTTP transport (for reverse proxies, e.g., https://example.com/mcp)")
 	f.String("oauth.domain", "", "Issuer domain for OAuth")
 	f.String("oauth.resource_url", "", "LFX API domain")
 	f.String("oauth.scopes", "openid,profile", "OAuth scopes (comma-separated)")
@@ -248,7 +251,11 @@ func runHTTPServer(cfg Config) {
 			scopes[i] = strings.TrimSpace(scopes[i])
 		}
 
-		resourceURL := fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
+		// Use public URL if configured (for reverse proxies), otherwise use local HTTP address.
+		resourceURL := cfg.HTTP.PublicURL
+		if resourceURL == "" {
+			resourceURL = fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
+		}
 		metadata := &oauthex.ProtectedResourceMetadata{
 			Resource:             resourceURL,
 			AuthorizationServers: []string{authServerURL},

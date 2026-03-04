@@ -51,8 +51,8 @@ gateway:
   # listeners is a map of listener configurations keyed by listener name.
   listeners:
     https:
-      # port is the listener port.
-      port: 443
+      # port is the listener port (8443 is Traefik's websecure entrypoint for HTTPS).
+      port: 8443
       # protocol is the listener protocol.
       protocol: HTTPS
       # hostname is the public DNS hostname for this listener (required).

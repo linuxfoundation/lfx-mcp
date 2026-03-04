@@ -70,7 +70,7 @@ func RegisterSearchCommitteeMembers(server *mcp.Server) {
 // SearchCommitteesArgs defines the input parameters for the search_committees tool.
 type SearchCommitteesArgs struct {
 	Name       string `json:"name,omitempty" jsonschema:"Name or partial name of the committee to search for"`
-	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter committees by project"`
+	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Optional v2 project UID to filter committees by project (e.g. a27394a3-7a6c-4d0f-9e0f-692d8753924f)"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -154,7 +154,9 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 	}
 
 	if args.ProjectUID != "" {
-		payload.Parent = &args.ProjectUID
+		// The query service requires parent refs in the form "<type>:<id>".
+		parentRef := "project:" + args.ProjectUID
+		payload.Parent = &parentRef
 	}
 
 	if args.PageToken != "" {

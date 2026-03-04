@@ -75,7 +75,7 @@ func main() {
 	f.String("client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")
 	f.String("token_endpoint", "", "OAuth2 token endpoint URL for token exchange")
 	f.String("lfx_api_url", "", "LFX API URL (used as token exchange audience)")
-	f.String("tools", "", "Comma-separated list of tools to enable (default: none)")
+	f.String("tools", "search_projects,get_project", "Comma-separated list of tools to enable")
 	f.Bool("debug", false, "Enable debug logging")
 
 	if err := f.Parse(os.Args[1:]); err != nil {

@@ -37,8 +37,10 @@ spec:
               value: {{ .Values.app.mcpApiAuthServers | quote }}
             - name: LFXMCP_MCP_API_SCOPES
               value: {{ .Values.app.mcpApiScopes | quote }}
+            {{- if .Values.app.tools }}
             - name: LFXMCP_TOOLS
               value: {{ .Values.app.tools | quote }}
+            {{- end }}
             - name: LFXMCP_TOKEN_ENDPOINT
               value: {{ .Values.app.tokenEndpoint | quote }}
             - name: LFXMCP_LFX_API_URL

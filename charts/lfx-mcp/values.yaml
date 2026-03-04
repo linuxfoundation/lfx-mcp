@@ -75,7 +75,7 @@ app:
   mcpApiAuthServers: ""
   # mcpApiScopes is the comma-separated list of OAuth2 scopes to request.
   mcpApiScopes: "openid,profile"
-  # tools is the comma-separated list of tool groups to enable (empty enables all).
+  # tools is the comma-separated list of tools to enable (empty enables all tools).
   tools: ""
   # lfxAPIURL is the base URL of the LFX API.
   lfxAPIURL: ""

@@ -76,7 +76,7 @@ func main() {
 	f.String("client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")
 	f.String("token_endpoint", "", "OAuth2 token endpoint URL for token exchange")
 	f.String("lfx_api_url", "", "LFX API URL (used as token exchange audience)")
-	f.String("tools", "search_projects,get_project", "Comma-separated list of tools to enable")
+	f.String("tools", "search_projects,get_project,search_committees,get_committee,get_committee_member", "Comma-separated list of tools to enable")
 	f.Bool("debug", false, "Enable debug logging")
 	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls")
 
@@ -169,13 +169,18 @@ func main() {
 			HTTPClient:                &http.Client{Timeout: 30 * time.Second},
 		})
 		if err != nil {
-			logger.Warn("failed to create token exchange client - project tools will not be available", errKey, err)
+			logger.Warn("failed to create token exchange client - project and committee tools will not be available", errKey, err)
 		} else {
 			var debugLogger *slog.Logger
 			if cfg.DebugTraffic {
 				debugLogger = logger
 			}
 			tools.SetProjectConfig(&tools.ProjectConfig{
+				LFXAPIURL:           cfg.LFXAPIURL,
+				TokenExchangeClient: tokenExchangeClient,
+				DebugLogger:         debugLogger,
+			})
+			tools.SetCommitteeConfig(&tools.CommitteeConfig{
 				LFXAPIURL:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
 				DebugLogger:         debugLogger,
@@ -266,6 +271,15 @@ func newServer(cfg Config) *mcp.Server {
 	}
 	if enabledTools["get_project"] {
 		tools.RegisterGetProject(server)
+	}
+	if enabledTools["search_committees"] {
+		tools.RegisterSearchCommittees(server)
+	}
+	if enabledTools["get_committee"] {
+		tools.RegisterGetCommittee(server)
+	}
+	if enabledTools["get_committee_member"] {
+		tools.RegisterGetCommitteeMember(server)
 	}
 
 	return server

@@ -56,6 +56,8 @@ import (
 
 	goahttp "goa.design/goa/v3/http"
 
+	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
+	committeehttpclient "github.com/linuxfoundation/lfx-v2-committee-service/gen/http/committee_service/client"
 	projecthttpclient "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/http/project_service/client"
 	projectservice "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/project_service"
 	queryhttpclient "github.com/linuxfoundation/lfx-v2-query-service/gen/http/query_svc/client"
@@ -117,8 +119,9 @@ type ClientConfig struct {
 
 // Clients holds initialized LFX v2 API service clients.
 type Clients struct {
-	Project  *projectservice.Client
-	QuerySvc *querysvc.Client
+	Committee *committeeservice.Client
+	Project   *projectservice.Client
+	QuerySvc  *querysvc.Client
 
 	tokenExchangeClient *TokenExchangeClient
 
@@ -160,6 +163,36 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 	if cfg.TokenExchangeClient != nil {
 		httpClient = clients.wrapWithAuthInterceptor(httpClient)
 	}
+
+	// Initialize committee service client.
+	committeeURL, err := url.Parse(cfg.APIDomain + "/committees")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse committee service URL: %w", err)
+	}
+
+	committeeHTTPClient := committeehttpclient.NewClient(
+		committeeURL.Scheme,
+		committeeURL.Host,
+		httpClient,
+		goahttp.RequestEncoder,
+		goahttp.ResponseDecoder,
+		false,
+	)
+
+	clients.Committee = committeeservice.NewClient(
+		committeeHTTPClient.CreateCommittee(),
+		committeeHTTPClient.GetCommitteeBase(),
+		committeeHTTPClient.UpdateCommitteeBase(),
+		committeeHTTPClient.DeleteCommittee(),
+		committeeHTTPClient.GetCommitteeSettings(),
+		committeeHTTPClient.UpdateCommitteeSettings(),
+		committeeHTTPClient.Readyz(),
+		committeeHTTPClient.Livez(),
+		committeeHTTPClient.CreateCommitteeMember(),
+		committeeHTTPClient.GetCommitteeMember(),
+		committeeHTTPClient.UpdateCommitteeMember(),
+		committeeHTTPClient.DeleteCommitteeMember(),
+	)
 
 	// Initialize project service client.
 	projectURL, err := url.Parse(cfg.APIDomain + "/projects")

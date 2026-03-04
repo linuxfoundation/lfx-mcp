@@ -9,7 +9,9 @@ require (
 	github.com/knadh/koanf/providers/env/v2 v2.0.0
 	github.com/knadh/koanf/v2 v2.3.2
 	github.com/lestrrat-go/jwx/v2 v2.1.6
+	github.com/linuxfoundation/lfx-v2-committee-service v0.2.19
 	github.com/linuxfoundation/lfx-v2-project-service v0.5.7
+	github.com/linuxfoundation/lfx-v2-query-service v0.4.12
 	github.com/modelcontextprotocol/go-sdk v1.4.0
 	goa.design/goa/v3 v3.25.3
 )
@@ -28,7 +30,6 @@ require (
 	github.com/lestrrat-go/httprc v1.0.6 // indirect
 	github.com/lestrrat-go/iter v1.0.2 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
-	github.com/linuxfoundation/lfx-v2-query-service v0.4.12 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect

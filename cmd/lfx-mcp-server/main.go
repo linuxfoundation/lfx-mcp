@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -301,7 +302,16 @@ func runHTTPServer(cfg Config) {
 	// Apply OAuth bearer token middleware if auth servers are configured.
 	var mcpHandler http.Handler = handler
 	if len(cfg.MCPAPI.AuthServers) > 0 {
-		resourceMetadataURL := fmt.Sprintf("http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)
+		// Use the public URL base for the resource metadata URL so that MCP clients
+		// outside the cluster can reach it via the WWW-Authenticate header.
+		resourceMetadataBase := cfg.MCPAPI.PublicURL
+		if resourceMetadataBase == "" {
+			resourceMetadataBase = fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
+		}
+		// Derive the well-known URL from the public MCP endpoint by replacing the path.
+		resourceMetadataBaseURL, _ := url.Parse(resourceMetadataBase)
+		resourceMetadataBaseURL.Path = "/.well-known/oauth-protected-resource"
+		resourceMetadataURL := resourceMetadataBaseURL.String()
 
 		// Determine the expected audience for JWT verification.
 		audience := cfg.MCPAPI.PublicURL

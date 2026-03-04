@@ -9,7 +9,8 @@
 *.dll
 *.so
 *.dylib
-lfx-mcp
+/lfx-mcp
+/lfx-mcp-server
 
 # Go build artifacts
 *.test

@@ -288,6 +288,16 @@ func runHTTPServer(cfg Config) {
 	// Setup HTTP server with handler mounted on /mcp.
 	mux := http.NewServeMux()
 
+	// Register health endpoints unconditionally so probes work without auth.
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
 	// Apply OAuth bearer token middleware if auth servers are configured.
 	var mcpHandler http.Handler = handler
 	if len(cfg.MCPAPI.AuthServers) > 0 {

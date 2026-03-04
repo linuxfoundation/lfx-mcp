@@ -24,6 +24,8 @@ jobs:
       id-token: write
     outputs:
       app_version: ${{ steps.prepare.outputs.app_version }}
+      chart_name: ${{ steps.prepare.outputs.chart_name }}
+      chart_version: ${{ steps.prepare.outputs.chart_version }}
       digest: ${{ steps.build.outputs.digest }}
       image_name: ${{ steps.build.outputs.image_name }}
     steps:
@@ -35,7 +37,13 @@ jobs:
         run: |
           set -euo pipefail
           APP_VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
-          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          CHART_NAME="$(yq '.name' charts/*/Chart.yaml)"
+          CHART_VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
+          {
+            echo "app_version=$APP_VERSION"
+            echo "chart_name=$CHART_NAME"
+            echo "chart_version=$CHART_VERSION"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Setup Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
@@ -84,6 +92,68 @@ jobs:
         run: |
           set -euo pipefail
           cosign sign --yes '${{ steps.build.outputs.image_name }}@${{ steps.build.outputs.digest }}'
+
+  release-helm-chart:
+    needs:
+      - publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    outputs:
+      digest: ${{ steps.publish-ghcr.outputs.digest }}
+      image_name: ${{ steps.publish-ghcr.outputs.image_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Publish Chart to GHCR
+        id: publish-ghcr
+        # yamllint disable-line rule:line-length
+        uses: linuxfoundation/lfx-public-workflows/.github/actions/helm-chart-oci-publisher@17e4144d7ba68f7c3e8c16eece5aed15fd7c2dc8 # main
+        with:
+          name: ${{ needs.publish.outputs.chart_name }}
+          repository: ${{ github.repository }}/chart
+          chart_version: ${{ needs.publish.outputs.chart_version }}
+          app_version: ${{ needs.publish.outputs.app_version }}
+          registry: ghcr.io
+          registry_username: ${{ github.actor }}
+          registry_password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+        with:
+          cosign-release: "${{ env.COSIGN_VERSION }}"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign the Helm chart in GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes '${{ steps.publish-ghcr.outputs.image_name }}@${{ steps.publish-ghcr.outputs.digest }}'
+
+  create-ghcr-helm-provenance:
+    needs:
+      - release-helm-chart
+    permissions:
+      actions: read
+      id-token: write
+      packages: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ${{ needs.release-helm-chart.outputs.image_name }}
+      digest: ${{ needs.release-helm-chart.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   create-provenance:
     needs:

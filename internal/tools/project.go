@@ -110,6 +110,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 
 	resourceType := projectResourceType
 	payload := &querysvc.QueryResourcesPayload{
+		Version:  "1",
 		Type:     &resourceType,
 		PageSize: pageSize,
 		Sort:     "name_asc",

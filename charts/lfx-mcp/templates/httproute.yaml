@@ -13,9 +13,11 @@ spec:
     - group: gateway.networking.k8s.io
       kind: Gateway
       name: {{ .Values.gateway.name }}
-      namespace: {{ .Release.Namespace }}
+      namespace: {{ .Values.gateway.namespace | default .Release.Namespace }}
+  {{- with .Values.gateway.listeners.https.hostname }}
   hostnames:
-    - {{ .Values.gateway.listeners.https.hostname | quote }}
+    - {{ . | quote }}
+  {{- end }}
   rules:
     - matches:
         - path:

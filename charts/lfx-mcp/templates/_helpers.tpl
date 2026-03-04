@@ -56,8 +56,30 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Derive the public MCP URL from the default https listener hostname.
+Determine the public MCP hostname.
+Prefer .Values.gateway.publicHostname if set; otherwise derive it
+from the first listener in .Values.gateway.listeners that has a hostname.
+*/}}
+{{- define "lfx-mcp.mcpPublicHostname" -}}
+{{- if .Values.gateway.publicHostname }}
+{{- .Values.gateway.publicHostname }}
+{{- else }}
+{{- $hostname := "" }}
+{{- range $name, $listener := .Values.gateway.listeners }}
+{{- if and (not $hostname) $listener.hostname }}
+{{- $hostname = $listener.hostname }}
+{{- end }}
+{{- end }}
+{{- $hostname }}
+{{- end }}
+{{- end }}
+
+{{/*
+Derive the public MCP URL from the public hostname.
 */}}
 {{- define "lfx-mcp.mcpPublicURL" -}}
-{{- printf "https://%s/mcp" .Values.gateway.listeners.https.hostname }}
+{{- $hostname := include "lfx-mcp.mcpPublicHostname" . | trim }}
+{{- if $hostname }}
+{{- printf "https://%s/mcp" $hostname }}
+{{- end }}
 {{- end }}

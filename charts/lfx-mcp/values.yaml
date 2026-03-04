@@ -35,6 +35,9 @@ gateway:
   name: lfx-mcp-gateway
   # namespace overrides the namespace for the Gateway resource (defaults to Release.Namespace).
   namespace: ""
+  # publicHostname overrides the public DNS hostname used to construct LFXMCP_MCP_API_PUBLIC_URL.
+  # When empty, the hostname is derived from the first listener that has a hostname set.
+  publicHostname: ""
   # gatewayClassName is the GatewayClass to use.
   gatewayClassName: traefik
   # annotations are additional annotations to add to the Gateway resource. The

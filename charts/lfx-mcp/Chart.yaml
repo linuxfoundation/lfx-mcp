@@ -1,0 +1,11 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+---
+apiVersion: v2
+name: lfx-mcp
+description: LFX MCP Server chart
+type: application
+# These versions should not be incremented, as there are dynamically replaced
+# with the release version during the chart build job.
+version: 0.0.1
+appVersion: latest

@@ -1,0 +1,70 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gateway.name }}
+  namespace: {{ .Values.gateway.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "lfx-mcp.labels" . | nindent 4 }}
+    {{- with .Values.gateway.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.gateway.certIssuer }}
+    {{- range $name, $listener := .Values.gateway.listeners }}
+    {{- if $listener.hostname }}
+    external-dns.alpha.kubernetes.io/hostname: {{ $listener.hostname }}
+    {{- end }}
+    {{- end }}
+    {{- with .Values.gateway.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  gatewayClassName: {{ .Values.gateway.gatewayClassName }}
+  listeners:
+    {{- range $name, $listener := .Values.gateway.listeners }}
+    - name: {{ $name }}
+      port: {{ $listener.port | int }}
+      protocol: {{ $listener.protocol }}
+      {{- if $listener.hostname }}
+      hostname: {{ $listener.hostname | quote }}
+      {{- end }}
+      {{- if $listener.allowedRoutes }}
+      allowedRoutes:
+        {{- if $listener.allowedRoutes.namespaces }}
+        namespaces:
+          {{- if $listener.allowedRoutes.namespaces.from }}
+          from: {{ $listener.allowedRoutes.namespaces.from }}
+          {{- end }}
+          {{- if $listener.allowedRoutes.namespaces.selector }}
+          selector:
+            {{- toYaml $listener.allowedRoutes.namespaces.selector | nindent 12 }}
+          {{- end }}
+        {{- end }}
+        {{- if $listener.allowedRoutes.kinds }}
+        kinds:
+          {{- toYaml $listener.allowedRoutes.kinds | nindent 10 }}
+        {{- end }}
+      {{- end }}
+      {{- if and (eq $listener.protocol "HTTPS") $listener.tls }}
+      tls:
+        mode: {{ $listener.tls.mode | default "Terminate" }}
+        {{- if $listener.tls.certificateRefs }}
+        certificateRefs:
+          {{- range $listener.tls.certificateRefs }}
+          - group: {{ .group | default "" | quote }}
+            kind: {{ .kind | default "Secret" }}
+            name: {{ .name }}
+            {{- if .namespace }}
+            namespace: {{ .namespace }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+        {{- if $listener.tls.options }}
+        options:
+          {{- toYaml $listener.tls.options | nindent 10 }}
+        {{- end }}
+      {{- end }}
+    {{- end }}

@@ -1,0 +1,100 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+---
+# image is the configuration for the container image.
+image:
+  # repository is the container image repository.
+  repository: ghcr.io/linuxfoundation/lfx-mcp/lfx-mcp-server
+  # tag is the container image tag (overrides appVersion from Chart.yaml).
+  tag: ""
+  # pullPolicy is the image pull policy.
+  pullPolicy: IfNotPresent
+
+# replicaCount is the number of replicas for the deployment.
+replicaCount: 1
+
+# resources is the configuration for container resource limits and requests.
+resources:
+  # limits is the maximum amount of resources the container can use.
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  # requests is the amount of resources the container requests.
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+# service is the configuration for the Kubernetes service.
+service:
+  # port is the service port.
+  port: 8080
+
+# gateway is the configuration for the Gateway API resources.
+gateway:
+  # name is the name of the Gateway resource to create.
+  name: lfx-mcp-gateway
+  # namespace overrides the namespace for the Gateway resource (defaults to Release.Namespace).
+  namespace: ""
+  # publicHostname overrides the public DNS hostname used to construct LFXMCP_MCP_API_PUBLIC_URL.
+  # When empty, the hostname is derived from the first listener that has a hostname set.
+  publicHostname: ""
+  # gatewayClassName is the GatewayClass to use.
+  gatewayClassName: traefik
+  # annotations are additional annotations to add to the Gateway resource. The
+  # cert-manager.io/cluster-issuer and external-dns.alpha.kubernetes.io/hostname annotations
+  # are set automatically from certIssuer and the listener hostname, but can be overridden here.
+  annotations: {}
+  # labels are additional labels to add to the Gateway resource.
+  labels: {}
+  # certIssuer is the cert-manager ClusterIssuer annotation value for TLS certificate provisioning.
+  certIssuer: letsencrypt-prod
+  # listeners is a map of listener configurations keyed by listener name.
+  listeners:
+    https:
+      # port is the listener port.
+      port: 443
+      # protocol is the listener protocol.
+      protocol: HTTPS
+      # hostname is the public DNS hostname for this listener (required).
+      hostname: ""
+      allowedRoutes:
+        namespaces:
+          from: Same
+      tls:
+        # mode is the TLS termination mode.
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            # name is the name of the TLS Secret (managed by cert-manager).
+            name: lfx-mcp-tls
+
+# app is the configuration for the application.
+app:
+  # mcpApiAuthServers is the space-separated list of OAuth2 authorization server URLs.
+  mcpApiAuthServers: ""
+  # mcpApiScopes is the comma-separated list of OAuth2 scopes to request.
+  mcpApiScopes: "openid,profile"
+  # tools is the comma-separated list of tool groups to enable (empty enables all).
+  tools: ""
+  # lfxAPIURL is the base URL of the LFX API.
+  lfxAPIURL: ""
+  # tokenEndpoint is the OAuth2 token endpoint URL used for client credentials.
+  tokenEndpoint: ""
+
+# secrets contains the name of the pre-existing Kubernetes Secret created by the external
+# secrets operator, along with the keys under which each credential is stored.
+secrets:
+  # name is the name of the Kubernetes Secret.
+  name: lfx-mcp-secrets
+  # keys maps each credential to the key name used in the Secret.
+  keys:
+    # clientID is the key name for the OAuth2 client ID.
+    clientID: client_id
+    # clientSecret is the key name for the OAuth2 client secret (used when authenticating
+    # with a shared secret rather than a signed client assertion).
+    clientSecret: client_secret
+    # clientAssertionSigningKey is the key name for the private key used to sign client
+    # assertions (used when authenticating with a JWT client assertion instead of a
+    # client secret).
+    clientAssertionSigningKey: client_assertion_signing_key

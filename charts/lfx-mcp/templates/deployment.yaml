@@ -1,0 +1,85 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lfx-mcp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lfx-mcp.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "lfx-mcp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lfx-mcp.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+          env:
+            - name: LFXMCP_MODE
+              value: http
+            - name: LFXMCP_HTTP_HOST
+              value: "0.0.0.0"
+            - name: LFXMCP_HTTP_PORT
+              value: {{ .Values.service.port | quote }}
+            - name: LFXMCP_MCP_API_PUBLIC_URL
+              value: {{ include "lfx-mcp.mcpPublicURL" . | quote }}
+            - name: LFXMCP_MCP_API_AUTH_SERVERS
+              value: {{ .Values.app.mcpApiAuthServers | quote }}
+            - name: LFXMCP_MCP_API_SCOPES
+              value: {{ .Values.app.mcpApiScopes | quote }}
+            - name: LFXMCP_TOOLS
+              value: {{ .Values.app.tools | quote }}
+            - name: LFXMCP_TOKEN_ENDPOINT
+              value: {{ .Values.app.tokenEndpoint | quote }}
+            - name: LFXMCP_LFX_API_URL
+              value: {{ .Values.app.lfxAPIURL | quote }}
+            - name: LFXMCP_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.name }}
+                  key: {{ .Values.secrets.keys.clientID }}
+            - name: LFXMCP_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.name }}
+                  key: {{ .Values.secrets.keys.clientSecret }}
+                  optional: true
+            - name: LFXMCP_CLIENT_ASSERTION_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.name }}
+                  key: {{ .Values.secrets.keys.clientAssertionSigningKey }}
+                  optional: true
+          ports:
+            - name: web
+              containerPort: {{ .Values.service.port }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: web
+            failureThreshold: 3
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: web
+            failureThreshold: 1
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: web
+            failureThreshold: 30
+            periodSeconds: 1

@@ -47,7 +47,9 @@ package lfxv2
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"sync"
 	"time"
@@ -107,6 +109,10 @@ type ClientConfig struct {
 	// If provided, the client will automatically exchange MCP tokens (from request context)
 	// for target API tokens.
 	TokenExchangeClient *TokenExchangeClient
+
+	// DebugLogger is used for debug-level HTTP request/response logging.
+	// If nil, debug logging is disabled.
+	DebugLogger *slog.Logger
 }
 
 // Clients holds initialized LFX v2 API service clients.
@@ -145,6 +151,10 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 	clients := &Clients{
 		tokenExchangeClient: cfg.TokenExchangeClient,
 		tokenCache:          make(map[string]*cachedToken),
+	}
+
+	if cfg.DebugLogger != nil {
+		httpClient = newDebugTransportClient(httpClient, cfg.DebugLogger)
 	}
 
 	if cfg.TokenExchangeClient != nil {
@@ -203,6 +213,54 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 	)
 
 	return clients, nil
+}
+
+// newDebugTransportClient wraps an HTTP client with a transport that logs the
+// full HTTP wire dump of every outbound request and inbound response at DEBUG level.
+func newDebugTransportClient(client *http.Client, logger *slog.Logger) *http.Client {
+	base := client.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	return &http.Client{
+		Transport: &debugTransport{
+			transport: base,
+			logger:    logger,
+		},
+		Timeout: client.Timeout,
+	}
+}
+
+// debugTransport is an http.RoundTripper that logs the full HTTP wire dump of
+// every outbound request and inbound response at DEBUG level.
+type debugTransport struct {
+	transport http.RoundTripper
+	logger    *slog.Logger
+}
+
+// RoundTrip implements http.RoundTripper.
+func (dt *debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	reqDump, err := httputil.DumpRequestOut(req, true)
+	if err != nil {
+		dt.logger.Error("failed to dump outbound request", "error", err)
+	} else {
+		dt.logger.Debug("lfxv2 outbound request", "dump", string(reqDump))
+	}
+
+	resp, err := dt.transport.RoundTrip(req)
+	if err != nil {
+		dt.logger.Error("lfxv2 outbound request failed", "error", err, "url", req.URL.String())
+		return nil, err
+	}
+
+	respDump, err := httputil.DumpResponse(resp, true)
+	if err != nil {
+		dt.logger.Error("failed to dump inbound response", "error", err)
+	} else {
+		dt.logger.Debug("lfxv2 inbound response", "dump", string(respDump))
+	}
+
+	return resp, nil
 }
 
 // wrapWithAuthInterceptor wraps an HTTP client with automatic token exchange.

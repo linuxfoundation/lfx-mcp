@@ -23,6 +23,7 @@ const projectResourceType = "project"
 type ProjectConfig struct {
 	LFXAPIURL           string
 	TokenExchangeClient *lfxv2.TokenExchangeClient
+	DebugLogger         *slog.Logger
 }
 
 var projectConfig *ProjectConfig
@@ -90,6 +91,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
 		APIDomain:           projectConfig.LFXAPIURL,
 		TokenExchangeClient: projectConfig.TokenExchangeClient,
+		DebugLogger:         projectConfig.DebugLogger,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -204,6 +206,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
 		APIDomain:           projectConfig.LFXAPIURL,
 		TokenExchangeClient: projectConfig.TokenExchangeClient,
+		DebugLogger:         projectConfig.DebugLogger,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)

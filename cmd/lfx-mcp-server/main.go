@@ -40,6 +40,7 @@ type Config struct {
 	LFXAPIURL                 string       `koanf:"lfx_api_url"`
 	Tools                     []string     `koanf:"tools"`
 	Debug                     bool         `koanf:"debug"`
+	DebugTraffic              bool         `koanf:"debug_traffic"`
 }
 
 // HTTPConfig holds HTTP transport configuration.
@@ -77,6 +78,7 @@ func main() {
 	f.String("lfx_api_url", "", "LFX API URL (used as token exchange audience)")
 	f.String("tools", "search_projects,get_project", "Comma-separated list of tools to enable")
 	f.Bool("debug", false, "Enable debug logging")
+	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
@@ -169,9 +171,14 @@ func main() {
 		if err != nil {
 			logger.Warn("failed to create token exchange client - project tools will not be available", errKey, err)
 		} else {
+			var debugLogger *slog.Logger
+			if cfg.DebugTraffic {
+				debugLogger = logger
+			}
 			tools.SetProjectConfig(&tools.ProjectConfig{
 				LFXAPIURL:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
+				DebugLogger:         debugLogger,
 			})
 		}
 	}

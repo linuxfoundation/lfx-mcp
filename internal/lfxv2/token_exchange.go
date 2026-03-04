@@ -1,0 +1,202 @@
+// Copyright The Linux Foundation and contributors.
+// SPDX-License-Identifier: MIT
+
+// Package lfxv2 provides client utilities for interacting with LFX v2 APIs, including OAuth2 token exchange.
+package lfxv2
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwt"
+)
+
+// TokenExchangeConfig holds configuration for OAuth2 token exchange (RFC 8693).
+type TokenExchangeConfig struct {
+	// TokenEndpoint is the OAuth2 token endpoint URL (e.g., "https://example.auth0.com/oauth/token").
+	TokenEndpoint string
+
+	// ClientID is the M2M client ID for token exchange.
+	ClientID string
+
+	// ClientSecret is the M2M client secret for token exchange.
+	// Ignored if ClientAssertionSigningKey is provided.
+	ClientSecret string
+
+	// ClientAssertionSigningKey is the PEM-encoded RSA private key for generating client assertions.
+	// If provided, this takes precedence over ClientSecret for client authentication.
+	// The key is used to sign a JWT assertion per RFC 7523.
+	ClientAssertionSigningKey string
+
+	// SubjectTokenType is the token type of the incoming subject token (e.g., LFX MCP API identifier).
+	SubjectTokenType string
+
+	// Audience is the target audience for the exchanged token (e.g., LFX V2 API identifier).
+	Audience string
+
+	// HTTPClient is the HTTP client to use for token exchange.
+	// If nil, a default client with 30s timeout will be created.
+	HTTPClient *http.Client
+}
+
+// TokenExchangeResponse represents the response from OAuth2 token exchange per RFC 8693.
+type TokenExchangeResponse struct {
+	AccessToken     string `json:"access_token"`
+	IssuedTokenType string `json:"issued_token_type,omitempty"`
+	TokenType       string `json:"token_type"`
+	ExpiresIn       int    `json:"expires_in"`
+	Scope           string `json:"scope,omitempty"`
+	RefreshToken    string `json:"refresh_token,omitempty"`
+}
+
+// TokenExchangeClient handles OAuth2 token exchange per RFC 8693.
+type TokenExchangeClient struct {
+	config TokenExchangeConfig
+	client *http.Client
+}
+
+// NewTokenExchangeClient creates a new RFC 8693 token exchange client.
+func NewTokenExchangeClient(cfg TokenExchangeConfig) (*TokenExchangeClient, error) {
+	if cfg.TokenEndpoint == "" {
+		return nil, fmt.Errorf("TokenEndpoint is required")
+	}
+	if cfg.ClientID == "" {
+		return nil, fmt.Errorf("ClientID is required")
+	}
+	if cfg.ClientSecret == "" && cfg.ClientAssertionSigningKey == "" {
+		return nil, fmt.Errorf("either ClientSecret or ClientAssertionSigningKey is required")
+	}
+	if cfg.SubjectTokenType == "" {
+		return nil, fmt.Errorf("SubjectTokenType is required")
+	}
+	if cfg.Audience == "" {
+		return nil, fmt.Errorf("Audience is required")
+	}
+
+	httpClient := cfg.HTTPClient
+	if httpClient == nil {
+		httpClient = &http.Client{
+			Timeout: 30 * time.Second,
+		}
+	}
+
+	return &TokenExchangeClient{
+		config: cfg,
+		client: httpClient,
+	}, nil
+}
+
+// generateClientAssertion creates a JWT client assertion per RFC 7523.
+func (c *TokenExchangeClient) generateClientAssertion() (string, error) {
+	// Parse the PEM-encoded private key.
+	block, _ := pem.Decode([]byte(c.config.ClientAssertionSigningKey))
+	if block == nil {
+		return "", fmt.Errorf("failed to decode PEM block containing private key")
+	}
+
+	privateKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		// Try parsing as PKCS1.
+		privateKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse private key: %w", err)
+		}
+	}
+
+	rsaKey, ok := privateKey.(*rsa.PrivateKey)
+	if !ok {
+		return "", fmt.Errorf("private key is not RSA")
+	}
+
+	now := time.Now()
+
+	// Generate a random JTI (JWT ID).
+	jtiBytes := make([]byte, 16)
+	if _, err := rand.Read(jtiBytes); err != nil {
+		return "", fmt.Errorf("failed to generate JTI: %w", err)
+	}
+
+	// Build JWT token.
+	token, err := jwt.NewBuilder().
+		Issuer(c.config.ClientID).
+		Subject(c.config.ClientID).
+		Audience([]string{c.config.TokenEndpoint}).
+		IssuedAt(now).
+		Expiration(now.Add(60 * time.Second)).
+		JwtID(fmt.Sprintf("%x", jtiBytes)).
+		Build()
+	if err != nil {
+		return "", fmt.Errorf("failed to build JWT: %w", err)
+	}
+
+	// Sign the token.
+	signed, err := jwt.Sign(token, jwt.WithKey(jwa.RS256, rsaKey))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign JWT: %w", err)
+	}
+
+	return string(signed), nil
+}
+
+// ExchangeToken exchanges a subject token for a new access token per RFC 8693.
+func (c *TokenExchangeClient) ExchangeToken(ctx context.Context, subjectToken string) (*TokenExchangeResponse, error) {
+	// Build token exchange request per RFC 8693 Section 2.1.
+	data := url.Values{}
+	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
+	data.Set("client_id", c.config.ClientID)
+	data.Set("subject_token", subjectToken)
+	data.Set("subject_token_type", c.config.SubjectTokenType)
+	data.Set("audience", c.config.Audience)
+
+	// Use client assertion if signing key is provided, otherwise use client secret.
+	if c.config.ClientAssertionSigningKey != "" {
+		assertion, err := c.generateClientAssertion()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate client assertion: %w", err)
+		}
+		data.Set("client_assertion", assertion)
+		data.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
+	} else {
+		data.Set("client_secret", c.config.ClientSecret)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.config.TokenEndpoint, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create token exchange request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to exchange token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read token exchange response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("token exchange failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var tokenResp TokenExchangeResponse
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return nil, fmt.Errorf("failed to parse token exchange response: %w", err)
+	}
+
+	return &tokenResp, nil
+}

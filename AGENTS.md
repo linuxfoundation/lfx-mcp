@@ -24,10 +24,10 @@ lfx-mcp/
 │   └── lfx-mcp-server/     # Main application entry point
 ├── internal/
 │   └── tools/              # MCP tool implementations
+├── scripts/                # Test and utility scripts
 ├── bin/                    # Built binaries (gitignored)
 ├── go.mod                  # Go module definition
 ├── Makefile               # Build automation
-├── test_server.sh         # Integration test script
 ├── README.md              # User documentation
 └── AGENTS.md              # This file (AI agent guidelines)
 ```
@@ -43,6 +43,7 @@ Client (Claude, etc.) → JSON-RPC 2.0 → stdio transport → MCP Server → To
 2. **Extensibility**: Easy to add new tools through the `mcp.AddTool` pattern
 3. **Type Safety**: Strong typing with automatic schema generation
 4. **Testability**: Simple stdio testing via JSON-RPC messages
+5. **Observability**: Structured JSON logging with optional debug mode
 
 ## Development Workflow
 
@@ -66,10 +67,16 @@ make build
 
 ```bash
 # Integration tests
-./test_server.sh
+./scripts/test_server.sh
+
+# Integration tests with debug logging
+./scripts/test_server.sh --debug
 
 # Manual testing
 make run  # Starts server in stdio mode
+
+# Manual testing with debug logging
+./bin/lfx-mcp-server -debug
 ```
 
 #### 3. Code Quality Checks
@@ -86,6 +93,119 @@ make check   # Run all checks
 ```bash
 make clean
 ```
+
+## Logging
+
+The server has two separate logging systems:
+
+### 1. Server-Side Logging (for operators)
+
+Uses Go's standard `slog` package for operational logs. These logs are written to stdout (HTTP mode) or stderr (stdio mode).
+
+**Configuration:**
+
+- **Format**: JSON (always)
+- **Output**: stdout (HTTP mode) or stderr (stdio mode)
+- **Default Level**: INFO
+- **Debug Mode**: Enabled via `-debug` flag or `LFXMCP_DEBUG=true` environment variable
+
+**Enable debug logging:**
+
+```bash
+# Via command-line flag
+./bin/lfx-mcp-server -debug
+
+# Via environment variable
+LFXMCP_DEBUG=true ./bin/lfx-mcp-server
+
+# Both work in HTTP mode too
+./bin/lfx-mcp-server -mode=http -debug
+```
+
+### 2. MCP Client Logging (for tool developers)
+
+Tools can send logs to the MCP client using `mcp.NewLoggingHandler`. These logs appear in the client's UI (e.g., Claude Desktop logs) and are controlled by the client's log level.
+
+**Usage in tools:**
+
+```go
+func handleMyTool(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallToolResult, any, error) {
+    // Create MCP logger that sends logs to the client.
+    logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+    
+    logger.Info("processing started", "param", args.Param)
+    logger.Debug("detailed info", "value", someValue)
+    logger.Warn("potential issue", "reason", "something unexpected")
+    
+    // ... tool implementation ...
+}
+```
+
+**How it works:**
+
+- The **client** controls the log level via the `SetLoggingLevel` MCP notification
+- Only logs at or above the client's level are sent over the protocol
+- Logs appear in the client's logging UI (not in server logs)
+- Log levels: debug, info, notice, warning, error, critical, alert, emergency
+
+**Key differences:**
+
+| Feature | Server Logging | MCP Client Logging |
+|---------|---------------|-------------------|
+| Audience | Server operators | Client users/developers |
+| Output | stdout/stderr | MCP protocol notifications |
+| Control | `-debug` flag | Client's `SetLoggingLevel` |
+| Format | JSON to files | JSON over protocol |
+| Use case | Debugging server | Debugging tool execution |
+
+### Server Log Structure
+
+Server-side logs are emitted as JSON objects:
+
+```json
+{"time":"2024-01-15T10:30:45.123Z","level":"INFO","msg":"Starting HTTP server","addr":"127.0.0.1:8080"}
+{"time":"2024-01-15T10:30:45.456Z","level":"ERROR","msg":"server failed","error":"connection refused"}
+```
+
+With debug logging enabled, source information is included:
+
+```json
+{"time":"2024-01-15T10:30:45.789Z","level":"DEBUG","source":{"file":"main.go","line":150},"msg":"processing request"}
+```
+
+### Using Server Logger
+
+The server logger is initialized in `main.go` and set as the default slog logger. Use it for operational logging:
+
+```go
+import "log/slog"
+
+// Info level
+slog.Info("operation completed", "key", "value")
+
+// Error level with structured fields
+slog.Error("operation failed", "error", err, "context", "additional info")
+
+// Debug level (only shown when debug mode is enabled)
+slog.Debug("detailed diagnostic", "request_id", reqID)
+
+// Using logger with context
+logger.With("component", "tool_handler").Info("processing tool call")
+```
+
+### Error Logging Convention
+
+```go
+const errKey = "error"
+
+// Server-side error logging
+logger.With(errKey, err).Error("operation failed")
+
+// MCP client error logging (in tools)
+mcpLogger.Error("tool operation failed", "error", err)
+```
+
+**Recommendation**: Use MCP client logging in tools for visibility to end users, and server-side logging for operational concerns.
 
 ## Adding New Tools
 
@@ -105,7 +225,7 @@ The MCP Go SDK provides a simple pattern for adding tools. Tools are implemented
 
 ```go
 // Copyright The Linux Foundation and contributors.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 
 package tools
 
@@ -206,10 +326,10 @@ Test the server by sending JSON-RPC messages:
 
 ### Integration Test Script
 
-The `test_server.sh` script provides comprehensive testing:
+The `scripts/test_server.sh` script provides comprehensive testing:
 
 ```bash
-./test_server.sh
+./scripts/test_server.sh
 ```
 
 This tests:
@@ -288,14 +408,41 @@ The Makefile uses optimized build flags:
 
 ## Environment Variables
 
-Currently, the server doesn't require environment variables, but future LFX integrations may add:
+The server supports configuration via environment variables with the `LFXMCP_` prefix. Environment variable names use underscores, which are automatically transformed to dots for nested configuration keys (e.g., `LFXMCP_HTTP_PORT` becomes `http.port`).
 
-| Variable      | Description          | Default | Required |
-|---------------|----------------------|---------|----------|
-| `LFX_API_URL` | LFX API base URL     | -       | Future   |
-| `DEBUG`       | Enable debug logging | false   | No       |
+**Configuration Precedence:** Environment variables **override** command-line flags. This allows command-line flags to provide defaults while environment variables can override them in containerized deployments.
 
-...and various other parameters needed to configure OAuth2 authentication.
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `LFXMCP_MODE` | Transport mode (`stdio` or `http`) | stdio | No |
+| `LFXMCP_HTTP_HOST` | HTTP server host | 127.0.0.1 | No |
+| `LFXMCP_HTTP_PORT` | HTTP server port | 8080 | No |
+| `LFXMCP_HTTP_PUBLIC_URL` | Public URL for HTTP transport | - | No |
+| `LFXMCP_DEBUG` | Enable debug logging | false | No |
+| `LFXMCP_TOOLS` | Comma-separated list of tools to enable | - | No |
+| `LFXMCP_MCP_API_AUTH_SERVERS` | Comma-separated list of authorization server URLs | - | No |
+| `LFXMCP_MCP_API_PUBLIC_URL` | Public URL for MCP API (for OAuth PRM) | - | No |
+| `LFXMCP_MCP_API_SCOPES` | OAuth scopes as comma-separated list | openid,profile | No |
+| `LFXMCP_CLIENT_ID` | OAuth client ID for authentication | - | No |
+| `LFXMCP_CLIENT_SECRET` | OAuth client secret | - | No |
+| `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | PEM-encoded RSA private key for client assertion | - | No |
+| `LFXMCP_TOKEN_ENDPOINT` | OAuth2 token endpoint URL for token exchange | - | No |
+| `LFXMCP_LFX_API_URL` | LFX API URL (used as token exchange audience) | - | No |
+
+**Example:**
+
+```bash
+export LFXMCP_MODE=http
+export LFXMCP_HTTP_PORT=8080
+export LFXMCP_DEBUG=true
+export LFXMCP_TOOLS=hello_world,user_info
+export LFXMCP_MCP_API_AUTH_SERVERS=https://linuxfoundation-dev.auth0.com
+export LFXMCP_CLIENT_ID=your_client_id
+export LFXMCP_TOKEN_ENDPOINT=https://linuxfoundation-dev.auth0.com/oauth/token
+export LFXMCP_LFX_API_URL=https://lfx-api.dev.v2.cluster.linuxfound.info/
+
+./bin/lfx-mcp-server
+```
 
 ## Error Handling Patterns
 
@@ -354,7 +501,7 @@ func(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallT
 2. **Tool Organization**: One tool per file (e.g., `hello_world.go`, `my_tool.go`)
 3. **Registration Pattern**: Each tool should have a `Register<ToolName>(server)` function
 4. **Schema Tags**: Always include descriptive `jsonschema` tags
-5. **Testing**: Test new tools with the test script (`./test_server.sh`)
+5. **Testing**: Test new tools with the test script (`./scripts/test_server.sh`)
 6. **Documentation**: Update README.md for user-facing changes
 7. **Code Quality**: Run `make check` before commits
 

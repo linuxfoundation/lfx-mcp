@@ -55,24 +55,111 @@ The server will listen for MCP messages on stdin and respond on stdout.
 To start the MCP server with HTTP transport:
 
 ```bash
-./bin/lfx-mcp-server -http
+./bin/lfx-mcp-server -mode=http
 ```
 
 The server will start an HTTP endpoint at `http://localhost:8080/mcp` that accepts MCP requests over streamable HTTP (Server-Sent Events). This is useful for web-based MCP clients.
 
-**Options:**
-- `-http`: Enable HTTP transport (default: stdio)
-- `-port`: Port to listen on for HTTP transport (default: 8080)
-- `-host`: Host to bind to for HTTP transport (default: 127.0.0.1)
+### Configuration
 
-**Example with custom port:**
+The server supports configuration via both command-line flags and environment variables. Environment variables **override** command-line flags, allowing flags to provide defaults while environment variables can override them in containerized deployments.
+
+**Command-line Flags:**
+- `-mode`: Transport mode: `stdio` or `http` (default: `stdio`)
+- `-http.port`: Port to listen on for HTTP transport (default: `8080`)
+- `-http.host`: Host to bind to for HTTP transport (default: `127.0.0.1`)
+- `-http.public_url`: Public URL for HTTP transport (for reverse proxies, e.g., `https://example.com/mcp`)
+- `-debug`: Enable debug logging with source location tracking (default: `false`)
+- `-tools`: Comma-separated list of tools to enable (default: none)
+- `-oauth.domain`: Issuer domain for IdP
+- `-oauth.resource_url`: LFX API domain for OAuth audience
+- `-oauth.scopes`: OAuth scopes as comma-separated list (default: `openid,profile`)
+- `-token_exchange.token_endpoint`: OAuth2 token endpoint URL for RFC 8693 token exchange (e.g., `https://example.auth0.com/oauth/token`)
+- `-token_exchange.client_id`: M2M client ID for token exchange
+- `-token_exchange.client_secret`: M2M client secret for token exchange (ignored if `client_assertion_signing_key` is set)
+- `-token_exchange.client_assertion_signing_key`: PEM-encoded RSA private key for client assertion (RFC 7523). Takes precedence over `client_secret` if both are provided
+- `-token_exchange.subject_token_type`: Subject token type for RFC 8693 (e.g., LFX MCP API identifier)
+- `-token_exchange.audience`: Target audience for exchanged token (e.g., LFX V2 API identifier)
+
+**Environment Variables:**
+
+All environment variables use the `LFXMCP_` prefix. Variable names use underscores, which are automatically transformed to dots for nested configuration keys (e.g., `LFXMCP_HTTP_PORT` becomes `http.port`):
+- `LFXMCP_MODE`: Transport mode (`stdio` or `http`)
+- `LFXMCP_HTTP_HOST`: HTTP server host
+- `LFXMCP_HTTP_PORT`: HTTP server port
+- `LFXMCP_DEBUG`: Enable debug logging (`true` or `false`)
+- `LFXMCP_TOOLS`: Comma-separated list of tools to enable
+- `LFXMCP_MCP_API_AUTH_SERVERS`: Comma-separated list of authorization server URLs
+- `LFXMCP_MCP_API_PUBLIC_URL`: Public URL for MCP API (for OAuth PRM)
+- `LFXMCP_MCP_API_SCOPES`: OAuth scopes as comma-separated list (default: `openid,profile`)
+- `LFXMCP_CLIENT_ID`: OAuth client ID for authentication
+- `LFXMCP_CLIENT_SECRET`: OAuth client secret
+- `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY`: PEM-encoded RSA private key for client assertion
+- `LFXMCP_TOKEN_ENDPOINT`: OAuth2 token endpoint URL for token exchange
+- `LFXMCP_LFX_API_URL`: LFX API URL (used as token exchange audience)
+
+**Examples:**
+
+With command-line flags:
 ```bash
-./bin/lfx-mcp-server -http -port 9090
+# Custom HTTP port
+./bin/lfx-mcp-server -mode=http -http.port=9090
+
+# Bind to all interfaces
+./bin/lfx-mcp-server -mode=http -http.host=0.0.0.0 -http.port=8080
 ```
 
-**Example binding to all interfaces:**
+With environment variables:
 ```bash
-./bin/lfx-mcp-server -http -host 0.0.0.0 -port 8080
+# Start in HTTP mode on custom port
+LFXMCP_MODE=http LFXMCP_HTTP_PORT=9090 ./bin/lfx-mcp-server
+
+# Enable debug logging (env var overrides flag)
+LFXMCP_DEBUG=true ./bin/lfx-mcp-server
+
+# Environment variable overrides flag
+LFXMCP_HTTP_PORT=9090 ./bin/lfx-mcp-server -mode=http -http.port=8080
+# Result: Server runs on port 9090 (env var wins)
+```
+
+### Logging
+
+The server uses structured JSON logging via Go's `slog` package. All logs are written to stdout in JSON format for easy parsing and integration with log aggregation systems.
+
+**Log Levels:**
+- `INFO` (default): Standard operational messages
+- `DEBUG`: Detailed diagnostic information with source location tracking
+
+**Enabling Debug Logging:**
+
+Debug logging can be enabled via command-line flag or environment variable:
+
+```bash
+# Via command-line flag
+./bin/lfx-mcp-server -debug
+
+# Via environment variable
+LFXMCP_DEBUG=true ./bin/lfx-mcp-server
+```
+
+When debug logging is enabled, the following additional information is included:
+- Source file locations for each log statement
+- Detailed request/response information
+- Internal state transitions
+
+**Log Format:**
+
+All logs are emitted as JSON objects with the following structure:
+
+```json
+{"time":"2024-01-15T10:30:45.123Z","level":"INFO","msg":"Starting HTTP server","addr":"127.0.0.1:8080"}
+{"time":"2024-01-15T10:30:45.456Z","level":"ERROR","msg":"server failed","error":"connection refused"}
+```
+
+Debug logs include source information:
+
+```json
+{"time":"2024-01-15T10:30:45.789Z","level":"DEBUG","source":{"file":"main.go","line":150},"msg":"processing request"}
 ```
 
 **Example HTTP request:**
@@ -179,7 +266,12 @@ To test the server manually, you can send JSON-RPC messages via stdio:
 # Test server initialization and tool listing
 (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'; 
  echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'; 
- sleep 1) | ./bin/lfx-mcp-server stdio
+ sleep 1) | ./bin/lfx-mcp-server
+
+# With debug logging enabled
+(echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'; 
+ echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'; 
+ sleep 1) | ./bin/lfx-mcp-server -debug
 
 # Test calling the hello_world tool
 (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'; 
@@ -193,7 +285,10 @@ Start the HTTP server and send requests using curl:
 
 ```bash
 # Start the server in the background
-./bin/lfx-mcp-server -http -port 8080 &
+./bin/lfx-mcp-server -mode=http -http.port=8080 &
+
+# Or with debug logging
+./bin/lfx-mcp-server -mode=http -http.port=8080 -debug &
 
 # Test tools list
 curl -X POST http://localhost:8080/mcp \

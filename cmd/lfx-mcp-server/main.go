@@ -20,6 +20,7 @@ import (
 	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/v2"
 	lfxauth "github.com/linuxfoundation/lfx-mcp/internal/auth"
+	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	"github.com/linuxfoundation/lfx-mcp/internal/tools"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -148,6 +149,32 @@ func main() {
 		})
 	}
 
+	// Configure temp_tlf_fetch tool if token exchange is configured.
+	if cfg.LFXAPIURL != "" && cfg.TokenEndpoint != "" && cfg.ClientID != "" {
+		subjectTokenType := cfg.MCPAPI.PublicURL
+		if subjectTokenType == "" {
+			subjectTokenType = fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
+		}
+
+		tokenExchangeClient, err := lfxv2.NewTokenExchangeClient(lfxv2.TokenExchangeConfig{
+			TokenEndpoint:             cfg.TokenEndpoint,
+			ClientID:                  cfg.ClientID,
+			ClientSecret:              cfg.ClientSecret,
+			ClientAssertionSigningKey: cfg.ClientAssertionSigningKey,
+			SubjectTokenType:          subjectTokenType,
+			Audience:                  cfg.LFXAPIURL,
+			HTTPClient:                &http.Client{Timeout: 30 * time.Second},
+		})
+		if err != nil {
+			logger.Warn("failed to create token exchange client - temp_tlf_fetch will not be available", errKey, err)
+		} else {
+			tools.SetTempTLFFetchConfig(&tools.TempTLFFetchConfig{
+				LFXAPIURL:           cfg.LFXAPIURL,
+				TokenExchangeClient: tokenExchangeClient,
+			})
+		}
+	}
+
 	// Validate configuration for HTTP mode.
 	if cfg.Mode == "http" {
 		if len(cfg.MCPAPI.AuthServers) == 0 {
@@ -225,6 +252,9 @@ func newServer(cfg Config) *mcp.Server {
 	}
 	if enabledTools["user_info"] {
 		tools.RegisterUserInfo(server)
+	}
+	if enabledTools["temp_tlf_fetch"] {
+		tools.RegisterTempTLFFetch(server)
 	}
 
 	return server

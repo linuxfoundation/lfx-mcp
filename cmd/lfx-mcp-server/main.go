@@ -293,10 +293,15 @@ func runHTTPServer(cfg Config) {
 				userID = "_anonymous"
 			}
 
+			// Store raw token in Extra for use in token exchange.
+			extra := make(map[string]any)
+			extra["raw_token"] = tokenString
+
 			return &auth.TokenInfo{
 				UserID:     userID,
 				Expiration: token.Expiration(),
 				Scopes:     lfxauth.ExtractScopes(token),
+				Extra:      extra,
 			}, nil
 		}
 

@@ -1,7 +1,6 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
-// Package tools provides MCP tool implementations for the LFX MCP server.
 package tools
 
 import (
@@ -68,24 +67,26 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 
 	logger.Info("fetching user info from OAuth provider")
 
-	// Extract Authorization header from request meta.
-	authHeader := ""
-	if req.Params.Meta != nil {
-		if authMap, ok := req.Params.Meta["authorization"].(map[string]interface{}); ok {
-			if headerVal, ok := authMap["header"].(string); ok {
-				authHeader = headerVal
-			}
+	// Extract raw token from TokenInfo.Extra (populated by JWT verifier).
+	var rawToken string
+	if req.Extra.TokenInfo != nil && req.Extra.TokenInfo.Extra != nil {
+		if token, ok := req.Extra.TokenInfo.Extra["raw_token"].(string); ok {
+			rawToken = token
 		}
 	}
 
-	if authHeader == "" {
+	if rawToken == "" {
+		logger.Error("raw token not found in request")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: Authorization header required"},
+				&mcp.TextContent{Text: "Error: Authentication token required"},
 			},
 			IsError: true,
 		}, nil, nil
 	}
+
+	// Construct Authorization header.
+	authHeader := "Bearer " + rawToken
 
 	// Call OAuth userinfo endpoint.
 	logger.Debug("sending request to userinfo endpoint", "url", userInfoConfig.UserInfoEndpoint)

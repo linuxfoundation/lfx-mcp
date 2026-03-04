@@ -68,8 +68,8 @@ jobs:
             --sbom spdx \
             --image-refs /tmp/image-refs.txt
 
-          DIGEST=$(cat /tmp/image-refs.txt | cut -d'@' -f2)
-          IMAGE_NAME=$(cat /tmp/image-refs.txt | cut -d'@' -f1)
+          DIGEST=$(tail -1 /tmp/image-refs.txt | cut -d'@' -f2)
+          IMAGE_NAME=$(tail -1 /tmp/image-refs.txt | cut -d'@' -f1)
 
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "image_name=$IMAGE_NAME" >> "$GITHUB_OUTPUT"

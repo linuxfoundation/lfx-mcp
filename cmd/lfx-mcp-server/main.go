@@ -19,6 +19,7 @@ import (
 	"github.com/knadh/koanf/providers/basicflag"
 	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/v2"
+	lfxauth "github.com/linuxfoundation/lfx-mcp/internal/auth"
 	"github.com/linuxfoundation/lfx-mcp/internal/tools"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -80,7 +81,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load configuration from environment variables with LFXMCP_ prefix.
+	// Load flags first (provides defaults).
+	if err := k.Load(basicflag.ProviderWithValue(f, ".", func(key string, value string) (string, interface{}) {
+		// Handle comma-separated lists.
+		if (key == "tools" || key == "mcp_api.auth_servers" || key == "mcp_api.scopes") && value != "" {
+			return key, strings.Split(value, ",")
+		}
+		return key, value
+	}, k), nil); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load flags: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Load configuration from environment variables with LFXMCP_ prefix (overrides flags).
 	if err := k.Load(env.Provider(".", env.Opt{
 		Prefix: "LFXMCP_",
 		TransformFunc: func(k, v string) (string, any) {
@@ -96,14 +109,6 @@ func main() {
 		},
 	}), nil); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load environment variables: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Load configuration from flags (only explicitly set flags override environment variables).
-	if err := k.Load(basicflag.ProviderWithValue(f, ".", func(key string, value string) (string, interface{}) {
-		return key, value
-	}, k), nil); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to load flags: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -132,24 +137,14 @@ func main() {
 	logger = slog.New(slog.NewJSONHandler(logOutput, logOptions))
 	slog.SetDefault(logger)
 
-	// Parse comma-separated flags.
-	if toolsFlag := f.Lookup("tools"); toolsFlag != nil && toolsFlag.Value.String() != "" {
-		cfg.Tools = strings.Split(toolsFlag.Value.String(), ",")
-	}
-	if authServersFlag := f.Lookup("mcp_api.auth_servers"); authServersFlag != nil && authServersFlag.Value.String() != "" {
-		cfg.MCPAPI.AuthServers = strings.Split(authServersFlag.Value.String(), ",")
-	}
-	if scopesFlag := f.Lookup("mcp_api.scopes"); scopesFlag != nil && scopesFlag.Value.String() != "" {
-		cfg.MCPAPI.Scopes = strings.Split(scopesFlag.Value.String(), ",")
-	}
-
 	// Configure user_info tool if auth servers are configured.
 	if len(cfg.MCPAPI.AuthServers) > 0 {
-		// Use first auth server for user info lookups.
+		// Build complete userinfo endpoint URL from first auth server.
 		authServerURL := strings.TrimSuffix(cfg.MCPAPI.AuthServers[0], "/")
+		userInfoEndpoint := authServerURL + "/userinfo"
 		tools.SetUserInfoConfig(&tools.UserInfoConfig{
-			OAuthDomain: authServerURL,
-			HTTPClient:  &http.Client{Timeout: 30 * time.Second},
+			UserInfoEndpoint: userInfoEndpoint,
+			HTTPClient:       &http.Client{Timeout: 30 * time.Second},
 		})
 	}
 
@@ -264,17 +259,44 @@ func runHTTPServer(cfg Config) {
 	mux := http.NewServeMux()
 
 	// Apply OAuth bearer token middleware if auth servers are configured.
-	// Note: We don't verify tokens here - we just proxy the Authorization header
-	// to upstream LFX APIs which perform the actual verification.
-	// TODO: extract principal for logging.
 	var mcpHandler http.Handler = handler
 	if len(cfg.MCPAPI.AuthServers) > 0 {
 		resourceMetadataURL := fmt.Sprintf("http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)
 
-		// Pass-through verifier - accepts any token without validation.
-		verifyToken := func(_ context.Context, _ string, _ *http.Request) (*auth.TokenInfo, error) {
+		// Determine the expected audience for JWT verification.
+		audience := cfg.MCPAPI.PublicURL
+		if audience == "" {
+			audience = fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
+		}
+
+		// Create JWT verifier with JWKS caching.
+		jwtVerifier, err := lfxauth.NewJWTVerifier(lfxauth.JWTVerifierConfig{
+			AuthServers: cfg.MCPAPI.AuthServers,
+			Audience:    audience,
+			HTTPClient:  &http.Client{Timeout: 30 * time.Second},
+		})
+		if err != nil {
+			logger.Error("failed to create JWT verifier", "error", err)
+			os.Exit(1)
+		}
+
+		// Token verifier that performs full JWT signature verification.
+		verifyToken := func(ctx context.Context, tokenString string, _ *http.Request) (*auth.TokenInfo, error) {
+			token, err := jwtVerifier.VerifyToken(ctx, tokenString)
+			if err != nil {
+				return nil, err
+			}
+
+			// Extract subject (user ID).
+			userID := token.Subject()
+			if userID == "" {
+				userID = "_anonymous"
+			}
+
 			return &auth.TokenInfo{
-				UserID: "_anonymous", // Placeholder until we extract from token.
+				UserID:     userID,
+				Expiration: token.Expiration(),
+				Scopes:     lfxauth.ExtractScopes(token),
 			}, nil
 		}
 
@@ -282,7 +304,7 @@ func runHTTPServer(cfg Config) {
 			ResourceMetadataURL: resourceMetadataURL,
 		})
 		mcpHandler = authMiddleware(handler)
-		logger.Info("OAuth bearer token required for /mcp endpoint (proxied to upstream)")
+		logger.Info("OAuth bearer token verification enabled for /mcp endpoint", "audience", audience)
 	}
 
 	// Apply HTTP request logging at debug level.

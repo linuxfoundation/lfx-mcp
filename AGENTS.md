@@ -410,6 +410,8 @@ The Makefile uses optimized build flags:
 
 The server supports configuration via environment variables with the `LFXMCP_` prefix. Environment variable names use underscores, which are automatically transformed to dots for nested configuration keys (e.g., `LFXMCP_HTTP_PORT` becomes `http.port`).
 
+**Configuration Precedence:** Environment variables **override** command-line flags. This allows command-line flags to provide defaults while environment variables can override them in containerized deployments.
+
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `LFXMCP_MODE` | Transport mode (`stdio` or `http`) | stdio | No |

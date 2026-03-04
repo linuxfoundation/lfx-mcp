@@ -22,8 +22,8 @@ type UserInfoArgs struct {
 
 // UserInfoConfig holds configuration for the user_info tool.
 type UserInfoConfig struct {
-	OAuthDomain string
-	HTTPClient  *http.Client
+	UserInfoEndpoint string // Full userinfo endpoint URL (e.g., https://example.auth0.com/userinfo).
+	HTTPClient       *http.Client
 }
 
 var userInfoConfig *UserInfoConfig
@@ -56,11 +56,11 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 		}, nil, nil
 	}
 
-	if userInfoConfig.OAuthDomain == "" {
-		logger.Error("OAuth domain not configured")
+	if userInfoConfig.UserInfoEndpoint == "" {
+		logger.Error("userinfo endpoint not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: OAuth domain not configured"},
+				&mcp.TextContent{Text: "Error: userinfo endpoint not configured"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -88,9 +88,8 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 	}
 
 	// Call OAuth userinfo endpoint.
-	userInfoURL := fmt.Sprintf("https://%s/userinfo", userInfoConfig.OAuthDomain)
-	logger.Debug("sending request to userinfo endpoint", "url", userInfoURL)
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", userInfoURL, nil)
+	logger.Debug("sending request to userinfo endpoint", "url", userInfoConfig.UserInfoEndpoint)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", userInfoConfig.UserInfoEndpoint, nil)
 	if err != nil {
 		logger.Error("failed to create HTTP request", "error", err)
 		return &mcp.CallToolResult{

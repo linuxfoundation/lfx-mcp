@@ -62,7 +62,7 @@ The server will start an HTTP endpoint at `http://localhost:8080/mcp` that accep
 
 ### Configuration
 
-The server supports configuration via both command-line flags and environment variables. Command-line flags take precedence over environment variables.
+The server supports configuration via both command-line flags and environment variables. Environment variables **override** command-line flags, allowing flags to provide defaults while environment variables can override them in containerized deployments.
 
 **Command-line Flags:**
 - `-mode`: Transport mode: `stdio` or `http` (default: `stdio`)
@@ -114,11 +114,12 @@ With environment variables:
 # Start in HTTP mode on custom port
 LFXMCP_MODE=http LFXMCP_HTTP_PORT=9090 ./bin/lfx-mcp-server
 
-# Enable debug logging
-LFXMCP_DEBUG=true ./bin/lfx-mcp-server -mode=stdio
+# Enable debug logging (env var overrides flag)
+LFXMCP_DEBUG=true ./bin/lfx-mcp-server
 
-# Override environment with command-line flag
-LFXMCP_HTTP_PORT=9090 ./bin/lfx-mcp-server -mode=http -http.port=8888
+# Environment variable overrides flag
+LFXMCP_HTTP_PORT=9090 ./bin/lfx-mcp-server -mode=http -http.port=8080
+# Result: Server runs on port 9090 (env var wins)
 ```
 
 ### Logging

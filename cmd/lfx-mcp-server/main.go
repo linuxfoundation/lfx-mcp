@@ -150,7 +150,7 @@ func main() {
 		})
 	}
 
-	// Configure temp_tlf_fetch tool if token exchange is configured.
+	// Configure project tools if token exchange is configured.
 	if cfg.LFXAPIURL != "" && cfg.TokenEndpoint != "" && cfg.ClientID != "" {
 		subjectTokenType := cfg.MCPAPI.PublicURL
 		if subjectTokenType == "" {
@@ -167,9 +167,9 @@ func main() {
 			HTTPClient:                &http.Client{Timeout: 30 * time.Second},
 		})
 		if err != nil {
-			logger.Warn("failed to create token exchange client - temp_tlf_fetch will not be available", errKey, err)
+			logger.Warn("failed to create token exchange client - project tools will not be available", errKey, err)
 		} else {
-			tools.SetTempTLFFetchConfig(&tools.TempTLFFetchConfig{
+			tools.SetProjectConfig(&tools.ProjectConfig{
 				LFXAPIURL:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
 			})
@@ -254,8 +254,11 @@ func newServer(cfg Config) *mcp.Server {
 	if enabledTools["user_info"] {
 		tools.RegisterUserInfo(server)
 	}
-	if enabledTools["temp_tlf_fetch"] {
-		tools.RegisterTempTLFFetch(server)
+	if enabledTools["search_projects"] {
+		tools.RegisterSearchProjects(server)
+	}
+	if enabledTools["get_project"] {
+		tools.RegisterGetProject(server)
 	}
 
 	return server

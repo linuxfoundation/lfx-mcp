@@ -34,7 +34,7 @@
 //	    }
 //
 //	    // Make API calls - token exchange happens automatically.
-//	    projects, err := clients.Project.GetProjects(ctx, &projectservice.GetProjectsPayload{})
+//	    result, err := clients.Project.GetOneProjectBase(ctx, &projectservice.GetOneProjectBasePayload{})
 //	    // ...
 //	}
 //
@@ -54,8 +54,10 @@ import (
 
 	goahttp "goa.design/goa/v3/http"
 
-	projectclient "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/http/project_service/client"
+	projecthttpclient "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/http/project_service/client"
 	projectservice "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/project_service"
+	queryhttpclient "github.com/linuxfoundation/lfx-v2-query-service/gen/http/query_svc/client"
+	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 )
 
@@ -109,7 +111,9 @@ type ClientConfig struct {
 
 // Clients holds initialized LFX v2 API service clients.
 type Clients struct {
-	Project             *projectservice.Client
+	Project  *projectservice.Client
+	QuerySvc *querysvc.Client
+
 	tokenExchangeClient *TokenExchangeClient
 
 	// Token cache: maps MCP token -> exchanged LFX token info.
@@ -153,7 +157,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		return nil, fmt.Errorf("failed to parse project service URL: %w", err)
 	}
 
-	projectHTTPClient := projectclient.NewClient(
+	projectHTTPClient := projecthttpclient.NewClient(
 		projectURL.Scheme,
 		projectURL.Host,
 		httpClient,
@@ -162,7 +166,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		false,
 	)
 
-	projectClient := projectservice.NewClient(
+	clients.Project = projectservice.NewClient(
 		projectHTTPClient.GetProjects(),
 		projectHTTPClient.CreateProject(),
 		projectHTTPClient.GetOneProjectBase(),
@@ -174,7 +178,29 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		projectHTTPClient.Livez(),
 	)
 
-	clients.Project = projectClient
+	// Initialize query service client.
+	queryURL, err := url.Parse(cfg.APIDomain + "/query")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse query service URL: %w", err)
+	}
+
+	queryHTTPClient := queryhttpclient.NewClient(
+		queryURL.Scheme,
+		queryURL.Host,
+		httpClient,
+		goahttp.RequestEncoder,
+		goahttp.ResponseDecoder,
+		false,
+	)
+
+	clients.QuerySvc = querysvc.NewClient(
+		queryHTTPClient.QueryResources(),
+		queryHTTPClient.QueryResourcesCount(),
+		queryHTTPClient.QueryOrgs(),
+		queryHTTPClient.SuggestOrgs(),
+		queryHTTPClient.Readyz(),
+		queryHTTPClient.Livez(),
+	)
 
 	return clients, nil
 }

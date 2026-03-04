@@ -40,6 +40,7 @@ type Config struct {
 	LFXAPIURL                 string       `koanf:"lfx_api_url"`
 	Tools                     []string     `koanf:"tools"`
 	Debug                     bool         `koanf:"debug"`
+	DebugTraffic              bool         `koanf:"debug_traffic"`
 }
 
 // HTTPConfig holds HTTP transport configuration.
@@ -75,8 +76,9 @@ func main() {
 	f.String("client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")
 	f.String("token_endpoint", "", "OAuth2 token endpoint URL for token exchange")
 	f.String("lfx_api_url", "", "LFX API URL (used as token exchange audience)")
-	f.String("tools", "", "Comma-separated list of tools to enable (default: none)")
+	f.String("tools", "search_projects,get_project", "Comma-separated list of tools to enable")
 	f.Bool("debug", false, "Enable debug logging")
+	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
@@ -150,7 +152,7 @@ func main() {
 		})
 	}
 
-	// Configure temp_tlf_fetch tool if token exchange is configured.
+	// Configure project tools if token exchange is configured.
 	if cfg.LFXAPIURL != "" && cfg.TokenEndpoint != "" && cfg.ClientID != "" {
 		subjectTokenType := cfg.MCPAPI.PublicURL
 		if subjectTokenType == "" {
@@ -167,11 +169,16 @@ func main() {
 			HTTPClient:                &http.Client{Timeout: 30 * time.Second},
 		})
 		if err != nil {
-			logger.Warn("failed to create token exchange client - temp_tlf_fetch will not be available", errKey, err)
+			logger.Warn("failed to create token exchange client - project tools will not be available", errKey, err)
 		} else {
-			tools.SetTempTLFFetchConfig(&tools.TempTLFFetchConfig{
+			var debugLogger *slog.Logger
+			if cfg.DebugTraffic {
+				debugLogger = logger
+			}
+			tools.SetProjectConfig(&tools.ProjectConfig{
 				LFXAPIURL:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
+				DebugLogger:         debugLogger,
 			})
 		}
 	}
@@ -254,8 +261,11 @@ func newServer(cfg Config) *mcp.Server {
 	if enabledTools["user_info"] {
 		tools.RegisterUserInfo(server)
 	}
-	if enabledTools["temp_tlf_fetch"] {
-		tools.RegisterTempTLFFetch(server)
+	if enabledTools["search_projects"] {
+		tools.RegisterSearchProjects(server)
+	}
+	if enabledTools["get_project"] {
+		tools.RegisterGetProject(server)
 	}
 
 	return server

@@ -70,16 +70,16 @@ The server supports configuration via both command-line flags and environment va
 - `-http.host`: Host to bind to for HTTP transport (default: `127.0.0.1`)
 - `-http.public_url`: Public URL for HTTP transport (for reverse proxies, e.g., `https://example.com/mcp`)
 - `-debug`: Enable debug logging with source location tracking (default: `false`)
-- `-tools`: Comma-separated list of tools to enable (default: none)
-- `-oauth.domain`: Issuer domain for IdP
-- `-oauth.resource_url`: LFX API domain for OAuth audience
-- `-oauth.scopes`: OAuth scopes as comma-separated list (default: `openid,profile`)
-- `-token_exchange.token_endpoint`: OAuth2 token endpoint URL for RFC 8693 token exchange (e.g., `https://example.auth0.com/oauth/token`)
-- `-token_exchange.client_id`: M2M client ID for token exchange
-- `-token_exchange.client_secret`: M2M client secret for token exchange (ignored if `client_assertion_signing_key` is set)
-- `-token_exchange.client_assertion_signing_key`: PEM-encoded RSA private key for client assertion (RFC 7523). Takes precedence over `client_secret` if both are provided
-- `-token_exchange.subject_token_type`: Subject token type for RFC 8693 (e.g., LFX MCP API identifier)
-- `-token_exchange.audience`: Target audience for exchanged token (e.g., LFX V2 API identifier)
+- `-debug_traffic`: Enable HTTP request/response wire logging for outbound LFX API calls (default: `false`)
+- `-tools`: Comma-separated list of tools to enable (default: `search_projects,get_project`)
+- `-mcp_api.auth_servers`: Comma-separated list of authorization server URLs for OAuth PRM
+- `-mcp_api.public_url`: Public URL for the MCP API endpoint (for OAuth PRM)
+- `-mcp_api.scopes`: OAuth scopes as comma-separated list (default: `openid,profile`)
+- `-client_id`: OAuth client ID for token exchange
+- `-client_secret`: OAuth client secret (ignored if `client_assertion_signing_key` is set)
+- `-client_assertion_signing_key`: PEM-encoded RSA private key for client assertion (RFC 7523)
+- `-token_endpoint`: OAuth2 token endpoint URL for RFC 8693 token exchange
+- `-lfx_api_url`: LFX API base URL (used as token exchange audience)
 
 **Environment Variables:**
 
@@ -88,15 +88,16 @@ All environment variables use the `LFXMCP_` prefix. Variable names use underscor
 - `LFXMCP_HTTP_HOST`: HTTP server host
 - `LFXMCP_HTTP_PORT`: HTTP server port
 - `LFXMCP_DEBUG`: Enable debug logging (`true` or `false`)
+- `LFXMCP_DEBUG_TRAFFIC`: Enable HTTP request/response wire logging for outbound LFX API calls (`true` or `false`)
 - `LFXMCP_TOOLS`: Comma-separated list of tools to enable
 - `LFXMCP_MCP_API_AUTH_SERVERS`: Comma-separated list of authorization server URLs
 - `LFXMCP_MCP_API_PUBLIC_URL`: Public URL for MCP API (for OAuth PRM)
 - `LFXMCP_MCP_API_SCOPES`: OAuth scopes as comma-separated list (default: `openid,profile`)
-- `LFXMCP_CLIENT_ID`: OAuth client ID for authentication
+- `LFXMCP_CLIENT_ID`: OAuth client ID for token exchange
 - `LFXMCP_CLIENT_SECRET`: OAuth client secret
 - `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY`: PEM-encoded RSA private key for client assertion
 - `LFXMCP_TOKEN_ENDPOINT`: OAuth2 token endpoint URL for token exchange
-- `LFXMCP_LFX_API_URL`: LFX API URL (used as token exchange audience)
+- `LFXMCP_LFX_API_URL`: LFX API base URL (used as token exchange audience)
 
 **Examples:**
 
@@ -172,6 +173,53 @@ curl -X POST http://localhost:8080/mcp \
 The HTTP transport uses stateless mode, creating a new MCP session for each request. This allows horizontal scaling without session management.
 
 ## Available Tools
+
+### search_projects
+
+Search for LFX projects by name. Supports typeahead (partial name matching) and pagination.
+
+**Parameters:**
+- `name` (string, optional): Name or partial name of the project to search for
+- `page_size` (integer, optional): Number of results per page (default: 10, max: 100)
+- `page_token` (string, optional): Opaque pagination token from a previous search response
+
+**Returns:** A JSON object with a `resources` array of matching projects and an optional `page_token` for retrieving the next page.
+
+**Example usage:**
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "search_projects",
+    "arguments": {
+      "name": "kubernetes",
+      "page_size": 5
+    }
+  }
+}
+```
+
+### get_project
+
+Fetch an LFX project by its v2 UID. Returns base project information and, where the caller has sufficient permissions, privileged project settings. Settings are omitted gracefully rather than failing if permissions are insufficient.
+
+**Parameters:**
+- `uid` (string, required): The v2 UID of the project to retrieve
+
+**Returns:** A JSON object with a `base` field (always present) and an optional `settings` field (omitted if the caller lacks permissions).
+
+**Example usage:**
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "get_project",
+    "arguments": {
+      "uid": "a09e35c2-98fb-4dc0-8e51-5578c59d5593"
+    }
+  }
+}
+```
 
 ### hello_world
 

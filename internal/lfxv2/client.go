@@ -34,7 +34,7 @@
 //	    }
 //
 //	    // Make API calls - token exchange happens automatically.
-//	    projects, err := clients.Project.GetProjects(ctx, &projectservice.GetProjectsPayload{})
+//	    result, err := clients.Project.GetOneProjectBase(ctx, &projectservice.GetOneProjectBasePayload{})
 //	    // ...
 //	}
 //
@@ -47,15 +47,19 @@ package lfxv2
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"sync"
 	"time"
 
 	goahttp "goa.design/goa/v3/http"
 
-	projectclient "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/http/project_service/client"
+	projecthttpclient "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/http/project_service/client"
 	projectservice "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/project_service"
+	queryhttpclient "github.com/linuxfoundation/lfx-v2-query-service/gen/http/query_svc/client"
+	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 )
 
@@ -105,11 +109,17 @@ type ClientConfig struct {
 	// If provided, the client will automatically exchange MCP tokens (from request context)
 	// for target API tokens.
 	TokenExchangeClient *TokenExchangeClient
+
+	// DebugLogger is used for debug-level HTTP request/response logging.
+	// If nil, debug logging is disabled.
+	DebugLogger *slog.Logger
 }
 
 // Clients holds initialized LFX v2 API service clients.
 type Clients struct {
-	Project             *projectservice.Client
+	Project  *projectservice.Client
+	QuerySvc *querysvc.Client
+
 	tokenExchangeClient *TokenExchangeClient
 
 	// Token cache: maps MCP token -> exchanged LFX token info.
@@ -143,6 +153,10 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		tokenCache:          make(map[string]*cachedToken),
 	}
 
+	if cfg.DebugLogger != nil {
+		httpClient = newDebugTransportClient(httpClient, cfg.DebugLogger)
+	}
+
 	if cfg.TokenExchangeClient != nil {
 		httpClient = clients.wrapWithAuthInterceptor(httpClient)
 	}
@@ -153,7 +167,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		return nil, fmt.Errorf("failed to parse project service URL: %w", err)
 	}
 
-	projectHTTPClient := projectclient.NewClient(
+	projectHTTPClient := projecthttpclient.NewClient(
 		projectURL.Scheme,
 		projectURL.Host,
 		httpClient,
@@ -162,7 +176,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		false,
 	)
 
-	projectClient := projectservice.NewClient(
+	clients.Project = projectservice.NewClient(
 		projectHTTPClient.GetProjects(),
 		projectHTTPClient.CreateProject(),
 		projectHTTPClient.GetOneProjectBase(),
@@ -174,9 +188,79 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		projectHTTPClient.Livez(),
 	)
 
-	clients.Project = projectClient
+	// Initialize query service client.
+	queryURL, err := url.Parse(cfg.APIDomain + "/query")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse query service URL: %w", err)
+	}
+
+	queryHTTPClient := queryhttpclient.NewClient(
+		queryURL.Scheme,
+		queryURL.Host,
+		httpClient,
+		goahttp.RequestEncoder,
+		goahttp.ResponseDecoder,
+		false,
+	)
+
+	clients.QuerySvc = querysvc.NewClient(
+		queryHTTPClient.QueryResources(),
+		queryHTTPClient.QueryResourcesCount(),
+		queryHTTPClient.QueryOrgs(),
+		queryHTTPClient.SuggestOrgs(),
+		queryHTTPClient.Readyz(),
+		queryHTTPClient.Livez(),
+	)
 
 	return clients, nil
+}
+
+// newDebugTransportClient wraps an HTTP client with a transport that logs the
+// full HTTP wire dump of every outbound request and inbound response at DEBUG level.
+func newDebugTransportClient(client *http.Client, logger *slog.Logger) *http.Client {
+	base := client.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	return &http.Client{
+		Transport: &debugTransport{
+			transport: base,
+			logger:    logger,
+		},
+		Timeout: client.Timeout,
+	}
+}
+
+// debugTransport is an http.RoundTripper that logs the full HTTP wire dump of
+// every outbound request and inbound response at DEBUG level.
+type debugTransport struct {
+	transport http.RoundTripper
+	logger    *slog.Logger
+}
+
+// RoundTrip implements http.RoundTripper.
+func (dt *debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	reqDump, err := httputil.DumpRequestOut(req, true)
+	if err != nil {
+		dt.logger.Error("failed to dump outbound request", "error", err)
+	} else {
+		dt.logger.Debug("lfxv2 outbound request", "dump", string(reqDump))
+	}
+
+	resp, err := dt.transport.RoundTrip(req)
+	if err != nil {
+		dt.logger.Error("lfxv2 outbound request failed", "error", err, "url", req.URL.String())
+		return nil, err
+	}
+
+	respDump, err := httputil.DumpResponse(resp, true)
+	if err != nil {
+		dt.logger.Error("failed to dump inbound response", "error", err)
+	} else {
+		dt.logger.Debug("lfxv2 inbound response", "dump", string(respDump))
+	}
+
+	return resp, nil
 }
 
 // wrapWithAuthInterceptor wraps an HTTP client with automatic token exchange.

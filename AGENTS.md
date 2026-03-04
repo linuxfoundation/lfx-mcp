@@ -419,6 +419,7 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 | `LFXMCP_HTTP_PORT` | HTTP server port | 8080 | No |
 | `LFXMCP_HTTP_PUBLIC_URL` | Public URL for HTTP transport | - | No |
 | `LFXMCP_DEBUG` | Enable debug logging | false | No |
+| `LFXMCP_DEBUG_TRAFFIC` | Enable HTTP request/response wire logging for outbound LFX API calls | false | No |
 | `LFXMCP_TOOLS` | Comma-separated list of tools to enable | - | No |
 | `LFXMCP_MCP_API_AUTH_SERVERS` | Comma-separated list of authorization server URLs | - | No |
 | `LFXMCP_MCP_API_PUBLIC_URL` | Public URL for MCP API (for OAuth PRM) | - | No |

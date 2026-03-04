@@ -97,7 +97,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		logger.Error("failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to create LFX v2 clients: %v", err)},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
 			},
 			IsError: true,
 		}, nil, nil
@@ -131,7 +131,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		logger.Error("QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: QueryResources failed: %v", err)},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search projects: %s", lfxv2.ErrorMessage(err))},
 			},
 			IsError: true,
 		}, nil, nil
@@ -213,7 +213,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 		logger.Error("failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to create LFX v2 clients: %v", err)},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
 			},
 			IsError: true,
 		}, nil, nil
@@ -228,7 +228,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 		logger.Error("GetOneProjectBase failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: GetOneProjectBase failed: %v", err)},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get project: %s", lfxv2.ErrorMessage(err))},
 			},
 			IsError: true,
 		}, nil, nil
@@ -242,7 +242,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 		UID: &args.UID,
 	})
 	if err != nil {
-		logger.Warn("getting privileged project settings failed, returning base only", "error", err, "uid", args.UID)
+		logger.Warn("getting privileged project settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
 	} else {
 		projectSettings = settingsResult.ProjectSettings
 	}

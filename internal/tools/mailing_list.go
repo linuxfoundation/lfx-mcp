@@ -55,7 +55,7 @@ type GetMailingListMemberArgs struct {
 type SearchMailingListMembersArgs struct {
 	MailingListUID string `json:"mailing_list_uid" jsonschema:"The v2 UID of the mailing list whose members to search"`
 	Name           string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
-	PageSize       int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageSize       int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10)"`
 	PageToken      string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
@@ -63,7 +63,7 @@ type SearchMailingListMembersArgs struct {
 type SearchMailingListsArgs struct {
 	Name       string `json:"name,omitempty" jsonschema:"Name or partial name of the mailing list to search for"`
 	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Optional v2 project UID to filter mailing lists by project (e.g. a27394a3-7a6c-4d0f-9e0f-692d8753924f)"`
-	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10)"`
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 

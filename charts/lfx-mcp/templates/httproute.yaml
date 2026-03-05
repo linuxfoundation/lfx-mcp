@@ -14,9 +14,14 @@ spec:
       kind: Gateway
       name: {{ .Values.gateway.name }}
       namespace: {{ .Values.gateway.namespace | default .Release.Namespace }}
-  {{- with .Values.gateway.listeners.https.hostname }}
+  {{- if or .Values.gateway.listeners.https.hostname .Values.gateway.listeners.https.additionalHostnames }}
   hostnames:
+    {{- with .Values.gateway.listeners.https.hostname }}
     - {{ . | quote }}
+    {{- end }}
+    {{- range .Values.gateway.listeners.https.additionalHostnames }}
+    - {{ . | quote }}
+    {{- end }}
   {{- end }}
   rules:
     - matches:

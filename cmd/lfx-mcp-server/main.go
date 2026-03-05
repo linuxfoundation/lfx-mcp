@@ -389,9 +389,6 @@ func runHTTPServer(cfg Config) {
 		logger.Info("OAuth bearer token verification enabled for /mcp endpoint", "audience", audience)
 	}
 
-	// Apply HTTP request logging at debug level.
-	mcpHandler = httpDebugLogging(logger)(mcpHandler)
-
 	mux.Handle("/mcp", mcpHandler)
 
 	// Add Protected Resource Metadata endpoint if auth servers are configured.
@@ -421,7 +418,7 @@ func runHTTPServer(cfg Config) {
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           httpDebugLogging(logger)(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -461,7 +458,8 @@ func runHTTPServer(cfg Config) {
 	logger.Info("HTTP server stopped")
 }
 
-// httpDebugLogging returns HTTP middleware that logs requests at debug level.
+// httpDebugLogging returns middleware that logs all incoming HTTP requests and their
+// completion at DEBUG level, including paths not handled by any route (404s).
 func httpDebugLogging(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -70,7 +70,7 @@ func main() {
 	f.Int("http.port", 8080, "Port to listen on for HTTP transport")
 	f.String("mcp_api.public_url", "", "Public URL for MCP API (for OAuth PRM; if not set, uses http://host:port/mcp)")
 	f.String("mcp_api.auth_servers", "", "Comma-separated list of authorization server URLs for OAuth PRM")
-	f.String("mcp_api.scopes", "openid,profile", "Comma-separated list of OAuth scopes for PRM")
+	f.String("mcp_api.scopes", "", "Comma-separated list of OAuth scopes for PRM")
 	f.String("client_id", "", "OAuth client ID for authentication")
 	f.String("client_secret", "", "OAuth client secret (ignored if client_assertion_signing_key is set)")
 	f.String("client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")
@@ -389,9 +389,6 @@ func runHTTPServer(cfg Config) {
 		logger.Info("OAuth bearer token verification enabled for /mcp endpoint", "audience", audience)
 	}
 
-	// Apply HTTP request logging at debug level.
-	mcpHandler = httpDebugLogging(logger)(mcpHandler)
-
 	mux.Handle("/mcp", mcpHandler)
 
 	// Add Protected Resource Metadata endpoint if auth servers are configured.
@@ -416,12 +413,19 @@ func runHTTPServer(cfg Config) {
 
 		mux.Handle("/.well-known/oauth-protected-resource", auth.ProtectedResourceMetadataHandler(metadata))
 		logger.With("url", fmt.Sprintf("http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)).Info("OAuth Protected Resource Metadata endpoint available")
+
+		// Redirect buggy MCP clients to the *correct* PRM endpoint.
+		redirectToPRM := func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/.well-known/oauth-protected-resource", http.StatusFound)
+		}
+		mux.HandleFunc("/.well-known/oauth-authorization-server/mcp", redirectToPRM)
+		mux.HandleFunc("/mcp/.well-known/oauth-authorization-server", redirectToPRM)
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           httpDebugLogging(logger)(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -461,7 +465,8 @@ func runHTTPServer(cfg Config) {
 	logger.Info("HTTP server stopped")
 }
 
-// httpDebugLogging returns HTTP middleware that logs requests at debug level.
+// httpDebugLogging returns middleware that logs all incoming HTTP requests and their
+// completion at DEBUG level, including paths not handled by any route (404s).
 func httpDebugLogging(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

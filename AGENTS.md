@@ -1,5 +1,7 @@
 # AGENTS.md
 
+> **Note:** `CLAUDE.md` is a symlink to this file. Only `AGENTS.md` needs to be edited; changes are automatically reflected in `CLAUDE.md`.
+
 This file provides essential information for AI agents working on the LFX MCP Server codebase. It focuses on development workflows, architecture understanding, and build processes needed for making code changes.
 
 ## Repository Overview
@@ -423,7 +425,7 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 | `LFXMCP_TOOLS` | Comma-separated list of tools to enable | - | No |
 | `LFXMCP_MCP_API_AUTH_SERVERS` | Comma-separated list of authorization server URLs | - | No |
 | `LFXMCP_MCP_API_PUBLIC_URL` | Public URL for MCP API (for OAuth PRM) | - | No |
-| `LFXMCP_MCP_API_SCOPES` | OAuth scopes as comma-separated list | openid,profile | No |
+| `LFXMCP_MCP_API_SCOPES` | OAuth scopes as comma-separated list | - | No |
 | `LFXMCP_CLIENT_ID` | OAuth client ID for authentication | - | No |
 | `LFXMCP_CLIENT_SECRET` | OAuth client secret | - | No |
 | `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | PEM-encoded RSA private key for client assertion | - | No |

@@ -64,7 +64,7 @@ func RegisterGetCommitteeMember(server *mcp.Server) {
 func RegisterSearchCommitteeMembers(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committee_members",
-		Description: "Search for members of a specific LFX committee. Requires a committee UID. Optionally filter by name.",
+		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID (v2), and/or name. At least one filter is recommended but not required.",
 	}, handleSearchCommitteeMembers)
 }
 
@@ -89,7 +89,8 @@ type GetCommitteeMemberArgs struct {
 
 // SearchCommitteeMembersArgs defines the input parameters for the search_committee_members tool.
 type SearchCommitteeMembersArgs struct {
-	CommitteeUID string `json:"committee_uid" jsonschema:"The v2 UID of the committee whose members to search"`
+	CommitteeUID string `json:"committee_uid,omitempty" jsonschema:"Optional v2 UID of the committee to filter members by"`
+	ProjectUID   string `json:"project_uid,omitempty" jsonschema:"Optional v2 project UID to filter committee members by project (e.g. a27394a3-7a6c-4d0f-9e0f-692d8753924f)"`
 	Name         string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
 	PageSize     int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
@@ -185,6 +186,12 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
+	}
+
+	// Warn if fewer results than requested were returned but more pages exist.
+	// This indicates some results on this page were excluded due to access controls.
+	if result.PageToken != nil && len(result.Resources) < pageSize {
+		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
@@ -428,15 +435,6 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		}, nil, nil
 	}
 
-	if args.CommitteeUID == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: committee_uid is required"},
-			},
-			IsError: true,
-		}, nil, nil
-	}
-
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.Error("failed to extract MCP token", "error", err)
@@ -471,14 +469,23 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 	}
 
 	resourceType := committeeMemberResourceType
-	// Members are tagged with committee_uid:<uid> by the committee service indexer.
-	committeeTag := fmt.Sprintf("committee_uid:%s", args.CommitteeUID)
 	payload := &querysvc.QueryResourcesPayload{
 		Version:  "1",
 		Type:     &resourceType,
-		Tags:     []string{committeeTag},
 		PageSize: pageSize,
 		Sort:     "name_asc",
+	}
+
+	// Build tag filters: committee members are tagged by the committee service indexer.
+	var tags []string
+	if args.CommitteeUID != "" {
+		tags = append(tags, fmt.Sprintf("committee_uid:%s", args.CommitteeUID))
+	}
+	if args.ProjectUID != "" {
+		tags = append(tags, fmt.Sprintf("project_uid:%s", args.ProjectUID))
+	}
+	if len(tags) > 0 {
+		payload.Tags = tags
 	}
 
 	if args.Name != "" {
@@ -489,7 +496,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.Info("searching committee members", "committee_uid", args.CommitteeUID, "name", args.Name, "page_size", pageSize)
+	logger.Info("searching committee members", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
@@ -512,6 +519,12 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		PageToken: result.PageToken,
 	}
 
+	// Warn if fewer results than requested were returned but more pages exist.
+	// This indicates some results on this page were excluded due to access controls.
+	if result.PageToken != nil && len(result.Resources) < pageSize {
+		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+	}
+
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.Error("failed to marshal search result", "error", err)
@@ -523,7 +536,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		}, nil, nil
 	}
 
-	logger.Info("search_committee_members succeeded", "committee_uid", args.CommitteeUID, "count", len(result.Resources))
+	logger.Info("search_committee_members succeeded", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

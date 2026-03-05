@@ -10,6 +10,7 @@ require (
 	github.com/knadh/koanf/v2 v2.3.2
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/linuxfoundation/lfx-v2-committee-service v0.2.19
+	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.1.10
 	github.com/linuxfoundation/lfx-v2-project-service v0.5.7
 	github.com/linuxfoundation/lfx-v2-query-service v0.4.12
 	github.com/modelcontextprotocol/go-sdk v1.4.0

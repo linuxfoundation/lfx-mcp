@@ -76,7 +76,7 @@ func main() {
 	f.String("client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")
 	f.String("token_endpoint", "", "OAuth2 token endpoint URL for token exchange")
 	f.String("lfx_api_url", "", "LFX API URL (used as token exchange audience)")
-	f.String("tools", "search_projects,get_project,search_committees,get_committee,get_committee_member,search_committee_members", "Comma-separated list of tools to enable")
+	f.String("tools", "search_projects,get_project,search_committees,get_committee,get_committee_member,search_committee_members,get_mailing_list_service,get_mailing_list,get_mailing_list_member,search_mailing_lists", "Comma-separated list of tools to enable")
 	f.Bool("debug", false, "Enable debug logging")
 	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls")
 
@@ -185,6 +185,11 @@ func main() {
 				TokenExchangeClient: tokenExchangeClient,
 				DebugLogger:         debugLogger,
 			})
+			tools.SetMailingListConfig(&tools.MailingListConfig{
+				LFXAPIURL:           cfg.LFXAPIURL,
+				TokenExchangeClient: tokenExchangeClient,
+				DebugLogger:         debugLogger,
+			})
 		}
 	}
 
@@ -283,6 +288,18 @@ func newServer(cfg Config) *mcp.Server {
 	}
 	if enabledTools["search_committee_members"] {
 		tools.RegisterSearchCommitteeMembers(server)
+	}
+	if enabledTools["get_mailing_list_service"] {
+		tools.RegisterGetGrpsioService(server)
+	}
+	if enabledTools["get_mailing_list"] {
+		tools.RegisterGetGrpsioMailingList(server)
+	}
+	if enabledTools["get_mailing_list_member"] {
+		tools.RegisterGetGrpsioMailingListMember(server)
+	}
+	if enabledTools["search_mailing_lists"] {
+		tools.RegisterSearchMailingLists(server)
 	}
 
 	return server

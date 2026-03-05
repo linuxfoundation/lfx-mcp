@@ -1,5 +1,7 @@
 # AGENTS.md
 
+> **Note:** `CLAUDE.md` is a symlink to this file. Only `AGENTS.md` needs to be edited; changes are automatically reflected in `CLAUDE.md`.
+
 This file provides essential information for AI agents working on the LFX MCP Server codebase. It focuses on development workflows, architecture understanding, and build processes needed for making code changes.
 
 ## Repository Overview

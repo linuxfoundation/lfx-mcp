@@ -57,6 +57,9 @@ gateway:
       protocol: HTTPS
       # hostname is the public DNS hostname for this listener (required).
       hostname: ""
+      # additionalHostnames is an optional list of additional hostnames to include in the HTTPRoute.
+      # Useful when external-dns domain filters require a different hostname than the public-facing one.
+      additionalHostnames: []
       allowedRoutes:
         namespaces:
           from: Same

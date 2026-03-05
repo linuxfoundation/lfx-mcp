@@ -29,48 +29,23 @@ service:
   # port is the service port.
   port: 8080
 
-# gateway is the configuration for the Gateway API resources.
-gateway:
-  # name is the name of the Gateway resource to create.
-  name: lfx-mcp-gateway
-  # namespace overrides the namespace for the Gateway resource (defaults to Release.Namespace).
-  namespace: ""
-  # publicHostname overrides the public DNS hostname used to construct LFXMCP_MCP_API_PUBLIC_URL.
-  # When empty, the hostname is derived from the first listener that has a hostname set.
-  publicHostname: ""
-  # gatewayClassName is the GatewayClass to use.
-  gatewayClassName: traefik
-  # annotations are additional annotations to add to the Gateway resource. The
-  # cert-manager.io/cluster-issuer and external-dns.alpha.kubernetes.io/hostname annotations
-  # are set automatically from certIssuer and the listener hostname, but can be overridden here.
-  annotations: {}
-  # labels are additional labels to add to the Gateway resource.
-  labels: {}
-  # certIssuer is the cert-manager ClusterIssuer annotation value for TLS certificate provisioning.
+# ingress is the configuration for the Kubernetes Ingress resource.
+ingress:
+  # hostname is the public DNS hostname (the vanity domain, e.g. mcp.lfx.dev).
+  hostname: ""
+  # clusterHostname is the hostname within the cluster's managed DNS zone that
+  # external-dns will create an A record for. Leave blank when hostname is already
+  # within the managed zone (external-dns will manage it directly). Set this when
+  # hostname is a vanity domain outside the managed zone — external-dns will create
+  # an A record here, and the vanity hostname should CNAME to this.
+  # Example: lfx-mcp.prod.v2.cluster.linuxfound.info
+  clusterHostname: ""
+  # certIssuer is the cert-manager ClusterIssuer used for TLS certificate provisioning.
   certIssuer: letsencrypt-prod
-  # listeners is a map of listener configurations keyed by listener name.
-  listeners:
-    https:
-      # port is the listener port (8443 is Traefik's websecure entrypoint for HTTPS).
-      port: 8443
-      # protocol is the listener protocol.
-      protocol: HTTPS
-      # hostname is the public DNS hostname for this listener (required).
-      hostname: ""
-      # additionalHostnames is an optional list of additional hostnames to include in the HTTPRoute.
-      # Useful when external-dns domain filters require a different hostname than the public-facing one.
-      additionalHostnames: []
-      allowedRoutes:
-        namespaces:
-          from: Same
-      tls:
-        # mode is the TLS termination mode.
-        mode: Terminate
-        certificateRefs:
-          - group: ""
-            kind: Secret
-            # name is the name of the TLS Secret (managed by cert-manager).
-            name: lfx-mcp-tls
+  # tlsSecretName is the name of the TLS Secret that cert-manager will create.
+  tlsSecretName: lfx-mcp-tls
+  # annotations are additional annotations to merge into the Ingress resource.
+  annotations: {}
 
 # app is the configuration for the application.
 app:

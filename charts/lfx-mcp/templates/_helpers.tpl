@@ -56,29 +56,10 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Determine the public MCP hostname.
-Prefer .Values.gateway.publicHostname if set; otherwise derive it
-from the first listener in .Values.gateway.listeners that has a hostname.
-*/}}
-{{- define "lfx-mcp.mcpPublicHostname" -}}
-{{- if .Values.gateway.publicHostname }}
-{{- .Values.gateway.publicHostname }}
-{{- else }}
-{{- $hostname := "" }}
-{{- range $name, $listener := .Values.gateway.listeners }}
-{{- if and (not $hostname) $listener.hostname }}
-{{- $hostname = $listener.hostname }}
-{{- end }}
-{{- end }}
-{{- $hostname }}
-{{- end }}
-{{- end }}
-
-{{/*
-Derive the public MCP URL from the public hostname.
+Derive the public MCP URL from the ingress hostname.
 */}}
 {{- define "lfx-mcp.mcpPublicURL" -}}
-{{- $hostname := include "lfx-mcp.mcpPublicHostname" . | trim }}
+{{- $hostname := .Values.ingress.hostname | trim }}
 {{- if $hostname }}
 {{- printf "https://%s/mcp" $hostname }}
 {{- end }}

@@ -413,6 +413,13 @@ func runHTTPServer(cfg Config) {
 
 		mux.Handle("/.well-known/oauth-protected-resource", auth.ProtectedResourceMetadataHandler(metadata))
 		logger.With("url", fmt.Sprintf("http://%s:%d/.well-known/oauth-protected-resource", cfg.HTTP.Host, cfg.HTTP.Port)).Info("OAuth Protected Resource Metadata endpoint available")
+
+		// Redirect buggy MCP clients to the *correct* PRM endpoint.
+		redirectToPRM := func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/.well-known/oauth-protected-resource", http.StatusFound)
+		}
+		mux.HandleFunc("/.well-known/oauth-authorization-server/mcp", redirectToPRM)
+		mux.HandleFunc("/mcp/.well-known/oauth-authorization-server", redirectToPRM)
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)

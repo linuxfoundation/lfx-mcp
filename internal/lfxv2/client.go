@@ -58,6 +58,8 @@ import (
 
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
 	committeehttpclient "github.com/linuxfoundation/lfx-v2-committee-service/gen/http/committee_service/client"
+	mailinglisthttpclient "github.com/linuxfoundation/lfx-v2-mailing-list-service/gen/http/mailing_list/client"
+	mailinglist "github.com/linuxfoundation/lfx-v2-mailing-list-service/gen/mailing_list"
 	projecthttpclient "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/http/project_service/client"
 	projectservice "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/project_service"
 	queryhttpclient "github.com/linuxfoundation/lfx-v2-query-service/gen/http/query_svc/client"
@@ -119,9 +121,10 @@ type ClientConfig struct {
 
 // Clients holds initialized LFX v2 API service clients.
 type Clients struct {
-	Committee *committeeservice.Client
-	Project   *projectservice.Client
-	QuerySvc  *querysvc.Client
+	Committee   *committeeservice.Client
+	MailingList *mailinglist.Client
+	Project     *projectservice.Client
+	QuerySvc    *querysvc.Client
 
 	tokenExchangeClient *TokenExchangeClient
 
@@ -192,6 +195,43 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		committeeHTTPClient.GetCommitteeMember(),
 		committeeHTTPClient.UpdateCommitteeMember(),
 		committeeHTTPClient.DeleteCommitteeMember(),
+	)
+
+	// Initialize mailing list service client.
+	mailingListURL, err := url.Parse(cfg.APIDomain + "/mailing-lists")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse mailing list service URL: %w", err)
+	}
+
+	mlHTTPClient := mailinglisthttpclient.NewClient(
+		mailingListURL.Scheme,
+		mailingListURL.Host,
+		httpClient,
+		goahttp.RequestEncoder,
+		goahttp.ResponseDecoder,
+		false,
+	)
+
+	clients.MailingList = mailinglist.NewClient(
+		mlHTTPClient.Livez(),
+		mlHTTPClient.Readyz(),
+		mlHTTPClient.CreateGrpsioService(),
+		mlHTTPClient.GetGrpsioService(),
+		mlHTTPClient.UpdateGrpsioService(),
+		mlHTTPClient.DeleteGrpsioService(),
+		mlHTTPClient.GetGrpsioServiceSettings(),
+		mlHTTPClient.UpdateGrpsioServiceSettings(),
+		mlHTTPClient.CreateGrpsioMailingList(),
+		mlHTTPClient.GetGrpsioMailingList(),
+		mlHTTPClient.UpdateGrpsioMailingList(),
+		mlHTTPClient.DeleteGrpsioMailingList(),
+		mlHTTPClient.GetGrpsioMailingListSettings(),
+		mlHTTPClient.UpdateGrpsioMailingListSettings(),
+		mlHTTPClient.CreateGrpsioMailingListMember(),
+		mlHTTPClient.GetGrpsioMailingListMember(),
+		mlHTTPClient.UpdateGrpsioMailingListMember(),
+		mlHTTPClient.DeleteGrpsioMailingListMember(),
+		mlHTTPClient.GroupsioWebhook(),
 	)
 
 	// Initialize project service client.

@@ -1,6 +1,7 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
+// Package lfxv2 provides client configuration for LFX v2 API services.
 package lfxv2
 
 import "fmt"

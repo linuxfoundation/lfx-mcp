@@ -77,9 +77,9 @@ app:
   debugTraffic: false
   # mcpApiAuthServers is the space-separated list of OAuth2 authorization server URLs.
   mcpApiAuthServers: ""
-  # mcpApiScopes is the comma-separated list of OAuth2 scopes to request.
+  # mcpApiScopes is the comma-separated list of OAuth2 scopes to advertise via OAuth PRM (empty advertises no scopes).
   mcpApiScopes: ""
-  # tools is the comma-separated list of tools to enable (empty enables all tools).
+  # tools is the comma-separated list of tools to enable (empty uses the server default tool set).
   tools: ""
   # lfxAPIURL is the base URL of the LFX API.
   lfxAPIURL: ""

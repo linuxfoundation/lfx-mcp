@@ -70,7 +70,7 @@ func main() {
 	f.Int("http.port", 8080, "Port to listen on for HTTP transport")
 	f.String("mcp_api.public_url", "", "Public URL for MCP API (for OAuth PRM; if not set, uses http://host:port/mcp)")
 	f.String("mcp_api.auth_servers", "", "Comma-separated list of authorization server URLs for OAuth PRM")
-	f.String("mcp_api.scopes", "openid,profile", "Comma-separated list of OAuth scopes for PRM")
+	f.String("mcp_api.scopes", "", "Comma-separated list of OAuth scopes for PRM")
 	f.String("client_id", "", "OAuth client ID for authentication")
 	f.String("client_secret", "", "OAuth client secret (ignored if client_assertion_signing_key is set)")
 	f.String("client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")

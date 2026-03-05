@@ -71,10 +71,14 @@ gateway:
 
 # app is the configuration for the application.
 app:
+  # debug enables debug logging.
+  debug: false
+  # debugTraffic enables HTTP request/response wire logging for outbound LFX API calls.
+  debugTraffic: false
   # mcpApiAuthServers is the space-separated list of OAuth2 authorization server URLs.
   mcpApiAuthServers: ""
   # mcpApiScopes is the comma-separated list of OAuth2 scopes to request.
-  mcpApiScopes: "openid,profile"
+  mcpApiScopes: ""
   # tools is the comma-separated list of tools to enable (empty enables all tools).
   tools: ""
   # lfxAPIURL is the base URL of the LFX API.

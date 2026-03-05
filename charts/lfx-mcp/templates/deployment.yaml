@@ -35,8 +35,18 @@ spec:
               value: {{ include "lfx-mcp.mcpPublicURL" . | quote }}
             - name: LFXMCP_MCP_API_AUTH_SERVERS
               value: {{ .Values.app.mcpApiAuthServers | quote }}
+            {{- if .Values.app.debug }}
+            - name: LFXMCP_DEBUG
+              value: "true"
+            {{- end }}
+            {{- if .Values.app.debugTraffic }}
+            - name: LFXMCP_DEBUG_TRAFFIC
+              value: "true"
+            {{- end }}
+            {{- if .Values.app.mcpApiScopes }}
             - name: LFXMCP_MCP_API_SCOPES
               value: {{ .Values.app.mcpApiScopes | quote }}
+            {{- end }}
             {{- if .Values.app.tools }}
             - name: LFXMCP_TOOLS
               value: {{ .Values.app.tools | quote }}

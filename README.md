@@ -74,7 +74,7 @@ The server supports configuration via both command-line flags and environment va
 - `-tools`: Comma-separated list of tools to enable (default: `search_projects,get_project`)
 - `-mcp_api.auth_servers`: Comma-separated list of authorization server URLs for OAuth PRM
 - `-mcp_api.public_url`: Public URL for the MCP API endpoint (for OAuth PRM)
-- `-mcp_api.scopes`: OAuth scopes as comma-separated list (default: `openid,profile`)
+- `-mcp_api.scopes`: OAuth scopes as comma-separated list (default: none; set to advertise scopes via OAuth PRM)
 - `-client_id`: OAuth client ID for token exchange
 - `-client_secret`: OAuth client secret (ignored if `client_assertion_signing_key` is set)
 - `-client_assertion_signing_key`: PEM-encoded RSA private key for client assertion (RFC 7523)
@@ -92,7 +92,7 @@ All environment variables use the `LFXMCP_` prefix. Variable names use underscor
 - `LFXMCP_TOOLS`: Comma-separated list of tools to enable
 - `LFXMCP_MCP_API_AUTH_SERVERS`: Comma-separated list of authorization server URLs
 - `LFXMCP_MCP_API_PUBLIC_URL`: Public URL for MCP API (for OAuth PRM)
-- `LFXMCP_MCP_API_SCOPES`: OAuth scopes as comma-separated list (default: `openid,profile`)
+- `LFXMCP_MCP_API_SCOPES`: OAuth scopes as comma-separated list (default: none; set to advertise scopes via OAuth PRM)
 - `LFXMCP_CLIENT_ID`: OAuth client ID for token exchange
 - `LFXMCP_CLIENT_SECRET`: OAuth client secret
 - `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY`: PEM-encoded RSA private key for client assertion

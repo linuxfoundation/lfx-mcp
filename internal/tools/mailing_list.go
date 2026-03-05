@@ -35,18 +35,18 @@ func SetMailingListConfig(cfg *MailingListConfig) {
 	mailingListConfig = cfg
 }
 
-// GetGrpsioServiceArgs defines the input parameters for the get_grpsio_service tool.
-type GetGrpsioServiceArgs struct {
-	UID string `json:"uid" jsonschema:"The v2 UID of the Groups.io service to retrieve"`
+// GetMailingListServiceArgs defines the input parameters for the get_mailing_list_service tool.
+type GetMailingListServiceArgs struct {
+	UID string `json:"uid" jsonschema:"The v2 UID of the mailing list service to retrieve"`
 }
 
-// GetGrpsioMailingListArgs defines the input parameters for the get_grpsio_mailing_list tool.
-type GetGrpsioMailingListArgs struct {
+// GetMailingListArgs defines the input parameters for the get_mailing_list tool.
+type GetMailingListArgs struct {
 	UID string `json:"uid" jsonschema:"The v2 UID of the mailing list to retrieve"`
 }
 
-// GetGrpsioMailingListMemberArgs defines the input parameters for the get_grpsio_mailing_list_member tool.
-type GetGrpsioMailingListMemberArgs struct {
+// GetMailingListMemberArgs defines the input parameters for the get_mailing_list_member tool.
+type GetMailingListMemberArgs struct {
 	MailingListUID string `json:"mailing_list_uid" jsonschema:"The v2 UID of the mailing list"`
 	MemberUID      string `json:"member_uid" jsonschema:"The v2 UID of the mailing list member"`
 }
@@ -67,28 +67,28 @@ type SearchMailingListsArgs struct {
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
-// RegisterGetGrpsioService registers the get_grpsio_service tool with the MCP server.
-func RegisterGetGrpsioService(server *mcp.Server) {
+// RegisterGetMailingListService registers the get_mailing_list_service tool with the MCP server.
+func RegisterGetMailingListService(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_mailing_list_service",
-		Description: "Get a Groups.io service's base info and settings by its UID. Privileged settings may be omitted if the caller lacks sufficient permissions.",
-	}, handleGetGrpsioService)
+		Description: "Get a mailing list service's base info and settings by its UID. Privileged settings may be omitted if the caller lacks sufficient permissions.",
+	}, handleGetMailingListService)
 }
 
-// RegisterGetGrpsioMailingList registers the get_grpsio_mailing_list tool with the MCP server.
-func RegisterGetGrpsioMailingList(server *mcp.Server) {
+// RegisterGetMailingList registers the get_mailing_list tool with the MCP server.
+func RegisterGetMailingList(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_mailing_list",
-		Description: "Get a Groups.io mailing list's base info and settings by its UID. Privileged settings may be omitted if the caller lacks sufficient permissions.",
-	}, handleGetGrpsioMailingList)
+		Description: "Get a mailing list's base info and settings by its UID. Privileged settings may be omitted if the caller lacks sufficient permissions.",
+	}, handleGetMailingList)
 }
 
-// RegisterGetGrpsioMailingListMember registers the get_grpsio_mailing_list_member tool with the MCP server.
-func RegisterGetGrpsioMailingListMember(server *mcp.Server) {
+// RegisterGetMailingListMember registers the get_mailing_list_member tool with the MCP server.
+func RegisterGetMailingListMember(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_mailing_list_member",
 		Description: "Get a specific mailing list member by mailing list UID and member UID.",
-	}, handleGetGrpsioMailingListMember)
+	}, handleGetMailingListMember)
 }
 
 // RegisterSearchMailingListMembers registers the search_mailing_list_members tool with the MCP server.
@@ -107,8 +107,8 @@ func RegisterSearchMailingLists(server *mcp.Server) {
 	}, handleSearchMailingLists)
 }
 
-// handleGetGrpsioService implements the get_grpsio_service tool logic.
-func handleGetGrpsioService(ctx context.Context, req *mcp.CallToolRequest, args GetGrpsioServiceArgs) (*mcp.CallToolResult, any, error) {
+// handleGetMailingListService implements the get_mailing_list_service tool logic.
+func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, args GetMailingListServiceArgs) (*mcp.CallToolResult, any, error) {
 	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
 
 	if mailingListConfig == nil {
@@ -158,7 +158,7 @@ func handleGetGrpsioService(ctx context.Context, req *mcp.CallToolRequest, args 
 		}, nil, nil
 	}
 
-	logger.Info("fetching grpsio service", "uid", args.UID)
+	logger.Info("fetching mailing list service", "uid", args.UID)
 
 	baseResult, err := clients.MailingList.GetGrpsioService(ctx, &mailinglist.GetGrpsioServicePayload{
 		UID: &args.UID,
@@ -167,7 +167,7 @@ func handleGetGrpsioService(ctx context.Context, req *mcp.CallToolRequest, args 
 		logger.Error("GetGrpsioService failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get grpsio service: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list service: %s", lfxv2.ErrorMessage(err))},
 			},
 			IsError: true,
 		}, nil, nil
@@ -178,24 +178,24 @@ func handleGetGrpsioService(ctx context.Context, req *mcp.CallToolRequest, args 
 		UID: &args.UID,
 	})
 	if err != nil {
-		logger.Warn("getting grpsio service settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
+		logger.Warn("getting mailing list service settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
 	} else {
 		serviceSettings = settingsResult.ServiceSettings
 	}
 
-	type grpsioServiceResult struct {
+	type serviceResult struct {
 		Base     *mailinglist.GrpsIoServiceWithReadonlyAttributes `json:"base"`
 		Settings *mailinglist.GrpsIoServiceSettings               `json:"settings,omitempty"`
 	}
 
-	out := grpsioServiceResult{
+	out := serviceResult{
 		Base:     baseResult.Service,
 		Settings: serviceSettings,
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal grpsio service result", "error", err)
+		logger.Error("failed to marshal mailing list service result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -204,7 +204,7 @@ func handleGetGrpsioService(ctx context.Context, req *mcp.CallToolRequest, args 
 		}, nil, nil
 	}
 
-	logger.Info("get_grpsio_service succeeded", "uid", args.UID)
+	logger.Info("get_mailing_list_service succeeded", "uid", args.UID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -213,8 +213,8 @@ func handleGetGrpsioService(ctx context.Context, req *mcp.CallToolRequest, args 
 	}, nil, nil
 }
 
-// handleGetGrpsioMailingList implements the get_grpsio_mailing_list tool logic.
-func handleGetGrpsioMailingList(ctx context.Context, req *mcp.CallToolRequest, args GetGrpsioMailingListArgs) (*mcp.CallToolResult, any, error) {
+// handleGetMailingList implements the get_mailing_list tool logic.
+func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args GetMailingListArgs) (*mcp.CallToolResult, any, error) {
 	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
 
 	if mailingListConfig == nil {
@@ -264,7 +264,7 @@ func handleGetGrpsioMailingList(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	logger.Info("fetching grpsio mailing list", "uid", args.UID)
+	logger.Info("fetching mailing list", "uid", args.UID)
 
 	baseResult, err := clients.MailingList.GetGrpsioMailingList(ctx, &mailinglist.GetGrpsioMailingListPayload{
 		Version: "1",
@@ -311,7 +311,7 @@ func handleGetGrpsioMailingList(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	logger.Info("get_grpsio_mailing_list succeeded", "uid", args.UID)
+	logger.Info("get_mailing_list succeeded", "uid", args.UID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -320,8 +320,8 @@ func handleGetGrpsioMailingList(ctx context.Context, req *mcp.CallToolRequest, a
 	}, nil, nil
 }
 
-// handleGetGrpsioMailingListMember implements the get_grpsio_mailing_list_member tool logic.
-func handleGetGrpsioMailingListMember(ctx context.Context, req *mcp.CallToolRequest, args GetGrpsioMailingListMemberArgs) (*mcp.CallToolResult, any, error) {
+// handleGetMailingListMember implements the get_mailing_list_member tool logic.
+func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, args GetMailingListMemberArgs) (*mcp.CallToolResult, any, error) {
 	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
 
 	if mailingListConfig == nil {
@@ -408,7 +408,7 @@ func handleGetGrpsioMailingListMember(ctx context.Context, req *mcp.CallToolRequ
 		}, nil, nil
 	}
 
-	logger.Info("get_grpsio_mailing_list_member succeeded", "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
+	logger.Info("get_mailing_list_member succeeded", "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

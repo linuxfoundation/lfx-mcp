@@ -290,13 +290,13 @@ func newServer(cfg Config) *mcp.Server {
 		tools.RegisterSearchCommitteeMembers(server)
 	}
 	if enabledTools["get_mailing_list_service"] {
-		tools.RegisterGetGrpsioService(server)
+		tools.RegisterGetMailingListService(server)
 	}
 	if enabledTools["get_mailing_list"] {
-		tools.RegisterGetGrpsioMailingList(server)
+		tools.RegisterGetMailingList(server)
 	}
 	if enabledTools["get_mailing_list_member"] {
-		tools.RegisterGetGrpsioMailingListMember(server)
+		tools.RegisterGetMailingListMember(server)
 	}
 	if enabledTools["search_mailing_lists"] {
 		tools.RegisterSearchMailingLists(server)

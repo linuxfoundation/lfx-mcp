@@ -1,0 +1,37 @@
+{{- /*
+Copyright The Linux Foundation and each contributor to LFX.
+SPDX-License-Identifier: MIT
+*/ -}}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "lfx-mcp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lfx-mcp.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.certIssuer }}
+    {{- if .Values.ingress.clusterHostname }}
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.ingress.clusterHostname }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: {{ .Values.ingress.hostname | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "lfx-mcp.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+  tls:
+    - secretName: {{ .Values.ingress.tlsSecretName }}
+      hosts:
+        - {{ .Values.ingress.hostname | quote }}

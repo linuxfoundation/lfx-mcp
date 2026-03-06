@@ -60,8 +60,8 @@ import (
 	committeehttpclient "github.com/linuxfoundation/lfx-v2-committee-service/gen/http/committee_service/client"
 	mailinglisthttpclient "github.com/linuxfoundation/lfx-v2-mailing-list-service/gen/http/mailing_list/client"
 	mailinglist "github.com/linuxfoundation/lfx-v2-mailing-list-service/gen/mailing_list"
-	membershiphttpclient "github.com/linuxfoundation/lfx-v2-member-service/gen/http/membership_service/client"
-	membershipservice "github.com/linuxfoundation/lfx-v2-member-service/gen/membership_service"
+	memberhttpclient "github.com/linuxfoundation/lfx-v2-member-service/gen/http/membership_service/client"
+	memberservice "github.com/linuxfoundation/lfx-v2-member-service/gen/membership_service"
 	projecthttpclient "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/http/project_service/client"
 	projectservice "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/project_service"
 	queryhttpclient "github.com/linuxfoundation/lfx-v2-query-service/gen/http/query_svc/client"
@@ -125,7 +125,7 @@ type ClientConfig struct {
 type Clients struct {
 	Committee   *committeeservice.Client
 	MailingList *mailinglist.Client
-	Membership  *membershipservice.Client
+	Member      *memberservice.Client
 	Project     *projectservice.Client
 	QuerySvc    *querysvc.Client
 
@@ -237,27 +237,27 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		mlHTTPClient.GroupsioWebhook(),
 	)
 
-	// Initialize membership service client.
-	membershipURL, err := url.Parse(cfg.APIDomain + "/memberships")
+	// Initialize member service client.
+	memberURL, err := url.Parse(cfg.APIDomain + "/members")
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse membership service URL: %w", err)
+		return nil, fmt.Errorf("failed to parse member service URL: %w", err)
 	}
 
-	membershipHTTPClient := membershiphttpclient.NewClient(
-		membershipURL.Scheme,
-		membershipURL.Host,
+	memberHTTPClient := memberhttpclient.NewClient(
+		memberURL.Scheme,
+		memberURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
 		goahttp.ResponseDecoder,
 		false,
 	)
 
-	clients.Membership = membershipservice.NewClient(
-		membershipHTTPClient.ListMemberships(),
-		membershipHTTPClient.GetMembership(),
-		membershipHTTPClient.ListMembershipContacts(),
-		membershipHTTPClient.Readyz(),
-		membershipHTTPClient.Livez(),
+	clients.Member = memberservice.NewClient(
+		memberHTTPClient.ListMembers(),
+		memberHTTPClient.GetMemberMembership(),
+		memberHTTPClient.ListMemberMembershipKeyContacts(),
+		memberHTTPClient.Readyz(),
+		memberHTTPClient.Livez(),
 	)
 
 	// Initialize project service client.

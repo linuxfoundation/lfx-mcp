@@ -11,26 +11,27 @@ import (
 	"strings"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
-	membershipservice "github.com/linuxfoundation/lfx-v2-member-service/gen/membership_service"
+	memberservice "github.com/linuxfoundation/lfx-v2-member-service/gen/membership_service"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// MembershipConfig holds configuration shared by membership tools.
-type MembershipConfig struct {
+// MemberConfig holds configuration shared by member tools.
+type MemberConfig struct {
 	LFXAPIURL           string
 	TokenExchangeClient *lfxv2.TokenExchangeClient
 	DebugLogger         *slog.Logger
 }
 
-var membershipConfig *MembershipConfig
+var memberConfig *MemberConfig
 
-// SetMembershipConfig sets the configuration for membership tools.
-func SetMembershipConfig(cfg *MembershipConfig) {
-	membershipConfig = cfg
+// SetMemberConfig sets the configuration for member tools.
+func SetMemberConfig(cfg *MemberConfig) {
+	memberConfig = cfg
 }
 
-// SearchMembershipsArgs defines the input parameters for the search_memberships tool.
-type SearchMembershipsArgs struct {
+// SearchMembersArgs defines the input parameters for the search_members tool.
+type SearchMembersArgs struct {
+	Search         string `json:"search,omitempty" jsonschema:"Free-text search across member name, project names, and tiers"`
 	Status         string `json:"status,omitempty" jsonschema:"Filter by membership status (e.g. active, expired)"`
 	MembershipType string `json:"membership_type,omitempty" jsonschema:"Filter by membership type"`
 	AccountID      string `json:"account_id,omitempty" jsonschema:"Filter by account ID"`
@@ -40,53 +41,55 @@ type SearchMembershipsArgs struct {
 	Tier           string `json:"tier,omitempty" jsonschema:"Filter by membership tier"`
 	ContactID      string `json:"contact_id,omitempty" jsonschema:"Filter by contact ID"`
 	AutoRenew      string `json:"auto_renew,omitempty" jsonschema:"Filter by auto-renew status (true or false)"`
-	PageSize       int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10)"`
+	PageSize       int    `json:"page_size,omitempty" jsonschema:"Number of results per page (1-100, default 25)"`
 	Offset         int    `json:"offset,omitempty" jsonschema:"Offset into the total result list (default 0)"`
 }
 
-// GetMembershipArgs defines the input parameters for the get_membership tool.
-type GetMembershipArgs struct {
-	UID string `json:"uid" jsonschema:"The UID of the membership to retrieve"`
+// GetMemberMembershipArgs defines the input parameters for the get_member_membership tool.
+type GetMemberMembershipArgs struct {
+	MemberID string `json:"member_id" jsonschema:"The member UID"`
+	ID       string `json:"id" jsonschema:"The membership UID"`
 }
 
-// GetMembershipContactsArgs defines the input parameters for the get_membership_contacts tool.
-type GetMembershipContactsArgs struct {
-	UID string `json:"uid" jsonschema:"The UID of the membership to get contacts for"`
+// GetMembershipKeyContactsArgs defines the input parameters for the get_membership_key_contacts tool.
+type GetMembershipKeyContactsArgs struct {
+	MemberID string `json:"member_id" jsonschema:"The member UID"`
+	ID       string `json:"id" jsonschema:"The membership UID"`
 }
 
-// RegisterSearchMemberships registers the search_memberships tool with the MCP server.
-func RegisterSearchMemberships(server *mcp.Server) {
+// RegisterSearchMembers registers the search_members tool with the MCP server.
+func RegisterSearchMembers(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "search_memberships",
-		Description: "Search and filter members (memberships). Use this tool when users ask about members, memberships, or member organizations. Supports filtering by status, membership_type, account_id, project_id, product_id, year, tier (e.g. gold, platinum, silver), contact_id, and auto_renew. Uses offset-based pagination.",
-	}, handleSearchMemberships)
+		Name:        "search_members",
+		Description: "Search and filter members (memberships). Use this tool when users ask about members, memberships, or member organizations. Supports free-text search and filtering by status, membership_type, account_id, project_id, product_id, year, tier (e.g. gold, platinum, silver), contact_id, and auto_renew. Uses offset-based pagination.",
+	}, handleSearchMembers)
 }
 
-// RegisterGetMembership registers the get_membership tool with the MCP server.
-func RegisterGetMembership(server *mcp.Server) {
+// RegisterGetMemberMembership registers the get_member_membership tool with the MCP server.
+func RegisterGetMemberMembership(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "get_membership",
-		Description: "Get a single member (membership) by its UID. Use this when users ask for details about a specific member or membership.",
-	}, handleGetMembership)
+		Name:        "get_member_membership",
+		Description: "Get a single member's membership by member ID and membership ID. Use this when users ask for details about a specific member or membership.",
+	}, handleGetMemberMembership)
 }
 
-// RegisterGetMembershipContacts registers the get_membership_contacts tool with the MCP server.
-func RegisterGetMembershipContacts(server *mcp.Server) {
+// RegisterGetMembershipKeyContacts registers the get_membership_key_contacts tool with the MCP server.
+func RegisterGetMembershipKeyContacts(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "get_membership_contacts",
-		Description: "Get key contacts for a member (membership) by its UID. Returns the people associated with a member such as primary contacts and board members.",
-	}, handleGetMembershipContacts)
+		Name:        "get_membership_key_contacts",
+		Description: "Get key contacts for a member's membership by member ID and membership ID. Returns the people associated with a member such as primary contacts and board members.",
+	}, handleGetMembershipKeyContacts)
 }
 
-// handleSearchMemberships implements the search_memberships tool logic.
-func handleSearchMemberships(ctx context.Context, req *mcp.CallToolRequest, args SearchMembershipsArgs) (*mcp.CallToolResult, any, error) {
+// handleSearchMembers implements the search_members tool logic.
+func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchMembersArgs) (*mcp.CallToolResult, any, error) {
 	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
 
-	if membershipConfig == nil {
-		logger.Error("membership tools not configured")
+	if memberConfig == nil {
+		logger.Error("member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: membership tools not configured"},
+				&mcp.TextContent{Text: "Error: member tools not configured"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -106,9 +109,9 @@ func handleSearchMemberships(ctx context.Context, req *mcp.CallToolRequest, args
 	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
 
 	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           membershipConfig.LFXAPIURL,
-		TokenExchangeClient: membershipConfig.TokenExchangeClient,
-		DebugLogger:         membershipConfig.DebugLogger,
+		APIDomain:           memberConfig.LFXAPIURL,
+		TokenExchangeClient: memberConfig.TokenExchangeClient,
+		DebugLogger:         memberConfig.DebugLogger,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -122,7 +125,7 @@ func handleSearchMemberships(ctx context.Context, req *mcp.CallToolRequest, args
 
 	pageSize := args.PageSize
 	if pageSize <= 0 {
-		pageSize = 10
+		pageSize = 25
 	}
 
 	// Build filter string from non-empty filter args.
@@ -156,7 +159,7 @@ func handleSearchMemberships(ctx context.Context, req *mcp.CallToolRequest, args
 	}
 
 	version := "1"
-	payload := &membershipservice.ListMembershipsPayload{
+	payload := &memberservice.ListMembersPayload{
 		Version:  &version,
 		PageSize: pageSize,
 		Offset:   args.Offset,
@@ -167,14 +170,18 @@ func handleSearchMemberships(ctx context.Context, req *mcp.CallToolRequest, args
 		payload.Filter = &filterStr
 	}
 
-	logger.Info("searching memberships", "filter_count", len(filters), "page_size", pageSize, "offset", args.Offset)
+	if args.Search != "" {
+		payload.Search = &args.Search
+	}
 
-	result, err := clients.Membership.ListMemberships(ctx, payload)
+	logger.Info("searching members", "filter_count", len(filters), "page_size", pageSize, "offset", args.Offset, "search", args.Search)
+
+	result, err := clients.Member.ListMembers(ctx, payload)
 	if err != nil {
-		logger.Error("ListMemberships failed", "error", err)
+		logger.Error("ListMembers failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search memberships: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search members: %s", lfxv2.ErrorMessage(err))},
 			},
 			IsError: true,
 		}, nil, nil
@@ -191,7 +198,7 @@ func handleSearchMemberships(ctx context.Context, req *mcp.CallToolRequest, args
 		}, nil, nil
 	}
 
-	logger.Info("search_memberships succeeded", "count", len(result.Memberships))
+	logger.Info("search_members succeeded", "count", len(result.Members))
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -200,24 +207,33 @@ func handleSearchMemberships(ctx context.Context, req *mcp.CallToolRequest, args
 	}, nil, nil
 }
 
-// handleGetMembership implements the get_membership tool logic.
-func handleGetMembership(ctx context.Context, req *mcp.CallToolRequest, args GetMembershipArgs) (*mcp.CallToolResult, any, error) {
+// handleGetMemberMembership implements the get_member_membership tool logic.
+func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, args GetMemberMembershipArgs) (*mcp.CallToolResult, any, error) {
 	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
 
-	if membershipConfig == nil {
-		logger.Error("membership tools not configured")
+	if memberConfig == nil {
+		logger.Error("member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: membership tools not configured"},
+				&mcp.TextContent{Text: "Error: member tools not configured"},
 			},
 			IsError: true,
 		}, nil, nil
 	}
 
-	if args.UID == "" {
+	if args.MemberID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: uid is required"},
+				&mcp.TextContent{Text: "Error: member_id is required"},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	if args.ID == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "Error: id is required"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -237,9 +253,9 @@ func handleGetMembership(ctx context.Context, req *mcp.CallToolRequest, args Get
 	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
 
 	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           membershipConfig.LFXAPIURL,
-		TokenExchangeClient: membershipConfig.TokenExchangeClient,
-		DebugLogger:         membershipConfig.DebugLogger,
+		APIDomain:           memberConfig.LFXAPIURL,
+		TokenExchangeClient: memberConfig.TokenExchangeClient,
+		DebugLogger:         memberConfig.DebugLogger,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -251,18 +267,19 @@ func handleGetMembership(ctx context.Context, req *mcp.CallToolRequest, args Get
 		}, nil, nil
 	}
 
-	logger.Info("fetching membership", "uid", args.UID)
+	logger.Info("fetching member membership", "member_id", args.MemberID, "id", args.ID)
 
 	version := "1"
-	result, err := clients.Membership.GetMembership(ctx, &membershipservice.GetMembershipPayload{
-		Version: &version,
-		UID:     &args.UID,
+	result, err := clients.Member.GetMemberMembership(ctx, &memberservice.GetMemberMembershipPayload{
+		Version:  &version,
+		MemberID: &args.MemberID,
+		ID:       &args.ID,
 	})
 	if err != nil {
-		logger.Error("GetMembership failed", "error", err, "uid", args.UID)
+		logger.Error("GetMemberMembership failed", "error", err, "member_id", args.MemberID, "id", args.ID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get member membership: %s", lfxv2.ErrorMessage(err))},
 			},
 			IsError: true,
 		}, nil, nil
@@ -279,7 +296,7 @@ func handleGetMembership(ctx context.Context, req *mcp.CallToolRequest, args Get
 		}, nil, nil
 	}
 
-	logger.Info("get_membership succeeded", "uid", args.UID)
+	logger.Info("get_member_membership succeeded", "member_id", args.MemberID, "id", args.ID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -288,24 +305,33 @@ func handleGetMembership(ctx context.Context, req *mcp.CallToolRequest, args Get
 	}, nil, nil
 }
 
-// handleGetMembershipContacts implements the get_membership_contacts tool logic.
-func handleGetMembershipContacts(ctx context.Context, req *mcp.CallToolRequest, args GetMembershipContactsArgs) (*mcp.CallToolResult, any, error) {
+// handleGetMembershipKeyContacts implements the get_membership_key_contacts tool logic.
+func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolRequest, args GetMembershipKeyContactsArgs) (*mcp.CallToolResult, any, error) {
 	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
 
-	if membershipConfig == nil {
-		logger.Error("membership tools not configured")
+	if memberConfig == nil {
+		logger.Error("member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: membership tools not configured"},
+				&mcp.TextContent{Text: "Error: member tools not configured"},
 			},
 			IsError: true,
 		}, nil, nil
 	}
 
-	if args.UID == "" {
+	if args.MemberID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: uid is required"},
+				&mcp.TextContent{Text: "Error: member_id is required"},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	if args.ID == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "Error: id is required"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -325,9 +351,9 @@ func handleGetMembershipContacts(ctx context.Context, req *mcp.CallToolRequest, 
 	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
 
 	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           membershipConfig.LFXAPIURL,
-		TokenExchangeClient: membershipConfig.TokenExchangeClient,
-		DebugLogger:         membershipConfig.DebugLogger,
+		APIDomain:           memberConfig.LFXAPIURL,
+		TokenExchangeClient: memberConfig.TokenExchangeClient,
+		DebugLogger:         memberConfig.DebugLogger,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -339,18 +365,19 @@ func handleGetMembershipContacts(ctx context.Context, req *mcp.CallToolRequest, 
 		}, nil, nil
 	}
 
-	logger.Info("fetching membership contacts", "uid", args.UID)
+	logger.Info("fetching membership key contacts", "member_id", args.MemberID, "id", args.ID)
 
 	version := "1"
-	result, err := clients.Membership.ListMembershipContacts(ctx, &membershipservice.ListMembershipContactsPayload{
-		Version: &version,
-		UID:     &args.UID,
+	result, err := clients.Member.ListMemberMembershipKeyContacts(ctx, &memberservice.ListMemberMembershipKeyContactsPayload{
+		Version:  &version,
+		MemberID: &args.MemberID,
+		ID:       &args.ID,
 	})
 	if err != nil {
-		logger.Error("ListMembershipContacts failed", "error", err, "uid", args.UID)
+		logger.Error("ListMemberMembershipKeyContacts failed", "error", err, "member_id", args.MemberID, "id", args.ID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership contacts: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership key contacts: %s", lfxv2.ErrorMessage(err))},
 			},
 			IsError: true,
 		}, nil, nil
@@ -358,7 +385,7 @@ func handleGetMembershipContacts(ctx context.Context, req *mcp.CallToolRequest, 
 
 	prettyJSON, err := json.MarshalIndent(result.Contacts, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal membership contacts result", "error", err)
+		logger.Error("failed to marshal membership key contacts result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -367,7 +394,7 @@ func handleGetMembershipContacts(ctx context.Context, req *mcp.CallToolRequest, 
 		}, nil, nil
 	}
 
-	logger.Info("get_membership_contacts succeeded", "uid", args.UID)
+	logger.Info("get_membership_key_contacts succeeded", "member_id", args.MemberID, "id", args.ID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

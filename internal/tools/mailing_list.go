@@ -53,7 +53,8 @@ type GetMailingListMemberArgs struct {
 
 // SearchMailingListMembersArgs defines the input parameters for the search_mailing_list_members tool.
 type SearchMailingListMembersArgs struct {
-	MailingListUID string `json:"mailing_list_uid" jsonschema:"The v2 UID of the mailing list whose members to search"`
+	MailingListUID string `json:"mailing_list_uid,omitempty" jsonschema:"Optional v2 UID of the mailing list to filter members by"`
+	ProjectUID     string `json:"project_uid,omitempty" jsonschema:"Optional v2 project UID to filter mailing list members by project"`
 	Name           string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
 	PageSize       int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10)"`
 	PageToken      string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
@@ -95,7 +96,7 @@ func RegisterGetMailingListMember(server *mcp.Server) {
 func RegisterSearchMailingListMembers(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_mailing_list_members",
-		Description: "Search for members of a specific mailing list. Requires a mailing list UID. Optionally filter by name.",
+		Description: "Search for LFX mailing list members. Optionally filter by mailing list UID, project UID (v2), and/or name. At least one filter is recommended but not required.",
 	}, handleSearchMailingListMembers)
 }
 
@@ -508,6 +509,10 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		PageToken: result.PageToken,
 	}
 
+	if result.PageToken != nil && len(result.Resources) < pageSize {
+		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+	}
+
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.Error("failed to marshal search result", "error", err)
@@ -537,15 +542,6 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: mailing list tools not configured"},
-			},
-			IsError: true,
-		}, nil, nil
-	}
-
-	if args.MailingListUID == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: mailing_list_uid is required"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -585,14 +581,22 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 	}
 
 	resourceType := mailingListMemberResourceType
-	// Members are tagged with mailing_list_uid:<uid> by the mailing list service indexer.
-	mlTag := fmt.Sprintf("mailing_list_uid:%s", args.MailingListUID)
 	payload := &querysvc.QueryResourcesPayload{
 		Version:  "1",
 		Type:     &resourceType,
-		Tags:     []string{mlTag},
 		PageSize: pageSize,
 		Sort:     "name_asc",
+	}
+
+	var tags []string
+	if args.MailingListUID != "" {
+		tags = append(tags, fmt.Sprintf("mailing_list_uid:%s", args.MailingListUID))
+	}
+	if args.ProjectUID != "" {
+		tags = append(tags, fmt.Sprintf("project_uid:%s", args.ProjectUID))
+	}
+	if len(tags) > 0 {
+		payload.Tags = tags
 	}
 
 	if args.Name != "" {
@@ -603,7 +607,7 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.Info("searching mailing list members", "mailing_list_uid", args.MailingListUID, "name", args.Name, "page_size", pageSize)
+	logger.Info("searching mailing list members", "mailing_list_uid", args.MailingListUID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
@@ -626,6 +630,10 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		PageToken: result.PageToken,
 	}
 
+	if result.PageToken != nil && len(result.Resources) < pageSize {
+		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+	}
+
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.Error("failed to marshal search result", "error", err)
@@ -637,7 +645,7 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	logger.Info("search_mailing_list_members succeeded", "mailing_list_uid", args.MailingListUID, "count", len(result.Resources))
+	logger.Info("search_mailing_list_members succeeded", "mailing_list_uid", args.MailingListUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

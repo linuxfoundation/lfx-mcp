@@ -58,6 +58,28 @@ type MCPAPIConfig struct {
 
 const errKey = "error"
 
+// defaultTools is the list of tools enabled by default.
+var defaultTools = []string{
+	"search_projects",
+	"get_project",
+	"search_committees",
+	"get_committee",
+	"get_committee_member",
+	"search_committee_members",
+	"get_mailing_list_service",
+	"get_mailing_list",
+	"get_mailing_list_member",
+	"search_mailing_lists",
+	"search_mailing_list_members",
+	"search_members",
+	"get_member_membership",
+	"get_membership_key_contacts",
+	"search_meetings",
+	"get_meeting",
+	"search_meeting_registrants",
+	"get_meeting_registrant",
+}
+
 var logger *slog.Logger
 
 func main() {
@@ -76,7 +98,7 @@ func main() {
 	f.String("client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")
 	f.String("token_endpoint", "", "OAuth2 token endpoint URL for token exchange")
 	f.String("lfx_api_url", "", "LFX API URL (used as token exchange audience)")
-	f.String("tools", "search_projects,get_project,search_committees,get_committee,get_committee_member,search_committee_members,get_mailing_list_service,get_mailing_list,get_mailing_list_member,search_mailing_lists,search_mailing_list_members,search_members,get_member_membership,get_membership_key_contacts,search_meetings,get_meeting,search_meeting_registrants,get_meeting_registrant", "Comma-separated list of tools to enable")
+	f.String("tools", strings.Join(defaultTools, ","), "Comma-separated list of tools to enable")
 	f.Bool("debug", false, "Enable debug logging")
 	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls")
 

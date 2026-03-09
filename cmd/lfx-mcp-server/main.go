@@ -452,8 +452,8 @@ func runHTTPServer(cfg Config) {
 		redirectToPRM := func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/.well-known/oauth-protected-resource", http.StatusFound)
 		}
-		mux.HandleFunc("/.well-known/oauth-authorization-server/mcp", redirectToPRM)
-		mux.HandleFunc("/mcp/.well-known/oauth-authorization-server", redirectToPRM)
+		mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", redirectToPRM)
+		mux.HandleFunc("/mcp/.well-known/oauth-protected-resource", redirectToPRM)
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)

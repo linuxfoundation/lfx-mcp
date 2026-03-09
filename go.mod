@@ -7,9 +7,9 @@ go 1.26.0
 require (
 	github.com/knadh/koanf/providers/basicflag v1.1.0
 	github.com/knadh/koanf/providers/env/v2 v2.0.0
-	github.com/knadh/koanf/v2 v2.3.2
+	github.com/knadh/koanf/v2 v2.3.3
 	github.com/lestrrat-go/jwx/v2 v2.1.6
-	github.com/linuxfoundation/lfx-v2-committee-service v0.2.19
+	github.com/linuxfoundation/lfx-v2-committee-service v0.2.20
 	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.1.10
 	github.com/linuxfoundation/lfx-v2-member-service v0.1.2
 	github.com/linuxfoundation/lfx-v2-project-service v0.5.7
@@ -38,6 +38,6 @@ require (
 	github.com/segmentio/encoding v0.5.3 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/oauth2 v0.35.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 )

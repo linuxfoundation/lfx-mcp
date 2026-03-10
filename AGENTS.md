@@ -507,6 +507,7 @@ func(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallT
 5. **Testing**: Test new tools with the test script (`./scripts/test_server.sh`)
 6. **Documentation**: Update README.md for user-facing changes
 7. **Code Quality**: Run `make check` before commits
+8. **Package Comments**: Every new `*.go` file must include a `// Package <name> ...` doc comment immediately above the `package` declaration (required by Megalinter's revive `package-comments` rule)
 
 ## Future Extensions
 

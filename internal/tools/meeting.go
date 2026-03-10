@@ -16,10 +16,10 @@ import (
 )
 
 // meetingResourceType is the resource type filter for meeting queries.
-const meetingResourceType = "meeting"
+const meetingResourceType = "v1_meeting"
 
 // meetingRegistrantResourceType is the resource type filter for meeting registrant queries.
-const meetingRegistrantResourceType = "meeting_registrant"
+const meetingRegistrantResourceType = "v1_meeting_registrant"
 
 // MeetingConfig holds configuration shared by meeting tools.
 type MeetingConfig struct {

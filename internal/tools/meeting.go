@@ -70,13 +70,13 @@ func RegisterGetMeetingRegistrant(server *mcp.Server) {
 // SearchMeetingsArgs defines the input parameters for the search_meetings tool.
 type SearchMeetingsArgs struct {
 	Name         string   `json:"name,omitempty" jsonschema:"Name or partial name of the meeting to search for"`
-	ProjectUID   string   `json:"project_uid,omitempty" jsonschema:"Filter meetings by project UID (uses Parent filter)"`
-	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter meetings by committee UID (uses tag filter)"`
+	ProjectUID   string   `json:"project_uid,omitempty" jsonschema:"Filter meetings by project UID"`
+	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter meetings by committee UID"`
 	DateField    string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set)"`
 	DateFrom     string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo       string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
 	Filters      []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters (e.g. visibility:public or status:active)"`
-	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc)"`
+	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
 	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -88,15 +88,12 @@ type GetMeetingArgs struct {
 
 // SearchMeetingRegistrantsArgs defines the input parameters for the search_meeting_registrants tool.
 type SearchMeetingRegistrantsArgs struct {
-	MeetingID    string   `json:"meeting_id,omitempty" jsonschema:"Filter registrants by meeting ID (uses tag filter)"`
-	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter registrants by committee UID (uses tag filter)"`
-	ProjectUID   string   `json:"project_uid,omitempty" jsonschema:"Filter registrants by project UID (uses tag filter)"`
+	MeetingID    string   `json:"meeting_id,omitempty" jsonschema:"Filter registrants by meeting ID"`
+	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter registrants by committee UID"`
+	ProjectUID   string   `json:"project_uid,omitempty" jsonschema:"Filter registrants by project UID"`
 	Name         string   `json:"name,omitempty" jsonschema:"Name or partial name of the registrant to search for"`
-	DateField    string   `json:"date_field,omitempty" jsonschema:"Date field to filter on"`
-	DateFrom     string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
-	DateTo       string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
 	Filters      []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters (e.g. host:true or type:committee)"`
-	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc)"`
+	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
 	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -430,18 +427,6 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 
 	if args.Name != "" {
 		payload.Name = &args.Name
-	}
-
-	if args.DateFrom != "" || args.DateTo != "" {
-		if args.DateField != "" {
-			payload.DateField = &args.DateField
-		}
-		if args.DateFrom != "" {
-			payload.DateFrom = &args.DateFrom
-		}
-		if args.DateTo != "" {
-			payload.DateTo = &args.DateTo
-		}
 	}
 
 	if len(args.Filters) > 0 {

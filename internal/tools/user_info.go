@@ -38,6 +38,10 @@ func RegisterUserInfo(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "user_info",
 		Description: "Get the authenticated user's OpenID Connect profile by proxying to the /userinfo endpoint",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "User Info",
+			ReadOnlyHint: true,
+		},
 	}, handleUserInfo)
 }
 

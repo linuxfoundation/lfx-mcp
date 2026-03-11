@@ -249,6 +249,10 @@ func RegisterMyTool(server *mcp.Server) {
     mcp.AddTool(server, &mcp.Tool{
         Name:        "my_tool",
         Description: "Brief description of what the tool does",
+        Annotations: &mcp.ToolAnnotations{
+            Title:        "My Tool",
+            ReadOnlyHint: true,
+        },
     }, handleMyTool)
 }
 
@@ -312,6 +316,33 @@ return &mcp.CallToolResult{
     },
 }, nil, nil
 ```
+
+### Tool Annotations
+
+All tools should include a `mcp.ToolAnnotations` struct to provide metadata hints to MCP clients (e.g., Claude). Annotations help clients decide how to present tools and whether to confirm before calling them.
+
+```go
+boolPtr := func(v bool) *bool { return &v }
+
+Annotations: &mcp.ToolAnnotations{
+    Title:        "Human Readable Title",
+    ReadOnlyHint: true,                // True if the tool makes no mutations.
+    // DestructiveHint: boolPtr(false), // Set when ReadOnlyHint is false and the tool is non-destructive.
+    // OpenWorldHint:  boolPtr(false),  // Override only for truly closed-world tools (see below).
+},
+```
+
+**`ReadOnlyHint`** (bool, default `false`) is the most impactful annotation — clients use it to decide whether to auto-confirm tool calls. Set it to `true` for any tool that only reads data and has no side effects.
+
+**`DestructiveHint`** (`*bool`, default `true`) is only meaningful when `ReadOnlyHint` is `false`. Set it to `false` for write tools that are additive or non-destructive (e.g., creating a new resource vs. deleting one).
+
+**`OpenWorldHint`** (`*bool`, default `true`) signals whether the tool interacts with an external, stateful system. The key distinction is not whether you own the API — it's whether the environment is fully controlled and deterministic:
+
+- **Set to `true` (or omit, since it's the default)** for any tool that calls an external API, including LFX's own services. Even for APIs we own, results can change between calls as data mutates on the server, network failures are possible, and write operations have real-world side effects. The tool doesn't fully control what it's reading or modifying, so the world is open.
+
+- **Set to `false` only** for tools that are genuinely closed-world: pure in-process computations, static config lookups that never change, or in-memory operations with no network calls. These are the exception, not the rule.
+
+Focus annotation effort on `ReadOnlyHint` and `DestructiveHint` — those have the most impact on client behavior. For `OpenWorldHint`, the default of `true` is correct for virtually all LFX API tools; only override it when you are certain the tool has zero external interaction.
 
 ## Testing Patterns
 

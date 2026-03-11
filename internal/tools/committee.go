@@ -41,6 +41,10 @@ func RegisterSearchCommittees(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committees",
 		Description: "Search for LFX committees by name using the LFX query service. Optionally filter by project UID.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Search Committees",
+			ReadOnlyHint: true,
+		},
 	}, handleSearchCommittees)
 }
 
@@ -49,6 +53,10 @@ func RegisterGetCommittee(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_committee",
 		Description: "Get an LFX committee's base info and settings by its UID. Privileged committee settings may be omitted if the caller lacks sufficient permissions.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Get Committee",
+			ReadOnlyHint: true,
+		},
 	}, handleGetCommittee)
 }
 
@@ -57,6 +65,10 @@ func RegisterGetCommitteeMember(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_committee_member",
 		Description: "Get a specific committee member by committee UID and member UID.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Get Committee Member",
+			ReadOnlyHint: true,
+		},
 	}, handleGetCommitteeMember)
 }
 
@@ -65,6 +77,10 @@ func RegisterSearchCommitteeMembers(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committee_members",
 		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID (v2), and/or name. At least one filter is recommended but not required.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Search Committee Members",
+			ReadOnlyHint: true,
+		},
 	}, handleSearchCommitteeMembers)
 }
 

@@ -23,6 +23,11 @@ func RegisterHelloWorld(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "hello_world",
 		Description: "A simple hello world tool that greets the user with an optional custom message",
+		Annotations: &mcp.ToolAnnotations{
+			Title:         "Hello World",
+			ReadOnlyHint:  true,
+			OpenWorldHint: boolPtr(false),
+		},
 	}, handleHelloWorld)
 }
 

@@ -322,11 +322,13 @@ return &mcp.CallToolResult{
 All tools should include a `mcp.ToolAnnotations` struct to provide metadata hints to MCP clients (e.g., Claude). Annotations help clients decide how to present tools and whether to confirm before calling them.
 
 ```go
-Annotations: mcp.ToolAnnotations{
+boolPtr := func(v bool) *bool { return &v }
+
+Annotations: &mcp.ToolAnnotations{
     Title:        "Human Readable Title",
-    ReadOnlyHint: true,               // True if the tool makes no mutations.
-    // DestructiveHint: mcp.Ptr(false), // Set when ReadOnlyHint is false and the tool is non-destructive.
-    // OpenWorldHint: mcp.Ptr(false),   // Override only for truly closed-world tools (see below).
+    ReadOnlyHint: true,                // True if the tool makes no mutations.
+    // DestructiveHint: boolPtr(false), // Set when ReadOnlyHint is false and the tool is non-destructive.
+    // OpenWorldHint:  boolPtr(false),  // Override only for truly closed-world tools (see below).
 },
 ```
 

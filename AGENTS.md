@@ -249,7 +249,7 @@ func RegisterMyTool(server *mcp.Server) {
     mcp.AddTool(server, &mcp.Tool{
         Name:        "my_tool",
         Description: "Brief description of what the tool does",
-        Annotations: mcp.ToolAnnotations{
+        Annotations: &mcp.ToolAnnotations{
             Title:        "My Tool",
             ReadOnlyHint: true,
         },

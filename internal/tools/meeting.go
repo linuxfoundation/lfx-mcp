@@ -40,6 +40,10 @@ func RegisterSearchMeetings(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_meetings",
 		Description: "Search for LFX meetings using the query service. Supports filtering by project, committee, date range, and other fields.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Search Meetings",
+			ReadOnlyHint: true,
+		},
 	}, handleSearchMeetings)
 }
 
@@ -48,6 +52,10 @@ func RegisterGetMeeting(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_meeting",
 		Description: "Get an LFX meeting by its UID using the query service.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Get Meeting",
+			ReadOnlyHint: true,
+		},
 	}, handleGetMeeting)
 }
 
@@ -56,6 +64,10 @@ func RegisterSearchMeetingRegistrants(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_meeting_registrants",
 		Description: "Search for LFX meeting registrants using the query service. Supports filtering by meeting, committee, project, date range, and other fields.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Search Meeting Registrants",
+			ReadOnlyHint: true,
+		},
 	}, handleSearchMeetingRegistrants)
 }
 
@@ -64,6 +76,10 @@ func RegisterGetMeetingRegistrant(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_meeting_registrant",
 		Description: "Get an LFX meeting registrant by its UID using the query service.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Get Meeting Registrant",
+			ReadOnlyHint: true,
+		},
 	}, handleGetMeetingRegistrant)
 }
 

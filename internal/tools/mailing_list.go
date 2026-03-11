@@ -74,6 +74,10 @@ func RegisterGetMailingListService(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_mailing_list_service",
 		Description: "Get a mailing list service's base info and settings by its UID. Privileged settings may be omitted if the caller lacks sufficient permissions.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Get Mailing List Service",
+			ReadOnlyHint: true,
+		},
 	}, handleGetMailingListService)
 }
 
@@ -82,6 +86,10 @@ func RegisterGetMailingList(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_mailing_list",
 		Description: "Get a mailing list's base info and settings by its UID. Privileged settings may be omitted if the caller lacks sufficient permissions.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Get Mailing List",
+			ReadOnlyHint: true,
+		},
 	}, handleGetMailingList)
 }
 
@@ -90,6 +98,10 @@ func RegisterGetMailingListMember(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_mailing_list_member",
 		Description: "Get a specific mailing list member by mailing list UID and member UID.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Get Mailing List Member",
+			ReadOnlyHint: true,
+		},
 	}, handleGetMailingListMember)
 }
 
@@ -98,6 +110,10 @@ func RegisterSearchMailingListMembers(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_mailing_list_members",
 		Description: "Search for LFX mailing list members. Optionally filter by mailing list UID, project UID (v2), and/or name. At least one filter is recommended but not required.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Search Mailing List Members",
+			ReadOnlyHint: true,
+		},
 	}, handleSearchMailingListMembers)
 }
 
@@ -106,6 +122,10 @@ func RegisterSearchMailingLists(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_mailing_lists",
 		Description: "Search for LFX mailing lists by name using the LFX query service. Optionally filter by project UID.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Search Mailing Lists",
+			ReadOnlyHint: true,
+		},
 	}, handleSearchMailingLists)
 }
 

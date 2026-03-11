@@ -78,6 +78,12 @@ var defaultTools = []string{
 	"get_meeting",
 	"search_meeting_registrants",
 	"get_meeting_registrant",
+	"search_past_meeting_participants",
+	"get_past_meeting_participant",
+	"search_past_meeting_transcripts",
+	"get_past_meeting_transcript",
+	"search_past_meeting_summaries",
+	"get_past_meeting_summary",
 }
 
 var logger *slog.Logger
@@ -356,6 +362,24 @@ func newServer(cfg Config) *mcp.Server {
 	}
 	if enabledTools["get_meeting_registrant"] {
 		tools.RegisterGetMeetingRegistrant(server)
+	}
+	if enabledTools["search_past_meeting_participants"] {
+		tools.RegisterSearchPastMeetingParticipants(server)
+	}
+	if enabledTools["get_past_meeting_participant"] {
+		tools.RegisterGetPastMeetingParticipant(server)
+	}
+	if enabledTools["search_past_meeting_transcripts"] {
+		tools.RegisterSearchPastMeetingTranscripts(server)
+	}
+	if enabledTools["get_past_meeting_transcript"] {
+		tools.RegisterGetPastMeetingTranscript(server)
+	}
+	if enabledTools["search_past_meeting_summaries"] {
+		tools.RegisterSearchPastMeetingSummaries(server)
+	}
+	if enabledTools["get_past_meeting_summary"] {
+		tools.RegisterGetPastMeetingSummary(server)
 	}
 
 	return server

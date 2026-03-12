@@ -66,6 +66,13 @@ var defaultTools = []string{
 	"get_committee",
 	"get_committee_member",
 	"search_committee_members",
+	"create_committee",
+	"update_committee",
+	"update_committee_settings",
+	"delete_committee",
+	"create_committee_member",
+	"update_committee_member",
+	"delete_committee_member",
 	"get_mailing_list_service",
 	"get_mailing_list",
 	"get_mailing_list_member",
@@ -326,6 +333,27 @@ func newServer(cfg Config) *mcp.Server {
 	}
 	if enabledTools["search_committee_members"] {
 		tools.RegisterSearchCommitteeMembers(server)
+	}
+	if enabledTools["create_committee"] {
+		tools.RegisterCreateCommittee(server)
+	}
+	if enabledTools["update_committee"] {
+		tools.RegisterUpdateCommittee(server)
+	}
+	if enabledTools["update_committee_settings"] {
+		tools.RegisterUpdateCommitteeSettings(server)
+	}
+	if enabledTools["delete_committee"] {
+		tools.RegisterDeleteCommittee(server)
+	}
+	if enabledTools["create_committee_member"] {
+		tools.RegisterCreateCommitteeMember(server)
+	}
+	if enabledTools["update_committee_member"] {
+		tools.RegisterUpdateCommitteeMember(server)
+	}
+	if enabledTools["delete_committee_member"] {
+		tools.RegisterDeleteCommitteeMember(server)
 	}
 	if enabledTools["get_mailing_list_service"] {
 		tools.RegisterGetMailingListService(server)

@@ -97,6 +97,10 @@ func RegisterSearchPastMeetingParticipants(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meeting_participants",
 		Description: "Search for LFX past meeting participants using the query service. Supports filtering by meeting, committee, project, and other fields.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Search Past Meeting Participants",
+			ReadOnlyHint: true,
+		},
 	}, handleSearchPastMeetingParticipants)
 }
 
@@ -105,6 +109,10 @@ func RegisterGetPastMeetingParticipant(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_past_meeting_participant",
 		Description: "Get an LFX past meeting participant by its UID using the query service.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Get Past Meeting Participant",
+			ReadOnlyHint: true,
+		},
 	}, handleGetPastMeetingParticipant)
 }
 
@@ -113,6 +121,10 @@ func RegisterSearchPastMeetingTranscripts(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meeting_transcripts",
 		Description: "Search for LFX past meeting transcripts using the query service. Supports filtering by meeting, committee, project, and other fields.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Search Past Meeting Transcripts",
+			ReadOnlyHint: true,
+		},
 	}, handleSearchPastMeetingTranscripts)
 }
 
@@ -121,6 +133,10 @@ func RegisterGetPastMeetingTranscript(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_past_meeting_transcript",
 		Description: "Get an LFX past meeting transcript by its UID using the query service.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Get Past Meeting Transcript",
+			ReadOnlyHint: true,
+		},
 	}, handleGetPastMeetingTranscript)
 }
 
@@ -129,6 +145,10 @@ func RegisterSearchPastMeetingSummaries(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meeting_summaries",
 		Description: "Search for LFX past meeting summaries using the query service. Supports filtering by meeting, committee, project, and other fields.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Search Past Meeting Summaries",
+			ReadOnlyHint: true,
+		},
 	}, handleSearchPastMeetingSummaries)
 }
 
@@ -137,6 +157,10 @@ func RegisterGetPastMeetingSummary(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_past_meeting_summary",
 		Description: "Get an LFX past meeting summary by its UID using the query service.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:        "Get Past Meeting Summary",
+			ReadOnlyHint: true,
+		},
 	}, handleGetPastMeetingSummary)
 }
 

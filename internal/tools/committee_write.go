@@ -752,7 +752,3 @@ func handleDeleteCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 	}, nil, nil
 }
 
-// strPtr returns a pointer to the given string value.
-func strPtr(s string) *string {
-	return &s
-}

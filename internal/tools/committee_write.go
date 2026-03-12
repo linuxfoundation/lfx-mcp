@@ -19,50 +19,50 @@ import (
 
 // CreateCommitteeArgs defines the input parameters for the create_committee tool.
 type CreateCommitteeArgs struct {
-	ProjectUID            string   `json:"project_uid" jsonschema:"Project UID the committee belongs to"`
-	Name                  string   `json:"name" jsonschema:"Name of the committee"`
-	Category              string   `json:"category" jsonschema:"Category of the committee"`
-	Description           *string  `json:"description,omitempty" jsonschema:"Description of the committee"`
-	Website               *string  `json:"website,omitempty" jsonschema:"Website URL of the committee"`
-	EnableVoting          bool     `json:"enable_voting,omitempty" jsonschema:"Whether voting is enabled"`
-	SSOGroupEnabled       bool     `json:"sso_group_enabled,omitempty" jsonschema:"Whether SSO group integration is enabled"`
-	RequiresReview        bool     `json:"requires_review,omitempty" jsonschema:"Whether the committee requires review"`
-	Public                bool     `json:"public,omitempty" jsonschema:"Whether the committee is publicly visible"`
-	CalendarPublic        *bool    `json:"calendar_public,omitempty" jsonschema:"Whether the committee calendar is publicly visible"`
-	DisplayName           *string  `json:"display_name,omitempty" jsonschema:"Display name of the committee"`
-	ParentUID             *string  `json:"parent_uid,omitempty" jsonschema:"UID of the parent committee, if any"`
-	BusinessEmailRequired bool     `json:"business_email_required,omitempty" jsonschema:"Whether business email is required for members"`
-	MemberVisibility      string   `json:"member_visibility,omitempty" jsonschema:"Visibility level of member profiles to other members"`
-	ShowMeetingAttendees  bool     `json:"show_meeting_attendees,omitempty" jsonschema:"Whether to show meeting attendees by default"`
-	Writers               []string `json:"writers,omitempty" jsonschema:"Manager user IDs who can edit this committee"`
-	Auditors              []string `json:"auditors,omitempty" jsonschema:"Auditor user IDs who can audit this committee"`
+	ProjectUID            string  `json:"project_uid" jsonschema:"Project UID the committee belongs to"`
+	Name                  string  `json:"name" jsonschema:"Name of the committee"`
+	Category              string  `json:"category" jsonschema:"Category of the committee"`
+	Description           *string `json:"description,omitempty" jsonschema:"Description of the committee"`
+	Website               *string `json:"website,omitempty" jsonschema:"Website URL of the committee"`
+	EnableVoting          bool    `json:"enable_voting,omitempty" jsonschema:"Whether voting is enabled"`
+	SSOGroupEnabled       bool    `json:"sso_group_enabled,omitempty" jsonschema:"Whether SSO group integration is enabled"`
+	RequiresReview        bool    `json:"requires_review,omitempty" jsonschema:"Whether the committee requires review"`
+	Public                bool    `json:"public,omitempty" jsonschema:"Whether the committee is publicly visible"`
+	CalendarPublic        *bool   `json:"calendar_public,omitempty" jsonschema:"Whether the committee calendar is publicly visible"`
+	DisplayName           *string `json:"display_name,omitempty" jsonschema:"Display name of the committee"`
+	ParentUID             *string `json:"parent_uid,omitempty" jsonschema:"UID of the parent committee, if any"`
+	BusinessEmailRequired bool    `json:"business_email_required,omitempty" jsonschema:"Whether business email is required for members"`
+	MemberVisibility      string  `json:"member_visibility,omitempty" jsonschema:"Visibility level of member profiles to other members"`
+	ShowMeetingAttendees  bool    `json:"show_meeting_attendees,omitempty" jsonschema:"Whether to show meeting attendees by default"`
 }
 
 // UpdateCommitteeArgs defines the input parameters for the update_committee tool.
+// Only fields that are provided (non-nil) will be updated; omitted fields retain
+// their current values (fetch-then-merge semantics).
 type UpdateCommitteeArgs struct {
 	UID             string  `json:"uid" jsonschema:"UID of the committee to update"`
-	ProjectUID      string  `json:"project_uid" jsonschema:"Project UID the committee belongs to"`
-	Name            string  `json:"name" jsonschema:"Name of the committee"`
-	Category        string  `json:"category" jsonschema:"Category of the committee"`
+	ProjectUID      *string `json:"project_uid,omitempty" jsonschema:"Project UID the committee belongs to"`
+	Name            *string `json:"name,omitempty" jsonschema:"Name of the committee"`
+	Category        *string `json:"category,omitempty" jsonschema:"Category of the committee"`
 	Description     *string `json:"description,omitempty" jsonschema:"Description of the committee"`
 	Website         *string `json:"website,omitempty" jsonschema:"Website URL of the committee"`
-	EnableVoting    bool    `json:"enable_voting,omitempty" jsonschema:"Whether voting is enabled"`
-	SSOGroupEnabled bool    `json:"sso_group_enabled,omitempty" jsonschema:"Whether SSO group integration is enabled"`
-	RequiresReview  bool    `json:"requires_review,omitempty" jsonschema:"Whether the committee requires review"`
-	Public          bool    `json:"public,omitempty" jsonschema:"Whether the committee is publicly visible"`
+	EnableVoting    *bool   `json:"enable_voting,omitempty" jsonschema:"Whether voting is enabled"`
+	SSOGroupEnabled *bool   `json:"sso_group_enabled,omitempty" jsonschema:"Whether SSO group integration is enabled"`
+	RequiresReview  *bool   `json:"requires_review,omitempty" jsonschema:"Whether the committee requires review"`
+	Public          *bool   `json:"public,omitempty" jsonschema:"Whether the committee is publicly visible"`
 	CalendarPublic  *bool   `json:"calendar_public,omitempty" jsonschema:"Whether the committee calendar is publicly visible"`
 	DisplayName     *string `json:"display_name,omitempty" jsonschema:"Display name of the committee"`
 	ParentUID       *string `json:"parent_uid,omitempty" jsonschema:"UID of the parent committee, if any"`
 }
 
 // UpdateCommitteeSettingsArgs defines the input parameters for the update_committee_settings tool.
+// Only fields that are provided (non-nil) will be updated; omitted fields retain
+// their current values (fetch-then-merge semantics).
 type UpdateCommitteeSettingsArgs struct {
-	UID                   string   `json:"uid" jsonschema:"UID of the committee whose settings to update"`
-	BusinessEmailRequired bool     `json:"business_email_required,omitempty" jsonschema:"Whether business email is required for members"`
-	MemberVisibility      string   `json:"member_visibility,omitempty" jsonschema:"Visibility level of member profiles to other members"`
-	ShowMeetingAttendees  bool     `json:"show_meeting_attendees,omitempty" jsonschema:"Whether to show meeting attendees by default"`
-	Writers               []string `json:"writers,omitempty" jsonschema:"Manager user IDs who can edit this committee"`
-	Auditors              []string `json:"auditors,omitempty" jsonschema:"Auditor user IDs who can audit this committee"`
+	UID                   string  `json:"uid" jsonschema:"UID of the committee whose settings to update"`
+	BusinessEmailRequired *bool   `json:"business_email_required,omitempty" jsonschema:"Whether business email is required for members"`
+	MemberVisibility      *string `json:"member_visibility,omitempty" jsonschema:"Visibility level of member profiles to other members"`
+	ShowMeetingAttendees  *bool   `json:"show_meeting_attendees,omitempty" jsonschema:"Whether to show meeting attendees by default"`
 }
 
 // DeleteCommitteeArgs defines the input parameters for the delete_committee tool.
@@ -110,12 +110,14 @@ type CreateCommitteeMemberArgs struct {
 }
 
 // UpdateCommitteeMemberArgs defines the input parameters for the update_committee_member tool.
+// Only fields that are provided (non-nil) will be updated; omitted fields retain
+// their current values (fetch-then-merge semantics).
 type UpdateCommitteeMemberArgs struct {
 	CommitteeUID    string                           `json:"committee_uid" jsonschema:"UID of the committee"`
 	MemberUID       string                           `json:"member_uid" jsonschema:"UID of the member to update"`
-	Email           string                           `json:"email" jsonschema:"Primary email address of the member"`
-	AppointedBy     string                           `json:"appointed_by" jsonschema:"How the member was appointed"`
-	Status          string                           `json:"status" jsonschema:"Member status"`
+	Email           *string                          `json:"email,omitempty" jsonschema:"Primary email address of the member"`
+	AppointedBy     *string                          `json:"appointed_by,omitempty" jsonschema:"How the member was appointed"`
+	Status          *string                          `json:"status,omitempty" jsonschema:"Member status"`
 	Username        *string                          `json:"username,omitempty" jsonschema:"LF ID username"`
 	FirstName       *string                          `json:"first_name,omitempty" jsonschema:"First name"`
 	LastName        *string                          `json:"last_name,omitempty" jsonschema:"Last name"`
@@ -150,10 +152,11 @@ func RegisterCreateCommittee(server *mcp.Server) {
 func RegisterUpdateCommittee(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_committee",
-		Description: "Update a committee's base information (name, category, visibility, etc.).",
+		Description: "Update a committee's base information (name, category, visibility, etc.). Only provided fields are changed; omitted fields keep their current values.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Update Committee",
-			DestructiveHint: boolPtr(false),
+			DestructiveHint: boolPtr(true),
+			IdempotentHint:  true,
 		},
 	}, handleUpdateCommittee)
 }
@@ -162,10 +165,11 @@ func RegisterUpdateCommittee(server *mcp.Server) {
 func RegisterUpdateCommitteeSettings(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_committee_settings",
-		Description: "Update a committee's settings (member visibility, writers, auditors, etc.).",
+		Description: "Update a committee's settings (member visibility, email requirements, meeting attendee defaults). Only provided fields are changed; omitted fields keep their current values.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Update Committee Settings",
-			DestructiveHint: boolPtr(false),
+			DestructiveHint: boolPtr(true),
+			IdempotentHint:  true,
 		},
 	}, handleUpdateCommitteeSettings)
 }
@@ -176,7 +180,8 @@ func RegisterDeleteCommittee(server *mcp.Server) {
 		Name:        "delete_committee",
 		Description: "Delete a committee by its UID.",
 		Annotations: &mcp.ToolAnnotations{
-			Title: "Delete Committee",
+			Title:           "Delete Committee",
+			DestructiveHint: boolPtr(true),
 		},
 	}, handleDeleteCommittee)
 }
@@ -197,10 +202,11 @@ func RegisterCreateCommitteeMember(server *mcp.Server) {
 func RegisterUpdateCommitteeMember(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_committee_member",
-		Description: "Update an existing committee member's information.",
+		Description: "Update an existing committee member's information. Only provided fields are changed; omitted fields keep their current values.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Update Committee Member",
-			DestructiveHint: boolPtr(false),
+			DestructiveHint: boolPtr(true),
+			IdempotentHint:  true,
 		},
 	}, handleUpdateCommitteeMember)
 }
@@ -211,7 +217,8 @@ func RegisterDeleteCommitteeMember(server *mcp.Server) {
 		Name:        "delete_committee_member",
 		Description: "Remove a member from a committee.",
 		Annotations: &mcp.ToolAnnotations{
-			Title: "Delete Committee Member",
+			Title:           "Delete Committee Member",
+			DestructiveHint: boolPtr(true),
 		},
 	}, handleDeleteCommitteeMember)
 }
@@ -291,8 +298,6 @@ func handleCreateCommittee(ctx context.Context, req *mcp.CallToolRequest, args C
 		BusinessEmailRequired: args.BusinessEmailRequired,
 		MemberVisibility:      args.MemberVisibility,
 		ShowMeetingAttendees:  args.ShowMeetingAttendees,
-		Writers:               args.Writers,
-		Auditors:              args.Auditors,
 	}
 
 	if args.CalendarPublic != nil {
@@ -331,6 +336,8 @@ func handleCreateCommittee(ctx context.Context, req *mcp.CallToolRequest, args C
 }
 
 // handleUpdateCommittee implements the update_committee tool logic.
+// It fetches the current committee base, merges in the provided fields,
+// and PUTs the result with If-Match for optimistic concurrency.
 func handleUpdateCommittee(ctx context.Context, req *mcp.CallToolRequest, args UpdateCommitteeArgs) (*mcp.CallToolResult, any, error) {
 	ctx, clients, logger, errResult := committeeWriteClients(ctx, req)
 	if errResult != nil {
@@ -348,24 +355,77 @@ func handleUpdateCommittee(ctx context.Context, req *mcp.CallToolRequest, args U
 
 	logger.Info("updating committee", "uid", args.UID)
 
-	payload := &committeeservice.UpdateCommitteeBasePayload{
-		Version:         strPtr("1"),
-		UID:             &args.UID,
-		ProjectUID:      args.ProjectUID,
-		Name:            args.Name,
-		Category:        args.Category,
-		Description:     args.Description,
-		Website:         args.Website,
-		EnableVoting:    args.EnableVoting,
-		SsoGroupEnabled: args.SSOGroupEnabled,
-		RequiresReview:  args.RequiresReview,
-		Public:          args.Public,
-		DisplayName:     args.DisplayName,
-		ParentUID:       args.ParentUID,
+	// Fetch current state for merge.
+	current, err := clients.Committee.GetCommitteeBase(ctx, &committeeservice.GetCommitteeBasePayload{
+		UID: &args.UID,
+	})
+	if err != nil {
+		logger.Error("GetCommitteeBase failed", "error", err, "uid", args.UID)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to fetch committee for update: %s", lfxv2.ErrorMessage(err))},
+			},
+			IsError: true,
+		}, nil, nil
 	}
 
+	base := current.CommitteeBase
+
+	// Build payload from current state, overriding with any provided args.
+	payload := &committeeservice.UpdateCommitteeBasePayload{
+		Version:         strPtr("1"),
+		IfMatch:         current.Etag,
+		UID:             &args.UID,
+		ProjectUID:      derefStr(base.ProjectUID),
+		Name:            derefStr(base.Name),
+		Category:        derefStr(base.Category),
+		Description:     base.Description,
+		Website:         base.Website,
+		EnableVoting:    base.EnableVoting,
+		SsoGroupEnabled: base.SsoGroupEnabled,
+		RequiresReview:  base.RequiresReview,
+		Public:          base.Public,
+		Calendar:        base.Calendar,
+		DisplayName:     base.DisplayName,
+		ParentUID:       base.ParentUID,
+	}
+
+	// Override with provided args.
+	if args.ProjectUID != nil {
+		payload.ProjectUID = *args.ProjectUID
+	}
+	if args.Name != nil {
+		payload.Name = *args.Name
+	}
+	if args.Category != nil {
+		payload.Category = *args.Category
+	}
+	if args.Description != nil {
+		payload.Description = args.Description
+	}
+	if args.Website != nil {
+		payload.Website = args.Website
+	}
+	if args.EnableVoting != nil {
+		payload.EnableVoting = *args.EnableVoting
+	}
+	if args.SSOGroupEnabled != nil {
+		payload.SsoGroupEnabled = *args.SSOGroupEnabled
+	}
+	if args.RequiresReview != nil {
+		payload.RequiresReview = *args.RequiresReview
+	}
+	if args.Public != nil {
+		payload.Public = *args.Public
+	}
 	if args.CalendarPublic != nil {
 		payload.Calendar = &struct{ Public bool }{Public: *args.CalendarPublic}
+	}
+	if args.DisplayName != nil {
+		payload.DisplayName = args.DisplayName
+	}
+	if args.ParentUID != nil {
+		payload.ParentUID = args.ParentUID
 	}
 
 	result, err := clients.Committee.UpdateCommitteeBase(ctx, payload)
@@ -400,6 +460,8 @@ func handleUpdateCommittee(ctx context.Context, req *mcp.CallToolRequest, args U
 }
 
 // handleUpdateCommitteeSettings implements the update_committee_settings tool logic.
+// It fetches the current committee settings, merges in the provided fields,
+// and PUTs the result with If-Match for optimistic concurrency.
 func handleUpdateCommitteeSettings(ctx context.Context, req *mcp.CallToolRequest, args UpdateCommitteeSettingsArgs) (*mcp.CallToolResult, any, error) {
 	ctx, clients, logger, errResult := committeeWriteClients(ctx, req)
 	if errResult != nil {
@@ -417,14 +479,41 @@ func handleUpdateCommitteeSettings(ctx context.Context, req *mcp.CallToolRequest
 
 	logger.Info("updating committee settings", "uid", args.UID)
 
+	// Fetch current state for merge.
+	current, err := clients.Committee.GetCommitteeSettings(ctx, &committeeservice.GetCommitteeSettingsPayload{
+		UID: &args.UID,
+	})
+	if err != nil {
+		logger.Error("GetCommitteeSettings failed", "error", err, "uid", args.UID)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to fetch committee settings for update: %s", lfxv2.ErrorMessage(err))},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	settings := current.CommitteeSettings
+
+	// Build payload from current state, overriding with any provided args.
 	payload := &committeeservice.UpdateCommitteeSettingsPayload{
 		Version:               strPtr("1"),
+		IfMatch:               current.Etag,
 		UID:                   &args.UID,
-		BusinessEmailRequired: args.BusinessEmailRequired,
-		MemberVisibility:      args.MemberVisibility,
-		ShowMeetingAttendees:  args.ShowMeetingAttendees,
-		Writers:               args.Writers,
-		Auditors:              args.Auditors,
+		BusinessEmailRequired: settings.BusinessEmailRequired,
+		MemberVisibility:      settings.MemberVisibility,
+		ShowMeetingAttendees:  settings.ShowMeetingAttendees,
+	}
+
+	// Override with provided args.
+	if args.BusinessEmailRequired != nil {
+		payload.BusinessEmailRequired = *args.BusinessEmailRequired
+	}
+	if args.MemberVisibility != nil {
+		payload.MemberVisibility = *args.MemberVisibility
+	}
+	if args.ShowMeetingAttendees != nil {
+		payload.ShowMeetingAttendees = *args.ShowMeetingAttendees
 	}
 
 	result, err := clients.Committee.UpdateCommitteeSettings(ctx, payload)
@@ -476,8 +565,23 @@ func handleDeleteCommittee(ctx context.Context, req *mcp.CallToolRequest, args D
 
 	logger.Info("deleting committee", "uid", args.UID)
 
-	err := clients.Committee.DeleteCommittee(ctx, &committeeservice.DeleteCommitteePayload{
+	// Fetch current state to obtain the ETag required by the API.
+	current, err := clients.Committee.GetCommitteeBase(ctx, &committeeservice.GetCommitteeBasePayload{
+		UID: &args.UID,
+	})
+	if err != nil {
+		logger.Error("GetCommitteeBase failed", "error", err, "uid", args.UID)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to fetch committee for delete: %s", lfxv2.ErrorMessage(err))},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	err = clients.Committee.DeleteCommittee(ctx, &committeeservice.DeleteCommitteePayload{
 		Version: strPtr("1"),
+		IfMatch: current.Etag,
 		UID:     &args.UID,
 	})
 	if err != nil {
@@ -627,6 +731,8 @@ func handleCreateCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 }
 
 // handleUpdateCommitteeMember implements the update_committee_member tool logic.
+// It fetches the current member data, merges in the provided fields,
+// and PUTs the result with If-Match for optimistic concurrency.
 func handleUpdateCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, args UpdateCommitteeMemberArgs) (*mcp.CallToolResult, any, error) {
 	ctx, clients, logger, errResult := committeeWriteClients(ctx, req)
 	if errResult != nil {
@@ -653,21 +759,76 @@ func handleUpdateCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 
 	logger.Info("updating committee member", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 
+	// Fetch current state for merge.
+	current, err := clients.Committee.GetCommitteeMember(ctx, &committeeservice.GetCommitteeMemberPayload{
+		Version:   "1",
+		UID:       args.CommitteeUID,
+		MemberUID: args.MemberUID,
+	})
+	if err != nil {
+		logger.Error("GetCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to fetch committee member for update: %s", lfxv2.ErrorMessage(err))},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	member := current.Member
+
+	// Build payload from current state, overriding with any provided args.
 	payload := &committeeservice.UpdateCommitteeMemberPayload{
 		Version:         "1",
+		IfMatch:         current.Etag,
 		UID:             args.CommitteeUID,
 		MemberUID:       args.MemberUID,
-		Email:           args.Email,
-		AppointedBy:     args.AppointedBy,
-		Status:          args.Status,
-		Username:        args.Username,
-		FirstName:       args.FirstName,
-		LastName:        args.LastName,
-		JobTitle:        args.JobTitle,
-		LinkedinProfile: args.LinkedinProfile,
-		Role:            buildMemberRole(args.Role),
-		Voting:          buildMemberVoting(args.Voting),
-		Organization:    buildMemberOrganization(args.Organization),
+		Email:           derefStr(member.Email),
+		AppointedBy:     member.AppointedBy,
+		Status:          member.Status,
+		Username:        member.Username,
+		FirstName:       member.FirstName,
+		LastName:        member.LastName,
+		JobTitle:        member.JobTitle,
+		LinkedinProfile: member.LinkedinProfile,
+		Role:            member.Role,
+		Voting:          member.Voting,
+		Organization:    member.Organization,
+	}
+
+	// Override with provided args.
+	if args.Email != nil {
+		payload.Email = *args.Email
+	}
+	if args.AppointedBy != nil {
+		payload.AppointedBy = *args.AppointedBy
+	}
+	if args.Status != nil {
+		payload.Status = *args.Status
+	}
+	if args.Username != nil {
+		payload.Username = args.Username
+	}
+	if args.FirstName != nil {
+		payload.FirstName = args.FirstName
+	}
+	if args.LastName != nil {
+		payload.LastName = args.LastName
+	}
+	if args.JobTitle != nil {
+		payload.JobTitle = args.JobTitle
+	}
+	if args.LinkedinProfile != nil {
+		payload.LinkedinProfile = args.LinkedinProfile
+	}
+	if args.Role != nil {
+		payload.Role = buildMemberRole(args.Role)
+	}
+	if args.Voting != nil {
+		payload.Voting = buildMemberVoting(args.Voting)
+	}
+	if args.Organization != nil {
+		payload.Organization = buildMemberOrganization(args.Organization)
 	}
 
 	result, err := clients.Committee.UpdateCommitteeMember(ctx, payload)
@@ -728,8 +889,25 @@ func handleDeleteCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 
 	logger.Info("deleting committee member", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 
-	err := clients.Committee.DeleteCommitteeMember(ctx, &committeeservice.DeleteCommitteeMemberPayload{
+	// Fetch current state to obtain the ETag required by the API.
+	current, err := clients.Committee.GetCommitteeMember(ctx, &committeeservice.GetCommitteeMemberPayload{
 		Version:   "1",
+		UID:       args.CommitteeUID,
+		MemberUID: args.MemberUID,
+	})
+	if err != nil {
+		logger.Error("GetCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to fetch committee member for delete: %s", lfxv2.ErrorMessage(err))},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	err = clients.Committee.DeleteCommitteeMember(ctx, &committeeservice.DeleteCommitteeMemberPayload{
+		Version:   "1",
+		IfMatch:   current.Etag,
 		UID:       args.CommitteeUID,
 		MemberUID: args.MemberUID,
 	})
@@ -752,3 +930,10 @@ func handleDeleteCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 	}, nil, nil
 }
 
+// derefStr safely dereferences a *string, returning "" if nil.
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}

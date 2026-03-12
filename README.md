@@ -53,7 +53,7 @@ make build
 | `get_committee` | Get a committee's base info and settings by UID |
 | `create_committee` | Create a new committee under a project |
 | `update_committee` | Update a committee's base information |
-| `update_committee_settings` | Update a committee's settings (visibility, writers, auditors) |
+| `update_committee_settings` | Update a committee's settings (visibility, email requirements, meeting attendee defaults) |
 | `delete_committee` | Delete a committee by UID |
 | `search_committee_members` | Search committee members; filter by committee, project, or name |
 | `get_committee_member` | Get a specific committee member by committee and member UID |

@@ -9,3 +9,9 @@ package tools
 func boolPtr(b bool) *bool {
 	return &b
 }
+
+// strPtr returns a pointer to the given string value. Used for optional
+// payload fields that distinguish between "unset" and "zero value".
+func strPtr(s string) *string {
+	return &s
+}

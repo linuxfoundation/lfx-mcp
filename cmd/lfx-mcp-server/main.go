@@ -530,10 +530,18 @@ func runHTTPServer(cfg Config) {
 			resourceURL = fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
 		}
 
+		// Use defaults when no scopes are configured, then validate to ensure
+		// the enforced scopes are always present and warn about unknown ones.
+		scopesSupported := cfg.MCPAPI.Scopes
+		if len(scopesSupported) == 0 {
+			scopesSupported = tools.DefaultScopes()
+		}
+		scopesSupported = tools.ValidateScopes(scopesSupported, logger.Warn)
+
 		metadata := &oauthex.ProtectedResourceMetadata{
 			Resource:             resourceURL,
 			AuthorizationServers: authServers,
-			ScopesSupported:      cfg.MCPAPI.Scopes,
+			ScopesSupported:      scopesSupported,
 		}
 
 		mux.Handle("/.well-known/oauth-protected-resource", auth.ProtectedResourceMetadataHandler(metadata))

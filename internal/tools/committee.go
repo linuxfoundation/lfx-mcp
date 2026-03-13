@@ -38,50 +38,50 @@ func SetCommitteeConfig(cfg *CommitteeConfig) {
 
 // RegisterSearchCommittees registers the search_committees tool with the MCP server.
 func RegisterSearchCommittees(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
+	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_committees",
 		Description: "Search for LFX committees by name using the LFX query service. Optionally filter by project UID.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Committees",
 			ReadOnlyHint: true,
 		},
-	}, handleSearchCommittees)
+	}, ReadScopes(), handleSearchCommittees)
 }
 
 // RegisterGetCommittee registers the get_committee tool with the MCP server.
 func RegisterGetCommittee(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
+	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "get_committee",
 		Description: "Get an LFX committee's base info and settings by its UID. Privileged committee settings may be omitted if the caller lacks sufficient permissions.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Committee",
 			ReadOnlyHint: true,
 		},
-	}, handleGetCommittee)
+	}, ReadScopes(), handleGetCommittee)
 }
 
 // RegisterGetCommitteeMember registers the get_committee_member tool with the MCP server.
 func RegisterGetCommitteeMember(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
+	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "get_committee_member",
 		Description: "Get a specific committee member by committee UID and member UID.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Committee Member",
 			ReadOnlyHint: true,
 		},
-	}, handleGetCommitteeMember)
+	}, ReadScopes(), handleGetCommitteeMember)
 }
 
 // RegisterSearchCommitteeMembers registers the search_committee_members tool with the MCP server.
 func RegisterSearchCommitteeMembers(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
+	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_committee_members",
 		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID (v2), and/or name. At least one filter is recommended but not required.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Committee Members",
 			ReadOnlyHint: true,
 		},
-	}, handleSearchCommitteeMembers)
+	}, ReadScopes(), handleSearchCommitteeMembers)
 }
 
 // SearchCommitteesArgs defines the input parameters for the search_committees tool.

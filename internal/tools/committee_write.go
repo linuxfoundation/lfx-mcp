@@ -88,7 +88,6 @@ type CommitteeMemberVotingArgs struct {
 
 // CommitteeMemberOrganizationArgs defines organization information for a committee member.
 type CommitteeMemberOrganizationArgs struct {
-	ID      *string `json:"id,omitempty" jsonschema:"Organization ID"`
 	Name    *string `json:"name,omitempty" jsonschema:"Organization name"`
 	Website *string `json:"website,omitempty" jsonschema:"Organization website URL"`
 }
@@ -99,7 +98,6 @@ type CreateCommitteeMemberArgs struct {
 	Email           string                           `json:"email" jsonschema:"Primary email address of the member"`
 	AppointedBy     string                           `json:"appointed_by" jsonschema:"How the member was appointed"`
 	Status          string                           `json:"status" jsonschema:"Member status"`
-	Username        *string                          `json:"username,omitempty" jsonschema:"LF ID username"`
 	FirstName       *string                          `json:"first_name,omitempty" jsonschema:"First name"`
 	LastName        *string                          `json:"last_name,omitempty" jsonschema:"Last name"`
 	JobTitle        *string                          `json:"job_title,omitempty" jsonschema:"Job title at organization"`
@@ -118,7 +116,6 @@ type UpdateCommitteeMemberArgs struct {
 	Email           *string                          `json:"email,omitempty" jsonschema:"Primary email address of the member"`
 	AppointedBy     *string                          `json:"appointed_by,omitempty" jsonschema:"How the member was appointed"`
 	Status          *string                          `json:"status,omitempty" jsonschema:"Member status"`
-	Username        *string                          `json:"username,omitempty" jsonschema:"LF ID username"`
 	FirstName       *string                          `json:"first_name,omitempty" jsonschema:"First name"`
 	LastName        *string                          `json:"last_name,omitempty" jsonschema:"Last name"`
 	JobTitle        *string                          `json:"job_title,omitempty" jsonschema:"Job title at organization"`
@@ -659,7 +656,6 @@ func buildMemberOrganization(o *CommitteeMemberOrganizationArgs) *struct {
 		Name    *string
 		Website *string
 	}{
-		ID:      o.ID,
 		Name:    o.Name,
 		Website: o.Website,
 	}
@@ -689,7 +685,6 @@ func handleCreateCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 		Email:           args.Email,
 		AppointedBy:     args.AppointedBy,
 		Status:          args.Status,
-		Username:        args.Username,
 		FirstName:       args.FirstName,
 		LastName:        args.LastName,
 		JobTitle:        args.JobTitle,
@@ -805,9 +800,6 @@ func handleUpdateCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 	}
 	if args.Status != nil {
 		payload.Status = *args.Status
-	}
-	if args.Username != nil {
-		payload.Username = args.Username
 	}
 	if args.FirstName != nil {
 		payload.FirstName = args.FirstName

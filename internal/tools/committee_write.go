@@ -820,7 +820,24 @@ func handleUpdateCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 		payload.Voting = buildMemberVoting(args.Voting)
 	}
 	if args.Organization != nil {
-		payload.Organization = buildMemberOrganization(args.Organization)
+		// Merge into existing organization to preserve the ID (which is not
+		// exposed as an input field).  Start from the current state so that
+		// only the caller-provided Name/Website are overridden.
+		org := payload.Organization // from current member state
+		if org == nil {
+			org = &struct {
+				ID      *string
+				Name    *string
+				Website *string
+			}{}
+		}
+		if args.Organization.Name != nil {
+			org.Name = args.Organization.Name
+		}
+		if args.Organization.Website != nil {
+			org.Website = args.Organization.Website
+		}
+		payload.Organization = org
 	}
 
 	result, err := clients.Committee.UpdateCommitteeMember(ctx, payload)

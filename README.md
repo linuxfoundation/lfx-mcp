@@ -22,16 +22,18 @@ This endpoint uses the [Streamable HTTP](https://modelcontextprotocol.io/specifi
 
 > **Note:** Running the LFX MCP Server locally (e.g. in stdio mode) is not a supported end-user configuration. The full tool set requires OAuth authentication flows that are only available through the hosted service.
 
+**Linux Foundation SSO does not support Dynamic Client Registration (DCR) or Client ID Metadata Documents (CIMD) at this time.** Please file an issue to request additional client support.
+
 ### Claude
 
-Claude supports remote MCP servers directly. Add the LFX MCP Server in **Settings → Integrations → Add Integration**:
+Add the LFX MCP Server in **Settings → Integrations → Add Integration**:
 
 - **URL:** `https://mcp.lfx.dev/mcp`
 - **Client ID:** `Ef9tuU5wcJJIXmNGvZyGUkZFfD8CZWar`
 
 ### Cursor
 
-Cursor supports remote MCP servers with static OAuth. Add the following to your `~/.cursor/mcp.json`:
+Add the following to your `~/.cursor/mcp.json`:
 
 ```json
 {
@@ -46,9 +48,9 @@ Cursor supports remote MCP servers with static OAuth. Add the following to your 
 }
 ```
 
-### stdio-only clients (via mcp-remote)
+### Additional clients (via mcp-remote)
 
-If your MCP client only supports stdio-based servers, you can use [mcp-remote](https://github.com/geelen/mcp-remote) as a local proxy. It handles the OAuth flow in your browser and bridges stdio to the remote HTTP server.
+If your MCP client does not support OAuth 2.0 with Streamable HTTP, you can use [mcp-remote](https://github.com/geelen/mcp-remote) as a local proxy. It handles the OAuth flow in your browser and serves a `stdio` transport to your MCP client.
 
 The port `3334` is required so that the OAuth callback URL matches the registered client. Please refer to your client's documentation for the exact configuration syntax. For example, in **Zed** (`~/.config/zed/settings.json`):
 
@@ -62,7 +64,7 @@ The port `3334` is required so that the OAuth callback URL matches the registere
         "https://mcp.lfx.dev/mcp",
         "3334",
         "--static-oauth-client-info",
-        "{\"client_id\":\"TODO: fill in after auth0-terraform deployment\"}"
+        "{\"client_id\":\"tjrXD5ZJORf6rpngMSRqqPmf3W1bnHEV\"}"
       ]
     }
   }
@@ -87,7 +89,9 @@ Then in the Inspector UI:
 
 - **Transport:** Streamable HTTP
 - **URL:** `https://mcp.lfx.dev/mcp`
-- **Client ID:** `TODO: fill in after auth0-terraform deployment`
+- **Authentication → OAuth 2.0 Flow → Client ID:** `4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O`
+
+Before hitting **Connect**, follow the **Open Auth Settings** button, then select **Quick OAuth Flow**.
 
 ## Available Tools
 

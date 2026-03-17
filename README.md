@@ -10,31 +10,88 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that c
 - **Query members** — Search memberships by tier, status, organization, and more; get key contacts
 - **Track meetings** — Find upcoming meetings, registrants, past participants, transcripts, and AI-generated summaries
 
-## Quick Start
+## Connecting to the LFX MCP Server
 
-### Prerequisites
+The LFX MCP Server is available as a hosted, production service at:
 
-- Go 1.26.0+
-
-### Build & Run
-
-```bash
-git clone https://github.com/linuxfoundation/lfx-mcp.git
-cd lfx-mcp
-make build
+```
+https://mcp.lfx.dev/mcp
 ```
 
-**Stdio transport** (default — used by Claude Desktop, Claude Code, etc.):
+This endpoint uses the [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) transport with OAuth 2.0 authentication. You will be prompted to log in with your Linux Foundation account the first time you connect.
 
-```bash
-./bin/lfx-mcp-server
+> **Note:** Running the LFX MCP Server locally (e.g. in stdio mode) is not a supported end-user configuration. The full tool set requires OAuth authentication flows that are only available through the hosted service.
+
+**Linux Foundation SSO does not support Dynamic Client Registration (DCR) or Client ID Metadata Documents (CIMD) at this time.** Please file an issue to request additional client support.
+
+### Claude
+
+Add the LFX MCP Server in **Settings → Integrations → Add Integration**:
+
+- **URL:** `https://mcp.lfx.dev/mcp`
+- **Client ID:** `Ef9tuU5wcJJIXmNGvZyGUkZFfD8CZWar`
+
+### Cursor
+
+Add the following to your `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "lfx": {
+      "url": "https://mcp.lfx.dev/mcp",
+      "auth": {
+        "CLIENT_ID": "HwGWwUy4uvqVQYDsuXb9IVamzcUhdZj5"
+      }
+    }
+  }
+}
 ```
 
-**HTTP transport** (streamable HTTP with SSE):
+### Additional clients (via mcp-remote)
+
+If your MCP client does not support OAuth 2.0 with Streamable HTTP, you can use [mcp-remote](https://github.com/geelen/mcp-remote) as a local proxy. It handles the OAuth flow in your browser and serves a `stdio` transport to your MCP client.
+
+The port `3334` is required so that the OAuth callback URL matches the registered client. Please refer to your client's documentation for the exact configuration syntax. For example, in **Zed** (`~/.config/zed/settings.json`):
+
+```json
+{
+  "context_servers": {
+    "lfx": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.lfx.dev/mcp",
+        "3334",
+        "--static-oauth-client-info",
+        "{\"client_id\":\"tjrXD5ZJORf6rpngMSRqqPmf3W1bnHEV\"}"
+      ]
+    }
+  }
+}
+```
+
+A browser window will open for authentication on first use. To clear cached credentials (e.g. to re-authenticate):
 
 ```bash
-./bin/lfx-mcp-server -mode=http
+rm -rf ~/.mcp-auth
 ```
+
+### MCP Inspector (developer testing)
+
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a browser-based tool for exploring and testing MCP servers. To connect it to the LFX MCP Server:
+
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+Then in the Inspector UI:
+
+- **Transport:** Streamable HTTP
+- **URL:** `https://mcp.lfx.dev/mcp`
+- **Authentication → OAuth 2.0 Flow → Client ID:** `4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O`
+
+Before hitting **Connect**, follow the **Open Auth Settings** button, then select **Quick OAuth Flow**.
 
 ## Available Tools
 
@@ -105,43 +162,6 @@ make build
 |------|-------------|
 | `hello_world` | Simple greeting tool for testing MCP connectivity |
 | `user_info` | Get the authenticated user's OpenID Connect profile |
-
-## Configuration
-
-<details>
-<summary>All flags and environment variables</summary>
-
-Environment variables use the `LFXMCP_` prefix and **override** their corresponding flags.
-
-| Flag | Env Var | Default | Description |
-|------|---------|---------|-------------|
-| `-mode` | `LFXMCP_MODE` | `stdio` | Transport mode: `stdio` or `http` |
-| `-http.host` | `LFXMCP_HTTP_HOST` | `127.0.0.1` | HTTP server bind address |
-| `-http.port` | `LFXMCP_HTTP_PORT` | `8080` | HTTP server port |
-| `-http.public_url` | `LFXMCP_HTTP_PUBLIC_URL` | — | Public URL for HTTP transport (reverse proxies) |
-| `-debug` | `LFXMCP_DEBUG` | `false` | Enable debug logging with source locations |
-| `-debug_traffic` | `LFXMCP_DEBUG_TRAFFIC` | `false` | Log outbound LFX API request/response bodies |
-| `-tools` | `LFXMCP_TOOLS` | — | Comma-separated list of tools to enable |
-| `-mcp_api.auth_servers` | `LFXMCP_MCP_API_AUTH_SERVERS` | — | OAuth authorization server URLs (comma-separated) |
-| `-mcp_api.public_url` | `LFXMCP_MCP_API_PUBLIC_URL` | — | Public URL for MCP API (OAuth PRM) |
-| `-mcp_api.scopes` | `LFXMCP_MCP_API_SCOPES` | — | OAuth scopes (comma-separated) |
-| `-client_id` | `LFXMCP_CLIENT_ID` | — | OAuth client ID for token exchange |
-| `-client_secret` | `LFXMCP_CLIENT_SECRET` | — | OAuth client secret |
-| `-client_assertion_signing_key` | `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | — | PEM-encoded RSA private key for client assertion |
-| `-token_endpoint` | `LFXMCP_TOKEN_ENDPOINT` | — | OAuth2 token endpoint URL (RFC 8693) |
-| `-lfx_api_url` | `LFXMCP_LFX_API_URL` | — | LFX API base URL (token exchange audience) |
-
-</details>
-
-## Development
-
-See [AGENTS.md](AGENTS.md) for architecture details, adding tools, testing patterns, and coding guidelines.
-
-```bash
-make build    # Compile the binary
-make check    # Format, vet, and lint
-make test     # Run tests
-```
 
 ## License
 

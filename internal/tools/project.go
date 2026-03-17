@@ -35,26 +35,26 @@ func SetProjectConfig(cfg *ProjectConfig) {
 
 // RegisterSearchProjects registers the search_projects tool with the MCP server.
 func RegisterSearchProjects(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
+	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_projects",
 		Description: "Search for LFX projects by name using the LFX query service",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Projects",
 			ReadOnlyHint: true,
 		},
-	}, handleSearchProjects)
+	}, ReadScopes(), handleSearchProjects)
 }
 
 // RegisterGetProject registers the get_project tool with the MCP server.
 func RegisterGetProject(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
+	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "get_project",
 		Description: "Get an LFX project's base info and settings by its UID. Privileged project settings may be omitted if the caller lacks sufficient permissions.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Project",
 			ReadOnlyHint: true,
 		},
-	}, handleGetProject)
+	}, ReadScopes(), handleGetProject)
 }
 
 // SearchProjectsArgs defines the input parameters for the search_projects tool.

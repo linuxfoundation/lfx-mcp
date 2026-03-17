@@ -60,38 +60,38 @@ type GetMembershipKeyContactsArgs struct {
 
 // RegisterSearchMembers registers the search_members tool with the MCP server.
 func RegisterSearchMembers(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
+	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_members",
 		Description: "Search and filter members (memberships). Use this tool when users ask about members, memberships, or member organizations. Supports free-text search and filtering by status, membership_type, account_id, project_id, product_id, year, tier (e.g. gold, platinum, silver), contact_id, and auto_renew. Uses offset-based pagination.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Members",
 			ReadOnlyHint: true,
 		},
-	}, handleSearchMembers)
+	}, ReadScopes(), handleSearchMembers)
 }
 
 // RegisterGetMemberMembership registers the get_member_membership tool with the MCP server.
 func RegisterGetMemberMembership(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
+	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "get_member_membership",
 		Description: "Get a single member's membership by member ID and membership ID. Use this when users ask for details about a specific member or membership.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Member Membership",
 			ReadOnlyHint: true,
 		},
-	}, handleGetMemberMembership)
+	}, ReadScopes(), handleGetMemberMembership)
 }
 
 // RegisterGetMembershipKeyContacts registers the get_membership_key_contacts tool with the MCP server.
 func RegisterGetMembershipKeyContacts(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
+	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "get_membership_key_contacts",
 		Description: "Get key contacts for a member's membership by member ID and membership ID. Returns the people associated with a member such as primary contacts and board members.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Membership Key Contacts",
 			ReadOnlyHint: true,
 		},
-	}, handleGetMembershipKeyContacts)
+	}, ReadScopes(), handleGetMembershipKeyContacts)
 }
 
 // handleSearchMembers implements the search_members tool logic.

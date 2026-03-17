@@ -5,7 +5,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that c
 ## What You Can Do
 
 - **Explore projects** — Search and retrieve details for any LFX project
-- **Manage committees** — Look up committees, their members, and roles across projects
+- **Manage committees** — Search, create, update, and delete committees and their members across projects
 - **Work with mailing lists** — Search mailing lists and their subscribers
 - **Query members** — Search memberships by tier, status, organization, and more; get key contacts
 - **Track meetings** — Find upcoming meetings, registrants, past participants, transcripts, and AI-generated summaries
@@ -104,8 +104,15 @@ Then in the Inspector UI:
 |------|-------------|
 | `search_committees` | Search for committees by name; optionally filter by project |
 | `get_committee` | Get a committee's base info and settings by UID |
+| `create_committee` | Create a new committee under a project |
+| `update_committee` | Update a committee's base information |
+| `update_committee_settings` | Update a committee's settings (visibility, email requirements, meeting attendee defaults) |
+| `delete_committee` | Delete a committee by UID |
 | `search_committee_members` | Search committee members; filter by committee, project, or name |
 | `get_committee_member` | Get a specific committee member by committee and member UID |
+| `create_committee_member` | Add a new member to a committee |
+| `update_committee_member` | Update an existing committee member's information |
+| `delete_committee_member` | Remove a member from a committee |
 
 ### Mailing Lists
 

@@ -93,20 +93,50 @@ Results are cached in-memory (slug→UUID mappings are stable).
 
 All tools require `writer` relation to the project.
 
-| Tool | Description |
-|------|-------------|
-| `onboarding_list_memberships` | List memberships for a project, with their configured agents, actions, and todos |
-| `onboarding_get_membership` | Get a single membership with its configured agents (including execution order), actions, and todos |
-| `onboarding_preview_agent` | Preview what an agent would do for a membership without executing |
-| `onboarding_run_agent` | Run an onboarding agent for a membership |
+The onboarding service exposes two sets of endpoints:
+
+- **Custom REST endpoints** under `/member-onboarding/` — for memberships, agent configs, rules, etc.
+- **AgentOS framework endpoints** under `/agents/{agent_id}/runs` — for running and previewing AI agents.
+
+| MCP Tool | Backend Endpoint | Method | Description |
+|----------|-----------------|--------|-------------|
+| `onboarding_list_memberships` | `/member-onboarding/{slug}/memberships` | `GET` | List memberships for a project with per-agent action/todo counts. Accepts `status` filter (`all`, `pending`, `in_progress`, `closed`). |
+| `onboarding_get_membership` | `/member-onboarding/{slug}/memberships/{membership_id}` | `GET` | Get a single membership with full agent details: configuration, execution order, actions taken, and pending todos. |
+| `onboarding_preview_agent` | `/agents/member-onboarding-preview/runs` | `POST` | Preview what an agent would do for a membership without executing. Sends a message describing the membership and target agent; returns predicted actions and prerequisite status. |
+| `onboarding_run_agent` | `/agents/{agent_id}/runs` | `POST` | Run a specific onboarding agent (e.g., `member-onboarding-slack`, `member-onboarding-email`) for a membership. The agent executes its configured actions and records results. |
+
+#### Agent IDs (for preview and run)
+
+The onboarding service registers these agents via the AgentOS framework:
+
+| Agent ID | Description |
+|----------|-------------|
+| `member-onboarding-preview` | Preview agent — predicts actions without executing |
+| `member-onboarding-slack` | Adds members to Slack channels |
+| `member-onboarding-email` | Sends onboarding emails based on templates |
+| `member-onboarding-discord` | Assigns Discord roles to members |
+| `member-onboarding-github` | Creates PRs / file changes in GitHub repos |
+| `member-onboarding-committees` | Adds members to LFX committees |
+| `member-onboarding-hubspot-workflow` | Enrolls contacts in HubSpot workflows |
+
+#### AgentOS Run Endpoint Schema
+
+`POST /agents/{agent_id}/runs` accepts `multipart/form-data`:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `message` | string | Yes | Text input describing what the agent should do (e.g., membership details + instructions) |
+| `stream` | boolean | No | Enable streaming via Server-Sent Events |
+| `session_id` | string | No | Session ID for context continuity |
+| `user_id` | string | No | User context identifier |
 
 ### LFX Lens
 
 All tools require `auditor` relation to the project.
 
-| Tool | Description |
-|------|-------------|
-| `lfx_lens_query` | Query LFX Lens analytics for a project |
+| MCP Tool | Backend Endpoint | Method | Description |
+|----------|-----------------|--------|-------------|
+| `lfx_lens_query` | TBD | TBD | Query LFX Lens analytics for a project |
 
 > **TODO:** Expand LFX Lens tool inventory once API endpoints are defined.
 

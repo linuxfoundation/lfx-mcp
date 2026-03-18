@@ -17,10 +17,10 @@ import (
 )
 
 // mailingListResourceType is the resource type filter for mailing list queries.
-const mailingListResourceType = "grpsio_mailing_list"
+const mailingListResourceType = "groupsio_mailing_list"
 
 // mailingListMemberResourceType is the resource type filter for mailing list member queries.
-const mailingListMemberResourceType = "grpsio_mailing_list_member"
+const mailingListMemberResourceType = "groupsio_member"
 
 // MailingListConfig holds configuration shared by mailing list tools.
 type MailingListConfig struct {

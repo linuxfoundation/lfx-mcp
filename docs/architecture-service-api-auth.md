@@ -155,14 +155,3 @@ All tools require `auditor` relation to the project.
 
 Existing token exchange config (`LFXMCP_LFX_API_URL`, `LFXMCP_TOKEN_ENDPOINT`, `LFXMCP_CLIENT_ID`, etc.) is reused for V2 access-check calls.
 
----
-
-## Open Questions for Eric
-
-| # | Question |
-|---|----------|
-| 1 | **Slug-to-UUID resolution** — What is the best V2 endpoint to resolve a project slug to its UUID? |
-| 2 | **Access-check format** — Can you confirm the format is `project:{uuid}#writer` (with `#`)? |
-| 3 | **Transitive relations** — Does checking `#writer` also return `allow` for `owner`s? |
-| 4 | **LFX Lens relation** — Is `auditor` correct for all Lens operations? |
-| 5 | **Staff-only access** — For staff-only features (Lens), is there an existing Auth0 claim we should check? |

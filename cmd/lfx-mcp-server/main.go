@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -486,7 +487,10 @@ func runHTTPServer(cfg Config) {
 		verifyToken := func(ctx context.Context, tokenString string, _ *http.Request) (*auth.TokenInfo, error) {
 			token, err := jwtVerifier.VerifyToken(ctx, tokenString)
 			if err != nil {
-				logger.Error("token verification failed", errKey, err)
+				logger.Debug("token verification failed", errKey, err)
+				if errors.Is(err, lfxauth.ErrTokenInvalid) {
+					return nil, fmt.Errorf("%w: %w", auth.ErrInvalidToken, err)
+				}
 				return nil, err
 			}
 

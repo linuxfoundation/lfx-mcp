@@ -6,6 +6,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,6 +15,11 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
+
+// ErrTokenInvalid is returned when a token fails validation (bad format, unknown
+// issuer, expired, bad signature, etc.). Callers can distinguish this from
+// infrastructure errors (e.g. JWKS fetch failures) using errors.Is.
+var ErrTokenInvalid = errors.New("token invalid")
 
 // JWTVerifierConfig holds configuration for JWT verification.
 type JWTVerifierConfig struct {
@@ -84,12 +90,12 @@ func (v *JWTVerifier) VerifyToken(ctx context.Context, tokenString string) (jwt.
 	// Parse token to get the issuer for JWKS lookup.
 	unverifiedToken, err := jwt.ParseString(tokenString, jwt.WithVerify(false), jwt.WithValidate(false))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse token: %w", err)
+		return nil, fmt.Errorf("%w: failed to parse token: %w", ErrTokenInvalid, err)
 	}
 
 	issuer := unverifiedToken.Issuer()
 	if issuer == "" {
-		return nil, fmt.Errorf("token missing issuer claim")
+		return nil, fmt.Errorf("%w: token missing issuer claim", ErrTokenInvalid)
 	}
 
 	// Normalize issuer (remove trailing slash).
@@ -106,12 +112,14 @@ func (v *JWTVerifier) VerifyToken(ctx context.Context, tokenString string) (jwt.
 	}
 
 	if jwksURL == "" {
-		return nil, fmt.Errorf("token issuer %s not in configured auth servers", issuer)
+		return nil, fmt.Errorf("%w: token issuer %s not in configured auth servers", ErrTokenInvalid, issuer)
 	}
 
 	// Fetch JWKS from cache.
 	keySet, err := v.jwksCache.Get(ctx, jwksURL)
 	if err != nil {
+		// Infrastructure error — do not wrap as ErrTokenInvalid; the token itself
+		// may be valid and the caller should not retry with a new token.
 		return nil, fmt.Errorf("failed to fetch JWKS from %s: %w", jwksURL, err)
 	}
 
@@ -123,7 +131,7 @@ func (v *JWTVerifier) VerifyToken(ctx context.Context, tokenString string) (jwt.
 		jwt.WithAudience(v.config.Audience),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("token verification failed: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrTokenInvalid, err)
 	}
 
 	return token, nil

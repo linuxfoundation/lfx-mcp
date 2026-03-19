@@ -486,6 +486,7 @@ func runHTTPServer(cfg Config) {
 		verifyToken := func(ctx context.Context, tokenString string, _ *http.Request) (*auth.TokenInfo, error) {
 			token, err := jwtVerifier.VerifyToken(ctx, tokenString)
 			if err != nil {
+				logger.Error("token verification failed", errKey, err)
 				return nil, err
 			}
 

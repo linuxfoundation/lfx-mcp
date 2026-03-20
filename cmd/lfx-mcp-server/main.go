@@ -82,6 +82,9 @@ var defaultTools = []string{
 	"search_members",
 	"get_member_membership",
 	"get_membership_key_contacts",
+	"create_membership_key_contact",
+	"update_membership_key_contact",
+	"delete_membership_key_contact",
 	"search_meetings",
 	"get_meeting",
 	"search_meeting_registrants",
@@ -379,6 +382,15 @@ func newServer(cfg Config) *mcp.Server {
 	}
 	if enabledTools["get_membership_key_contacts"] {
 		tools.RegisterGetMembershipKeyContacts(server)
+	}
+	if enabledTools["create_membership_key_contact"] {
+		tools.RegisterCreateMembershipKeyContact(server)
+	}
+	if enabledTools["update_membership_key_contact"] {
+		tools.RegisterUpdateMembershipKeyContact(server)
+	}
+	if enabledTools["delete_membership_key_contact"] {
+		tools.RegisterDeleteMembershipKeyContact(server)
 	}
 	if enabledTools["search_meetings"] {
 		tools.RegisterSearchMeetings(server)

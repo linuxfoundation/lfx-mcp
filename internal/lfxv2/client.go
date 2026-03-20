@@ -253,9 +253,18 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 	)
 
 	clients.Member = memberservice.NewClient(
-		memberHTTPClient.ListMembers(),
-		memberHTTPClient.GetMemberMembership(),
-		memberHTTPClient.ListMemberMembershipKeyContacts(),
+		memberHTTPClient.ListProjectTiers(),
+		memberHTTPClient.GetProjectTier(),
+		memberHTTPClient.ListProjectMemberships(),
+		memberHTTPClient.GetProjectMembership(),
+		memberHTTPClient.ListMembershipKeyContacts(),
+		memberHTTPClient.CreateMembershipKeyContact(),
+		memberHTTPClient.UpdateMembershipKeyContact(),
+		memberHTTPClient.DeleteMembershipKeyContact(),
+		memberHTTPClient.GetMembershipKeyContact(),
+		memberHTTPClient.DeprecatedListMembers(),
+		memberHTTPClient.DeprecatedGetMemberMembership(),
+		memberHTTPClient.DeprecatedListMemberMembershipKeyContacts(),
 		memberHTTPClient.Readyz(),
 		memberHTTPClient.Livez(),
 	)

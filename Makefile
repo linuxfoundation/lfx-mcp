@@ -1,7 +1,7 @@
 # Copyright The Linux Foundation and each contributor to LFX.
 # SPDX-License-Identifier: MIT
 
-.PHONY: all build clean check fmt vet lint test test-coverage run help deps install-tools docker-build
+.PHONY: all build clean check fmt vet lint test test-coverage run help deps install-tools docker-build ko-build
 
 # Build variables
 BINARY_NAME=lfx-mcp-server
@@ -9,12 +9,16 @@ CMD_DIR=./cmd/lfx-mcp-server
 BUILD_DIR=./bin
 GO_FILES=$(shell find . -name "*.go" -type f)
 
-# Build flags
-LDFLAGS=-ldflags="-s -w"
+# Version string: clean tag on a tagged commit, tag+offset+hash between tags,
+# with a -dirty suffix if there are uncommitted changes.
+VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || echo "dev")
 
-# Docker variables
-DOCKER_IMAGE=linuxfoundation/lfx-mcp
-DOCKER_TAG=latest
+# Build flags
+LDFLAGS=-ldflags="-s -w -X main.Version=$(VERSION)"
+
+# Docker/ko variables
+DOCKER_IMAGE=linuxfoundation/lfx-mcp/lfx-mcp-server
+DOCKER_TAG=local
 
 # Default target
 all: clean check build
@@ -93,8 +97,15 @@ install-tools:
 # Build Docker image
 docker-build:
 	@echo "Building Docker image..."
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f Dockerfile .
+	docker build --build-arg VERSION=$(VERSION) -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f Dockerfile .
 	@echo "Docker image built: $(DOCKER_IMAGE):$(DOCKER_TAG)"
+
+# Build ko image locally: loads into local Docker daemon with a :local tag, matching docker-build.
+# KO_DOCKER_REPO is the parent path; ko appends the binary name to produce the full image name.
+# VERSION is exported so the .ko.yaml {{.Env.VERSION}} template resolves correctly.
+ko-build:
+	@echo "Building ko image..."
+	KO_DOCKER_REPO=$(DOCKER_IMAGE) VERSION=$(VERSION) ko build -L --bare --tags local ./cmd/lfx-mcp-server
 
 # Show help
 help:
@@ -112,4 +123,5 @@ help:
 	@echo "  deps           - Download and tidy dependencies"
 	@echo "  install-tools  - Install development tools"
 	@echo "  docker-build   - Build Docker image"
+	@echo "  ko-build       - Build ko image locally with :local tag"
 	@echo "  help           - Show this help message"

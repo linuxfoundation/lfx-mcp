@@ -1,0 +1,7 @@
+# Copyright The Linux Foundation and contributors.
+# SPDX-License-Identifier: MIT
+builds:
+  - id: lfx-mcp-server
+    dir: ./cmd/lfx-mcp-server
+    ldflags:
+      - -X=main.Version={{.Env.VERSION}}

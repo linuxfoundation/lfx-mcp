@@ -21,8 +21,10 @@ RUN go mod download
 # Copy the code into the container
 COPY . .
 
-# Build the packages
-RUN go build -o /go/bin/lfx-mcp-server -trimpath -ldflags="-w -s" github.com/linuxfoundation/lfx-mcp/cmd/lfx-mcp-server
+# Build the packages. VERSION may be passed via --build-arg for local Docker builds;
+# CI uses ko with .ko.yaml ldflags instead.
+ARG VERSION=dev
+RUN go build -o /go/bin/lfx-mcp-server -trimpath -ldflags="-w -s -X main.Version=${VERSION}" github.com/linuxfoundation/lfx-mcp/cmd/lfx-mcp-server
 
 # Run our go binary standalone
 FROM cgr.dev/chainguard/static:latest

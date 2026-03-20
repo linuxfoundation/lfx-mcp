@@ -1,6 +1,7 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
+// Package tools provides MCP tool implementations for the LFX MCP server.
 package tools
 
 import (
@@ -167,15 +168,15 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 
 	version := "1"
 	payload := &memberservice.CreateMembershipKeyContactPayload{
-		Version:    &version,
-		ProjectUID: &args.ProjectUID,
-		ID:         &args.ID,
-		Email:      args.Email,
-		FirstName:  args.FirstName,
-		LastName:   args.LastName,
-		Title:      args.Title,
-		Role:       args.Role,
-		Status:     args.Status,
+		Version:        &version,
+		ProjectUID:     &args.ProjectUID,
+		ID:             &args.ID,
+		Email:          args.Email,
+		FirstName:      args.FirstName,
+		LastName:       args.LastName,
+		Title:          args.Title,
+		Role:           args.Role,
+		Status:         args.Status,
 		BoardMember:    args.BoardMember,
 		PrimaryContact: args.PrimaryContact,
 	}

@@ -7,9 +7,11 @@ package main
 import (
 	"context"
 	"errors"
+	"expvar"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -56,6 +58,15 @@ type MCPAPIConfig struct {
 	AuthServers []string `koanf:"auth_servers"`
 	Scopes      []string `koanf:"scopes"`
 }
+
+// Build-time variables set via ldflags.
+var (
+	// Version is the application version, set at build time via -ldflags.
+	// On a tagged commit this is the tag (e.g. v0.4.1); between tags it includes
+	// the offset and short hash (e.g. v0.4.1-3-gabcdef0); a -dirty suffix is
+	// appended when there are uncommitted changes.
+	Version = "dev"
+)
 
 const errKey = "error"
 
@@ -104,6 +115,10 @@ func main() {
 
 	// Define flags.
 	f := flag.NewFlagSet("lfx-mcp-server", flag.ExitOnError)
+	f.Usage = func() {
+		fmt.Fprintf(f.Output(), "lfx-mcp-server %s\n\nUsage:\n", Version)
+		f.PrintDefaults()
+	}
 	f.String("mode", "stdio", "Transport mode: stdio or http")
 	f.String("http.host", "127.0.0.1", "Host to bind to for HTTP transport")
 	f.Int("http.port", 8080, "Port to listen on for HTTP transport")
@@ -300,7 +315,7 @@ func mcpLoggingMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 func newServer(cfg Config) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "lfx-mcp-server",
-		Version: "0.1.0",
+		Version: Version,
 	}, &mcp.ServerOptions{
 		Logger: logger,
 	})
@@ -464,6 +479,10 @@ func runHTTPServer(cfg Config) {
 		_, _ = w.Write([]byte("ok"))
 	})
 
+	// Register expvar debug endpoint; restricted to loopback-only so it is
+	// accessible via kubectl port-forward but blocked from ingress traffic.
+	mux.Handle("/debug/vars", localhostOnly(expvar.Handler()))
+
 	// Apply OAuth bearer token middleware if auth servers are configured.
 	var mcpHandler http.Handler = handler
 	if len(cfg.MCPAPI.AuthServers) > 0 {
@@ -617,6 +636,26 @@ func runHTTPServer(cfg Config) {
 	}
 
 	logger.Info("HTTP server stopped")
+}
+
+// localhostOnly wraps h and returns 403 Forbidden for any request whose remote
+// address is not the IPv4 or IPv6 loopback address. This allows the handler to
+// be reached via kubectl port-forward (which arrives as 127.0.0.1) while
+// blocking traffic that originates from the ingress or other cluster sources.
+func localhostOnly(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsLoopback() {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // httpDebugLogging returns middleware that logs all incoming HTTP requests and their

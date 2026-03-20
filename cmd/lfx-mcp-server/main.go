@@ -487,13 +487,14 @@ func runHTTPServer(cfg Config) {
 		verifyToken := func(ctx context.Context, tokenString string, _ *http.Request) (*auth.TokenInfo, error) {
 			token, err := jwtVerifier.VerifyToken(ctx, tokenString)
 			if err != nil {
-				if errors.Is(err, lfxauth.ErrTokenInvalid) {
-					// Expected invalid/expired token: log at debug and wrap as auth.ErrInvalidToken.
+				if errors.Is(err, auth.ErrInvalidToken) {
+					// Expected invalid/expired token: log at debug and return as-is
+					// (jwt_verifier already wraps with auth.ErrInvalidToken).
 					logger.Debug("token verification failed", errKey, err)
-					return nil, fmt.Errorf("%w: %w", auth.ErrInvalidToken, err)
+				} else {
+					// Infrastructure or unexpected verification failure: log at error level.
+					logger.Error("token verification failed", errKey, err)
 				}
-				// Infrastructure or unexpected verification failure: log at error level.
-				logger.Error("token verification failed", errKey, err)
 				return nil, err
 			}
 

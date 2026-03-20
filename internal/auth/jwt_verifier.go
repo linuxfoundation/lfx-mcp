@@ -6,20 +6,16 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	sdkauth "github.com/modelcontextprotocol/go-sdk/auth"
+
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
-
-// ErrTokenInvalid is returned when a token fails validation (bad format, unknown
-// issuer, expired, bad signature, etc.). Callers can distinguish this from
-// infrastructure errors (e.g. JWKS fetch failures) using errors.Is.
-var ErrTokenInvalid = errors.New("token invalid")
 
 // JWTVerifierConfig holds configuration for JWT verification.
 type JWTVerifierConfig struct {
@@ -90,12 +86,12 @@ func (v *JWTVerifier) VerifyToken(ctx context.Context, tokenString string) (jwt.
 	// Parse token to get the issuer for JWKS lookup.
 	unverifiedToken, err := jwt.ParseString(tokenString, jwt.WithVerify(false), jwt.WithValidate(false))
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to parse token: %w", ErrTokenInvalid, err)
+		return nil, fmt.Errorf("%w: failed to parse token: %w", sdkauth.ErrInvalidToken, err)
 	}
 
 	issuer := unverifiedToken.Issuer()
 	if issuer == "" {
-		return nil, fmt.Errorf("%w: token missing issuer claim", ErrTokenInvalid)
+		return nil, fmt.Errorf("%w: token missing issuer claim", sdkauth.ErrInvalidToken)
 	}
 
 	// Normalize issuer (remove trailing slash).
@@ -112,7 +108,7 @@ func (v *JWTVerifier) VerifyToken(ctx context.Context, tokenString string) (jwt.
 	}
 
 	if jwksURL == "" {
-		return nil, fmt.Errorf("%w: token issuer %s not in configured auth servers", ErrTokenInvalid, issuer)
+		return nil, fmt.Errorf("%w: token issuer %s not in configured auth servers", sdkauth.ErrInvalidToken, issuer)
 	}
 
 	// Fetch JWKS from cache.
@@ -131,7 +127,7 @@ func (v *JWTVerifier) VerifyToken(ctx context.Context, tokenString string) (jwt.
 		jwt.WithAudience(v.config.Audience),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrTokenInvalid, err)
+		return nil, fmt.Errorf("%w: %w", sdkauth.ErrInvalidToken, err)
 	}
 
 	return token, nil

@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"errors"
+	_ "expvar"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -56,6 +57,15 @@ type MCPAPIConfig struct {
 	AuthServers []string `koanf:"auth_servers"`
 	Scopes      []string `koanf:"scopes"`
 }
+
+// Build-time variables set via ldflags.
+var (
+	// Version is the application version, set at build time via -ldflags.
+	// On a tagged commit this is the tag (e.g. v0.4.1); between tags it includes
+	// the offset and short hash (e.g. v0.4.1-3-gabcdef0); a -dirty suffix is
+	// appended when there are uncommitted changes.
+	Version = "dev"
+)
 
 const errKey = "error"
 
@@ -300,7 +310,7 @@ func mcpLoggingMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 func newServer(cfg Config) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "lfx-mcp-server",
-		Version: "0.1.0",
+		Version: Version,
 	}, &mcp.ServerOptions{
 		Logger: logger,
 	})
@@ -463,6 +473,9 @@ func runHTTPServer(cfg Config) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+
+	// Register expvar debug endpoint (internal only; not exposed via ingress HTTPRoute).
+	mux.Handle("/debug/vars", http.DefaultServeMux)
 
 	// Apply OAuth bearer token middleware if auth servers are configured.
 	var mcpHandler http.Handler = handler

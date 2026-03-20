@@ -9,8 +9,12 @@ CMD_DIR=./cmd/lfx-mcp-server
 BUILD_DIR=./bin
 GO_FILES=$(shell find . -name "*.go" -type f)
 
+# Version string: clean tag on a tagged commit, tag+offset+hash between tags,
+# with a -dirty suffix if there are uncommitted changes.
+VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || echo "dev")
+
 # Build flags
-LDFLAGS=-ldflags="-s -w"
+LDFLAGS=-ldflags="-s -w -X main.Version=$(VERSION)"
 
 # Docker variables
 DOCKER_IMAGE=linuxfoundation/lfx-mcp

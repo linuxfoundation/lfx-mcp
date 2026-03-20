@@ -114,6 +114,10 @@ func main() {
 
 	// Define flags.
 	f := flag.NewFlagSet("lfx-mcp-server", flag.ExitOnError)
+	f.Usage = func() {
+		fmt.Fprintf(f.Output(), "lfx-mcp-server %s\n\nUsage:\n", Version)
+		f.PrintDefaults()
+	}
 	f.String("mode", "stdio", "Transport mode: stdio or http")
 	f.String("http.host", "127.0.0.1", "Host to bind to for HTTP transport")
 	f.Int("http.port", 8080, "Port to listen on for HTTP transport")

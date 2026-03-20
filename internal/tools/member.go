@@ -32,37 +32,31 @@ func SetMemberConfig(cfg *MemberConfig) {
 
 // SearchMembersArgs defines the input parameters for the search_members tool.
 type SearchMembersArgs struct {
-	Search         string `json:"search,omitempty" jsonschema:"Free-text search across member name, project names, and tiers"`
-	Status         string `json:"status,omitempty" jsonschema:"Filter by membership status (e.g. active, expired)"`
-	MembershipType string `json:"membership_type,omitempty" jsonschema:"Filter by membership type"`
-	AccountID      string `json:"account_id,omitempty" jsonschema:"Filter by account ID"`
-	ProjectID      string `json:"project_id,omitempty" jsonschema:"Filter by project ID"`
-	ProductID      string `json:"product_id,omitempty" jsonschema:"Filter by product ID"`
-	Year           string `json:"year,omitempty" jsonschema:"Filter by membership year"`
-	Tier           string `json:"tier,omitempty" jsonschema:"Filter by membership tier"`
-	ContactID      string `json:"contact_id,omitempty" jsonschema:"Filter by contact ID"`
-	AutoRenew      string `json:"auto_renew,omitempty" jsonschema:"Filter by auto-renew status (true or false)"`
-	PageSize       int    `json:"page_size,omitempty" jsonschema:"Number of results per page (1-100, default 25)"`
-	Offset         int    `json:"offset,omitempty" jsonschema:"Offset into the total result list (default 0)"`
+	ProjectUID string `json:"project_uid" jsonschema:"V2 project UUID (required)"`
+	Search     string `json:"search,omitempty" jsonschema:"Free-text search across company name, project name, and tier"`
+	TierUID    string `json:"tier_uid,omitempty" jsonschema:"Filter by membership tier UID (UUID from list_project_tiers)"`
+	Sort       string `json:"sort,omitempty" jsonschema:"Sort order: newest (default), name, last_modified"`
+	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (1-1000, default 25)"`
+	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque cursor from a previous response to fetch the next page"`
 }
 
 // GetMemberMembershipArgs defines the input parameters for the get_member_membership tool.
 type GetMemberMembershipArgs struct {
-	MemberID string `json:"member_id" jsonschema:"The member UID"`
-	ID       string `json:"id" jsonschema:"The membership UID"`
+	ProjectUID string `json:"project_uid" jsonschema:"V2 project UUID"`
+	ID         string `json:"id" jsonschema:"The membership UID"`
 }
 
 // GetMembershipKeyContactsArgs defines the input parameters for the get_membership_key_contacts tool.
 type GetMembershipKeyContactsArgs struct {
-	MemberID string `json:"member_id" jsonschema:"The member UID"`
-	ID       string `json:"id" jsonschema:"The membership UID"`
+	ProjectUID string `json:"project_uid" jsonschema:"V2 project UUID"`
+	ID         string `json:"id" jsonschema:"The membership UID"`
 }
 
 // RegisterSearchMembers registers the search_members tool with the MCP server.
 func RegisterSearchMembers(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_members",
-		Description: "Search and filter members (memberships). Use this tool when users ask about members, memberships, or member organizations. Supports free-text search and filtering by status, membership_type, account_id, project_id, product_id, year, tier (e.g. gold, platinum, silver), contact_id, and auto_renew. Uses offset-based pagination.",
+		Description: "List and search memberships for a project. Use this tool when users ask about members, memberships, or member organizations for a specific project. Requires project_uid. Supports free-text search, tier_uid filter, and sort order (newest, name, last_modified). Uses cursor-based pagination via page_token.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Members",
 			ReadOnlyHint: true,
@@ -74,7 +68,7 @@ func RegisterSearchMembers(server *mcp.Server) {
 func RegisterGetMemberMembership(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "get_member_membership",
-		Description: "Get a single member's membership by member ID and membership ID. Use this when users ask for details about a specific member or membership.",
+		Description: "Get a single membership by project UID and membership ID. Use this when users ask for details about a specific membership.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Member Membership",
 			ReadOnlyHint: true,
@@ -86,7 +80,7 @@ func RegisterGetMemberMembership(server *mcp.Server) {
 func RegisterGetMembershipKeyContacts(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "get_membership_key_contacts",
-		Description: "Get key contacts for a member's membership by member ID and membership ID. Returns the people associated with a member such as primary contacts and board members.",
+		Description: "Get key contacts for a membership by project UID and membership ID. Returns the people associated with a membership such as primary contacts and board members.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Membership Key Contacts",
 			ReadOnlyHint: true,
@@ -136,6 +130,15 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		}, nil, nil
 	}
 
+	if args.ProjectUID == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "Error: project_uid is required"},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
 	pageSize := args.PageSize
 	if pageSize <= 0 {
 		pageSize = 25
@@ -143,39 +146,20 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 
 	// Build filter string from non-empty filter args.
 	var filters []string
-	if args.Status != "" {
-		filters = append(filters, "status="+args.Status)
-	}
-	if args.MembershipType != "" {
-		filters = append(filters, "membership_type="+args.MembershipType)
-	}
-	if args.AccountID != "" {
-		filters = append(filters, "account_id="+args.AccountID)
-	}
-	if args.ProjectID != "" {
-		filters = append(filters, "project_id="+args.ProjectID)
-	}
-	if args.ProductID != "" {
-		filters = append(filters, "product_id="+args.ProductID)
-	}
-	if args.Year != "" {
-		filters = append(filters, "year="+args.Year)
-	}
-	if args.Tier != "" {
-		filters = append(filters, "tier="+args.Tier)
-	}
-	if args.ContactID != "" {
-		filters = append(filters, "contact_id="+args.ContactID)
-	}
-	if args.AutoRenew != "" {
-		filters = append(filters, "auto_renew="+args.AutoRenew)
+	if args.TierUID != "" {
+		filters = append(filters, "tier_uid="+args.TierUID)
 	}
 
 	version := "1"
-	payload := &memberservice.ListMembersPayload{
-		Version:  &version,
-		PageSize: pageSize,
-		Offset:   args.Offset,
+	payload := &memberservice.ListProjectMembershipsPayload{
+		Version:    &version,
+		ProjectUID: &args.ProjectUID,
+		PageSize:   pageSize,
+		Sort:       args.Sort,
+	}
+
+	if args.PageToken != "" {
+		payload.PageToken = &args.PageToken
 	}
 
 	if len(filters) > 0 {
@@ -187,11 +171,11 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		payload.Search = &args.Search
 	}
 
-	logger.Info("searching members", "filter_count", len(filters), "page_size", pageSize, "offset", args.Offset, "search", args.Search)
+	logger.Info("searching members", "project_uid", args.ProjectUID, "filter_count", len(filters), "page_size", pageSize, "page_token", args.PageToken, "search", args.Search)
 
-	result, err := clients.Member.ListMembers(ctx, payload)
+	result, err := clients.Member.ListProjectMemberships(ctx, payload)
 	if err != nil {
-		logger.Error("ListMembers failed", "error", err)
+		logger.Error("ListProjectMemberships failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search members: %s", lfxv2.ErrorMessage(err))},
@@ -211,7 +195,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		}, nil, nil
 	}
 
-	logger.Info("search_members succeeded", "count", len(result.Members))
+	logger.Info("search_members succeeded", "count", len(result.Memberships))
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -234,10 +218,10 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
-	if args.MemberID == "" {
+	if args.ProjectUID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: member_id is required"},
+				&mcp.TextContent{Text: "Error: project_uid is required"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -280,16 +264,16 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
-	logger.Info("fetching member membership", "member_id", args.MemberID, "id", args.ID)
+	logger.Info("fetching member membership", "project_uid", args.ProjectUID, "id", args.ID)
 
 	version := "1"
-	result, err := clients.Member.GetMemberMembership(ctx, &memberservice.GetMemberMembershipPayload{
-		Version:  &version,
-		MemberID: &args.MemberID,
-		ID:       &args.ID,
+	result, err := clients.Member.GetProjectMembership(ctx, &memberservice.GetProjectMembershipPayload{
+		Version:    &version,
+		ProjectUID: &args.ProjectUID,
+		ID:         &args.ID,
 	})
 	if err != nil {
-		logger.Error("GetMemberMembership failed", "error", err, "member_id", args.MemberID, "id", args.ID)
+		logger.Error("GetProjectMembership failed", "error", err, "project_uid", args.ProjectUID, "id", args.ID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get member membership: %s", lfxv2.ErrorMessage(err))},
@@ -309,7 +293,7 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
-	logger.Info("get_member_membership succeeded", "member_id", args.MemberID, "id", args.ID)
+	logger.Info("get_member_membership succeeded", "project_uid", args.ProjectUID, "id", args.ID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -332,10 +316,10 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	if args.MemberID == "" {
+	if args.ProjectUID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: member_id is required"},
+				&mcp.TextContent{Text: "Error: project_uid is required"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -378,16 +362,16 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	logger.Info("fetching membership key contacts", "member_id", args.MemberID, "id", args.ID)
+	logger.Info("fetching membership key contacts", "project_uid", args.ProjectUID, "id", args.ID)
 
 	version := "1"
-	result, err := clients.Member.ListMemberMembershipKeyContacts(ctx, &memberservice.ListMemberMembershipKeyContactsPayload{
-		Version:  &version,
-		MemberID: &args.MemberID,
-		ID:       &args.ID,
+	result, err := clients.Member.ListMembershipKeyContacts(ctx, &memberservice.ListMembershipKeyContactsPayload{
+		Version:    &version,
+		ProjectUID: &args.ProjectUID,
+		ID:         &args.ID,
 	})
 	if err != nil {
-		logger.Error("ListMemberMembershipKeyContacts failed", "error", err, "member_id", args.MemberID, "id", args.ID)
+		logger.Error("ListMembershipKeyContacts failed", "error", err, "project_uid", args.ProjectUID, "id", args.ID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership key contacts: %s", lfxv2.ErrorMessage(err))},
@@ -407,7 +391,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	logger.Info("get_membership_key_contacts succeeded", "member_id", args.MemberID, "id", args.ID)
+	logger.Info("get_membership_key_contacts succeeded", "project_uid", args.ProjectUID, "id", args.ID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

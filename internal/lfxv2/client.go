@@ -414,15 +414,30 @@ func (a *authInterceptor) RoundTrip(req *http.Request) (*http.Response, error) {
 	return a.base.RoundTrip(reqClone)
 }
 
-// getOrExchangeToken gets a cached LFX token or performs token exchange.
+// m2mCacheKey is the cache key used for all M2M token requests. Since M2M callers
+// all receive the same LFX token (minted via client_credentials), a single entry
+// covers them all rather than one entry per unique M2M subject token.
+const m2mCacheKey = "__m2m__"
+
+// getOrExchangeToken gets a cached LFX token or obtains a new one.
+// For user tokens, it performs RFC 8693 token exchange.
+// For M2M tokens (Auth0 @clients subject), it uses the client_credentials grant
+// because Auth0 cannot exchange M2M tokens via token exchange (no user to propagate).
 func (c *Clients) getOrExchangeToken(ctx context.Context, mcpToken string) (string, error) {
 	if c.tokenExchangeClient == nil {
 		return "", fmt.Errorf("token exchange client not configured")
 	}
 
+	// M2M tokens all share a single cached LFX token obtained via client_credentials.
+	useClientCredentials := isM2MToken(mcpToken)
+	cacheKey := mcpToken
+	if useClientCredentials {
+		cacheKey = m2mCacheKey
+	}
+
 	// Check cache first (read lock).
 	c.mu.RLock()
-	cached, exists := c.tokenCache[mcpToken]
+	cached, exists := c.tokenCache[cacheKey]
 	c.mu.RUnlock()
 
 	// Return cached token if valid.
@@ -430,25 +445,31 @@ func (c *Clients) getOrExchangeToken(ctx context.Context, mcpToken string) (stri
 		return cached.accessToken, nil
 	}
 
-	// Need to exchange token (write lock).
+	// Need to fetch token (write lock).
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	// Double-check cache in case another goroutine just updated it.
-	cached, exists = c.tokenCache[mcpToken]
+	cached, exists = c.tokenCache[cacheKey]
 	if exists && time.Now().Before(cached.expiry) {
 		return cached.accessToken, nil
 	}
 
-	// Perform token exchange.
-	resp, err := c.tokenExchangeClient.ExchangeToken(ctx, mcpToken)
+	// Obtain LFX token via the appropriate grant type.
+	var resp *TokenExchangeResponse
+	var err error
+	if useClientCredentials {
+		resp, err = c.tokenExchangeClient.ClientCredentials(ctx)
+	} else {
+		resp, err = c.tokenExchangeClient.ExchangeToken(ctx, mcpToken)
+	}
 	if err != nil {
 		return "", err
 	}
 
-	// Cache the exchanged token with 5-minute buffer.
+	// Cache the token with a 5-minute buffer before expiry.
 	expiryBuffer := 5 * time.Minute
-	c.tokenCache[mcpToken] = &cachedToken{
+	c.tokenCache[cacheKey] = &cachedToken{
 		accessToken: resp.AccessToken,
 		expiry:      time.Now().Add(time.Duration(resp.ExpiresIn)*time.Second - expiryBuffer),
 	}

@@ -149,44 +149,49 @@ func (c *TokenExchangeClient) generateClientAssertion() (string, error) {
 	return string(signed), nil
 }
 
-// ExchangeToken exchanges a subject token for a new access token per RFC 8693.
-func (c *TokenExchangeClient) ExchangeToken(ctx context.Context, subjectToken string) (*TokenExchangeResponse, error) {
-	// Build token exchange request per RFC 8693 Section 2.1.
-	data := url.Values{}
-	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
-	data.Set("client_id", c.config.ClientID)
-	data.Set("subject_token", subjectToken)
-	data.Set("subject_token_type", c.config.SubjectTokenType)
-	data.Set("audience", c.config.Audience)
+// isM2MToken reports whether token is a machine-to-machine (client credentials)
+// JWT, identified by Auth0's convention of a subject claim ending in "@clients".
+func isM2MToken(token string) bool {
+	parsed, err := jwt.ParseInsecure([]byte(token))
+	if err != nil {
+		return false
+	}
+	return strings.HasSuffix(parsed.Subject(), "@clients")
+}
 
-	// Use client assertion if signing key is provided, otherwise use client secret.
+// addClientAuth adds client authentication fields (secret or JWT assertion) to data.
+func (c *TokenExchangeClient) addClientAuth(data url.Values) error {
 	if c.config.ClientAssertionSigningKey != "" {
 		assertion, err := c.generateClientAssertion()
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate client assertion: %w", err)
+			return fmt.Errorf("failed to generate client assertion: %w", err)
 		}
 		data.Set("client_assertion", assertion)
 		data.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
 	} else {
 		data.Set("client_secret", c.config.ClientSecret)
 	}
+	return nil
+}
 
+// postTokenRequest sends a token request and returns the parsed response.
+func (c *TokenExchangeClient) postTokenRequest(ctx context.Context, data url.Values) (*TokenExchangeResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.config.TokenEndpoint, strings.NewReader(data.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create token exchange request: %w", err)
+		return nil, fmt.Errorf("failed to create token request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to exchange token: %w", err)
+		return nil, fmt.Errorf("failed to execute token request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read token exchange response: %w", err)
+		return nil, fmt.Errorf("failed to read token response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -195,8 +200,41 @@ func (c *TokenExchangeClient) ExchangeToken(ctx context.Context, subjectToken st
 
 	var tokenResp TokenExchangeResponse
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return nil, fmt.Errorf("failed to parse token exchange response: %w", err)
+		return nil, fmt.Errorf("failed to parse token response: %w", err)
 	}
 
 	return &tokenResp, nil
+}
+
+// ExchangeToken exchanges a subject token for a new access token per RFC 8693.
+func (c *TokenExchangeClient) ExchangeToken(ctx context.Context, subjectToken string) (*TokenExchangeResponse, error) {
+	data := url.Values{}
+	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
+	data.Set("client_id", c.config.ClientID)
+	data.Set("subject_token", subjectToken)
+	data.Set("subject_token_type", c.config.SubjectTokenType)
+	data.Set("audience", c.config.Audience)
+
+	if err := c.addClientAuth(data); err != nil {
+		return nil, err
+	}
+
+	return c.postTokenRequest(ctx, data)
+}
+
+// ClientCredentials obtains an LFX API token using the client_credentials grant.
+// This is used when the caller presents an M2M token, which Auth0 cannot exchange
+// via RFC 8693 token exchange (it requires a user subject). Instead, the MCP server
+// mints a fresh LFX token using its own client identity.
+func (c *TokenExchangeClient) ClientCredentials(ctx context.Context) (*TokenExchangeResponse, error) {
+	data := url.Values{}
+	data.Set("grant_type", "client_credentials")
+	data.Set("client_id", c.config.ClientID)
+	data.Set("audience", c.config.Audience)
+
+	if err := c.addClientAuth(data); err != nil {
+		return nil, err
+	}
+
+	return c.postTokenRequest(ctx, data)
 }

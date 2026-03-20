@@ -18,7 +18,7 @@ LDFLAGS=-ldflags="-s -w -X main.Version=$(VERSION)"
 
 # Docker variables
 DOCKER_IMAGE=linuxfoundation/lfx-mcp
-DOCKER_TAG=latest
+DOCKER_TAG=local
 
 # Default target
 all: clean check build
@@ -97,7 +97,7 @@ install-tools:
 # Build Docker image
 docker-build:
 	@echo "Building Docker image..."
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f Dockerfile .
+	docker build --build-arg VERSION=$(VERSION) -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f Dockerfile .
 	@echo "Docker image built: $(DOCKER_IMAGE):$(DOCKER_TAG)"
 
 # Show help

@@ -58,6 +58,8 @@ jobs:
 
       - name: Build and publish lfx-mcp-server image
         id: build
+        env:
+          VERSION: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           ko build github.com/linuxfoundation/lfx-mcp/cmd/lfx-mcp-server \

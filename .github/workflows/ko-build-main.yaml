@@ -27,7 +27,10 @@ jobs:
       - uses: ko-build/setup-ko@d006021bd0c28d1ce33a07e7943d48b079944c8d # v0.9
         with:
           version: v0.18.0
-      - run: |
+      - name: Build and publish lfx-mcp-server image
+        env:
+          VERSION: development-${{ github.sha }}
+        run: |
           ko build github.com/linuxfoundation/lfx-mcp/cmd/lfx-mcp-server \
             -B \
             --platform linux/amd64,linux/arm64 \

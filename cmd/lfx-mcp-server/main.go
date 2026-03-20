@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -486,7 +487,14 @@ func runHTTPServer(cfg Config) {
 		verifyToken := func(ctx context.Context, tokenString string, _ *http.Request) (*auth.TokenInfo, error) {
 			token, err := jwtVerifier.VerifyToken(ctx, tokenString)
 			if err != nil {
-				logger.Error("token verification failed", errKey, err)
+				if errors.Is(err, auth.ErrInvalidToken) {
+					// Expected invalid/expired token: log at debug and return as-is
+					// (jwt_verifier already wraps with auth.ErrInvalidToken).
+					logger.Debug("token verification failed", errKey, err)
+				} else {
+					// Infrastructure or unexpected verification failure: log at error level.
+					logger.Error("token verification failed", errKey, err)
+				}
 				return nil, err
 			}
 

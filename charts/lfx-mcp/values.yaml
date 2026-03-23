@@ -80,3 +80,34 @@ secrets:
     # assertions (used when authenticating with a JWT client assertion instead of a
     # client secret).
     clientAssertionSigningKey: client_assertion_signing_key
+# apiCredentials is a TEMPORARY stop-gap for MCP clients that cannot complete a full
+# OAuth2 authorization code flow. Remove this stanza once all clients support proper
+# OAuth2.
+#
+# NOTE: app.mcpApiAuthServers must also be set for API-key authentication to take
+# effect. apiCredentials is a fallback within the OAuth2 bearer-token middleware —
+# it is not an independent auth mechanism.
+#
+# When set, the Deployment will expose each consumer-key→secret pair as an individual
+# env var (LFXMCP_API_CREDENTIALS_<KEY>=<secret>) sourced from the referenced Secret.
+# Clients authenticate by passing the shared secret as "Authorization: Bearer <secret>".
+# Authenticated requests are granted the same scopes as an OAuth2 M2M
+# client_credentials token (read:all, manage:all).
+#
+# This stanza has NO default values and is entirely opt-in. Example:
+#
+#   apiCredentials:
+#     secretName: lfx-mcp-api-keys
+#     keys:
+#       my-client: my_client_api_key
+#
+# The Secret referenced by secretName must already exist before the chart is deployed.
+# Its data keys must match the values listed under apiCredentials.keys.
+#
+# apiCredentials:
+#   # secretName is the name of the pre-existing Kubernetes Secret holding the API key pairs.
+#   secretName: ""
+#   # keys maps API consumer identifiers (used as TokenInfo.UserID) to key names in the
+#   # Secret whose values are the corresponding shared-secret passwords.
+#   keys: {}
+#   #   my-client: my_client_api_key

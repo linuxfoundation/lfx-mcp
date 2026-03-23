@@ -86,12 +86,30 @@ func mcpTokenFromContext(ctx context.Context) string {
 	return ""
 }
 
+// apiKeyMCPToken is the sentinel value stored in the MCP token context when a
+// request was authenticated via a static API key. getOrExchangeToken recognises
+// this value and uses the client_credentials grant directly, bypassing the
+// RFC 8693 token-exchange path (which requires a real bearer token).
+//
+// TEMPORARY — remove when static API key support is retired.
+const apiKeyMCPToken = "__api_key__"
+
 // ExtractMCPToken extracts the raw MCP token from auth.TokenInfo.Extra.
 // This token can be passed to WithMCPToken for use in LFX API calls.
 // Returns an error if the token cannot be extracted.
+//
+// For requests authenticated via a static API key (Extra["api_key_auth"]==true),
+// the apiKeyMCPToken sentinel is returned so that the token-exchange layer uses
+// the client_credentials grant rather than attempting to exchange a bearer token.
 func ExtractMCPToken(tokenInfo *auth.TokenInfo) (string, error) {
 	if tokenInfo == nil || tokenInfo.Extra == nil {
 		return "", fmt.Errorf("tokenInfo or Extra map is nil")
+	}
+
+	// TEMPORARY: static API-key requests carry no bearer token; signal the
+	// token-exchange layer to use client_credentials instead.
+	if isAPIKey, _ := tokenInfo.Extra["api_key_auth"].(bool); isAPIKey {
+		return apiKeyMCPToken, nil
 	}
 
 	rawToken, ok := tokenInfo.Extra["raw_token"].(string)
@@ -434,13 +452,15 @@ const m2mCacheKey = "__m2m__"
 // For user tokens, it performs RFC 8693 token exchange.
 // For M2M tokens (Auth0 @clients subject), it uses the client_credentials grant
 // because Auth0 cannot exchange M2M tokens via token exchange (no user to propagate).
+// For static API-key requests (apiKeyMCPToken sentinel), it also uses the
+// client_credentials grant since there is no bearer token to exchange.
 func (c *Clients) getOrExchangeToken(ctx context.Context, mcpToken string) (string, error) {
 	if c.tokenExchangeClient == nil {
 		return "", fmt.Errorf("token exchange client not configured")
 	}
 
-	// M2M tokens all share a single cached LFX token obtained via client_credentials.
-	useClientCredentials := isM2MToken(mcpToken)
+	// API-key and M2M requests both use client_credentials; they share a cache entry.
+	useClientCredentials := mcpToken == apiKeyMCPToken || isM2MToken(mcpToken)
 	cacheKey := mcpToken
 	if useClientCredentials {
 		cacheKey = m2mCacheKey

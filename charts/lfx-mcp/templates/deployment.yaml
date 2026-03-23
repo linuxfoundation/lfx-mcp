@@ -72,6 +72,20 @@ spec:
                   name: {{ .Values.secrets.name }}
                   key: {{ .Values.secrets.keys.clientAssertionSigningKey }}
                   optional: true
+            {{- /*
+              TEMPORARY: Expose each API key credential as an individual env var
+              LFXMCP_API_CREDENTIALS_<KEY>=<secret> sourced from the Secret referenced by
+              apiCredentials.secretName. Remove this block when static API key support is retired.
+            */}}
+            {{- if and .Values.apiCredentials .Values.apiCredentials.secretName .Values.apiCredentials.keys }}
+            {{- range $consumerKey, $secretKey := .Values.apiCredentials.keys }}
+            - name: {{ printf "LFXMCP_API_CREDENTIALS_%s" ($consumerKey | upper) }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.apiCredentials.secretName }}
+                  key: {{ $secretKey }}
+            {{- end }}
+            {{- end }}
           ports:
             - name: web
               containerPort: {{ .Values.service.port }}

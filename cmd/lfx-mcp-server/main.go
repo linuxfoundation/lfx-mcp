@@ -44,6 +44,9 @@ type Config struct {
 	Tools                     []string     `koanf:"tools"`
 	Debug                     bool         `koanf:"debug"`
 	DebugTraffic              bool         `koanf:"debug_traffic"`
+	// APICredentials is a consumer-key→shared-secret map for static API-key auth.
+	// TEMPORARY: stop-gap for MCP clients that cannot complete OAuth2.
+	APICredentials map[string]string `koanf:"api_credentials"`
 }
 
 // HTTPConfig holds HTTP transport configuration.
@@ -165,6 +168,16 @@ func main() {
 			// Handle comma-separated lists.
 			if (key == "tools" || key == "mcp_api.auth_servers" || key == "mcp_api.scopes") && v != "" {
 				return key, strings.Split(v, ",")
+			}
+			// TEMPORARY: map LFXMCP_API_CREDENTIALS_<KEY>=<secret> env vars into the
+			// api_credentials koanf map. Each env var contributes one entry.
+			// Remove this block when static API key support is retired.
+			const apiCredPrefix = "api_credentials_"
+			if strings.HasPrefix(key, apiCredPrefix) {
+				credKey := strings.TrimPrefix(key, apiCredPrefix)
+				if credKey != "" {
+					return "api_credentials." + credKey, v
+				}
 			}
 			return key, v
 		},
@@ -495,7 +508,14 @@ func runHTTPServer(cfg Config) {
 	// accessible via kubectl port-forward but blocked from ingress traffic.
 	mux.Handle("/debug/vars", localhostOnly(expvar.Handler()))
 
-	// Apply OAuth bearer token middleware if auth servers are configured.
+	// TEMPORARY: build API-key verifier when credentials are configured.
+	// Returns nil when no credentials are set, so the check is zero-cost in the common path.
+	apiKeyVerifier := lfxauth.NewAPIKeyVerifier(cfg.APICredentials)
+	if apiKeyVerifier != nil {
+		logger.Info("static API-key authentication enabled (TEMPORARY)")
+	}
+
+	// Apply auth middleware to the /mcp handler.
 	var mcpHandler http.Handler = handler
 	if len(cfg.MCPAPI.AuthServers) > 0 {
 		// Use the public URL base for the resource metadata URL so that MCP clients
@@ -526,8 +546,22 @@ func runHTTPServer(cfg Config) {
 			os.Exit(1)
 		}
 
-		// Token verifier that performs full JWT signature verification.
+		// Token verifier that:
+		//  1. TEMPORARY: tries static API-key auth first when configured.
+		//  2. Falls back to full JWT signature verification.
 		verifyToken := func(ctx context.Context, tokenString string, _ *http.Request) (*auth.TokenInfo, error) {
+			// TEMPORARY: check whether the bearer value is a static API key.
+			if apiKeyVerifier != nil {
+				if info, handled, err := apiKeyVerifier.VerifyAPIKey(ctx, tokenString); handled {
+					if err != nil {
+						logger.Debug("api key verification failed", errKey, err)
+						return nil, err
+					}
+					return info, nil
+				}
+			}
+
+			// Standard JWT verification path.
 			token, err := jwtVerifier.VerifyToken(ctx, tokenString)
 			if err != nil {
 				if errors.Is(err, auth.ErrInvalidToken) {

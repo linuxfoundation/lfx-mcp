@@ -131,7 +131,7 @@ func RegisterSearchMailingLists(server *mcp.Server) {
 
 // handleGetMailingListService implements the get_mailing_list_service tool logic.
 func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, args GetMailingListServiceArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if mailingListConfig == nil {
 		logger.Error("mailing list tools not configured")
@@ -237,7 +237,7 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 
 // handleGetMailingList implements the get_mailing_list tool logic.
 func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args GetMailingListArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if mailingListConfig == nil {
 		logger.Error("mailing list tools not configured")
@@ -344,7 +344,7 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 
 // handleGetMailingListMember implements the get_mailing_list_member tool logic.
 func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, args GetMailingListMemberArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if mailingListConfig == nil {
 		logger.Error("mailing list tools not configured")
@@ -441,7 +441,7 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 
 // handleSearchMailingLists implements the search_mailing_lists tool logic.
 func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, args SearchMailingListsArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if mailingListConfig == nil {
 		logger.Error("mailing list tools not configured")
@@ -556,7 +556,7 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 
 // handleSearchMailingListMembers implements the search_mailing_list_members tool logic.
 func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchMailingListMembersArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if mailingListConfig == nil {
 		logger.Error("mailing list tools not configured")

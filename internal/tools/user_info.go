@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -48,7 +47,7 @@ func RegisterUserInfo(server *mcp.Server) {
 // handleUserInfo implements the user_info tool logic.
 func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArgs) (*mcp.CallToolResult, any, error) {
 	// Create MCP logger that sends logs to the client.
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if userInfoConfig == nil {
 		logger.Error("user_info tool not configured")

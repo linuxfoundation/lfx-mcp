@@ -253,7 +253,7 @@ type GetPastMeetingSummaryArgs struct {
 
 // handleSearchMeetings implements the search_meetings tool logic.
 func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingsArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if meetingConfig == nil {
 		logger.Error("meeting tools not configured")
@@ -399,7 +399,7 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 
 // handleGetMeeting implements the get_meeting tool logic.
 func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMeetingArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if meetingConfig == nil {
 		logger.Error("meeting tools not configured")
@@ -501,7 +501,7 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 
 // handleSearchMeetingRegistrants implements the search_meeting_registrants tool logic.
 func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingRegistrantsArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if meetingConfig == nil {
 		logger.Error("meeting tools not configured")
@@ -634,7 +634,7 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 
 // handleGetMeetingRegistrant implements the get_meeting_registrant tool logic.
 func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, args GetMeetingRegistrantArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if meetingConfig == nil {
 		logger.Error("meeting tools not configured")
@@ -766,7 +766,7 @@ func handleGetPastMeetingSummary(ctx context.Context, req *mcp.CallToolRequest, 
 
 // handleSearchPastMeetingResource is a shared implementation for searching past meeting resource types.
 func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest, resourceType, resourceLabel, meetingID, committeeUID, projectUID, name string, filters []string, sort string, pageSize int, pageToken string) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if meetingConfig == nil {
 		logger.Error("meeting tools not configured")
@@ -896,7 +896,7 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 
 // handleGetPastMeetingResource is a shared implementation for getting a past meeting resource by UID.
 func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest, resourceType, resourceLabel, uid string) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if meetingConfig == nil {
 		logger.Error("meeting tools not configured")

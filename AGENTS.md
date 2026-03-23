@@ -490,6 +490,9 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 | `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | PEM-encoded RSA private key for client assertion | - | No |
 | `LFXMCP_TOKEN_ENDPOINT` | OAuth2 token endpoint URL for token exchange | - | No |
 | `LFXMCP_LFX_API_URL` | LFX API URL (used as token exchange audience) | - | No |
+| `LFXMCP_ONBOARDING_API_URL` | Base URL of the member onboarding service | - | No |
+| `LFXMCP_LENS_API_URL` | Base URL of the LFX Lens service | - | No |
+| `LFXMCP_LF_AI_API_KEY` | Shared API key for LF AI service APIs (onboarding, lens) | - | No |
 
 **Example:**
 

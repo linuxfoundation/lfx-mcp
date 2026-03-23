@@ -7,7 +7,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -34,7 +33,7 @@ func RegisterHelloWorld(server *mcp.Server) {
 // handleHelloWorld implements the hello_world tool logic.
 func handleHelloWorld(_ context.Context, req *mcp.CallToolRequest, args HelloWorldArgs) (*mcp.CallToolResult, any, error) {
 	// Create MCP logger that sends logs to the client.
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	// Extract name parameter with default.
 	name := "World"

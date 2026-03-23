@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	memberservice "github.com/linuxfoundation/lfx-v2-member-service/gen/membership_service"
@@ -101,7 +100,7 @@ func RegisterDeleteMembershipKeyContact(server *mcp.Server) {
 // --- Handlers ---
 
 func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest, args CreateMembershipKeyContactArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if memberConfig == nil {
 		logger.Error("member tools not configured")
@@ -209,7 +208,7 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 }
 
 func handleUpdateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest, args UpdateMembershipKeyContactArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if memberConfig == nil {
 		logger.Error("member tools not configured")
@@ -298,7 +297,7 @@ func handleUpdateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 }
 
 func handleDeleteMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest, args DeleteMembershipKeyContactArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if memberConfig == nil {
 		logger.Error("member tools not configured")

@@ -225,7 +225,7 @@ func RegisterDeleteCommitteeMember(server *mcp.Server) {
 // committeeWriteClients creates LFX v2 clients for committee write operations,
 // returning the clients and MCP logger, or an error tool result.
 func committeeWriteClients(ctx context.Context, req *mcp.CallToolRequest) (context.Context, *lfxv2.Clients, *slog.Logger, *mcp.CallToolResult) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if committeeConfig == nil {
 		logger.Error("committee tools not configured")

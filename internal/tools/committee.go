@@ -114,7 +114,7 @@ type SearchCommitteeMembersArgs struct {
 
 // handleSearchCommittees implements the search_committees tool logic.
 func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteesArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if committeeConfig == nil {
 		logger.Error("committee tools not configured")
@@ -233,7 +233,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 // handleGetCommittee implements the get_committee tool logic, fetching both base
 // info and settings for the given committee UID.
 func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetCommitteeArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if committeeConfig == nil {
 		logger.Error("committee tools not configured")
@@ -342,7 +342,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 
 // handleGetCommitteeMember implements the get_committee_member tool logic.
 func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, args GetCommitteeMemberArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if committeeConfig == nil {
 		logger.Error("committee tools not configured")
@@ -439,7 +439,7 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 
 // handleSearchCommitteeMembers implements the search_committee_members tool logic.
 func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteeMembersArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if committeeConfig == nil {
 		logger.Error("committee tools not configured")

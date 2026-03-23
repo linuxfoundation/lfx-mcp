@@ -71,7 +71,7 @@ type GetProjectArgs struct {
 
 // handleSearchProjects implements the search_projects tool logic.
 func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args SearchProjectsArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if projectConfig == nil {
 		logger.Error("project tools not configured")
@@ -178,7 +178,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 // handleGetProject implements the get_project tool logic, fetching both base
 // info and settings for the given project UID.
 func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetProjectArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if projectConfig == nil {
 		logger.Error("project tools not configured")
@@ -242,15 +242,15 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 		}, nil, nil
 	}
 
-	// Settings may be unavailable due to insufficient permissions; treat that
-	// as a partial result rather than a hard failure so callers still get the
-	// base data they are authorised to see.
+	// Settings may be unavailable (e.g. insufficient permissions, or a response
+	// decode failure); treat that as a partial result rather than a hard failure
+	// so callers still get the base data they are authorised to see.
 	var projectSettings *projectservice.ProjectSettings
 	settingsResult, err := clients.Project.GetOneProjectSettings(ctx, &projectservice.GetOneProjectSettingsPayload{
 		UID: &args.UID,
 	})
 	if err != nil {
-		logger.Warn("getting privileged project settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
+		logger.Error("getting project settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
 	} else {
 		projectSettings = settingsResult.ProjectSettings
 	}

@@ -144,7 +144,7 @@ func RegisterGetMembershipKeyContact(server *mcp.Server) {
 
 // handleSearchMembers implements the search_members tool logic.
 func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchMembersArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if memberConfig == nil {
 		logger.Error("member tools not configured")
@@ -260,7 +260,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 
 // handleGetMemberMembership implements the get_member_membership tool logic.
 func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, args GetMemberMembershipArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if memberConfig == nil {
 		logger.Error("member tools not configured")
@@ -358,7 +358,7 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 
 // handleListProjectTiers implements the list_project_tiers tool logic.
 func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args ListProjectTiersArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if memberConfig == nil {
 		logger.Error("member tools not configured")
@@ -446,7 +446,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 
 // handleGetProjectTier implements the get_project_tier tool logic.
 func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args GetProjectTierArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if memberConfig == nil {
 		logger.Error("member tools not configured")
@@ -544,7 +544,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 
 // handleGetMembershipKeyContacts implements the get_membership_key_contacts tool logic.
 func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolRequest, args GetMembershipKeyContactsArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if memberConfig == nil {
 		logger.Error("member tools not configured")
@@ -642,7 +642,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 
 // handleGetMembershipKeyContact implements the get_membership_key_contact tool logic.
 func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest, args GetMembershipKeyContactArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(req)
 
 	if memberConfig == nil {
 		logger.Error("member tools not configured")

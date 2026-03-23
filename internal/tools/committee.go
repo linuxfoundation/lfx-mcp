@@ -76,7 +76,7 @@ func RegisterGetCommitteeMember(server *mcp.Server) {
 func RegisterSearchCommitteeMembers(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_committee_members",
-		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID (v2), and/or name. At least one filter is recommended but not required.",
+		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID, and/or name. At least one filter is recommended but not required.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Committee Members",
 			ReadOnlyHint: true,
@@ -87,26 +87,26 @@ func RegisterSearchCommitteeMembers(server *mcp.Server) {
 // SearchCommitteesArgs defines the input parameters for the search_committees tool.
 type SearchCommitteesArgs struct {
 	Name       string `json:"name,omitempty" jsonschema:"Name or partial name of the committee to search for"`
-	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Optional v2 project UID to filter committees by project (e.g. a27394a3-7a6c-4d0f-9e0f-692d8753924f)"`
+	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter committees by project"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // GetCommitteeArgs defines the input parameters for the get_committee tool.
 type GetCommitteeArgs struct {
-	UID string `json:"uid" jsonschema:"The v2 UID of the committee to retrieve"`
+	UID string `json:"uid" jsonschema:"The UID of the committee to retrieve"`
 }
 
 // GetCommitteeMemberArgs defines the input parameters for the get_committee_member tool.
 type GetCommitteeMemberArgs struct {
-	CommitteeUID string `json:"committee_uid" jsonschema:"The v2 UID of the committee"`
-	MemberUID    string `json:"member_uid" jsonschema:"The v2 UID of the committee member"`
+	CommitteeUID string `json:"committee_uid" jsonschema:"The UID of the committee"`
+	MemberUID    string `json:"member_uid" jsonschema:"The UID of the committee member"`
 }
 
 // SearchCommitteeMembersArgs defines the input parameters for the search_committee_members tool.
 type SearchCommitteeMembersArgs struct {
-	CommitteeUID string `json:"committee_uid,omitempty" jsonschema:"Optional v2 UID of the committee to filter members by"`
-	ProjectUID   string `json:"project_uid,omitempty" jsonschema:"Optional v2 project UID to filter committee members by project (e.g. a27394a3-7a6c-4d0f-9e0f-692d8753924f)"`
+	CommitteeUID string `json:"committee_uid,omitempty" jsonschema:"Optional UID of the committee to filter members by"`
+	ProjectUID   string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter committee members by project"`
 	Name         string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
 	PageSize     int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`

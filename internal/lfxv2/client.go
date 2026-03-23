@@ -198,6 +198,17 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		committeeHTTPClient.GetCommitteeMember(),
 		committeeHTTPClient.UpdateCommitteeMember(),
 		committeeHTTPClient.DeleteCommitteeMember(),
+		committeeHTTPClient.GetInvite(),
+		committeeHTTPClient.CreateInvite(),
+		committeeHTTPClient.RevokeInvite(),
+		committeeHTTPClient.AcceptInvite(),
+		committeeHTTPClient.DeclineInvite(),
+		committeeHTTPClient.GetApplication(),
+		committeeHTTPClient.SubmitApplication(),
+		committeeHTTPClient.ApproveApplication(),
+		committeeHTTPClient.RejectApplication(),
+		committeeHTTPClient.JoinCommittee(),
+		committeeHTTPClient.LeaveCommittee(),
 	)
 
 	// Initialize mailing list service client.

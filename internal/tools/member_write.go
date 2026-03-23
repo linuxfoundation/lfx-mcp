@@ -20,7 +20,7 @@ import (
 // CreateMembershipKeyContactArgs defines the input parameters for the
 // create_membership_key_contact tool.
 type CreateMembershipKeyContactArgs struct {
-	ProjectUID     string  `json:"project_uid" jsonschema:"V2 project UUID"`
+	ProjectUID     string  `json:"project_uid" jsonschema:"Project UUID"`
 	ID             string  `json:"id" jsonschema:"Membership UID"`
 	Email          string  `json:"email" jsonschema:"Contact email address; used to resolve or create the Salesforce Contact record"`
 	FirstName      string  `json:"first_name" jsonschema:"Contact first name; used when creating a new Contact on miss"`
@@ -36,7 +36,7 @@ type CreateMembershipKeyContactArgs struct {
 // update_membership_key_contact tool. Only provided (non-nil) fields are
 // updated; omitted fields retain their current values.
 type UpdateMembershipKeyContactArgs struct {
-	ProjectUID     string  `json:"project_uid" jsonschema:"V2 project UUID"`
+	ProjectUID     string  `json:"project_uid" jsonschema:"Project UUID"`
 	ID             string  `json:"id" jsonschema:"Membership UID"`
 	Cid            string  `json:"cid" jsonschema:"Key contact UID"`
 	Role           *string `json:"role,omitempty" jsonschema:"Contact role designation, e.g. 'Voting Representative'"`
@@ -48,7 +48,7 @@ type UpdateMembershipKeyContactArgs struct {
 // DeleteMembershipKeyContactArgs defines the input parameters for the
 // delete_membership_key_contact tool.
 type DeleteMembershipKeyContactArgs struct {
-	ProjectUID string `json:"project_uid" jsonschema:"V2 project UUID"`
+	ProjectUID string `json:"project_uid" jsonschema:"Project UUID"`
 	ID         string `json:"id" jsonschema:"Membership UID"`
 	Cid        string `json:"cid" jsonschema:"Key contact UID to remove"`
 }

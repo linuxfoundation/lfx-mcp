@@ -90,9 +90,12 @@ var defaultTools = []string{
 	"get_mailing_list_member",
 	"search_mailing_lists",
 	"search_mailing_list_members",
+	"list_project_tiers",
+	"get_project_tier",
 	"search_members",
 	"get_member_membership",
 	"get_membership_key_contacts",
+	"get_membership_key_contact",
 	"create_membership_key_contact",
 	"update_membership_key_contact",
 	"delete_membership_key_contact",
@@ -389,6 +392,12 @@ func newServer(cfg Config) *mcp.Server {
 	if enabledTools["search_mailing_list_members"] {
 		tools.RegisterSearchMailingListMembers(server)
 	}
+	if enabledTools["list_project_tiers"] {
+		tools.RegisterListProjectTiers(server)
+	}
+	if enabledTools["get_project_tier"] {
+		tools.RegisterGetProjectTier(server)
+	}
 	if enabledTools["search_members"] {
 		tools.RegisterSearchMembers(server)
 	}
@@ -397,6 +406,9 @@ func newServer(cfg Config) *mcp.Server {
 	}
 	if enabledTools["get_membership_key_contacts"] {
 		tools.RegisterGetMembershipKeyContacts(server)
+	}
+	if enabledTools["get_membership_key_contact"] {
+		tools.RegisterGetMembershipKeyContact(server)
 	}
 	if enabledTools["create_membership_key_contact"] {
 		tools.RegisterCreateMembershipKeyContact(server)

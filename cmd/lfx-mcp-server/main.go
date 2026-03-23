@@ -25,6 +25,7 @@ import (
 	"github.com/knadh/koanf/v2"
 	lfxauth "github.com/linuxfoundation/lfx-mcp/internal/auth"
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
+	"github.com/linuxfoundation/lfx-mcp/internal/serviceapi"
 	"github.com/linuxfoundation/lfx-mcp/internal/tools"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -47,6 +48,11 @@ type Config struct {
 	// APICredentials is a consumer-key→shared-secret map for static API-key auth.
 	// TEMPORARY: stop-gap for MCP clients that cannot complete OAuth2.
 	APICredentials map[string]string `koanf:"api_credentials"`
+
+	// Service API configuration.
+	OnboardingAPIURL string `koanf:"onboarding_api_url"`
+	LensAPIURL       string `koanf:"lens_api_url"`
+	LFAIAPIKey       string `koanf:"lf_ai_api_key"`
 }
 
 // HTTPConfig holds HTTP transport configuration.
@@ -112,6 +118,8 @@ var defaultTools = []string{
 	"get_past_meeting_transcript",
 	"search_past_meeting_summaries",
 	"get_past_meeting_summary",
+	"onboarding_list_memberships",
+	"lfx_lens_query",
 }
 
 var logger *slog.Logger
@@ -139,6 +147,9 @@ func main() {
 	f.String("tools", strings.Join(defaultTools, ","), "Comma-separated list of tools to enable")
 	f.Bool("debug", false, "Enable debug logging")
 	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls")
+	f.String("onboarding_api_url", "", "Base URL of the member onboarding service")
+	f.String("lens_api_url", "", "Base URL of the LFX Lens service")
+	f.String("lf_ai_api_key", "", "Shared API key for LF AI service APIs (onboarding, lens)")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
@@ -270,6 +281,56 @@ func main() {
 				TokenExchangeClient: tokenExchangeClient,
 				DebugLogger:         debugLogger,
 			})
+
+			// Configure service API infrastructure (shared across onboarding, lens, etc.).
+			if cfg.LFAIAPIKey != "" {
+				slugResolver := lfxv2.NewSlugResolver()
+				accessChecker := lfxv2.NewAccessCheckClient(cfg.LFXAPIURL, &http.Client{Timeout: 30 * time.Second})
+
+				sharedAuth := tools.ServiceAuth{
+					LFXAPIURL:           cfg.LFXAPIURL,
+					TokenExchangeClient: tokenExchangeClient,
+					DebugLogger:         debugLogger,
+					SlugResolver:        slugResolver,
+					AccessChecker:       accessChecker,
+				}
+
+				if cfg.OnboardingAPIURL != "" {
+					onboardingClient, err := serviceapi.NewClient(serviceapi.Config{
+						BaseURL:     cfg.OnboardingAPIURL,
+						APIKey:      cfg.LFAIAPIKey,
+						HTTPClient:  &http.Client{Timeout: 30 * time.Second},
+						DebugLogger: debugLogger,
+					})
+					if err != nil {
+						logger.Warn("failed to create onboarding service client", errKey, err)
+					} else {
+						tools.SetOnboardingConfig(&tools.OnboardingConfig{
+							ServiceAuth:   sharedAuth,
+							ServiceClient: onboardingClient,
+						})
+						logger.Info("onboarding service tools configured", "url", cfg.OnboardingAPIURL)
+					}
+				}
+
+				if cfg.LensAPIURL != "" {
+					lensClient, err := serviceapi.NewClient(serviceapi.Config{
+						BaseURL:     cfg.LensAPIURL,
+						APIKey:      cfg.LFAIAPIKey,
+						HTTPClient:  &http.Client{Timeout: 120 * time.Second},
+						DebugLogger: debugLogger,
+					})
+					if err != nil {
+						logger.Warn("failed to create Lens service client", errKey, err)
+					} else {
+						tools.SetLensConfig(&tools.LensConfig{
+							ServiceAuth:   sharedAuth,
+							ServiceClient: lensClient,
+						})
+						logger.Info("LFX Lens tools configured", "url", cfg.LensAPIURL)
+					}
+				}
+			}
 		}
 	}
 
@@ -463,6 +524,14 @@ func newServer(cfg Config) *mcp.Server {
 		tools.RegisterGetPastMeetingSummary(server)
 	}
 
+	// Service API tools.
+	if enabledTools["onboarding_list_memberships"] {
+		tools.RegisterOnboardingListMemberships(server)
+	}
+	if enabledTools["lfx_lens_query"] {
+		tools.RegisterLFXLensQuery(server)
+	}
+
 	return server
 }
 
@@ -581,9 +650,14 @@ func runHTTPServer(cfg Config) {
 				userID = "_anonymous"
 			}
 
-			// Store raw token in Extra for use in token exchange.
+			// Store raw token and custom claims in Extra for use by tool handlers.
 			extra := make(map[string]any)
 			extra["raw_token"] = tokenString
+
+			// Extract lf_staff custom claim for service tool authorization (LFX Lens).
+			if staffClaim, ok := token.Get(tools.ClaimLFStaff); ok {
+				extra[tools.ClaimLFStaff] = staffClaim
+			}
 
 			return &auth.TokenInfo{
 				UserID:     userID,

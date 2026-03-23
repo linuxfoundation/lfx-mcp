@@ -66,7 +66,7 @@ type SearchProjectsArgs struct {
 
 // GetProjectArgs defines the input parameters for the get_project tool.
 type GetProjectArgs struct {
-	UID string `json:"uid" jsonschema:"The v2 UID of the project to retrieve"`
+	UID string `json:"uid" jsonschema:"The UID of the project to retrieve"`
 }
 
 // handleSearchProjects implements the search_projects tool logic.

@@ -38,24 +38,24 @@ func SetMailingListConfig(cfg *MailingListConfig) {
 
 // GetMailingListServiceArgs defines the input parameters for the get_mailing_list_service tool.
 type GetMailingListServiceArgs struct {
-	UID string `json:"uid" jsonschema:"The v2 UID of the mailing list service to retrieve"`
+	UID string `json:"uid" jsonschema:"The UID of the mailing list service to retrieve"`
 }
 
 // GetMailingListArgs defines the input parameters for the get_mailing_list tool.
 type GetMailingListArgs struct {
-	UID string `json:"uid" jsonschema:"The v2 UID of the mailing list to retrieve"`
+	UID string `json:"uid" jsonschema:"The UID of the mailing list to retrieve"`
 }
 
 // GetMailingListMemberArgs defines the input parameters for the get_mailing_list_member tool.
 type GetMailingListMemberArgs struct {
-	MailingListUID string `json:"mailing_list_uid" jsonschema:"The v2 UID of the mailing list"`
-	MemberUID      string `json:"member_uid" jsonschema:"The v2 UID of the mailing list member"`
+	MailingListUID string `json:"mailing_list_uid" jsonschema:"The UID of the mailing list"`
+	MemberUID      string `json:"member_uid" jsonschema:"The UID of the mailing list member"`
 }
 
 // SearchMailingListMembersArgs defines the input parameters for the search_mailing_list_members tool.
 type SearchMailingListMembersArgs struct {
-	MailingListUID string `json:"mailing_list_uid,omitempty" jsonschema:"Optional v2 UID of the mailing list to filter members by"`
-	ProjectUID     string `json:"project_uid,omitempty" jsonschema:"Optional v2 project UID to filter mailing list members by project"`
+	MailingListUID string `json:"mailing_list_uid,omitempty" jsonschema:"Optional UID of the mailing list to filter members by"`
+	ProjectUID     string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter mailing list members by project"`
 	Name           string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
 	PageSize       int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10)"`
 	PageToken      string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
@@ -64,7 +64,7 @@ type SearchMailingListMembersArgs struct {
 // SearchMailingListsArgs defines the input parameters for the search_mailing_lists tool.
 type SearchMailingListsArgs struct {
 	Name       string `json:"name,omitempty" jsonschema:"Name or partial name of the mailing list to search for"`
-	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Optional v2 project UID to filter mailing lists by project (e.g. a27394a3-7a6c-4d0f-9e0f-692d8753924f)"`
+	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter mailing lists by project"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10)"`
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -109,7 +109,7 @@ func RegisterGetMailingListMember(server *mcp.Server) {
 func RegisterSearchMailingListMembers(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_mailing_list_members",
-		Description: "Search for LFX mailing list members. Optionally filter by mailing list UID, project UID (v2), and/or name. At least one filter is recommended but not required.",
+		Description: "Search for LFX mailing list members. Optionally filter by mailing list UID, project UID, and/or name. At least one filter is recommended but not required.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Mailing List Members",
 			ReadOnlyHint: true,

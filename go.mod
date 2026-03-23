@@ -7,11 +7,11 @@ go 1.26.0
 require (
 	github.com/knadh/koanf/providers/basicflag v1.1.0
 	github.com/knadh/koanf/providers/env/v2 v2.0.0
-	github.com/knadh/koanf/v2 v2.3.3
+	github.com/knadh/koanf/v2 v2.3.4
 	github.com/lestrrat-go/jwx/v2 v2.1.6
-	github.com/linuxfoundation/lfx-v2-committee-service v0.2.20
-	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.1.10
-	github.com/linuxfoundation/lfx-v2-member-service v0.3.0
+	github.com/linuxfoundation/lfx-v2-committee-service v0.2.22
+	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.3.0
+	github.com/linuxfoundation/lfx-v2-member-service v0.3.1
 	github.com/linuxfoundation/lfx-v2-project-service v0.5.7
 	github.com/linuxfoundation/lfx-v2-query-service v0.4.12
 	github.com/modelcontextprotocol/go-sdk v1.4.1
@@ -22,7 +22,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/go-chi/chi/v5 v5.2.5 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/goccy/go-json v0.10.5 // indirect
+	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect

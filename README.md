@@ -97,10 +97,11 @@ Before hitting **Connect**, follow the **Open Auth Settings** button, then selec
 
 ### Projects
 
-| Tool | Description |
-|------|-------------|
-| `search_projects` | Search for LFX projects by name with typeahead and pagination |
-| `get_project` | Get a project's base info and settings by UID |
+| Tool                  | Description                                                                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_projects`     | Search for LFX projects by name; optionally filter by parent project UID to list child projects                                        |
+| `get_project`         | Get a project's base info and settings by UID                                                                                          |
+| `get_project_summary` | Get a rolled-up fact sheet for a project: child project count, committee count, working group count, meeting count, plus base metadata |
 
 ### Committees
 

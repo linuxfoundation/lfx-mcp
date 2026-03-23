@@ -74,6 +74,7 @@ const errKey = "error"
 var defaultTools = []string{
 	"search_projects",
 	"get_project",
+	"get_project_summary",
 	"search_committees",
 	"get_committee",
 	"get_committee_member",
@@ -343,6 +344,9 @@ func newServer(cfg Config) *mcp.Server {
 	}
 	if enabledTools["get_project"] {
 		tools.RegisterGetProject(server)
+	}
+	if enabledTools["get_project_summary"] {
+		tools.RegisterGetProjectSummary(server)
 	}
 	if enabledTools["search_committees"] {
 		tools.RegisterSearchCommittees(server)

@@ -11,17 +11,35 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// loggerContextKey is the unexported key type used to store a contextual logger.
+type loggerContextKey struct{}
+
+// WithLogger returns a new context with the given logger stored in it.
+// The middleware calls this before invoking the tool handler so that
+// session_id and mcp_method are pre-bound on every log record.
+func WithLogger(ctx context.Context, l *slog.Logger) context.Context {
+	return context.WithValue(ctx, loggerContextKey{}, l)
+}
+
+// loggerFromContext retrieves the contextual logger stored by WithLogger, or
+// falls back to slog.Default() when no logger has been stored.
+func loggerFromContext(ctx context.Context) *slog.Logger {
+	if l, ok := ctx.Value(loggerContextKey{}).(*slog.Logger); ok && l != nil {
+		return l
+	}
+	return slog.Default()
+}
+
 // newToolLogger returns a logger that writes to both the MCP client session
-// (so the AI sees log output) and the server's default system logger (so
-// operators see it in server stdout/stderr).
+// (so the AI sees log output) and the server-side contextual logger (so
+// operators see it in server stdout/stderr with session_id/mcp_method
+// pre-bound from context).
 //
-// Use this for all tool log calls that matter to operators — errors, warnings,
-// and key informational events. For messages that are only useful to the MCP
-// client (e.g. "N results were filtered by permissions"), call
-// newToolLogger(req) directly instead.
-func newToolLogger(req *mcp.CallToolRequest) *slog.Logger {
+// Use logger.XxxContext(ctx, ...) with the returned logger so the active OTel
+// span's trace_id and span_id are injected into every log record.
+func newToolLogger(ctx context.Context, req *mcp.CallToolRequest) *slog.Logger {
 	mcpHandler := mcp.NewLoggingHandler(req.Session, nil)
-	sysHandler := slog.Default().Handler()
+	sysHandler := loggerFromContext(ctx).Handler()
 	return slog.New(&teeHandler{mcp: mcpHandler, sys: sysHandler})
 }
 

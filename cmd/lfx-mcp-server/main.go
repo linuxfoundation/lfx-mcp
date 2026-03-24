@@ -32,6 +32,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	slogotel "github.com/remychantenay/slog-otel"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Config holds all configuration for the LFX MCP server.
@@ -336,23 +338,35 @@ func mcpLoggingMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 			start := time.Now()
 			sessionID := req.GetSession().ID()
 
+			// Bind mcp.session.id and mcp.method.name onto a child logger and
+			// store it in context so every tool handler that calls
+			// newToolLogger(ctx, req) automatically inherits both fields on all
+			// log records.
+			callLogger := serverLogger.With("mcp.session.id", sessionID, "mcp.method.name", method)
+			ctx = tools.WithLogger(ctx, callLogger)
+
+			// Tag the active OTel span with MCP semconv attributes per
+			// https://opentelemetry.io/docs/specs/semconv/gen-ai/mcp/ so APM
+			// can filter and group by method and session without parsing logs.
+			span := trace.SpanFromContext(ctx)
+			span.SetAttributes(
+				semconv.McpMethodNameKey.String(method),
+				semconv.McpSessionID(sessionID),
+			)
+
 			// Call the actual handler.
 			result, err := next(ctx, method, req)
 
 			// Log completion.
 			duration := time.Since(start)
 			if err != nil {
-				serverLogger.Warn("mcp method call failed",
-					"session_id", sessionID,
-					"method", method,
+				callLogger.WarnContext(ctx, "mcp method call failed",
 					"duration_ms", duration.Milliseconds(),
 					"error", err,
 				)
 			} else {
 				// DEBUG only: observable via APM spans; INFO would violate ADR-0002.
-				serverLogger.Debug("mcp method call completed",
-					"session_id", sessionID,
-					"method", method,
+				callLogger.DebugContext(ctx, "mcp method call completed",
 					"duration_ms", duration.Milliseconds(),
 				)
 			}

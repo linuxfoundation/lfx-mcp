@@ -42,14 +42,14 @@ type SearchMembersArgs struct {
 
 // GetMemberMembershipArgs defines the input parameters for the get_member_membership tool.
 type GetMemberMembershipArgs struct {
-	ProjectUID string `json:"project_uid" jsonschema:"Project UUID"`
-	ID         string `json:"id" jsonschema:"The membership UID"`
+	ProjectUID    string `json:"project_uid" jsonschema:"Project UUID"`
+	MembershipUID string `json:"membership_uid" jsonschema:"The membership UID"`
 }
 
 // GetMembershipKeyContactsArgs defines the input parameters for the get_membership_key_contacts tool.
 type GetMembershipKeyContactsArgs struct {
-	ProjectUID string `json:"project_uid" jsonschema:"Project UUID"`
-	ID         string `json:"id" jsonschema:"The membership UID"`
+	ProjectUID    string `json:"project_uid" jsonschema:"Project UUID"`
+	MembershipUID string `json:"membership_uid" jsonschema:"The membership UID"`
 }
 
 // ListProjectTiersArgs defines the input parameters for the list_project_tiers tool.
@@ -60,14 +60,134 @@ type ListProjectTiersArgs struct {
 // GetProjectTierArgs defines the input parameters for the get_project_tier tool.
 type GetProjectTierArgs struct {
 	ProjectUID string `json:"project_uid" jsonschema:"Project UUID (required)"`
-	TierID     string `json:"tier_id" jsonschema:"Membership tier UID"`
+	TierUID    string `json:"tier_uid" jsonschema:"Membership tier UID"`
 }
 
 // GetMembershipKeyContactArgs defines the input parameters for the get_membership_key_contact tool.
 type GetMembershipKeyContactArgs struct {
-	ProjectUID string `json:"project_uid" jsonschema:"Project UUID"`
-	ID         string `json:"id" jsonschema:"The membership UID"`
-	Cid        string `json:"cid" jsonschema:"Key contact UID"`
+	ProjectUID    string `json:"project_uid" jsonschema:"Project UUID"`
+	MembershipUID string `json:"membership_uid" jsonschema:"The membership UID"`
+	ContactUID    string `json:"contact_uid" jsonschema:"Key contact UID"`
+}
+
+// membershipTierView is a filtered view of MembershipTierResponse for MCP
+// responses. Redundant fields that are either required inputs or always
+// constant are omitted: project_uid (required input), family (always
+// "Membership"), and product_type (always null).
+type membershipTierView struct {
+	UID       *string `json:"uid,omitempty"`
+	Name      *string `json:"name,omitempty"`
+	CreatedAt *string `json:"created_at,omitempty"`
+	UpdatedAt *string `json:"updated_at,omitempty"`
+}
+
+// membershipView is a filtered view of ProjectMembershipResponse for MCP
+// responses. Redundant fields omitted: project_uid (required input),
+// tier_family (always "Membership"), tier_product_type (always null), and
+// membership_type (a raw Salesforce record type ID, not useful to callers).
+type membershipView struct {
+	UID              *string  `json:"uid,omitempty"`
+	TierUID          *string  `json:"tier_uid,omitempty"`
+	Status           *string  `json:"status,omitempty"`
+	Year             *string  `json:"year,omitempty"`
+	Tier             *string  `json:"tier,omitempty"`
+	AutoRenew        *bool    `json:"auto_renew,omitempty"`
+	RenewalType      *string  `json:"renewal_type,omitempty"`
+	Price            *float64 `json:"price,omitempty"`
+	AnnualFullPrice  *float64 `json:"annual_full_price,omitempty"`
+	PaymentFrequency *string  `json:"payment_frequency,omitempty"`
+	PaymentTerms     *string  `json:"payment_terms,omitempty"`
+	AgreementDate    *string  `json:"agreement_date,omitempty"`
+	PurchaseDate     *string  `json:"purchase_date,omitempty"`
+	StartDate        *string  `json:"start_date,omitempty"`
+	EndDate          *string  `json:"end_date,omitempty"`
+	CompanyName      *string  `json:"company_name,omitempty"`
+	CompanyLogoURL   *string  `json:"company_logo_url,omitempty"`
+	CompanyDomain    *string  `json:"company_domain,omitempty"`
+	TierName         *string  `json:"tier_name,omitempty"`
+	CreatedAt        *string  `json:"created_at,omitempty"`
+	UpdatedAt        *string  `json:"updated_at,omitempty"`
+}
+
+// keyContactView is a filtered view of ProjectKeyContactResponse for MCP
+// responses. Redundant fields omitted: tier_uid (a degree removed from the
+// contact and not directly useful), project_uid (required input), and
+// membership_uid (the id required input).
+type keyContactView struct {
+	UID            *string `json:"uid,omitempty"`
+	Role           *string `json:"role,omitempty"`
+	Status         *string `json:"status,omitempty"`
+	BoardMember    *bool   `json:"board_member,omitempty"`
+	PrimaryContact *bool   `json:"primary_contact,omitempty"`
+	FirstName      *string `json:"first_name,omitempty"`
+	LastName       *string `json:"last_name,omitempty"`
+	Title          *string `json:"title,omitempty"`
+	Email          *string `json:"email,omitempty"`
+	CompanyName    *string `json:"company_name,omitempty"`
+	CompanyLogoURL *string `json:"company_logo_url,omitempty"`
+	CompanyDomain  *string `json:"company_domain,omitempty"`
+	CreatedAt      *string `json:"created_at,omitempty"`
+	UpdatedAt      *string `json:"updated_at,omitempty"`
+}
+
+// toMembershipTierView converts a MembershipTierResponse to the filtered MCP
+// view, dropping redundant fields.
+func toMembershipTierView(t *memberservice.MembershipTierResponse) membershipTierView {
+	return membershipTierView{
+		UID:       t.UID,
+		Name:      t.Name,
+		CreatedAt: t.CreatedAt,
+		UpdatedAt: t.UpdatedAt,
+	}
+}
+
+// toMembershipView converts a ProjectMembershipResponse to the filtered MCP
+// view, dropping redundant fields.
+func toMembershipView(m *memberservice.ProjectMembershipResponse) membershipView {
+	return membershipView{
+		UID:              m.UID,
+		TierUID:          m.TierUID,
+		Status:           m.Status,
+		Year:             m.Year,
+		Tier:             m.Tier,
+		AutoRenew:        m.AutoRenew,
+		RenewalType:      m.RenewalType,
+		Price:            m.Price,
+		AnnualFullPrice:  m.AnnualFullPrice,
+		PaymentFrequency: m.PaymentFrequency,
+		PaymentTerms:     m.PaymentTerms,
+		AgreementDate:    m.AgreementDate,
+		PurchaseDate:     m.PurchaseDate,
+		StartDate:        m.StartDate,
+		EndDate:          m.EndDate,
+		CompanyName:      m.CompanyName,
+		CompanyLogoURL:   m.CompanyLogoURL,
+		CompanyDomain:    m.CompanyDomain,
+		TierName:         m.TierName,
+		CreatedAt:        m.CreatedAt,
+		UpdatedAt:        m.UpdatedAt,
+	}
+}
+
+// toKeyContactView converts a ProjectKeyContactResponse to the filtered MCP
+// view, dropping redundant fields.
+func toKeyContactView(c *memberservice.ProjectKeyContactResponse) keyContactView {
+	return keyContactView{
+		UID:            c.UID,
+		Role:           c.Role,
+		Status:         c.Status,
+		BoardMember:    c.BoardMember,
+		PrimaryContact: c.PrimaryContact,
+		FirstName:      c.FirstName,
+		LastName:       c.LastName,
+		Title:          c.Title,
+		Email:          c.Email,
+		CompanyName:    c.CompanyName,
+		CompanyLogoURL: c.CompanyLogoURL,
+		CompanyDomain:  c.CompanyDomain,
+		CreatedAt:      c.CreatedAt,
+		UpdatedAt:      c.UpdatedAt,
+	}
 }
 
 // RegisterSearchMembers registers the search_members tool with the MCP server.
@@ -238,7 +358,21 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		}, nil, nil
 	}
 
-	prettyJSON, err := json.MarshalIndent(result, "", "  ")
+	views := make([]membershipView, 0, len(result.Memberships))
+	for _, m := range result.Memberships {
+		views = append(views, toMembershipView(m))
+	}
+
+	type searchResult struct {
+		Memberships []membershipView `json:"memberships"`
+		Metadata    interface{}      `json:"metadata,omitempty"`
+	}
+	filtered := searchResult{
+		Memberships: views,
+		Metadata:    result.Metadata,
+	}
+
+	prettyJSON, err := json.MarshalIndent(filtered, "", "  ")
 	if err != nil {
 		logger.Error("failed to marshal search result", "error", err)
 		return &mcp.CallToolResult{
@@ -281,10 +415,10 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
-	if args.ID == "" {
+	if args.MembershipUID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: id is required"},
+				&mcp.TextContent{Text: "Error: membership_uid is required"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -318,16 +452,16 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
-	logger.Info("fetching member membership", "project_uid", args.ProjectUID, "id", args.ID)
+	logger.Info("fetching member membership", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 
 	version := "1"
 	result, err := clients.Member.GetProjectMembership(ctx, &memberservice.GetProjectMembershipPayload{
-		Version:    &version,
-		ProjectUID: &args.ProjectUID,
-		ID:         &args.ID,
+		Version:       &version,
+		ProjectUID:    &args.ProjectUID,
+		MembershipUID: &args.MembershipUID,
 	})
 	if err != nil {
-		logger.Error("GetProjectMembership failed", "error", err, "project_uid", args.ProjectUID, "id", args.ID)
+		logger.Error("GetProjectMembership failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get member membership: %s", lfxv2.ErrorMessage(err))},
@@ -347,7 +481,7 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
-	logger.Info("get_member_membership succeeded", "project_uid", args.ProjectUID, "id", args.ID)
+	logger.Info("get_member_membership succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -424,7 +558,12 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 		}, nil, nil
 	}
 
-	prettyJSON, err := json.MarshalIndent(result.Tiers, "", "  ")
+	tierViews := make([]membershipTierView, 0, len(result.Tiers))
+	for _, t := range result.Tiers {
+		tierViews = append(tierViews, toMembershipTierView(t))
+	}
+
+	prettyJSON, err := json.MarshalIndent(tierViews, "", "  ")
 	if err != nil {
 		logger.Error("failed to marshal tiers result", "error", err)
 		return &mcp.CallToolResult{
@@ -467,10 +606,10 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	if args.TierID == "" {
+	if args.TierUID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: tier_id is required"},
+				&mcp.TextContent{Text: "Error: tier_uid is required"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -504,16 +643,16 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	logger.Info("fetching project tier", "project_uid", args.ProjectUID, "tier_id", args.TierID)
+	logger.Info("fetching project tier", "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
 
 	version := "1"
 	result, err := clients.Member.GetProjectTier(ctx, &memberservice.GetProjectTierPayload{
 		Version:    &version,
 		ProjectUID: &args.ProjectUID,
-		TierID:     &args.TierID,
+		TierUID:    &args.TierUID,
 	})
 	if err != nil {
-		logger.Error("GetProjectTier failed", "error", err, "project_uid", args.ProjectUID, "tier_id", args.TierID)
+		logger.Error("GetProjectTier failed", "error", err, "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get project tier: %s", lfxv2.ErrorMessage(err))},
@@ -533,7 +672,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	logger.Info("get_project_tier succeeded", "project_uid", args.ProjectUID, "tier_id", args.TierID)
+	logger.Info("get_project_tier succeeded", "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -565,10 +704,10 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	if args.ID == "" {
+	if args.MembershipUID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: id is required"},
+				&mcp.TextContent{Text: "Error: membership_uid is required"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -602,16 +741,16 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	logger.Info("fetching membership key contacts", "project_uid", args.ProjectUID, "id", args.ID)
+	logger.Info("fetching membership key contacts", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 
 	version := "1"
 	result, err := clients.Member.ListMembershipKeyContacts(ctx, &memberservice.ListMembershipKeyContactsPayload{
-		Version:    &version,
-		ProjectUID: &args.ProjectUID,
-		ID:         &args.ID,
+		Version:       &version,
+		ProjectUID:    &args.ProjectUID,
+		MembershipUID: &args.MembershipUID,
 	})
 	if err != nil {
-		logger.Error("ListMembershipKeyContacts failed", "error", err, "project_uid", args.ProjectUID, "id", args.ID)
+		logger.Error("ListMembershipKeyContacts failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership key contacts: %s", lfxv2.ErrorMessage(err))},
@@ -620,7 +759,12 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	prettyJSON, err := json.MarshalIndent(result.Contacts, "", "  ")
+	contactViews := make([]keyContactView, 0, len(result.Contacts))
+	for _, c := range result.Contacts {
+		contactViews = append(contactViews, toKeyContactView(c))
+	}
+
+	prettyJSON, err := json.MarshalIndent(contactViews, "", "  ")
 	if err != nil {
 		logger.Error("failed to marshal membership key contacts result", "error", err)
 		return &mcp.CallToolResult{
@@ -631,7 +775,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	logger.Info("get_membership_key_contacts succeeded", "project_uid", args.ProjectUID, "id", args.ID)
+	logger.Info("get_membership_key_contacts succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -663,19 +807,19 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		}, nil, nil
 	}
 
-	if args.ID == "" {
+	if args.MembershipUID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: id (membership UID) is required"},
+				&mcp.TextContent{Text: "Error: membership_uid is required"},
 			},
 			IsError: true,
 		}, nil, nil
 	}
 
-	if args.Cid == "" {
+	if args.ContactUID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: cid (key contact UID) is required"},
+				&mcp.TextContent{Text: "Error: contact_uid is required"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -709,17 +853,17 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		}, nil, nil
 	}
 
-	logger.Info("fetching membership key contact", "project_uid", args.ProjectUID, "id", args.ID, "cid", args.Cid)
+	logger.Info("fetching membership key contact", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 
 	version := "1"
 	result, err := clients.Member.GetMembershipKeyContact(ctx, &memberservice.GetMembershipKeyContactPayload{
-		Version:    &version,
-		ProjectUID: &args.ProjectUID,
-		ID:         &args.ID,
-		Cid:        &args.Cid,
+		Version:       &version,
+		ProjectUID:    &args.ProjectUID,
+		MembershipUID: &args.MembershipUID,
+		ContactUID:    &args.ContactUID,
 	})
 	if err != nil {
-		logger.Error("GetMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "id", args.ID, "cid", args.Cid)
+		logger.Error("GetMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership key contact: %s", lfxv2.ErrorMessage(err))},
@@ -728,7 +872,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		}, nil, nil
 	}
 
-	prettyJSON, err := json.MarshalIndent(result.Contact, "", "  ")
+	prettyJSON, err := json.MarshalIndent(toKeyContactView(result.Contact), "", "  ")
 	if err != nil {
 		logger.Error("failed to marshal key contact result", "error", err)
 		return &mcp.CallToolResult{
@@ -739,7 +883,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		}, nil, nil
 	}
 
-	logger.Info("get_membership_key_contact succeeded", "project_uid", args.ProjectUID, "id", args.ID, "cid", args.Cid)
+	logger.Info("get_membership_key_contact succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

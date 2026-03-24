@@ -329,10 +329,11 @@ func main() {
 	}
 }
 
-// mcpLoggingMiddleware creates middleware that logs all MCP method calls.
-// Successful completions are logged at DEBUG (not INFO) — they are observable
-// via APM spans and do not need to appear in the structured log stream per ADR-0002.
-func mcpLoggingMiddleware(serverLogger *slog.Logger) mcp.Middleware {
+// mcpOTelMiddleware creates middleware that instruments all MCP method calls with
+// OpenTelemetry span attributes (per the MCP semconv spec) and structured logging;
+// successful completions are logged at DEBUG, as they are observable via APM spans
+// without needing to appear in the structured log stream.
+func mcpOTelMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			start := time.Now()
@@ -354,8 +355,47 @@ func mcpLoggingMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 				semconv.McpSessionID(sessionID),
 			)
 
+			// network.transport: "pipe" for stdio (no HTTP headers), "tcp" for HTTP.
+			// Per the MCP semconv spec, stdio maps to the "pipe" transport value.
+			extra := req.GetExtra()
+			if extra != nil && extra.Header != nil {
+				span.SetAttributes(semconv.NetworkTransportTCP)
+			} else {
+				span.SetAttributes(semconv.NetworkTransportPipe)
+			}
+
+			// mcp.protocol.version: read the version the client advertised during
+			// the initialize handshake and record it on the span (Recommended).
+			if ss, ok := req.GetSession().(*mcp.ServerSession); ok {
+				if initParams := ss.InitializeParams(); initParams != nil && initParams.ProtocolVersion != "" {
+					span.SetAttributes(semconv.McpProtocolVersion(initParams.ProtocolVersion))
+				}
+			}
+
+			// For tools/call, add gen_ai.tool.name (Conditionally Required) and
+			// gen_ai.operation.name = "execute_tool" (Recommended).
+			if method == "tools/call" {
+				if params, ok := req.GetParams().(*mcp.CallToolParamsRaw); ok && params.Name != "" {
+					span.SetAttributes(
+						semconv.GenAIToolName(params.Name),
+						semconv.GenAIOperationNameExecuteTool,
+					)
+				}
+			}
+
 			// Call the actual handler.
 			result, err := next(ctx, method, req)
+
+			// Set error.type on the span when the call fails (Conditionally Required).
+			// For a JSON-RPC-level error, use the error string; for a tool-level
+			// IsError result on tools/call, use the well-known "tool_error" value.
+			if err != nil {
+				span.SetAttributes(semconv.ErrorTypeKey.String(err.Error()))
+			} else if method == "tools/call" {
+				if toolResult, ok := result.(*mcp.CallToolResult); ok && toolResult != nil && toolResult.IsError {
+					span.SetAttributes(semconv.ErrorTypeKey.String("tool_error"))
+				}
+			}
 
 			// Log completion.
 			duration := time.Since(start)
@@ -365,7 +405,7 @@ func mcpLoggingMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 					"error", err,
 				)
 			} else {
-				// DEBUG only: observable via APM spans; INFO would violate ADR-0002.
+				// DEBUG only: successful calls are observable via APM spans.
 				callLogger.DebugContext(ctx, "mcp method call completed",
 					"duration_ms", duration.Milliseconds(),
 				)
@@ -385,8 +425,8 @@ func newServer(cfg Config) *mcp.Server {
 		Logger: logger,
 	})
 
-	// Add middleware for logging all MCP method calls from clients.
-	server.AddReceivingMiddleware(mcpLoggingMiddleware(logger))
+	// Add middleware for OTel instrumentation and logging of all MCP method calls.
+	server.AddReceivingMiddleware(mcpOTelMiddleware(logger))
 
 	// Register tools based on configuration.
 	enabledTools := make(map[string]bool)

@@ -50,9 +50,10 @@ type Config struct {
 	APICredentials map[string]string `koanf:"api_credentials"`
 
 	// Service API configuration.
-	OnboardingAPIURL string `koanf:"onboarding_api_url"`
-	LensAPIURL       string `koanf:"lens_api_url"`
-	LFAIAPIKey       string `koanf:"lf_ai_api_key"`
+	OnboardingAPIURL      string `koanf:"onboarding_api_url"`
+	OnboardingAPIAudience string `koanf:"onboarding_api_audience"`
+	LensAPIURL            string `koanf:"lens_api_url"`
+	LensAPIAudience       string `koanf:"lens_api_audience"`
 }
 
 // HTTPConfig holds HTTP transport configuration.
@@ -148,8 +149,9 @@ func main() {
 	f.Bool("debug", false, "Enable debug logging")
 	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls")
 	f.String("onboarding_api_url", "", "Base URL of the member onboarding service")
+	f.String("onboarding_api_audience", "", "Auth0 resource server audience for the member onboarding API")
 	f.String("lens_api_url", "", "Base URL of the LFX Lens service")
-	f.String("lf_ai_api_key", "", "Shared API key for LF AI service APIs (onboarding, lens)")
+	f.String("lens_api_audience", "", "Auth0 resource server audience for the LFX Lens API")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
@@ -283,22 +285,35 @@ func main() {
 			})
 
 			// Configure service API infrastructure (shared across onboarding, lens, etc.).
-			if cfg.LFAIAPIKey != "" {
-				slugResolver := lfxv2.NewSlugResolver()
-				accessChecker := lfxv2.NewAccessCheckClient(cfg.LFXAPIURL, &http.Client{Timeout: 30 * time.Second})
+			slugResolver := lfxv2.NewSlugResolver()
+			accessChecker := lfxv2.NewAccessCheckClient(cfg.LFXAPIURL, &http.Client{Timeout: 30 * time.Second})
 
-				sharedAuth := tools.ServiceAuth{
-					LFXAPIURL:           cfg.LFXAPIURL,
-					TokenExchangeClient: tokenExchangeClient,
-					DebugLogger:         debugLogger,
-					SlugResolver:        slugResolver,
-					AccessChecker:       accessChecker,
-				}
+			sharedAuth := tools.ServiceAuth{
+				LFXAPIURL:           cfg.LFXAPIURL,
+				TokenExchangeClient: tokenExchangeClient,
+				DebugLogger:         debugLogger,
+				SlugResolver:        slugResolver,
+				AccessChecker:       accessChecker,
+			}
 
-				if cfg.OnboardingAPIURL != "" {
+			// Shared M2M credentials for client credentials grants.
+			ccBase := lfxv2.ClientCredentialsConfig{
+				TokenEndpoint:             cfg.TokenEndpoint,
+				ClientID:                  cfg.ClientID,
+				ClientSecret:              cfg.ClientSecret,
+				ClientAssertionSigningKey: cfg.ClientAssertionSigningKey,
+			}
+
+			if cfg.OnboardingAPIURL != "" && cfg.OnboardingAPIAudience != "" {
+				ccCfg := ccBase
+				ccCfg.Audience = cfg.OnboardingAPIAudience
+				ccClient, err := lfxv2.NewClientCredentialsClient(ccCfg)
+				if err != nil {
+					logger.Warn("failed to create onboarding client credentials client", errKey, err)
+				} else {
 					onboardingClient, err := serviceapi.NewClient(serviceapi.Config{
 						BaseURL:     cfg.OnboardingAPIURL,
-						APIKey:      cfg.LFAIAPIKey,
+						TokenSource: ccClient,
 						HTTPClient:  &http.Client{Timeout: 30 * time.Second},
 						DebugLogger: debugLogger,
 					})
@@ -312,11 +327,18 @@ func main() {
 						logger.Info("onboarding service tools configured", "url", cfg.OnboardingAPIURL)
 					}
 				}
+			}
 
-				if cfg.LensAPIURL != "" {
+			if cfg.LensAPIURL != "" && cfg.LensAPIAudience != "" {
+				ccCfg := ccBase
+				ccCfg.Audience = cfg.LensAPIAudience
+				ccClient, err := lfxv2.NewClientCredentialsClient(ccCfg)
+				if err != nil {
+					logger.Warn("failed to create Lens client credentials client", errKey, err)
+				} else {
 					lensClient, err := serviceapi.NewClient(serviceapi.Config{
 						BaseURL:     cfg.LensAPIURL,
-						APIKey:      cfg.LFAIAPIKey,
+						TokenSource: ccClient,
 						HTTPClient:  &http.Client{Timeout: 120 * time.Second},
 						DebugLogger: debugLogger,
 					})

@@ -98,9 +98,10 @@ func NewTokenExchangeClient(cfg TokenExchangeConfig) (*TokenExchangeClient, erro
 }
 
 // generateClientAssertion creates a JWT client assertion per RFC 7523.
-func (c *TokenExchangeClient) generateClientAssertion() (string, error) {
+// This is a package-level function shared by TokenExchangeClient and ClientCredentialsClient.
+func generateClientAssertion(clientID, tokenEndpoint, signingKeyPEM string) (string, error) {
 	// Parse the PEM-encoded private key.
-	block, _ := pem.Decode([]byte(c.config.ClientAssertionSigningKey))
+	block, _ := pem.Decode([]byte(signingKeyPEM))
 	if block == nil {
 		return "", fmt.Errorf("failed to decode PEM block containing private key")
 	}
@@ -129,9 +130,9 @@ func (c *TokenExchangeClient) generateClientAssertion() (string, error) {
 
 	// Build JWT token.
 	token, err := jwt.NewBuilder().
-		Issuer(c.config.ClientID).
-		Subject(c.config.ClientID).
-		Audience([]string{c.config.TokenEndpoint}).
+		Issuer(clientID).
+		Subject(clientID).
+		Audience([]string{tokenEndpoint}).
 		IssuedAt(now).
 		Expiration(now.Add(60 * time.Second)).
 		JwtID(fmt.Sprintf("%x", jtiBytes)).
@@ -162,7 +163,7 @@ func isM2MToken(token string) bool {
 // addClientAuth adds client authentication fields (secret or JWT assertion) to data.
 func (c *TokenExchangeClient) addClientAuth(data url.Values) error {
 	if c.config.ClientAssertionSigningKey != "" {
-		assertion, err := c.generateClientAssertion()
+		assertion, err := generateClientAssertion(c.config.ClientID, c.config.TokenEndpoint, c.config.ClientAssertionSigningKey)
 		if err != nil {
 			return fmt.Errorf("failed to generate client assertion: %w", err)
 		}

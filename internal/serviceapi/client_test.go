@@ -14,7 +14,15 @@ import (
 	"testing"
 )
 
+// staticToken is a test TokenSource that always returns the same token.
+type staticToken string
+
+func (s staticToken) GetToken(_ context.Context) (string, error) {
+	return string(s), nil
+}
+
 func TestNewClient_Validation(t *testing.T) {
+	ts := staticToken("key")
 	tests := []struct {
 		name    string
 		cfg     Config
@@ -22,17 +30,17 @@ func TestNewClient_Validation(t *testing.T) {
 	}{
 		{
 			name:    "missing BaseURL",
-			cfg:     Config{APIKey: "key"},
+			cfg:     Config{TokenSource: ts},
 			wantErr: true,
 		},
 		{
-			name:    "missing APIKey",
+			name:    "missing TokenSource",
 			cfg:     Config{BaseURL: "https://example.com"},
 			wantErr: true,
 		},
 		{
 			name: "valid config",
-			cfg:  Config{BaseURL: "https://example.com", APIKey: "key"},
+			cfg:  Config{BaseURL: "https://example.com", TokenSource: ts},
 		},
 	}
 
@@ -46,13 +54,13 @@ func TestNewClient_Validation(t *testing.T) {
 	}
 }
 
-func TestGet_APIKeyHeader(t *testing.T) {
+func TestGet_BearerTokenHeader(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
-		if r.Header.Get("Authorization") != "ApiKey test-key" {
-			t.Errorf("expected 'ApiKey test-key', got %q", r.Header.Get("Authorization"))
+		if r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Errorf("expected 'Bearer test-token', got %q", r.Header.Get("Authorization"))
 		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"ok":true}`))
@@ -60,9 +68,9 @@ func TestGet_APIKeyHeader(t *testing.T) {
 	defer server.Close()
 
 	client, err := NewClient(Config{
-		BaseURL:    server.URL,
-		APIKey:     "test-key",
-		HTTPClient: server.Client(),
+		BaseURL:     server.URL,
+		TokenSource: staticToken("test-token"),
+		HTTPClient:  server.Client(),
 	})
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -93,7 +101,7 @@ func TestGet_QueryParams(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := NewClient(Config{BaseURL: server.URL, APIKey: "key", HTTPClient: server.Client()})
+	client, _ := NewClient(Config{BaseURL: server.URL, TokenSource: staticToken("key"), HTTPClient: server.Client()})
 
 	query := url.Values{"status": {"pending"}, "page": {"2"}}
 	_, status, err := client.Get(context.Background(), "/items", query)
@@ -118,8 +126,8 @@ func TestPostJSON(t *testing.T) {
 		if r.Header.Get("Content-Type") != "application/json" {
 			t.Errorf("expected application/json, got %q", r.Header.Get("Content-Type"))
 		}
-		if r.Header.Get("Authorization") != "ApiKey json-key" {
-			t.Errorf("expected 'ApiKey json-key', got %q", r.Header.Get("Authorization"))
+		if r.Header.Get("Authorization") != "Bearer json-token" {
+			t.Errorf("expected 'Bearer json-token', got %q", r.Header.Get("Authorization"))
 		}
 
 		var p payload
@@ -135,7 +143,7 @@ func TestPostJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := NewClient(Config{BaseURL: server.URL, APIKey: "json-key", HTTPClient: server.Client()})
+	client, _ := NewClient(Config{BaseURL: server.URL, TokenSource: staticToken("json-token"), HTTPClient: server.Client()})
 
 	body, status, err := client.PostJSON(context.Background(), "/items", payload{Name: "test", Count: 42})
 	if err != nil {
@@ -164,9 +172,9 @@ func TestPostMultipart(t *testing.T) {
 			t.Errorf("expected multipart/form-data, got %q", mediaType)
 		}
 
-		// Verify API key is present.
-		if r.Header.Get("Authorization") != "ApiKey mp-key" {
-			t.Errorf("expected 'ApiKey mp-key', got %q", r.Header.Get("Authorization"))
+		// Verify bearer token is present.
+		if r.Header.Get("Authorization") != "Bearer mp-token" {
+			t.Errorf("expected 'Bearer mp-token', got %q", r.Header.Get("Authorization"))
 		}
 
 		// Parse multipart form.
@@ -185,7 +193,7 @@ func TestPostMultipart(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := NewClient(Config{BaseURL: server.URL, APIKey: "mp-key", HTTPClient: server.Client()})
+	client, _ := NewClient(Config{BaseURL: server.URL, TokenSource: staticToken("mp-token"), HTTPClient: server.Client()})
 
 	fields := map[string]string{
 		"message": "onboard Google to pytorch",
@@ -210,7 +218,7 @@ func TestGet_NonSuccessStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := NewClient(Config{BaseURL: server.URL, APIKey: "key", HTTPClient: server.Client()})
+	client, _ := NewClient(Config{BaseURL: server.URL, TokenSource: staticToken("key"), HTTPClient: server.Client()})
 
 	body, status, err := client.Get(context.Background(), "/missing", nil)
 	if err != nil {
@@ -234,7 +242,7 @@ func TestGet_TrailingSlashBaseURL(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := NewClient(Config{BaseURL: server.URL + "/api/", APIKey: "key", HTTPClient: server.Client()})
+	client, _ := NewClient(Config{BaseURL: server.URL + "/api/", TokenSource: staticToken("key"), HTTPClient: server.Client()})
 
 	_, _, err := client.Get(context.Background(), "/test", nil)
 	if err != nil {
@@ -252,7 +260,7 @@ func TestPostJSON_EmptyBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := NewClient(Config{BaseURL: server.URL, APIKey: "key", HTTPClient: server.Client()})
+	client, _ := NewClient(Config{BaseURL: server.URL, TokenSource: staticToken("key"), HTTPClient: server.Client()})
 
 	_, _, err := client.PostJSON(context.Background(), "/test", struct{}{})
 	if err != nil {

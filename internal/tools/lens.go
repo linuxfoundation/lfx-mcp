@@ -6,7 +6,8 @@ package tools
 
 import (
 	"context"
-	"net/http"
+	"encoding/json"
+	"fmt"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/serviceapi"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -79,23 +80,37 @@ func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args LFXL
 		return errResult, nil, nil
 	}
 
-	// Proxy to Lens service API.
-	payload := lensWorkflowRequest{
-		Input: args.Input,
-		AdditionalData: lensWorkflowAdditional{
-			Foundation: lensFoundation{
-				Slug: args.ProjectSlug,
-			},
-		},
-	}
+	// TODO: Proxy to Lens service API once Auth0 resource server is deployed.
+	// The actual call will be:
+	//
+	//   POST /workflows/lfx-lens-mcp-workflow/runs (multipart/form-data)
+	//   Fields: message (string), additional_data (JSON: {"foundation": {"slug": "<slug>"}}), stream ("false")
+	//   Authorization: Bearer <m2m_token>
+	//
+	// Response: {"content": "...", "content_type": "str", "status": "COMPLETED"}
+	//
+	// payload := lensWorkflowRequest{
+	// 	Input: args.Input,
+	// 	AdditionalData: lensWorkflowAdditional{
+	// 		Foundation: lensFoundation{Slug: args.ProjectSlug},
+	// 	},
+	// }
+	// body, statusCode, err := lensConfig.ServiceClient.PostJSON(ctx, "/workflows/lfx-lens-mcp-workflow/runs", payload)
+	// if err != nil {
+	// 	return toolError("Lens API call failed: %v", err), nil, nil
+	// }
+	// if statusCode != http.StatusOK {
+	// 	return toolError("Lens service returned status %d: %s", statusCode, string(body)), nil, nil
+	// }
 
-	body, statusCode, err := lensConfig.ServiceClient.PostJSON(ctx, "/workflows/lfx-lens-mcp-workflow/runs", payload)
-	if err != nil {
-		return toolError("Lens API call failed: %v", err), nil, nil
+	_ = ctx // used by actual API call
+
+	dummyResponse := map[string]string{
+		"content":      fmt.Sprintf("[dry-run] LFX Lens query for project %q: %s", args.ProjectSlug, args.Input),
+		"content_type": "str",
+		"status":       "COMPLETED",
 	}
-	if statusCode != http.StatusOK {
-		return toolError("Lens service returned status %d: %s", statusCode, string(body)), nil, nil
-	}
+	body, _ := json.Marshal(dummyResponse)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: string(body)}},

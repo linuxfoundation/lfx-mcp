@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 // Package serviceapi provides an HTTP client for internal LFX service APIs
-// authenticated with shared API keys. These services (e.g., Member Onboarding,
-// LFX Lens) have no per-user authorization — the MCP server enforces access
-// control via the V2 access-check endpoint before proxying requests here.
+// authenticated with OAuth2 client credentials (M2M bearer tokens). These
+// services (e.g., Member Onboarding, LFX Lens) have no per-user authorization
+// — the MCP server enforces access control via the V2 access-check endpoint
+// before proxying requests here.
 package serviceapi
 
 import (
@@ -22,13 +23,18 @@ import (
 	"time"
 )
 
+// TokenSource provides bearer tokens for authenticating requests to service APIs.
+type TokenSource interface {
+	GetToken(ctx context.Context) (string, error)
+}
+
 // Config holds configuration for a service API client.
 type Config struct {
 	// BaseURL is the root URL of the service API (e.g., "https://onboarding.lfx.internal").
 	BaseURL string
 
-	// APIKey is injected as "Authorization: ApiKey {key}" on every request.
-	APIKey string
+	// TokenSource provides bearer tokens for request authentication.
+	TokenSource TokenSource
 
 	// HTTPClient is the HTTP client to use. If nil, a default client with 30s
 	// timeout is created.
@@ -41,7 +47,7 @@ type Config struct {
 // Client is an HTTP client for an internal service API.
 type Client struct {
 	baseURL     string
-	apiKey      string
+	tokenSource TokenSource
 	httpClient  *http.Client
 	debugLogger *slog.Logger
 }
@@ -51,8 +57,8 @@ func NewClient(cfg Config) (*Client, error) {
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("BaseURL is required")
 	}
-	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("APIKey is required")
+	if cfg.TokenSource == nil {
+		return nil, fmt.Errorf("TokenSource is required")
 	}
 
 	httpClient := cfg.HTTPClient
@@ -66,7 +72,7 @@ func NewClient(cfg Config) (*Client, error) {
 
 	return &Client{
 		baseURL:     strings.TrimSuffix(cfg.BaseURL, "/"),
-		apiKey:      cfg.APIKey,
+		tokenSource: cfg.TokenSource,
 		httpClient:  httpClient,
 		debugLogger: cfg.DebugLogger,
 	}, nil
@@ -133,9 +139,13 @@ func (c *Client) PostMultipart(ctx context.Context, path string, fields map[stri
 	return c.do(req)
 }
 
-// do executes an HTTP request with API key authentication.
+// do executes an HTTP request with bearer token authentication.
 func (c *Client) do(req *http.Request) ([]byte, int, error) {
-	req.Header.Set("Authorization", "ApiKey "+c.apiKey)
+	token, err := c.tokenSource.GetToken(req.Context())
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get bearer token: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

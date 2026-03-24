@@ -6,9 +6,8 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/serviceapi"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -61,19 +60,38 @@ func handleOnboardingListMemberships(ctx context.Context, req *mcp.CallToolReque
 		return errResult, nil, nil
 	}
 
-	path := fmt.Sprintf("/member-onboarding/%s/memberships", args.ProjectSlug)
-	query := url.Values{}
-	if args.Status != "" {
-		query.Set("status", args.Status)
-	}
+	// TODO: Proxy to onboarding service API once Auth0 resource server is deployed.
+	// The actual call will be:
+	//
+	//   GET /member-onboarding/{slug}/memberships?status={status}
+	//   Authorization: Bearer <m2m_token>
+	//
+	// path := fmt.Sprintf("/member-onboarding/%s/memberships", args.ProjectSlug)
+	// query := url.Values{}
+	// if args.Status != "" {
+	// 	query.Set("status", args.Status)
+	// }
+	// body, statusCode, err := onboardingConfig.ServiceClient.Get(ctx, path, query)
+	// if err != nil {
+	// 	return toolError("onboarding API call failed: %v", err), nil, nil
+	// }
+	// if statusCode != http.StatusOK {
+	// 	return toolError("onboarding service returned status %d: %s", statusCode, string(body)), nil, nil
+	// }
 
-	body, statusCode, err := onboardingConfig.ServiceClient.Get(ctx, path, query)
-	if err != nil {
-		return toolError("onboarding API call failed: %v", err), nil, nil
+	_ = ctx // used by actual API call
+
+	status := args.Status
+	if status == "" {
+		status = "all"
 	}
-	if statusCode != http.StatusOK {
-		return toolError("onboarding service returned status %d: %s", statusCode, string(body)), nil, nil
+	dummyResponse := map[string]any{
+		"project_slug": args.ProjectSlug,
+		"status":       status,
+		"memberships":  []any{},
+		"message":      fmt.Sprintf("[dry-run] Would list memberships for project %q with status %q", args.ProjectSlug, status),
 	}
+	body, _ := json.Marshal(dummyResponse)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: string(body)}},

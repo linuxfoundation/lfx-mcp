@@ -315,7 +315,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 	var settingsWarning string
 	if err != nil {
 		settingsWarning = fmt.Sprintf("WARNING: committee settings unavailable - %s", lfxv2.ErrorMessage(err))
-		logger.Warn("getting privileged committee settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
+		logger.Error("getting privileged committee settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
 	} else {
 		committeeSettings = settingsResult.CommitteeSettings
 	}

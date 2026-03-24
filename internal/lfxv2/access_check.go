@@ -1,6 +1,7 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
+// Package lfxv2 provides client utilities for interacting with LFX v2 APIs, including OAuth2 token exchange.
 package lfxv2
 
 import (

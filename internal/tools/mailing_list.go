@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	mailinglist "github.com/linuxfoundation/lfx-v2-mailing-list-service/gen/mailing_list"
@@ -27,6 +28,9 @@ type MailingListConfig struct {
 	LFXAPIURL           string
 	TokenExchangeClient *lfxv2.TokenExchangeClient
 	DebugLogger         *slog.Logger
+	// HTTPClient is the HTTP client to use for LFX API calls.
+	// If nil, a default 30-second timeout client is created.
+	HTTPClient *http.Client
 }
 
 var mailingListConfig *MailingListConfig
@@ -169,6 +173,7 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 		APIDomain:           mailingListConfig.LFXAPIURL,
 		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
 		DebugLogger:         mailingListConfig.DebugLogger,
+		HTTPClient:          mailingListConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -199,7 +204,9 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 	settingsResult, err := clients.MailingList.GetGrpsioServiceSettings(ctx, &mailinglist.GetGrpsioServiceSettingsPayload{
 		UID: &args.UID,
 	})
+	var settingsWarning string
 	if err != nil {
+		settingsWarning = fmt.Sprintf("WARNING: mailing list service settings unavailable - %s", lfxv2.ErrorMessage(err))
 		logger.Warn("getting mailing list service settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
 	} else {
 		serviceSettings = settingsResult.ServiceSettings
@@ -228,10 +235,14 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 
 	logger.Info("get_mailing_list_service succeeded", "uid", args.UID)
 
+	content := []mcp.Content{}
+	if settingsWarning != "" {
+		content = append(content, &mcp.TextContent{Text: settingsWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
+		Content: content,
 	}, nil, nil
 }
 
@@ -275,6 +286,7 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		APIDomain:           mailingListConfig.LFXAPIURL,
 		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
 		DebugLogger:         mailingListConfig.DebugLogger,
+		HTTPClient:          mailingListConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -306,7 +318,9 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	settingsResult, err := clients.MailingList.GetGrpsioMailingListSettings(ctx, &mailinglist.GetGrpsioMailingListSettingsPayload{
 		UID: &args.UID,
 	})
+	var listSettingsWarning string
 	if err != nil {
+		listSettingsWarning = fmt.Sprintf("WARNING: mailing list settings unavailable - %s", lfxv2.ErrorMessage(err))
 		logger.Warn("getting mailing list settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
 	} else {
 		mlSettings = settingsResult.MailingListSettings
@@ -335,10 +349,14 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 
 	logger.Info("get_mailing_list succeeded", "uid", args.UID)
 
+	content := []mcp.Content{}
+	if listSettingsWarning != "" {
+		content = append(content, &mcp.TextContent{Text: listSettingsWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
+		Content: content,
 	}, nil, nil
 }
 
@@ -391,6 +409,7 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 		APIDomain:           mailingListConfig.LFXAPIURL,
 		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
 		DebugLogger:         mailingListConfig.DebugLogger,
+		HTTPClient:          mailingListConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -470,6 +489,7 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		APIDomain:           mailingListConfig.LFXAPIURL,
 		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
 		DebugLogger:         mailingListConfig.DebugLogger,
+		HTTPClient:          mailingListConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -530,8 +550,9 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		PageToken: result.PageToken,
 	}
 
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
@@ -547,11 +568,12 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 
 	logger.Info("search_mailing_lists succeeded", "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
 // handleSearchMailingListMembers implements the search_mailing_list_members tool logic.
@@ -651,8 +673,9 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		PageToken: result.PageToken,
 	}
 
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
@@ -668,9 +691,10 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 
 	logger.Info("search_mailing_list_members succeeded", "mailing_list_uid", args.MailingListUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }

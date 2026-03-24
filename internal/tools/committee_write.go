@@ -254,6 +254,7 @@ func committeeWriteClients(ctx context.Context, req *mcp.CallToolRequest) (conte
 		APIDomain:           committeeConfig.LFXAPIURL,
 		TokenExchangeClient: committeeConfig.TokenExchangeClient,
 		DebugLogger:         committeeConfig.DebugLogger,
+		HTTPClient:          committeeConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)

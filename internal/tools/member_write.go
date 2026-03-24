@@ -156,6 +156,7 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -252,6 +253,7 @@ func handleUpdateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -341,6 +343,7 @@ func handleDeleteMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)

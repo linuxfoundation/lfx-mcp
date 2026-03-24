@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	projectservice "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/project_service"
@@ -24,6 +25,9 @@ type ProjectConfig struct {
 	LFXAPIURL           string
 	TokenExchangeClient *lfxv2.TokenExchangeClient
 	DebugLogger         *slog.Logger
+	// HTTPClient is the HTTP client to use for LFX API calls.
+	// If nil, a default 30-second timeout client is created.
+	HTTPClient *http.Client
 }
 
 var projectConfig *ProjectConfig
@@ -100,6 +104,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		APIDomain:           projectConfig.LFXAPIURL,
 		TokenExchangeClient: projectConfig.TokenExchangeClient,
 		DebugLogger:         projectConfig.DebugLogger,
+		HTTPClient:          projectConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -216,6 +221,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 		APIDomain:           projectConfig.LFXAPIURL,
 		TokenExchangeClient: projectConfig.TokenExchangeClient,
 		DebugLogger:         projectConfig.DebugLogger,
+		HTTPClient:          projectConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -249,8 +255,10 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 	settingsResult, err := clients.Project.GetOneProjectSettings(ctx, &projectservice.GetOneProjectSettingsPayload{
 		UID: &args.UID,
 	})
+	var settingsWarning string
 	if err != nil {
-		logger.Error("getting project settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
+		settingsWarning = fmt.Sprintf("WARNING: project settings unavailable - %s", lfxv2.ErrorMessage(err))
+		logger.Warn("getting project settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
 	} else {
 		projectSettings = settingsResult.ProjectSettings
 	}
@@ -278,9 +286,13 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 
 	logger.Info("get_project succeeded", "uid", args.UID)
 
+	content := []mcp.Content{}
+	if settingsWarning != "" {
+		content = append(content, &mcp.TextContent{Text: settingsWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
+		Content: content,
 	}, nil, nil
 }

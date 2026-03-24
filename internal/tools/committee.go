@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
@@ -27,6 +28,9 @@ type CommitteeConfig struct {
 	LFXAPIURL           string
 	TokenExchangeClient *lfxv2.TokenExchangeClient
 	DebugLogger         *slog.Logger
+	// HTTPClient is the HTTP client to use for LFX API calls.
+	// If nil, a default 30-second timeout client is created.
+	HTTPClient *http.Client
 }
 
 var committeeConfig *CommitteeConfig
@@ -143,6 +147,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		APIDomain:           committeeConfig.LFXAPIURL,
 		TokenExchangeClient: committeeConfig.TokenExchangeClient,
 		DebugLogger:         committeeConfig.DebugLogger,
+		HTTPClient:          committeeConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -206,8 +211,9 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 
 	// Warn if fewer results than requested were returned but more pages exist.
 	// This indicates some results on this page were excluded due to access controls.
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
@@ -223,11 +229,12 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 
 	logger.Info("search_committees succeeded", "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
 // handleGetCommittee implements the get_committee tool logic, fetching both base
@@ -271,6 +278,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		APIDomain:           committeeConfig.LFXAPIURL,
 		TokenExchangeClient: committeeConfig.TokenExchangeClient,
 		DebugLogger:         committeeConfig.DebugLogger,
+		HTTPClient:          committeeConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -304,7 +312,9 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 	settingsResult, err := clients.Committee.GetCommitteeSettings(ctx, &committeeservice.GetCommitteeSettingsPayload{
 		UID: &args.UID,
 	})
+	var settingsWarning string
 	if err != nil {
+		settingsWarning = fmt.Sprintf("WARNING: committee settings unavailable - %s", lfxv2.ErrorMessage(err))
 		logger.Warn("getting privileged committee settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
 	} else {
 		committeeSettings = settingsResult.CommitteeSettings
@@ -333,10 +343,14 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 
 	logger.Info("get_committee succeeded", "uid", args.UID)
 
+	content := []mcp.Content{}
+	if settingsWarning != "" {
+		content = append(content, &mcp.TextContent{Text: settingsWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
+		Content: content,
 	}, nil, nil
 }
 
@@ -389,6 +403,7 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		APIDomain:           committeeConfig.LFXAPIURL,
 		TokenExchangeClient: committeeConfig.TokenExchangeClient,
 		DebugLogger:         committeeConfig.DebugLogger,
+		HTTPClient:          committeeConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -468,6 +483,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		APIDomain:           committeeConfig.LFXAPIURL,
 		TokenExchangeClient: committeeConfig.TokenExchangeClient,
 		DebugLogger:         committeeConfig.DebugLogger,
+		HTTPClient:          committeeConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -537,8 +553,9 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 
 	// Warn if fewer results than requested were returned but more pages exist.
 	// This indicates some results on this page were excluded due to access controls.
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
@@ -554,9 +571,10 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 
 	logger.Info("search_committee_members succeeded", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }

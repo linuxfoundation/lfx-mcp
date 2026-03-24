@@ -25,10 +25,13 @@ import (
 	"github.com/knadh/koanf/v2"
 	lfxauth "github.com/linuxfoundation/lfx-mcp/internal/auth"
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
+	localOtel "github.com/linuxfoundation/lfx-mcp/internal/otel"
 	"github.com/linuxfoundation/lfx-mcp/internal/tools"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
+	slogotel "github.com/remychantenay/slog-otel"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Config holds all configuration for the LFX MCP server.
@@ -208,8 +211,25 @@ func main() {
 		logOutput = os.Stderr
 	}
 
-	logger = slog.New(slog.NewJSONHandler(logOutput, logOptions))
+	// Build the handler chain: JSON → slog-otel (injects trace_id/span_id from context).
+	jsonHandler := slog.NewJSONHandler(logOutput, logOptions)
+	otelHandler := slogotel.OtelHandler{Next: jsonHandler}
+	logger = slog.New(otelHandler)
 	slog.SetDefault(logger)
+
+	// Initialise the OpenTelemetry SDK.  A no-op provider is installed when
+	// OTEL_TRACES_EXPORTER is unset (the default), so stdio/local-dev has zero
+	// overhead.  The shutdown func flushes pending spans on exit.
+	otelShutdown, err := localOtel.SetupSDK(context.Background(), Version)
+	if err != nil {
+		logger.Error("failed to initialise OpenTelemetry SDK", errKey, err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := otelShutdown(context.Background()); err != nil {
+			logger.Error("OpenTelemetry SDK shutdown failed", errKey, err)
+		}
+	}()
 
 	// Configure user_info tool if auth servers are configured.
 	if len(cfg.MCPAPI.AuthServers) > 0 {
@@ -236,7 +256,12 @@ func main() {
 			ClientAssertionSigningKey: cfg.ClientAssertionSigningKey,
 			SubjectTokenType:          subjectTokenType,
 			Audience:                  cfg.LFXAPIURL,
-			HTTPClient:                &http.Client{Timeout: 30 * time.Second},
+			// Wrap the token-exchange HTTP client with OTel tracing so token
+			// fetches appear as child spans under the active request trace.
+			HTTPClient: &http.Client{
+				Timeout:   30 * time.Second,
+				Transport: otelhttp.NewTransport(http.DefaultTransport),
+			},
 		})
 		if err != nil {
 			logger.Warn("failed to create token exchange client - project and committee tools will not be available", errKey, err)
@@ -245,30 +270,41 @@ func main() {
 			if cfg.DebugTraffic {
 				debugLogger = logger
 			}
+			// Shared HTTP client for all LFX API calls: OTel transport so upstream
+			// service calls appear as child spans.
+			lfxHTTPClient := &http.Client{
+				Timeout:   30 * time.Second,
+				Transport: otelhttp.NewTransport(http.DefaultTransport),
+			}
 			tools.SetProjectConfig(&tools.ProjectConfig{
 				LFXAPIURL:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
 				DebugLogger:         debugLogger,
+				HTTPClient:          lfxHTTPClient,
 			})
 			tools.SetCommitteeConfig(&tools.CommitteeConfig{
 				LFXAPIURL:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
 				DebugLogger:         debugLogger,
+				HTTPClient:          lfxHTTPClient,
 			})
 			tools.SetMailingListConfig(&tools.MailingListConfig{
 				LFXAPIURL:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
 				DebugLogger:         debugLogger,
+				HTTPClient:          lfxHTTPClient,
 			})
 			tools.SetMemberConfig(&tools.MemberConfig{
 				LFXAPIURL:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
 				DebugLogger:         debugLogger,
+				HTTPClient:          lfxHTTPClient,
 			})
 			tools.SetMeetingConfig(&tools.MeetingConfig{
 				LFXAPIURL:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
 				DebugLogger:         debugLogger,
+				HTTPClient:          lfxHTTPClient,
 			})
 		}
 	}
@@ -296,6 +332,8 @@ func main() {
 }
 
 // mcpLoggingMiddleware creates middleware that logs all MCP method calls.
+// Successful completions are logged at DEBUG (not INFO) — they are observable
+// via APM spans and do not need to appear in the structured log stream per ADR-0002.
 func mcpLoggingMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
@@ -315,7 +353,8 @@ func mcpLoggingMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 					"error", err,
 				)
 			} else {
-				serverLogger.Info("mcp method call completed",
+				// DEBUG only: observable via APM spans; INFO would violate ADR-0002.
+				serverLogger.Debug("mcp method call completed",
 					"session_id", sessionID,
 					"method", method,
 					"duration_ms", duration.Milliseconds(),
@@ -642,9 +681,19 @@ func runHTTPServer(cfg Config) {
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)
+
+	// Wrap the mux with OTel instrumentation so every inbound HTTP request gets
+	// a root span with W3C TraceContext propagation, then layer debug logging on
+	// top.  Order: otelhttp (outermost) → httpDebugLogging → mux.
+	var rootHandler http.Handler = mux
+	rootHandler = httpDebugLogging(logger)(rootHandler)
+	rootHandler = otelhttp.NewHandler(rootHandler, "lfx-mcp-server",
+		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
+	)
+
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           httpDebugLogging(logger)(mux),
+		Handler:           rootHandler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

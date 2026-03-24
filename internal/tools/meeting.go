@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
@@ -35,6 +36,9 @@ type MeetingConfig struct {
 	LFXAPIURL           string
 	TokenExchangeClient *lfxv2.TokenExchangeClient
 	DebugLogger         *slog.Logger
+	// HTTPClient is the HTTP client to use for LFX API calls.
+	// If nil, a default 30-second timeout client is created.
+	HTTPClient *http.Client
 }
 
 var meetingConfig *MeetingConfig
@@ -282,6 +286,7 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -373,8 +378,9 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		PageToken: result.PageToken,
 	}
 
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
@@ -390,11 +396,12 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 
 	logger.Info("search_meetings succeeded", "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
 // handleGetMeeting implements the get_meeting tool logic.
@@ -437,6 +444,7 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -530,6 +538,7 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -608,8 +617,9 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 		PageToken: result.PageToken,
 	}
 
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
@@ -625,11 +635,12 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 
 	logger.Info("search_meeting_registrants succeeded", "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
 // handleGetMeetingRegistrant implements the get_meeting_registrant tool logic.
@@ -672,6 +683,7 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -795,6 +807,7 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -870,8 +883,9 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 		PageToken: result.PageToken,
 	}
 
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
@@ -887,11 +901,12 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 
 	logger.Info("search "+resourceLabel+" succeeded", "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
 // handleGetPastMeetingResource is a shared implementation for getting a past meeting resource by UID.
@@ -934,6 +949,7 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)

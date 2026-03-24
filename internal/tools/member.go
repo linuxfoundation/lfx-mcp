@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
@@ -21,6 +22,9 @@ type MemberConfig struct {
 	LFXAPIURL           string
 	TokenExchangeClient *lfxv2.TokenExchangeClient
 	DebugLogger         *slog.Logger
+	// HTTPClient is the HTTP client to use for LFX API calls.
+	// If nil, a default 30-second timeout client is created.
+	HTTPClient *http.Client
 }
 
 var memberConfig *MemberConfig
@@ -293,6 +297,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -441,6 +446,7 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -530,6 +536,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -632,6 +639,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -730,6 +738,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)
@@ -842,6 +851,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
 		logger.Error("failed to create LFX v2 clients", "error", err)

@@ -387,8 +387,8 @@ func mcpOTelMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 			result, err := next(ctx, method, req)
 
 			// Set error.type on the span when the call fails (Conditionally Required).
-			// For a JSON-RPC-level error, use the error string; for a tool-level
-			// IsError result on tools/call, use the well-known "tool_error" value.
+			// The SDK converts regular tool errors into IsError=true results, so err
+			// here is only non-nil for protocol-level failures (e.g. unknown tool name).
 			if err != nil {
 				span.SetAttributes(semconv.ErrorTypeKey.String(err.Error()))
 			} else if method == "tools/call" {

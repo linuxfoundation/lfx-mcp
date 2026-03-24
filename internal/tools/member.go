@@ -364,8 +364,8 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 	}
 
 	type searchResult struct {
-		Memberships []membershipView `json:"memberships"`
-		Metadata    interface{}      `json:"metadata,omitempty"`
+		Memberships []membershipView            `json:"memberships"`
+		Metadata    *memberservice.ListMetadata `json:"metadata,omitempty"`
 	}
 	filtered := searchResult{
 		Memberships: views,

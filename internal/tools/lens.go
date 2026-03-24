@@ -31,7 +31,7 @@ func SetLensConfig(cfg *LensConfig) {
 func RegisterLFXLensQuery(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
 		Name:        "lfx_lens_query",
-		Description: "Query LFX Lens analytics for a project. Requires LF staff access and auditor relation to the project. Use search_projects first to find the project slug and name.",
+		Description: "Query LFX Lens analytics for a project. Requires LF staff access and auditor relation to the project. Use search_projects first to find the project slug.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "LFX Lens Query",
 			ReadOnlyHint: true,
@@ -44,7 +44,6 @@ func RegisterLFXLensQuery(server *mcp.Server) {
 // LFXLensQueryArgs defines the input for lfx_lens_query.
 type LFXLensQueryArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf')"`
-	ProjectName string `json:"project_name" jsonschema:"Project name or legal entity name from search_projects (e.g. 'Cloud Native Computing Foundation (CNCF)')"`
 	Input       string `json:"input" jsonschema:"Natural language query about the project (e.g. 'How many active maintainers does this project have?')"`
 }
 
@@ -60,7 +59,6 @@ type lensWorkflowAdditional struct {
 
 type lensFoundation struct {
 	Slug string `json:"slug"`
-	Name string `json:"name"`
 }
 
 // --- Tool handlers ---
@@ -87,7 +85,6 @@ func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args LFXL
 		AdditionalData: lensWorkflowAdditional{
 			Foundation: lensFoundation{
 				Slug: args.ProjectSlug,
-				Name: args.ProjectName,
 			},
 		},
 	}

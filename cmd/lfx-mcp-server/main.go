@@ -219,17 +219,13 @@ func main() {
 
 	// Initialise the OpenTelemetry SDK.  A no-op provider is installed when
 	// OTEL_TRACES_EXPORTER is unset (the default), so stdio/local-dev has zero
-	// overhead.  The shutdown func flushes pending spans on exit.
+	// overhead.  The shutdown func is passed to the server runner so it can be
+	// flushed inside the graceful shutdown path with a bounded context.
 	otelShutdown, err := localOtel.SetupSDK(context.Background(), Version)
 	if err != nil {
 		logger.Error("failed to initialise OpenTelemetry SDK", errKey, err)
 		os.Exit(1)
 	}
-	defer func() {
-		if err := otelShutdown(context.Background()); err != nil {
-			logger.Error("OpenTelemetry SDK shutdown failed", errKey, err)
-		}
-	}()
 
 	// Configure user_info tool if auth servers are configured.
 	if len(cfg.MCPAPI.AuthServers) > 0 {
@@ -322,9 +318,9 @@ func main() {
 	// Run server based on mode.
 	switch cfg.Mode {
 	case "stdio":
-		runStdioServer(cfg)
+		runStdioServer(cfg, otelShutdown)
 	case "http":
-		runHTTPServer(cfg)
+		runHTTPServer(cfg, otelShutdown)
 	default:
 		logger.With(errKey, fmt.Errorf("invalid mode: %s", cfg.Mode)).Error("invalid mode (must be 'stdio' or 'http')")
 		os.Exit(1)
@@ -505,7 +501,7 @@ func newServer(cfg Config) *mcp.Server {
 	return server
 }
 
-func runStdioServer(cfg Config) {
+func runStdioServer(cfg Config, otelShutdown func(context.Context) error) {
 	ctx := context.Background()
 
 	// Create the MCP server.
@@ -514,11 +510,20 @@ func runStdioServer(cfg Config) {
 	// Run the server on stdio transport.
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
 		logger.With(errKey, err).Error("server failed")
+		// Flush OTel spans before exiting.
+		if serr := otelShutdown(ctx); serr != nil {
+			logger.Error("OpenTelemetry SDK shutdown failed", errKey, serr)
+		}
 		os.Exit(1)
+	}
+
+	// Flush OTel spans on clean exit.
+	if err := otelShutdown(ctx); err != nil {
+		logger.Error("OpenTelemetry SDK shutdown failed", errKey, err)
 	}
 }
 
-func runHTTPServer(cfg Config) {
+func runHTTPServer(cfg Config, otelShutdown func(context.Context) error) {
 	// Create server factory function for stateless mode.
 	createServer := func(_ *http.Request) *mcp.Server {
 		return newServer(cfg)
@@ -727,7 +732,16 @@ func runHTTPServer(cfg Config) {
 	// Attempt graceful shutdown.
 	if err := httpServer.Shutdown(ctx); err != nil {
 		logger.With(errKey, err).Error("Server shutdown failed")
+		// Flush OTel spans before exiting.
+		if serr := otelShutdown(ctx); serr != nil {
+			logger.Error("OpenTelemetry SDK shutdown failed", errKey, serr)
+		}
 		os.Exit(1)
+	}
+
+	// Flush pending OTel spans before the process exits.
+	if err := otelShutdown(ctx); err != nil {
+		logger.Error("OpenTelemetry SDK shutdown failed", errKey, err)
 	}
 
 	logger.Info("HTTP server stopped")

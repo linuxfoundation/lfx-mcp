@@ -291,9 +291,6 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		memberHTTPClient.UpdateMembershipKeyContact(),
 		memberHTTPClient.DeleteMembershipKeyContact(),
 		memberHTTPClient.GetMembershipKeyContact(),
-		memberHTTPClient.DeprecatedListMembers(),
-		memberHTTPClient.DeprecatedGetMemberMembership(),
-		memberHTTPClient.DeprecatedListMemberMembershipKeyContacts(),
 		memberHTTPClient.Readyz(),
 		memberHTTPClient.Livez(),
 	)

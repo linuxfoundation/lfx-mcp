@@ -79,7 +79,7 @@ secrets:
     # clientAssertionSigningKey is the key name for the private key used to sign client
     # assertions (used when authenticating with a JWT client assertion instead of a
     # client secret).
-    clientAssertionSigningKey: client_assertion_signing_key
+    clientAssertionSigningKey: client_private_key
 # apiCredentials is a TEMPORARY stop-gap for MCP clients that cannot complete a full
 # OAuth2 authorization code flow. Remove this stanza once all clients support proper
 # OAuth2.
@@ -117,7 +117,7 @@ serviceAccount:
   # create specifies whether a service account should be created
   create: true
   # name is the name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # If not set and create is true, defaults to the chart name.
   name: "lfx-mcp"
   # annotations to add to the service account
   annotations: {}

@@ -7,7 +7,6 @@ package tools
 import (
 	"context"
 	"log/slog"
-	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -76,18 +75,6 @@ func (t *teeHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 
 func (t *teeHandler) WithGroup(name string) slog.Handler {
 	return &teeHandler{mcp: t.mcp.WithGroup(name), sys: t.sys.WithGroup(name)}
-}
-
-// ParseEnvBool parses a boolean environment variable value using the truthy
-// strings recognised across the codebase: "true", "t", "1", "y", "yes"
-// (all case-insensitive). Any other non-empty value is treated as false.
-func ParseEnvBool(v string) bool {
-	switch strings.ToLower(v) {
-	case "true", "t", "1", "y", "yes":
-		return true
-	default:
-		return false
-	}
 }
 
 // boolPtr returns a pointer to the given bool value. Used for optional

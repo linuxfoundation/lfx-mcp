@@ -37,7 +37,7 @@ func RegisterOnboardingListMemberships(server *mcp.Server) {
 			Title:        "List Onboarding Memberships",
 			ReadOnlyHint: true,
 		},
-	}, handleOnboardingListMemberships)
+	}, WriteScopes(), handleOnboardingListMemberships)
 }
 
 // --- Tool args ---
@@ -52,12 +52,12 @@ type OnboardingListMembershipsArgs struct {
 
 func handleOnboardingListMemberships(ctx context.Context, req *mcp.CallToolRequest, args OnboardingListMembershipsArgs) (*mcp.CallToolResult, any, error) {
 	if onboardingConfig == nil {
-		return toolError("onboarding tools not configured"), nil, nil
+		return nil, nil, fmt.Errorf("onboarding tools not configured")
 	}
 
-	ctx, errResult := onboardingConfig.AuthorizeProject(ctx, req, args.ProjectSlug, RelationWriter)
-	if errResult != nil {
-		return errResult, nil, nil
+	ctx, err := onboardingConfig.AuthorizeProject(ctx, req, args.ProjectSlug, RelationWriter)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// TODO: Proxy to onboarding service API once Auth0 resource server is deployed.
@@ -73,10 +73,10 @@ func handleOnboardingListMemberships(ctx context.Context, req *mcp.CallToolReque
 	// }
 	// body, statusCode, err := onboardingConfig.ServiceClient.Get(ctx, path, query)
 	// if err != nil {
-	// 	return toolError("onboarding API call failed: %v", err), nil, nil
+	// 	return nil, nil, fmt.Errorf("onboarding API call failed: %w", err)
 	// }
 	// if statusCode != http.StatusOK {
-	// 	return toolError("onboarding service returned status %d: %s", statusCode, string(body)), nil, nil
+	// 	return nil, nil, fmt.Errorf("onboarding service returned status %d: %s", statusCode, string(body))
 	// }
 
 	_ = ctx // used by actual API call

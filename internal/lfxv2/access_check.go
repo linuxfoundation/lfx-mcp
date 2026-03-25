@@ -51,12 +51,20 @@ func NewAccessCheckClient(apiURL string, httpClient *http.Client) *AccessCheckCl
 	}
 }
 
-// CheckAccess sends a batch of access-check requests and returns the results.
+// CheckAccess sends a batch of access-check requests and returns the results
+// as a map from request string to granted status.
 //
 // token is the user's exchanged V2 bearer token (not the MCP token or API key).
 // requests are formatted as "object:id#relation" (e.g., "project:uuid#writer").
-// Results are returned in the same order as requests, each being "allow" or "deny".
-func (c *AccessCheckClient) CheckAccess(ctx context.Context, token string, requests []string) ([]string, error) {
+//
+// The V2 access-check endpoint returns results in an unordered list. Each
+// result is a tab-delimited string in the format:
+//
+//	<request>@<user>\ttrue|false
+//
+// This method parses those results and matches them back to the original
+// requests. The returned map is keyed by the original request string.
+func (c *AccessCheckClient) CheckAccess(ctx context.Context, token string, requests []string) (map[string]bool, error) {
 	body, err := json.Marshal(accessCheckRequest{Requests: requests})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal access-check request: %w", err)
@@ -95,7 +103,16 @@ func (c *AccessCheckClient) CheckAccess(ctx context.Context, token string, reque
 		return nil, fmt.Errorf("access-check returned %d results for %d requests", len(result.Results), len(requests))
 	}
 
-	return result.Results, nil
+	parsed := make(map[string]bool, len(result.Results))
+	for _, r := range result.Results {
+		req, allowed, err := parseAccessResult(r)
+		if err != nil {
+			return nil, err
+		}
+		parsed[req] = allowed
+	}
+
+	return parsed, nil
 }
 
 // CheckProjectAccess verifies the user has the specified relation to a project.
@@ -110,9 +127,38 @@ func (c *AccessCheckClient) CheckProjectAccess(ctx context.Context, token string
 		return fmt.Errorf("access check failed: %w", err)
 	}
 
-	if results[0] != "allow" {
+	allowed, ok := results[request]
+	if !ok {
+		return fmt.Errorf("access check did not return a result for %s", request)
+	}
+	if !allowed {
 		return fmt.Errorf("access denied: user does not have %s relation to project %s", relation, projectUUID)
 	}
 
 	return nil
+}
+
+// parseAccessResult extracts the original request and granted/denied status
+// from a V2 access-check result string. The format is:
+//
+//	<request>@<user>\t<true|false>
+//
+// For example: "project:uuid#writer@user:auth0|alice\ttrue"
+func parseAccessResult(result string) (request string, allowed bool, err error) {
+	parts := strings.SplitN(result, "\t", 2)
+	if len(parts) != 2 {
+		return "", false, fmt.Errorf("unexpected access-check result format (no tab delimiter): %q", result)
+	}
+
+	// The left side is "<request>@<user_type>:<user_id>".
+	// Split on the last "@" to extract the original request.
+	atIdx := strings.LastIndex(parts[0], "@")
+	if atIdx < 0 {
+		return "", false, fmt.Errorf("unexpected access-check result format (no @ delimiter): %q", result)
+	}
+
+	request = parts[0][:atIdx]
+	allowed = parts[1] == "true"
+
+	return request, allowed, nil
 }

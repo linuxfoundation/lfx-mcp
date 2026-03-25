@@ -94,10 +94,6 @@ spec:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ .Values.app.otel.endpoint | quote }}
             {{- end }}
-            {{- if .Values.app.otel.insecure }}
-            - name: OTEL_EXPORTER_OTLP_INSECURE
-              value: {{ .Values.app.otel.insecure | quote }}
-            {{- end }}
             {{- if .Values.app.otel.tracesExporter }}
             - name: OTEL_TRACES_EXPORTER
               value: {{ .Values.app.otel.tracesExporter | quote }}

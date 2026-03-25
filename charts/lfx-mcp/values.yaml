@@ -75,9 +75,8 @@ app:
   otel:
     # endpoint is the OTLP gRPC collector endpoint (e.g. "http://$(HOST_IP):4317").
     # Leave empty to disable tracing (installs a no-op provider).
+    # Bare host:port values are assumed to be plain HTTP; supply an explicit https:// scheme for TLS.
     endpoint: ""
-    # insecure disables TLS for the OTLP connection ("true" for the Datadog Agent receiver).
-    insecure: ""
     # tracesExporter selects the traces exporter ("otlp" or "none").
     tracesExporter: ""
     # tracesSampleRatio is the trace sampling ratio (0.0–1.0, e.g. "0.2" for 20%).

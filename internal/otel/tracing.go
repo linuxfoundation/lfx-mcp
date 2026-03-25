@@ -31,10 +31,14 @@ import (
 )
 
 const (
-	// OTelProtocolGRPC configures OTLP exporters to use gRPC protocol.
+	// OTelProtocolGRPC is the spec value for the gRPC OTLP transport protocol.
+	// Ref: https://opentelemetry.io/docs/specs/otel/protocol/exporter/#specify-protocol
 	OTelProtocolGRPC = "grpc"
-	// OTelProtocolHTTP configures OTLP exporters to use HTTP protocol.
-	OTelProtocolHTTP = "http"
+	// OTelProtocolHTTPProtobuf is the spec value for the HTTP/protobuf OTLP transport protocol.
+	OTelProtocolHTTPProtobuf = "http/protobuf"
+	// OTelProtocolHTTPJSON is the spec value for the HTTP/JSON OTLP transport protocol.
+	// The Go SDK does not support this; it is warned about and treated as http/protobuf.
+	OTelProtocolHTTPJSON = "http/json"
 
 	// OTelExporterOTLP configures signals to export via OTLP.
 	OTelExporterOTLP = "otlp"
@@ -52,17 +56,15 @@ type Config struct {
 	// ServiceVersion is the version of the service.
 	// Env: OTEL_SERVICE_VERSION
 	ServiceVersion string
-	// Protocol specifies the OTLP protocol to use: "grpc" or "http".
+	// Protocol specifies the OTLP transport protocol: "grpc", "http/protobuf", or "http/json".
 	// Env: OTEL_EXPORTER_OTLP_PROTOCOL (default: "grpc")
 	Protocol string
 	// Endpoint is the OTLP collector endpoint.
-	// For gRPC: typically "localhost:4317"
-	// For HTTP: typically "localhost:4318"
+	// For gRPC: typically "http://localhost:4317" or bare "localhost:4317" (http:// is assumed).
+	// For HTTP: typically "http://localhost:4318" or bare "localhost:4318" (http:// is assumed).
+	// To use TLS, provide an explicit https:// scheme.
 	// Env: OTEL_EXPORTER_OTLP_ENDPOINT
 	Endpoint string
-	// Insecure disables TLS for the connection.
-	// Env: OTEL_EXPORTER_OTLP_INSECURE
-	Insecure bool
 	// TracesExporter specifies the traces exporter: "otlp" or "none".
 	// Env: OTEL_TRACES_EXPORTER (default: "none")
 	TracesExporter string
@@ -82,7 +84,6 @@ type Config struct {
 }
 
 // ConfigFromEnv creates a Config from standard OTEL environment variables.
-// Boolean env vars accept "true", "t", "1" (case-insensitive) for true.
 func ConfigFromEnv(serviceVersion string) Config {
 	serviceName := os.Getenv("OTEL_SERVICE_NAME")
 	if serviceName == "" {
@@ -98,8 +99,13 @@ func ConfigFromEnv(serviceVersion string) Config {
 	switch protocol {
 	case "":
 		protocol = OTelProtocolGRPC
-	case OTelProtocolGRPC, OTelProtocolHTTP:
-		// Valid value — keep as-is.
+	case OTelProtocolGRPC, OTelProtocolHTTPProtobuf:
+		// Valid spec value — keep as-is.
+	case OTelProtocolHTTPJSON:
+		// The Go SDK does not implement http/json; fall back to http/protobuf.
+		slog.Warn("OTEL_EXPORTER_OTLP_PROTOCOL http/json is not supported by the Go SDK, using http/protobuf",
+			"provided_value", protocol)
+		protocol = OTelProtocolHTTPProtobuf
 	default:
 		slog.Warn("invalid OTEL_EXPORTER_OTLP_PROTOCOL value, using default",
 			"provided_value", protocol, "default", OTelProtocolGRPC)
@@ -108,38 +114,9 @@ func ConfigFromEnv(serviceVersion string) Config {
 
 	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 
-	var insecure bool
-	if v := os.Getenv("OTEL_EXPORTER_OTLP_INSECURE"); v != "" {
-		// Accept "true", "t", "1", etc. via strconv.ParseBool, and fall back to
-		// strings.ToLower comparison for "t"/"y"/"yes" variants not handled by ParseBool.
-		parsed, err := strconv.ParseBool(v)
-		if err != nil {
-			// Fallback: accept additional truthy strings consistent with the rest of the codebase.
-			lower := strings.ToLower(v)
-			insecure = lower == "t" || lower == "y" || lower == "yes" || lower == "1"
-			if !insecure {
-				slog.Warn("invalid OTEL_EXPORTER_OTLP_INSECURE value, using default false",
-					"provided_value", v)
-			}
-		} else {
-			insecure = parsed
-		}
-	}
-
-	tracesExporter := os.Getenv("OTEL_TRACES_EXPORTER")
-	if tracesExporter == "" {
-		tracesExporter = OTelExporterNone
-	}
-
-	metricsExporter := os.Getenv("OTEL_METRICS_EXPORTER")
-	if metricsExporter == "" {
-		metricsExporter = OTelExporterNone
-	}
-
-	logsExporter := os.Getenv("OTEL_LOGS_EXPORTER")
-	if logsExporter == "" {
-		logsExporter = OTelExporterNone
-	}
+	tracesExporter := normaliseExporter("OTEL_TRACES_EXPORTER", os.Getenv("OTEL_TRACES_EXPORTER"))
+	metricsExporter := normaliseExporter("OTEL_METRICS_EXPORTER", os.Getenv("OTEL_METRICS_EXPORTER"))
+	logsExporter := normaliseExporter("OTEL_LOGS_EXPORTER", os.Getenv("OTEL_LOGS_EXPORTER"))
 
 	propagators := os.Getenv("OTEL_PROPAGATORS")
 	if propagators == "" {
@@ -166,7 +143,6 @@ func ConfigFromEnv(serviceVersion string) Config {
 		"service_version", serviceVersion,
 		"protocol", protocol,
 		"endpoint", endpoint,
-		"insecure", insecure,
 		"traces_exporter", tracesExporter,
 		"traces_sample_ratio", tracesSampleRatio,
 		"metrics_exporter", metricsExporter,
@@ -179,7 +155,6 @@ func ConfigFromEnv(serviceVersion string) Config {
 		ServiceVersion:    serviceVersion,
 		Protocol:          protocol,
 		Endpoint:          endpoint,
-		Insecure:          insecure,
 		TracesExporter:    tracesExporter,
 		TracesSampleRatio: tracesSampleRatio,
 		MetricsExporter:   metricsExporter,
@@ -216,9 +191,10 @@ func SetupSDKWithConfig(ctx context.Context, cfg Config) (shutdown func(context.
 
 	// Normalise endpoint to include a URL scheme so WithEndpointURL can parse it.
 	// Bare host:port values like "127.0.0.1:4317" cause url.Parse to fail with
-	// "first path segment in URL cannot contain colon".
+	// "first path segment in URL cannot contain colon". http:// is assumed for
+	// bare values; users requiring TLS must supply an explicit https:// scheme.
 	if cfg.Endpoint != "" {
-		cfg.Endpoint = endpointURL(cfg.Endpoint, cfg.Insecure)
+		cfg.Endpoint = endpointURL(cfg.Endpoint)
 	}
 
 	// Route OTEL internal errors through slog instead of the default stderr writer.
@@ -234,6 +210,7 @@ func SetupSDKWithConfig(ctx context.Context, cfg Config) (shutdown func(context.
 
 	otel.SetTextMapPropagator(newPropagator(cfg))
 
+	// cfg.TracesExporter is already validated to "otlp" or "none" by ConfigFromEnv.
 	if cfg.TracesExporter != OTelExporterNone {
 		var tracerProvider *trace.TracerProvider
 		tracerProvider, err = newTraceProvider(ctx, cfg, res)
@@ -270,19 +247,16 @@ func SetupSDKWithConfig(ctx context.Context, cfg Config) (shutdown func(context.
 	return
 }
 
-// endpointURL ensures the endpoint has a URL scheme. The OTel SDK internally
-// reads OTEL_EXPORTER_OTLP_ENDPOINT and parses it with url.Parse, which fails
-// for bare host:port values like "127.0.0.1:4317" with "first path segment in
-// URL cannot contain colon". Prepending the appropriate scheme based on the
-// insecure flag produces a valid URL the SDK can parse.
-func endpointURL(raw string, insecure bool) string {
+// endpointURL ensures the endpoint has a URL scheme. The OTel SDK passes the
+// endpoint to url.Parse internally, which rejects bare host:port values like
+// "127.0.0.1:4317" with "first path segment in URL cannot contain colon".
+// Bare values are assumed to be plain HTTP; supply an explicit https:// scheme
+// to use TLS.
+func endpointURL(raw string) string {
 	if strings.Contains(raw, "://") {
 		return raw
 	}
-	if insecure {
-		return "http://" + raw
-	}
-	return "https://" + raw
+	return "http://" + raw
 }
 
 // newResource creates an OpenTelemetry resource with service name and version attributes.
@@ -320,27 +294,36 @@ func newPropagator(cfg Config) propagation.TextMapPropagator {
 	return propagation.NewCompositeTextMapPropagator(propagators...)
 }
 
+// normaliseExporter validates a signal exporter env var value, accepting only
+// "otlp" and "none". Any other value emits a warning and defaults to "none".
+func normaliseExporter(envKey, v string) string {
+	switch v {
+	case "":
+		return OTelExporterNone
+	case OTelExporterOTLP, OTelExporterNone:
+		return v
+	default:
+		slog.Warn("unsupported exporter value, only \"otlp\" and \"none\" are supported; using \"none\"",
+			"env", envKey, "provided_value", v)
+		return OTelExporterNone
+	}
+}
+
 // newTraceProvider creates a TracerProvider with the configured OTLP exporter.
 func newTraceProvider(ctx context.Context, cfg Config, res *resource.Resource) (*trace.TracerProvider, error) {
 	var exporter trace.SpanExporter
 	var err error
 
-	if cfg.Protocol == OTelProtocolHTTP {
+	if cfg.Protocol == OTelProtocolHTTPProtobuf {
 		opts := []otlptracehttp.Option{}
 		if cfg.Endpoint != "" {
 			opts = append(opts, otlptracehttp.WithEndpointURL(cfg.Endpoint))
-		}
-		if cfg.Insecure {
-			opts = append(opts, otlptracehttp.WithInsecure())
 		}
 		exporter, err = otlptracehttp.New(ctx, opts...)
 	} else {
 		opts := []otlptracegrpc.Option{}
 		if cfg.Endpoint != "" {
 			opts = append(opts, otlptracegrpc.WithEndpointURL(cfg.Endpoint))
-		}
-		if cfg.Insecure {
-			opts = append(opts, otlptracegrpc.WithInsecure())
 		}
 		exporter, err = otlptracegrpc.New(ctx, opts...)
 	}
@@ -351,7 +334,7 @@ func newTraceProvider(ctx context.Context, cfg Config, res *resource.Resource) (
 
 	return trace.NewTracerProvider(
 		trace.WithResource(res),
-		trace.WithSampler(trace.TraceIDRatioBased(cfg.TracesSampleRatio)),
+		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(cfg.TracesSampleRatio))),
 		trace.WithBatcher(exporter,
 			trace.WithBatchTimeout(time.Second),
 		),
@@ -363,22 +346,16 @@ func newMetricsProvider(ctx context.Context, cfg Config, res *resource.Resource)
 	var exporter metric.Exporter
 	var err error
 
-	if cfg.Protocol == OTelProtocolHTTP {
+	if cfg.Protocol == OTelProtocolHTTPProtobuf {
 		opts := []otlpmetrichttp.Option{}
 		if cfg.Endpoint != "" {
 			opts = append(opts, otlpmetrichttp.WithEndpointURL(cfg.Endpoint))
-		}
-		if cfg.Insecure {
-			opts = append(opts, otlpmetrichttp.WithInsecure())
 		}
 		exporter, err = otlpmetrichttp.New(ctx, opts...)
 	} else {
 		opts := []otlpmetricgrpc.Option{}
 		if cfg.Endpoint != "" {
 			opts = append(opts, otlpmetricgrpc.WithEndpointURL(cfg.Endpoint))
-		}
-		if cfg.Insecure {
-			opts = append(opts, otlpmetricgrpc.WithInsecure())
 		}
 		exporter, err = otlpmetricgrpc.New(ctx, opts...)
 	}
@@ -400,22 +377,16 @@ func newLoggerProvider(ctx context.Context, cfg Config, res *resource.Resource) 
 	var exporter log.Exporter
 	var err error
 
-	if cfg.Protocol == OTelProtocolHTTP {
+	if cfg.Protocol == OTelProtocolHTTPProtobuf {
 		opts := []otlploghttp.Option{}
 		if cfg.Endpoint != "" {
 			opts = append(opts, otlploghttp.WithEndpointURL(cfg.Endpoint))
-		}
-		if cfg.Insecure {
-			opts = append(opts, otlploghttp.WithInsecure())
 		}
 		exporter, err = otlploghttp.New(ctx, opts...)
 	} else {
 		opts := []otlploggrpc.Option{}
 		if cfg.Endpoint != "" {
 			opts = append(opts, otlploggrpc.WithEndpointURL(cfg.Endpoint))
-		}
-		if cfg.Insecure {
-			opts = append(opts, otlploggrpc.WithInsecure())
 		}
 		exporter, err = otlploggrpc.New(ctx, opts...)
 	}

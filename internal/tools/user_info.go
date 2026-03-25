@@ -47,10 +47,10 @@ func RegisterUserInfo(server *mcp.Server) {
 // handleUserInfo implements the user_info tool logic.
 func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArgs) (*mcp.CallToolResult, any, error) {
 	// Create MCP logger that sends logs to the client.
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if userInfoConfig == nil {
-		logger.Error("user_info tool not configured")
+		logger.ErrorContext(ctx, "user_info tool not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: user_info tool not configured"},
@@ -60,7 +60,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 	}
 
 	if userInfoConfig.UserInfoEndpoint == "" {
-		logger.Error("userinfo endpoint not configured")
+		logger.ErrorContext(ctx, "userinfo endpoint not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: userinfo endpoint not configured"},
@@ -69,7 +69,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 		}, nil, nil
 	}
 
-	logger.Info("fetching user info from OAuth provider")
+	logger.InfoContext(ctx, "fetching user info from OAuth provider")
 
 	// Extract raw token from TokenInfo.Extra (populated by JWT verifier).
 	var rawToken string
@@ -80,7 +80,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 	}
 
 	if rawToken == "" {
-		logger.Error("raw token not found in request")
+		logger.ErrorContext(ctx, "raw token not found in request")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: Authentication token required"},
@@ -93,10 +93,10 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 	authHeader := "Bearer " + rawToken
 
 	// Call OAuth userinfo endpoint.
-	logger.Debug("sending request to userinfo endpoint", "url", userInfoConfig.UserInfoEndpoint)
+	logger.DebugContext(ctx, "sending request to userinfo endpoint", "url", userInfoConfig.UserInfoEndpoint)
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", userInfoConfig.UserInfoEndpoint, nil)
 	if err != nil {
-		logger.Error("failed to create HTTP request", "error", err)
+		logger.ErrorContext(ctx, "failed to create HTTP request", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error creating request: %v", err)},
@@ -125,7 +125,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Error("failed to read response body", "error", err)
+		logger.ErrorContext(ctx, "failed to read response body", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error reading response: %v", err)},
@@ -147,7 +147,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 	// Parse and pretty-print JSON.
 	var userInfo map[string]interface{}
 	if err := json.Unmarshal(body, &userInfo); err != nil {
-		logger.Error("failed to parse JSON response", "error", err)
+		logger.ErrorContext(ctx, "failed to parse JSON response", "error", err)
 		// Return raw response if not valid JSON.
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -159,7 +159,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 	// Return pretty-printed JSON.
 	prettyJSON, err := json.MarshalIndent(userInfo, "", "  ")
 	if err != nil {
-		logger.Error("failed to format JSON response", "error", err)
+		logger.ErrorContext(ctx, "failed to format JSON response", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error formatting response: %v", err)},
@@ -168,7 +168,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 		}, nil, nil
 	}
 
-	logger.Info("user info retrieved successfully", "sub", userInfo["sub"])
+	logger.InfoContext(ctx, "user info retrieved successfully", "sub", userInfo["sub"])
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

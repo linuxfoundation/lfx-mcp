@@ -31,9 +31,9 @@ func RegisterHelloWorld(server *mcp.Server) {
 }
 
 // handleHelloWorld implements the hello_world tool logic.
-func handleHelloWorld(_ context.Context, req *mcp.CallToolRequest, args HelloWorldArgs) (*mcp.CallToolResult, any, error) {
+func handleHelloWorld(ctx context.Context, req *mcp.CallToolRequest, args HelloWorldArgs) (*mcp.CallToolResult, any, error) {
 	// Create MCP logger that sends logs to the client.
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	// Extract name parameter with default.
 	name := "World"
@@ -42,18 +42,18 @@ func handleHelloWorld(_ context.Context, req *mcp.CallToolRequest, args HelloWor
 	}
 
 	// Log tool execution with client-visible logs.
-	logger.Info("hello_world tool called", "name", name)
+	logger.InfoContext(ctx, "hello_world tool called", "name", name)
 
 	// Generate greeting.
 	var greeting string
 	if args.Message != "" {
 		greeting = fmt.Sprintf("%s, %s!", args.Message, name)
-		logger.Warn("custom message provided", "message", args.Message)
+		logger.WarnContext(ctx, "custom message provided", "message", args.Message)
 	} else {
 		greeting = fmt.Sprintf("Hello, %s!", name)
 	}
 
-	logger.Debug("greeting generated", "greeting", greeting)
+	logger.DebugContext(ctx, "greeting generated", "greeting", greeting)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

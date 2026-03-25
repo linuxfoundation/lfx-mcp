@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
@@ -35,6 +36,9 @@ type MeetingConfig struct {
 	LFXAPIURL           string
 	TokenExchangeClient *lfxv2.TokenExchangeClient
 	DebugLogger         *slog.Logger
+	// HTTPClient is the HTTP client to use for LFX API calls.
+	// If nil, a default 30-second timeout client is created.
+	HTTPClient *http.Client
 }
 
 var meetingConfig *MeetingConfig
@@ -253,10 +257,10 @@ type GetPastMeetingSummaryArgs struct {
 
 // handleSearchMeetings implements the search_meetings tool logic.
 func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingsArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
-		logger.Error("meeting tools not configured")
+		logger.ErrorContext(ctx, "meeting tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: meeting tools not configured"},
@@ -267,7 +271,7 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -282,9 +286,10 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -350,11 +355,11 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.Info("searching meetings", "name", args.Name, "project_uid", args.ProjectUID, "committee_uid", args.CommitteeUID, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching meetings", "name", args.Name, "project_uid", args.ProjectUID, "committee_uid", args.CommitteeUID, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
-		logger.Error("QueryResources failed", "error", err)
+		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search meetings: %s", lfxv2.ErrorMessage(err))},
@@ -373,13 +378,14 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		PageToken: result.PageToken,
 	}
 
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal search result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -388,21 +394,22 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		}, nil, nil
 	}
 
-	logger.Info("search_meetings succeeded", "count", len(result.Resources))
+	logger.InfoContext(ctx, "search_meetings succeeded", "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
 // handleGetMeeting implements the get_meeting tool logic.
 func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMeetingArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
-		logger.Error("meeting tools not configured")
+		logger.ErrorContext(ctx, "meeting tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: meeting tools not configured"},
@@ -422,7 +429,7 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -437,9 +444,10 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -448,7 +456,7 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 		}, nil, nil
 	}
 
-	logger.Info("fetching meeting", "uid", args.UID)
+	logger.InfoContext(ctx, "fetching meeting", "uid", args.UID)
 
 	resourceType := meetingResourceType
 	payload := &querysvc.QueryResourcesPayload{
@@ -461,7 +469,7 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
-		logger.Error("QueryResources failed", "error", err)
+		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get meeting: %s", lfxv2.ErrorMessage(err))},
@@ -481,7 +489,7 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 
 	prettyJSON, err := json.MarshalIndent(result.Resources[0], "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal meeting result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal meeting result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -490,7 +498,7 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 		}, nil, nil
 	}
 
-	logger.Info("get_meeting succeeded", "uid", args.UID)
+	logger.InfoContext(ctx, "get_meeting succeeded", "uid", args.UID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -501,10 +509,10 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 
 // handleSearchMeetingRegistrants implements the search_meeting_registrants tool logic.
 func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingRegistrantsArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
-		logger.Error("meeting tools not configured")
+		logger.ErrorContext(ctx, "meeting tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: meeting tools not configured"},
@@ -515,7 +523,7 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -530,9 +538,10 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -585,11 +594,11 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.Info("searching meeting registrants", "meeting_id", args.MeetingID, "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching meeting registrants", "meeting_id", args.MeetingID, "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
-		logger.Error("QueryResources failed", "error", err)
+		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search meeting registrants: %s", lfxv2.ErrorMessage(err))},
@@ -608,13 +617,14 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 		PageToken: result.PageToken,
 	}
 
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal search result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -623,21 +633,22 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	logger.Info("search_meeting_registrants succeeded", "count", len(result.Resources))
+	logger.InfoContext(ctx, "search_meeting_registrants succeeded", "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
 // handleGetMeetingRegistrant implements the get_meeting_registrant tool logic.
 func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, args GetMeetingRegistrantArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
-		logger.Error("meeting tools not configured")
+		logger.ErrorContext(ctx, "meeting tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: meeting tools not configured"},
@@ -657,7 +668,7 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -672,9 +683,10 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -683,7 +695,7 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	logger.Info("fetching meeting registrant", "uid", args.UID)
+	logger.InfoContext(ctx, "fetching meeting registrant", "uid", args.UID)
 
 	resourceType := meetingRegistrantResourceType
 	payload := &querysvc.QueryResourcesPayload{
@@ -696,7 +708,7 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
-		logger.Error("QueryResources failed", "error", err)
+		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get meeting registrant: %s", lfxv2.ErrorMessage(err))},
@@ -716,7 +728,7 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 
 	prettyJSON, err := json.MarshalIndent(result.Resources[0], "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal meeting registrant result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal meeting registrant result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -725,7 +737,7 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	logger.Info("get_meeting_registrant succeeded", "uid", args.UID)
+	logger.InfoContext(ctx, "get_meeting_registrant succeeded", "uid", args.UID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -766,10 +778,10 @@ func handleGetPastMeetingSummary(ctx context.Context, req *mcp.CallToolRequest, 
 
 // handleSearchPastMeetingResource is a shared implementation for searching past meeting resource types.
 func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest, resourceType, resourceLabel, meetingID, committeeUID, projectUID, name string, filters []string, sort string, pageSize int, pageToken string) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
-		logger.Error("meeting tools not configured")
+		logger.ErrorContext(ctx, "meeting tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: meeting tools not configured"},
@@ -780,7 +792,7 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -795,9 +807,10 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -847,11 +860,11 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 		payload.PageToken = &pageToken
 	}
 
-	logger.Info("searching "+resourceLabel, "meeting_id", meetingID, "committee_uid", committeeUID, "project_uid", projectUID, "name", name, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching "+resourceLabel, "meeting_id", meetingID, "committee_uid", committeeUID, "project_uid", projectUID, "name", name, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
-		logger.Error("QueryResources failed", "error", err)
+		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search %s: %s", resourceLabel, lfxv2.ErrorMessage(err))},
@@ -870,13 +883,14 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 		PageToken: result.PageToken,
 	}
 
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal search result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -885,21 +899,22 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 		}, nil, nil
 	}
 
-	logger.Info("search "+resourceLabel+" succeeded", "count", len(result.Resources))
+	logger.InfoContext(ctx, "search "+resourceLabel+" succeeded", "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
 // handleGetPastMeetingResource is a shared implementation for getting a past meeting resource by UID.
 func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest, resourceType, resourceLabel, uid string) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
-		logger.Error("meeting tools not configured")
+		logger.ErrorContext(ctx, "meeting tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: meeting tools not configured"},
@@ -919,7 +934,7 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -934,9 +949,10 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 		APIDomain:           meetingConfig.LFXAPIURL,
 		TokenExchangeClient: meetingConfig.TokenExchangeClient,
 		DebugLogger:         meetingConfig.DebugLogger,
+		HTTPClient:          meetingConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -945,7 +961,7 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 		}, nil, nil
 	}
 
-	logger.Info("fetching "+resourceLabel, "uid", uid)
+	logger.InfoContext(ctx, "fetching "+resourceLabel, "uid", uid)
 
 	payload := &querysvc.QueryResourcesPayload{
 		Version:  "1",
@@ -957,7 +973,7 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
-		logger.Error("QueryResources failed", "error", err)
+		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get %s: %s", resourceLabel, lfxv2.ErrorMessage(err))},
@@ -977,7 +993,7 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 
 	prettyJSON, err := json.MarshalIndent(result.Resources[0], "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -986,7 +1002,7 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 		}, nil, nil
 	}
 
-	logger.Info("get "+resourceLabel+" succeeded", "uid", uid)
+	logger.InfoContext(ctx, "get "+resourceLabel+" succeeded", "uid", uid)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

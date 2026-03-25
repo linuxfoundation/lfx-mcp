@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
@@ -27,6 +28,9 @@ type CommitteeConfig struct {
 	LFXAPIURL           string
 	TokenExchangeClient *lfxv2.TokenExchangeClient
 	DebugLogger         *slog.Logger
+	// HTTPClient is the HTTP client to use for LFX API calls.
+	// If nil, a default 30-second timeout client is created.
+	HTTPClient *http.Client
 }
 
 var committeeConfig *CommitteeConfig
@@ -114,10 +118,10 @@ type SearchCommitteeMembersArgs struct {
 
 // handleSearchCommittees implements the search_committees tool logic.
 func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteesArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
-		logger.Error("committee tools not configured")
+		logger.ErrorContext(ctx, "committee tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: committee tools not configured"},
@@ -128,7 +132,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -143,9 +147,10 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		APIDomain:           committeeConfig.LFXAPIURL,
 		TokenExchangeClient: committeeConfig.TokenExchangeClient,
 		DebugLogger:         committeeConfig.DebugLogger,
+		HTTPClient:          committeeConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -181,11 +186,11 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.Info("searching committees", "name", args.Name, "project_uid", args.ProjectUID, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching committees", "name", args.Name, "project_uid", args.ProjectUID, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
-		logger.Error("QueryResources failed", "error", err)
+		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search committees: %s", lfxv2.ErrorMessage(err))},
@@ -206,13 +211,14 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 
 	// Warn if fewer results than requested were returned but more pages exist.
 	// This indicates some results on this page were excluded due to access controls.
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal search result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -221,22 +227,23 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		}, nil, nil
 	}
 
-	logger.Info("search_committees succeeded", "count", len(result.Resources))
+	logger.InfoContext(ctx, "search_committees succeeded", "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
 // handleGetCommittee implements the get_committee tool logic, fetching both base
 // info and settings for the given committee UID.
 func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetCommitteeArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
-		logger.Error("committee tools not configured")
+		logger.ErrorContext(ctx, "committee tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: committee tools not configured"},
@@ -256,7 +263,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -271,9 +278,10 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		APIDomain:           committeeConfig.LFXAPIURL,
 		TokenExchangeClient: committeeConfig.TokenExchangeClient,
 		DebugLogger:         committeeConfig.DebugLogger,
+		HTTPClient:          committeeConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -282,13 +290,13 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		}, nil, nil
 	}
 
-	logger.Info("fetching committee", "uid", args.UID)
+	logger.InfoContext(ctx, "fetching committee", "uid", args.UID)
 
 	baseResult, err := clients.Committee.GetCommitteeBase(ctx, &committeeservice.GetCommitteeBasePayload{
 		UID: &args.UID,
 	})
 	if err != nil {
-		logger.Error("GetCommitteeBase failed", "error", err, "uid", args.UID)
+		logger.ErrorContext(ctx, "GetCommitteeBase failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get committee: %s", lfxv2.ErrorMessage(err))},
@@ -304,8 +312,10 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 	settingsResult, err := clients.Committee.GetCommitteeSettings(ctx, &committeeservice.GetCommitteeSettingsPayload{
 		UID: &args.UID,
 	})
+	var settingsWarning string
 	if err != nil {
-		logger.Warn("getting privileged committee settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
+		settingsWarning = fmt.Sprintf("WARNING: committee settings unavailable - %s", lfxv2.ErrorMessage(err))
+		logger.ErrorContext(ctx, "getting privileged committee settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
 	} else {
 		committeeSettings = settingsResult.CommitteeSettings
 	}
@@ -322,7 +332,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal committee result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal committee result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -331,21 +341,25 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		}, nil, nil
 	}
 
-	logger.Info("get_committee succeeded", "uid", args.UID)
+	logger.InfoContext(ctx, "get_committee succeeded", "uid", args.UID)
+
+	content := []mcp.Content{}
+	if settingsWarning != "" {
+		content = append(content, &mcp.TextContent{Text: settingsWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
 
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
+		Content: content,
 	}, nil, nil
 }
 
 // handleGetCommitteeMember implements the get_committee_member tool logic.
 func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, args GetCommitteeMemberArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
-		logger.Error("committee tools not configured")
+		logger.ErrorContext(ctx, "committee tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: committee tools not configured"},
@@ -374,7 +388,7 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -389,9 +403,10 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		APIDomain:           committeeConfig.LFXAPIURL,
 		TokenExchangeClient: committeeConfig.TokenExchangeClient,
 		DebugLogger:         committeeConfig.DebugLogger,
+		HTTPClient:          committeeConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -400,7 +415,7 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		}, nil, nil
 	}
 
-	logger.Info("fetching committee member", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
+	logger.InfoContext(ctx, "fetching committee member", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 
 	result, err := clients.Committee.GetCommitteeMember(ctx, &committeeservice.GetCommitteeMemberPayload{
 		Version:   "1",
@@ -408,7 +423,7 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		MemberUID: args.MemberUID,
 	})
 	if err != nil {
-		logger.Error("GetCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
+		logger.ErrorContext(ctx, "GetCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get committee member: %s", lfxv2.ErrorMessage(err))},
@@ -419,7 +434,7 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 
 	prettyJSON, err := json.MarshalIndent(result.Member, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal committee member result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal committee member result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -428,7 +443,7 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		}, nil, nil
 	}
 
-	logger.Info("get_committee_member succeeded", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
+	logger.InfoContext(ctx, "get_committee_member succeeded", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -439,10 +454,10 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 
 // handleSearchCommitteeMembers implements the search_committee_members tool logic.
 func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteeMembersArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
-		logger.Error("committee tools not configured")
+		logger.ErrorContext(ctx, "committee tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: committee tools not configured"},
@@ -453,7 +468,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -468,9 +483,10 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		APIDomain:           committeeConfig.LFXAPIURL,
 		TokenExchangeClient: committeeConfig.TokenExchangeClient,
 		DebugLogger:         committeeConfig.DebugLogger,
+		HTTPClient:          committeeConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -512,11 +528,11 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.Info("searching committee members", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching committee members", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
-		logger.Error("QueryResources failed", "error", err)
+		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search committee members: %s", lfxv2.ErrorMessage(err))},
@@ -537,13 +553,14 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 
 	// Warn if fewer results than requested were returned but more pages exist.
 	// This indicates some results on this page were excluded due to access controls.
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal search result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -552,11 +569,12 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		}, nil, nil
 	}
 
-	logger.Info("search_committee_members succeeded", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
+	logger.InfoContext(ctx, "search_committee_members succeeded", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }

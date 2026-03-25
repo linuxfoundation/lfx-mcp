@@ -37,7 +37,7 @@ func RegisterLFXLensQuery(server *mcp.Server) {
 			Title:        "LFX Lens Query",
 			ReadOnlyHint: true,
 		},
-	}, handleLFXLensQuery)
+	}, ReadScopes(), handleLFXLensQuery)
 }
 
 // --- Tool args ---
@@ -66,18 +66,18 @@ type lensFoundation struct {
 
 func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args LFXLensQueryArgs) (*mcp.CallToolResult, any, error) {
 	if lensConfig == nil {
-		return toolError("LFX Lens tools not configured"), nil, nil
+		return nil, nil, fmt.Errorf("LFX Lens tools not configured")
 	}
 
 	// Staff check — LFX Lens is staff-only.
-	if errResult := RequireLFStaff(req); errResult != nil {
-		return errResult, nil, nil
+	if err := RequireLFStaff(req); err != nil {
+		return nil, nil, err
 	}
 
 	// Project-level authorization — auditor relation required.
-	ctx, errResult := lensConfig.AuthorizeProject(ctx, req, args.ProjectSlug, RelationAuditor)
-	if errResult != nil {
-		return errResult, nil, nil
+	ctx, err := lensConfig.AuthorizeProject(ctx, req, args.ProjectSlug, RelationAuditor)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// TODO: Proxy to Lens service API once Auth0 resource server is deployed.
@@ -97,10 +97,10 @@ func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args LFXL
 	// }
 	// body, statusCode, err := lensConfig.ServiceClient.PostJSON(ctx, "/workflows/lfx-lens-mcp-workflow/runs", payload)
 	// if err != nil {
-	// 	return toolError("Lens API call failed: %v", err), nil, nil
+	// 	return nil, nil, fmt.Errorf("Lens API call failed: %w", err)
 	// }
 	// if statusCode != http.StatusOK {
-	// 	return toolError("Lens service returned status %d: %s", statusCode, string(body)), nil, nil
+	// 	return nil, nil, fmt.Errorf("Lens service returned status %d: %s", statusCode, string(body))
 	// }
 
 	_ = ctx // used by actual API call

@@ -40,7 +40,9 @@ func TestCheckAccess_Allow(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessCheckResponse{Results: []string{"allow"}})
+		json.NewEncoder(w).Encode(accessCheckResponse{
+			Results: []string{"project:abc-123#writer@user:auth0|testuser\ttrue"},
+		})
 	}))
 	defer server.Close()
 
@@ -49,15 +51,21 @@ func TestCheckAccess_Allow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(results) != 1 || results[0] != "allow" {
-		t.Errorf("expected [allow], got %v", results)
+	allowed, ok := results["project:abc-123#writer"]
+	if !ok {
+		t.Fatal("expected result for project:abc-123#writer")
+	}
+	if !allowed {
+		t.Error("expected allowed=true")
 	}
 }
 
 func TestCheckAccess_Deny(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessCheckResponse{Results: []string{"deny"}})
+		json.NewEncoder(w).Encode(accessCheckResponse{
+			Results: []string{"project:abc-123#writer@user:auth0|testuser\tfalse"},
+		})
 	}))
 	defer server.Close()
 
@@ -66,8 +74,12 @@ func TestCheckAccess_Deny(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(results) != 1 || results[0] != "deny" {
-		t.Errorf("expected [deny], got %v", results)
+	allowed, ok := results["project:abc-123#writer"]
+	if !ok {
+		t.Fatal("expected result for project:abc-123#writer")
+	}
+	if allowed {
+		t.Error("expected allowed=false")
 	}
 }
 
@@ -81,9 +93,14 @@ func TestCheckAccess_Batch(t *testing.T) {
 			t.Errorf("expected 3 requests, got %d", len(req.Requests))
 		}
 
+		// Return results in a different order than requested (as the real API does).
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(accessCheckResponse{
-			Results: []string{"allow", "deny", "allow"},
+			Results: []string{
+				"project:bbb#auditor@user:auth0|testuser\tfalse",
+				"project:aaa#writer@user:auth0|testuser\ttrue",
+				"project:ccc#writer@user:auth0|testuser\ttrue",
+			},
 		})
 	}))
 	defer server.Close()
@@ -100,8 +117,14 @@ func TestCheckAccess_Batch(t *testing.T) {
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
 	}
-	if results[0] != "allow" || results[1] != "deny" || results[2] != "allow" {
-		t.Errorf("unexpected results: %v", results)
+	if !results["project:aaa#writer"] {
+		t.Error("expected project:aaa#writer to be allowed")
+	}
+	if results["project:bbb#auditor"] {
+		t.Error("expected project:bbb#auditor to be denied")
+	}
+	if !results["project:ccc#writer"] {
+		t.Error("expected project:ccc#writer to be allowed")
 	}
 }
 
@@ -112,7 +135,9 @@ func TestCheckAccess_HashSeparator(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&capturedBody)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessCheckResponse{Results: []string{"allow"}})
+		json.NewEncoder(w).Encode(accessCheckResponse{
+			Results: []string{"project:my-uuid#writer@user:auth0|testuser\ttrue"},
+		})
 	}))
 	defer server.Close()
 
@@ -160,7 +185,9 @@ func TestCheckAccess_ResultCountMismatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		// Return 1 result for 2 requests.
-		json.NewEncoder(w).Encode(accessCheckResponse{Results: []string{"allow"}})
+		json.NewEncoder(w).Encode(accessCheckResponse{
+			Results: []string{"project:a#writer@user:auth0|testuser\ttrue"},
+		})
 	}))
 	defer server.Close()
 
@@ -174,7 +201,9 @@ func TestCheckAccess_ResultCountMismatch(t *testing.T) {
 func TestCheckProjectAccess_Allow(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessCheckResponse{Results: []string{"allow"}})
+		json.NewEncoder(w).Encode(accessCheckResponse{
+			Results: []string{"project:uuid-123#writer@user:auth0|testuser\ttrue"},
+		})
 	}))
 	defer server.Close()
 
@@ -188,7 +217,9 @@ func TestCheckProjectAccess_Allow(t *testing.T) {
 func TestCheckProjectAccess_Deny(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessCheckResponse{Results: []string{"deny"}})
+		json.NewEncoder(w).Encode(accessCheckResponse{
+			Results: []string{"project:uuid-123#writer@user:auth0|testuser\tfalse"},
+		})
 	}))
 	defer server.Close()
 
@@ -196,6 +227,59 @@ func TestCheckProjectAccess_Deny(t *testing.T) {
 	err := client.CheckProjectAccess(context.Background(), "token", "uuid-123", "writer")
 	if err == nil {
 		t.Fatal("expected error for denied access")
+	}
+}
+
+func TestParseAccessResult(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantReq string
+		wantOK  bool
+		wantErr bool
+	}{
+		{
+			name:    "allowed",
+			input:   "project:abc-123#writer@user:auth0|alice\ttrue",
+			wantReq: "project:abc-123#writer",
+			wantOK:  true,
+		},
+		{
+			name:    "denied",
+			input:   "project:abc-123#owner@user:auth0|alice\tfalse",
+			wantReq: "project:abc-123#owner",
+			wantOK:  false,
+		},
+		{
+			name:    "no tab",
+			input:   "project:abc-123#writer@user:auth0|alice",
+			wantErr: true,
+		},
+		{
+			name:    "no at sign",
+			input:   "something\ttrue",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, allowed, err := parseAccessResult(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if req != tt.wantReq {
+				t.Errorf("request = %q, want %q", req, tt.wantReq)
+			}
+			if allowed != tt.wantOK {
+				t.Errorf("allowed = %v, want %v", allowed, tt.wantOK)
+			}
+		})
 	}
 }
 

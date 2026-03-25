@@ -34,23 +34,21 @@ const (
 
 // AddServiceTool registers a tool that proxies to an internal service API.
 //
-// Unlike [AddToolWithScopes], service tools do NOT check JWT scopes at dispatch.
-// Authorization is handled inside the tool handler via the V2 access-check
-// endpoint, which verifies the user has the required project-level relationship
-// (e.g., "writer" or "auditor") before proxying the request.
-//
-// This separation exists because:
-//   - Service APIs use shared API keys with no per-user authorization
-//   - The MCP server IS the authorization gateway for these tools
-//   - The V2 access-check (OpenFGA-backed) is the authoritative decision
-//   - MCP scopes (read:all / manage:all) are for V2 API tools where
-//     Heimdal handles per-resource authorization
+// Service tools enforce two layers of authorization:
+//  1. MCP JWT scopes (read:all / manage:all) — checked at dispatch by
+//     [AddToolWithScopes]. This ensures a reduced-scope MCP token cannot
+//     access tools beyond its granted scopes, regardless of the user's
+//     underlying permissions.
+//  2. V2 access-check (OpenFGA) — checked inside the tool handler via
+//     [ServiceAuth.AuthorizeProject]. This verifies the user has the
+//     required project-level relationship (e.g., "writer" or "auditor").
 func AddServiceTool[In, Out any](
 	server *mcp.Server,
 	tool *mcp.Tool,
+	scopes []string,
 	handler mcp.ToolHandlerFor[In, Out],
 ) {
-	mcp.AddTool(server, tool, handler)
+	AddToolWithScopes(server, tool, scopes, handler)
 }
 
 // --- Shared service tool infrastructure ---
@@ -73,15 +71,17 @@ type ServiceAuth struct {
 //  4. Verify the user has the required relation via access-check
 //
 // On success it returns the enriched context (with MCP token attached).
-// On failure it returns an MCP error result that the handler can return directly.
-func (s *ServiceAuth) AuthorizeProject(ctx context.Context, req *mcp.CallToolRequest, slug, relation string) (context.Context, *mcp.CallToolResult) {
+// On failure it returns an error — the MCP SDK automatically wraps returned
+// errors into a CallToolResult with IsError set, so callers can propagate
+// the error directly as the handler's error return value.
+func (s *ServiceAuth) AuthorizeProject(ctx context.Context, req *mcp.CallToolRequest, slug, relation string) (context.Context, error) {
 	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
 
 	// Extract MCP token.
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.Error("failed to extract MCP token", "error", err)
-		return ctx, toolError("failed to extract MCP token: %v", err)
+		return ctx, fmt.Errorf("failed to extract MCP token: %w", err)
 	}
 
 	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
@@ -94,27 +94,27 @@ func (s *ServiceAuth) AuthorizeProject(ctx context.Context, req *mcp.CallToolReq
 	})
 	if err != nil {
 		logger.Error("failed to create V2 clients", "error", err)
-		return ctx, toolError("failed to create V2 clients: %v", err)
+		return ctx, fmt.Errorf("failed to create V2 clients: %w", err)
 	}
 
 	// Resolve slug → UUID.
 	projectUUID, err := s.SlugResolver.Resolve(ctx, clients, slug)
 	if err != nil {
 		logger.Error("failed to resolve project slug", "error", err, "slug", slug)
-		return ctx, toolError("failed to resolve project slug %q: %v", slug, err)
+		return ctx, fmt.Errorf("failed to resolve project slug %q: %w", slug, err)
 	}
 
 	// Get exchanged V2 token for access-check.
 	v2Token, err := clients.GetExchangedToken(ctx)
 	if err != nil {
 		logger.Error("failed to get V2 token", "error", err)
-		return ctx, toolError("failed to get V2 token: %v", err)
+		return ctx, fmt.Errorf("failed to get V2 token: %w", err)
 	}
 
 	// Check project access.
 	if err := s.AccessChecker.CheckProjectAccess(ctx, v2Token, projectUUID, relation); err != nil {
 		logger.Warn("access denied", "error", err, "slug", slug, "relation", relation)
-		return ctx, toolError("%v", err)
+		return ctx, err
 	}
 
 	return ctx, nil
@@ -122,19 +122,12 @@ func (s *ServiceAuth) AuthorizeProject(ctx context.Context, req *mcp.CallToolReq
 
 // --- Helpers ---
 
-// toolError creates an MCP error result with a formatted message.
-func toolError(format string, args ...any) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: "+format, args...)}},
-		IsError: true,
-	}
-}
-
 // RequireLFStaff checks that the user has the lf_staff custom claim. Returns
-// an MCP error result if the user is not staff, or nil if they are.
-func RequireLFStaff(req *mcp.CallToolRequest) *mcp.CallToolResult {
-	if req.Extra != nil && req.Extra.TokenInfo != nil && !IsLFStaff(req.Extra.TokenInfo) {
-		return toolError("this tool is available to Linux Foundation staff only")
+// an error if the claim is absent or false (deny by default). Returns nil only
+// when the claim is present and true.
+func RequireLFStaff(req *mcp.CallToolRequest) error {
+	if req.Extra == nil || req.Extra.TokenInfo == nil || !IsLFStaff(req.Extra.TokenInfo) {
+		return fmt.Errorf("this tool is available to Linux Foundation staff only")
 	}
 	return nil
 }

@@ -11,12 +11,14 @@ The MCP server acts as the authorization gateway: before proxying a request to a
 
 ### Access Rules
 
-| Service | Required V2 Relation | Rationale |
-|---------|---------------------|-----------|
-| **Member Onboarding** | `writer` | Managing onboarding workflows is a write-level project operation |
-| **LFX Lens** | `auditor` | Analytics/reporting requires auditor-level read access |
+Service tools enforce two layers of authorization: **MCP scopes** (checked at dispatch) and **V2 relations** (checked inside the handler via OpenFGA). Both must pass.
 
-LFX Lens additionally requires the `lf_staff` JWT claim (staff-only tool).
+| Service | MCP Scope | Required V2 Relation | Additional | Rationale |
+|---------|-----------|---------------------|------------|-----------|
+| **Member Onboarding** | `manage:all` | `writer` | — | Managing onboarding workflows is a write-level project operation |
+| **LFX Lens** | `read:all` | `auditor` | `lf_staff` claim | Analytics/reporting requires auditor-level read access; staff-only |
+
+MCP scopes act as an upper bound on what a token can do — like a reduced-scope PAT in GitHub. Even if a user has `writer` access to a project in OpenFGA, a `read:all`-only MCP token cannot call onboarding tools.
 
 ---
 
@@ -51,8 +53,9 @@ sequenceDiagram
     Note over Client,MCP: 2. Tool Call
     Client->>MCP: tools/call with MCP JWT<br/>(e.g., lfx_lens_query)
 
-    Note over MCP: 3. JWT Verification
+    Note over MCP: 3. JWT Verification + MCP Scope Check
     MCP->>MCP: Verify JWT signature (JWKS)
+    MCP->>MCP: Check MCP scope<br/>(read:all or manage:all)
     MCP->>MCP: Check lf_staff claim<br/>(Lens only: staff-gated)
 
     Note over MCP,V2: 4. Authorization via V2 (M2M client exchanges user token)
@@ -120,13 +123,15 @@ Content-Type: application/json
 }
 ```
 
+Each result is a tab-delimited string containing the request echoed back with the authenticated user appended, followed by `true` or `false`:
+
 ```json
 {
-  "results": ["allow"]
+  "results": ["project:{uuid}#writer@user:auth0|alice\ttrue"]
 }
 ```
 
-Multiple checks can be batched — results are returned in the same order as requests.
+Multiple checks can be batched. **Results are NOT guaranteed to be in the same order as requests** — cached entries are populated first. The MCP server matches results back to requests by parsing the request prefix from each result string.
 
 ---
 

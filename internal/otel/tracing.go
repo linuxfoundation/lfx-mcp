@@ -68,9 +68,14 @@ type Config struct {
 	// TracesExporter specifies the traces exporter: "otlp" or "none".
 	// Env: OTEL_TRACES_EXPORTER (default: "none")
 	TracesExporter string
-	// TracesSampleRatio specifies the sampling ratio for traces (0.0 to 1.0).
-	// Env: OTEL_TRACES_SAMPLE_RATIO (default: 1.0)
-	TracesSampleRatio float64
+	// TracesSampler specifies the sampler to use for traces.
+	// Env: OTEL_TRACES_SAMPLER (default: "parentbased_traceidratio")
+	// Known values: "parentbased_traceidratio", "traceidratio", "always_on",
+	// "always_off", "parentbased_always_on", "parentbased_always_off".
+	TracesSampler string
+	// TracesSamplerArg is the argument for the sampler (e.g. ratio for traceidratio).
+	// Env: OTEL_TRACES_SAMPLER_ARG (default: 1.0 for ratio-based samplers)
+	TracesSamplerArg float64
 	// MetricsExporter specifies the metrics exporter: "otlp" or "none".
 	// Env: OTEL_METRICS_EXPORTER (default: "none")
 	MetricsExporter string
@@ -123,18 +128,23 @@ func ConfigFromEnv(serviceVersion string) Config {
 		propagators = "tracecontext,baggage"
 	}
 
-	tracesSampleRatio := 1.0
-	if ratio := os.Getenv("OTEL_TRACES_SAMPLE_RATIO"); ratio != "" {
-		if parsed, err := strconv.ParseFloat(ratio, 64); err == nil {
+	tracesSampler := os.Getenv("OTEL_TRACES_SAMPLER")
+	if tracesSampler == "" {
+		tracesSampler = "parentbased_traceidratio"
+	}
+
+	tracesSamplerArg := 1.0
+	if arg := os.Getenv("OTEL_TRACES_SAMPLER_ARG"); arg != "" {
+		if parsed, err := strconv.ParseFloat(arg, 64); err == nil {
 			if parsed >= 0.0 && parsed <= 1.0 {
-				tracesSampleRatio = parsed
+				tracesSamplerArg = parsed
 			} else {
-				slog.Warn("OTEL_TRACES_SAMPLE_RATIO must be between 0.0 and 1.0, using default 1.0",
-					"provided_value", ratio)
+				slog.Warn("OTEL_TRACES_SAMPLER_ARG must be between 0.0 and 1.0, using default 1.0",
+					"provided_value", arg)
 			}
 		} else {
-			slog.Warn("invalid OTEL_TRACES_SAMPLE_RATIO value, using default 1.0",
-				"provided_value", ratio, "error", err)
+			slog.Warn("invalid OTEL_TRACES_SAMPLER_ARG value, using default 1.0",
+				"provided_value", arg, "error", err)
 		}
 	}
 
@@ -144,22 +154,24 @@ func ConfigFromEnv(serviceVersion string) Config {
 		"protocol", protocol,
 		"endpoint", endpoint,
 		"traces_exporter", tracesExporter,
-		"traces_sample_ratio", tracesSampleRatio,
+		"traces_sampler", tracesSampler,
+		"traces_sampler_arg", tracesSamplerArg,
 		"metrics_exporter", metricsExporter,
 		"logs_exporter", logsExporter,
 		"propagators", propagators,
 	).Debug("OTel config resolved")
 
 	return Config{
-		ServiceName:       serviceName,
-		ServiceVersion:    serviceVersion,
-		Protocol:          protocol,
-		Endpoint:          endpoint,
-		TracesExporter:    tracesExporter,
-		TracesSampleRatio: tracesSampleRatio,
-		MetricsExporter:   metricsExporter,
-		LogsExporter:      logsExporter,
-		Propagators:       propagators,
+		ServiceName:      serviceName,
+		ServiceVersion:   serviceVersion,
+		Protocol:         protocol,
+		Endpoint:         endpoint,
+		TracesExporter:   tracesExporter,
+		TracesSampler:    tracesSampler,
+		TracesSamplerArg: tracesSamplerArg,
+		MetricsExporter:  metricsExporter,
+		LogsExporter:     logsExporter,
+		Propagators:      propagators,
 	}
 }
 
@@ -294,6 +306,31 @@ func newPropagator(cfg Config) propagation.TextMapPropagator {
 	return propagation.NewCompositeTextMapPropagator(propagators...)
 }
 
+// newSampler constructs the configured trace sampler from cfg.TracesSampler and
+// cfg.TracesSamplerArg. Unrecognised sampler names fall back to
+// parentbased_traceidratio with a warning.
+func newSampler(cfg Config) trace.Sampler {
+	ratio := cfg.TracesSamplerArg
+	switch cfg.TracesSampler {
+	case "always_on":
+		return trace.AlwaysSample()
+	case "always_off":
+		return trace.NeverSample()
+	case "traceidratio":
+		return trace.TraceIDRatioBased(ratio)
+	case "parentbased_always_on":
+		return trace.ParentBased(trace.AlwaysSample())
+	case "parentbased_always_off":
+		return trace.ParentBased(trace.NeverSample())
+	case "", "parentbased_traceidratio":
+		return trace.ParentBased(trace.TraceIDRatioBased(ratio))
+	default:
+		slog.Warn("unrecognised OTEL_TRACES_SAMPLER value, using parentbased_traceidratio",
+			"provided_value", cfg.TracesSampler)
+		return trace.ParentBased(trace.TraceIDRatioBased(ratio))
+	}
+}
+
 // normaliseExporter validates a signal exporter env var value, accepting only
 // "otlp" and "none". Any other value emits a warning and defaults to "none".
 func normaliseExporter(envKey, v string) string {
@@ -334,7 +371,7 @@ func newTraceProvider(ctx context.Context, cfg Config, res *resource.Resource) (
 
 	return trace.NewTracerProvider(
 		trace.WithResource(res),
-		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(cfg.TracesSampleRatio))),
+		trace.WithSampler(newSampler(cfg)),
 		trace.WithBatcher(exporter,
 			trace.WithBatchTimeout(time.Second),
 		),

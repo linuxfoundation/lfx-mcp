@@ -223,7 +223,7 @@ func main() {
 	// OTEL_TRACES_EXPORTER is unset (the default), so stdio/local-dev has zero
 	// overhead.  The shutdown func is passed to the server runner so it can be
 	// flushed inside the graceful shutdown path with a bounded context.
-	otelShutdown, err := localOtel.SetupSDK(context.Background(), Version)
+	otelCfg, otelShutdown, err := localOtel.SetupSDK(context.Background(), Version)
 	if err != nil {
 		logger.Error("failed to initialise OpenTelemetry SDK", errKey, err)
 		os.Exit(1)
@@ -320,7 +320,7 @@ func main() {
 	case "stdio":
 		runStdioServer(cfg, otelShutdown)
 	case "http":
-		runHTTPServer(cfg, otelShutdown)
+		runHTTPServer(cfg, otelCfg, otelShutdown)
 	default:
 		logger.With(errKey, fmt.Errorf("invalid mode: %s", cfg.Mode)).Error("invalid mode (must be 'stdio' or 'http')")
 		os.Exit(1)
@@ -575,7 +575,7 @@ func runStdioServer(cfg Config, otelShutdown func(context.Context) error) {
 	}
 }
 
-func runHTTPServer(cfg Config, otelShutdown func(context.Context) error) {
+func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(context.Context) error) {
 	// Create server factory function for stateless mode.
 	createServer := func(_ *http.Request) *mcp.Server {
 		return newServer(cfg)
@@ -744,7 +744,7 @@ func runHTTPServer(cfg Config, otelShutdown func(context.Context) error) {
 	// top.  Order: otelhttp (outermost) → httpDebugLogging → mux.
 	var rootHandler http.Handler = mux
 	rootHandler = httpDebugLogging(logger)(rootHandler)
-	rootHandler = otelhttp.NewHandler(rootHandler, "lfx-mcp-server",
+	rootHandler = otelhttp.NewHandler(rootHandler, otelCfg.ServiceName,
 		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
 	)
 

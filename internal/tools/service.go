@@ -15,8 +15,9 @@ import (
 )
 
 // ClaimLFStaff is the namespaced JWT claim that indicates the user is LF staff.
-// This claim is set by an Auth0 Action during login based on LDAP group membership.
-const ClaimLFStaff = "https://sso.linuxfoundation.org/claims/lf_staff"
+// This claim is set by the CustomClaims Auth0 Action based on LDAP group
+// membership (lf-staff group). Uses the lfxPrefix namespace per convention.
+const ClaimLFStaff = "http://lfx.dev/claims/lf_staff"
 
 // Relation constants for V2 access-check. These are the service API equivalents
 // of ScopeRead / ScopeManage — they define what project-level relationship is

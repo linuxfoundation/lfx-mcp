@@ -8,8 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"net/http"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
@@ -25,12 +23,9 @@ const committeeMemberResourceType = "committee_member"
 
 // CommitteeConfig holds configuration shared by committee tools.
 type CommitteeConfig struct {
-	LFXAPIURL           string
-	TokenExchangeClient *lfxv2.TokenExchangeClient
-	DebugLogger         *slog.Logger
-	// HTTPClient is the HTTP client to use for LFX API calls.
-	// If nil, a default 30-second timeout client is created.
-	HTTPClient *http.Client
+	// Clients is the shared LFX v2 API client instance. It must be created once
+	// at startup so that its token cache persists across requests.
+	Clients *lfxv2.Clients
 }
 
 var committeeConfig *CommitteeConfig
@@ -141,23 +136,8 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           committeeConfig.LFXAPIURL,
-		TokenExchangeClient: committeeConfig.TokenExchangeClient,
-		DebugLogger:         committeeConfig.DebugLogger,
-		HTTPClient:          committeeConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := committeeConfig.Clients
 
 	pageSize := args.PageSize
 	if pageSize <= 0 {
@@ -193,7 +173,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search committees: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search committees: %s", err.Error())},
 			},
 			IsError: true,
 		}, nil, nil
@@ -272,23 +252,8 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           committeeConfig.LFXAPIURL,
-		TokenExchangeClient: committeeConfig.TokenExchangeClient,
-		DebugLogger:         committeeConfig.DebugLogger,
-		HTTPClient:          committeeConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := committeeConfig.Clients
 
 	logger.InfoContext(ctx, "fetching committee", "uid", args.UID)
 
@@ -299,7 +264,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		logger.ErrorContext(ctx, "GetCommitteeBase failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get committee: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get committee: %s", err.Error())},
 			},
 			IsError: true,
 		}, nil, nil
@@ -314,8 +279,8 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 	})
 	var settingsWarning string
 	if err != nil {
-		settingsWarning = fmt.Sprintf("WARNING: committee settings unavailable - %s", lfxv2.ErrorMessage(err))
-		logger.ErrorContext(ctx, "getting privileged committee settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
+		settingsWarning = fmt.Sprintf("WARNING: committee settings unavailable - %s", err.Error())
+		logger.ErrorContext(ctx, "getting privileged committee settings failed, returning base only", "error", err.Error(), "uid", args.UID)
 	} else {
 		committeeSettings = settingsResult.CommitteeSettings
 	}
@@ -397,23 +362,8 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           committeeConfig.LFXAPIURL,
-		TokenExchangeClient: committeeConfig.TokenExchangeClient,
-		DebugLogger:         committeeConfig.DebugLogger,
-		HTTPClient:          committeeConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := committeeConfig.Clients
 
 	logger.InfoContext(ctx, "fetching committee member", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 
@@ -426,7 +376,7 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		logger.ErrorContext(ctx, "GetCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get committee member: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get committee member: %s", err.Error())},
 			},
 			IsError: true,
 		}, nil, nil
@@ -477,23 +427,8 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           committeeConfig.LFXAPIURL,
-		TokenExchangeClient: committeeConfig.TokenExchangeClient,
-		DebugLogger:         committeeConfig.DebugLogger,
-		HTTPClient:          committeeConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := committeeConfig.Clients
 
 	pageSize := args.PageSize
 	if pageSize <= 0 {
@@ -535,7 +470,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search committee members: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search committee members: %s", err.Error())},
 			},
 			IsError: true,
 		}, nil, nil

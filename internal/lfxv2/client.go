@@ -11,8 +11,9 @@
 //
 // # Usage in MCP Tools
 //
-// Tools should extract the raw MCP token from the request and attach it to the
-// context before making LFX API calls:
+// A single *Clients instance should be created once at startup (via NewClients)
+// and shared across all tool invocations. Per-request, call WithMCPToken to
+// attach the caller's MCP bearer token to the context before making LFX API calls:
 //
 //	func handleMyTool(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallToolResult, any, error) {
 //	    // Extract raw MCP token from request.
@@ -21,27 +22,20 @@
 //	        return nil, nil, err
 //	    }
 //
-//	    // Attach token to context for LFX API calls.
-//	    ctx = lfxv2.WithMCPToken(ctx, mcpToken)
+//	    // Attach token to context; the shared clients instance handles exchange.
+//	    ctx = sharedClients.WithMCPToken(ctx, mcpToken)
 //
-//	    // Create clients with token exchange enabled.
-//	    clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-//	        APIDomain: "https://api.lfx.dev",
-//	        TokenExchangeClient: tokenExchangeClient, // shared instance
-//	    })
-//	    if err != nil {
-//	        return nil, nil, err
-//	    }
-//
-//	    // Make API calls - token exchange happens automatically.
-//	    result, err := clients.Project.GetOneProjectBase(ctx, &projectservice.GetOneProjectBasePayload{})
+//	    // Make API calls - token exchange and caching happen automatically.
+//	    result, err := sharedClients.Project.GetOneProjectBase(ctx, &projectservice.GetOneProjectBasePayload{})
 //	    // ...
 //	}
 //
 // # Token Caching
 //
-// Exchanged tokens are cached per MCP token to avoid redundant exchanges.
-// The cache is thread-safe and automatically expires tokens with a 5-minute buffer.
+// Exchanged tokens are cached per MCP token inside the long-lived *Clients
+// instance to avoid redundant token-exchange round-trips on every request.
+// The cache is goroutine-safe and automatically expires tokens with a
+// configurable buffer before their exp claim (default 5 minutes).
 package lfxv2
 
 import (
@@ -395,6 +389,13 @@ func (dt *debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	return resp, nil
+}
+
+// WithMCPToken attaches mcpToken to ctx so the auth interceptor can retrieve
+// it when forwarding requests to LFX APIs. Call this once per inbound request
+// before invoking any LFX API method on the shared *Clients instance.
+func (c *Clients) WithMCPToken(ctx context.Context, mcpToken string) context.Context {
+	return WithMCPToken(ctx, mcpToken)
 }
 
 // wrapWithAuthInterceptor wraps an HTTP client with automatic token exchange.

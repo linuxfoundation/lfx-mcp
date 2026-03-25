@@ -274,36 +274,34 @@ func main() {
 				Timeout:   30 * time.Second,
 				Transport: otelhttp.NewTransport(http.DefaultTransport),
 			}
-			tools.SetProjectConfig(&tools.ProjectConfig{
-				LFXAPIURL:           cfg.LFXAPIURL,
+			// Create a single shared Clients instance so that the token cache
+			// persists across requests, eliminating redundant token-exchange
+			// round-trips to Auth0 on every tool invocation.
+			sharedClients, err := lfxv2.NewClients(context.Background(), lfxv2.ClientConfig{
+				APIDomain:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
 				DebugLogger:         debugLogger,
 				HTTPClient:          lfxHTTPClient,
 			})
-			tools.SetCommitteeConfig(&tools.CommitteeConfig{
-				LFXAPIURL:           cfg.LFXAPIURL,
-				TokenExchangeClient: tokenExchangeClient,
-				DebugLogger:         debugLogger,
-				HTTPClient:          lfxHTTPClient,
-			})
-			tools.SetMailingListConfig(&tools.MailingListConfig{
-				LFXAPIURL:           cfg.LFXAPIURL,
-				TokenExchangeClient: tokenExchangeClient,
-				DebugLogger:         debugLogger,
-				HTTPClient:          lfxHTTPClient,
-			})
-			tools.SetMemberConfig(&tools.MemberConfig{
-				LFXAPIURL:           cfg.LFXAPIURL,
-				TokenExchangeClient: tokenExchangeClient,
-				DebugLogger:         debugLogger,
-				HTTPClient:          lfxHTTPClient,
-			})
-			tools.SetMeetingConfig(&tools.MeetingConfig{
-				LFXAPIURL:           cfg.LFXAPIURL,
-				TokenExchangeClient: tokenExchangeClient,
-				DebugLogger:         debugLogger,
-				HTTPClient:          lfxHTTPClient,
-			})
+			if err != nil {
+				logger.Warn("failed to create shared LFX v2 clients - LFX API tools will not be available", errKey, err)
+			} else {
+				tools.SetProjectConfig(&tools.ProjectConfig{
+					Clients: sharedClients,
+				})
+				tools.SetCommitteeConfig(&tools.CommitteeConfig{
+					Clients: sharedClients,
+				})
+				tools.SetMailingListConfig(&tools.MailingListConfig{
+					Clients: sharedClients,
+				})
+				tools.SetMemberConfig(&tools.MemberConfig{
+					Clients: sharedClients,
+				})
+				tools.SetMeetingConfig(&tools.MeetingConfig{
+					Clients: sharedClients,
+				})
+			}
 		}
 	}
 

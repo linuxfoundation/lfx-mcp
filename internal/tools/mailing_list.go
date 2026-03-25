@@ -8,8 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"net/http"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	mailinglist "github.com/linuxfoundation/lfx-v2-mailing-list-service/gen/mailing_list"
@@ -25,12 +23,9 @@ const mailingListMemberResourceType = "groupsio_member"
 
 // MailingListConfig holds configuration shared by mailing list tools.
 type MailingListConfig struct {
-	LFXAPIURL           string
-	TokenExchangeClient *lfxv2.TokenExchangeClient
-	DebugLogger         *slog.Logger
-	// HTTPClient is the HTTP client to use for LFX API calls.
-	// If nil, a default 30-second timeout client is created.
-	HTTPClient *http.Client
+	// Clients is the shared LFX v2 API client instance. It must be created once
+	// at startup so that its token cache persists across requests.
+	Clients *lfxv2.Clients
 }
 
 var mailingListConfig *MailingListConfig
@@ -167,23 +162,8 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           mailingListConfig.LFXAPIURL,
-		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
-		DebugLogger:         mailingListConfig.DebugLogger,
-		HTTPClient:          mailingListConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := mailingListConfig.Clients
 
 	logger.InfoContext(ctx, "fetching mailing list service", "uid", args.UID)
 
@@ -194,7 +174,7 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 		logger.ErrorContext(ctx, "GetGrpsioService failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list service: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list service: %s", err.Error())},
 			},
 			IsError: true,
 		}, nil, nil
@@ -206,8 +186,8 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 	})
 	var settingsWarning string
 	if err != nil {
-		settingsWarning = fmt.Sprintf("WARNING: mailing list service settings unavailable - %s", lfxv2.ErrorMessage(err))
-		logger.ErrorContext(ctx, "getting mailing list service settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
+		settingsWarning = fmt.Sprintf("WARNING: mailing list service settings unavailable - %s", err.Error())
+		logger.ErrorContext(ctx, "getting mailing list service settings failed, returning base only", "error", err.Error(), "uid", args.UID)
 	} else {
 		serviceSettings = settingsResult.ServiceSettings
 	}
@@ -280,23 +260,8 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           mailingListConfig.LFXAPIURL,
-		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
-		DebugLogger:         mailingListConfig.DebugLogger,
-		HTTPClient:          mailingListConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := mailingListConfig.Clients
 
 	logger.InfoContext(ctx, "fetching mailing list", "uid", args.UID)
 
@@ -308,7 +273,7 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		logger.ErrorContext(ctx, "GetGrpsioMailingList failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list: %s", err.Error())},
 			},
 			IsError: true,
 		}, nil, nil
@@ -320,8 +285,8 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	})
 	var listSettingsWarning string
 	if err != nil {
-		listSettingsWarning = fmt.Sprintf("WARNING: mailing list settings unavailable - %s", lfxv2.ErrorMessage(err))
-		logger.ErrorContext(ctx, "getting mailing list settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
+		listSettingsWarning = fmt.Sprintf("WARNING: mailing list settings unavailable - %s", err.Error())
+		logger.ErrorContext(ctx, "getting mailing list settings failed, returning base only", "error", err.Error(), "uid", args.UID)
 	} else {
 		mlSettings = settingsResult.MailingListSettings
 	}
@@ -403,23 +368,8 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           mailingListConfig.LFXAPIURL,
-		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
-		DebugLogger:         mailingListConfig.DebugLogger,
-		HTTPClient:          mailingListConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := mailingListConfig.Clients
 
 	logger.InfoContext(ctx, "fetching mailing list member", "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
 
@@ -432,7 +382,7 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 		logger.ErrorContext(ctx, "GetGrpsioMailingListMember failed", "error", err, "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list member: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list member: %s", err.Error())},
 			},
 			IsError: true,
 		}, nil, nil
@@ -483,23 +433,8 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           mailingListConfig.LFXAPIURL,
-		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
-		DebugLogger:         mailingListConfig.DebugLogger,
-		HTTPClient:          mailingListConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := mailingListConfig.Clients
 
 	pageSize := args.PageSize
 	if pageSize <= 0 {
@@ -534,7 +469,7 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search mailing lists: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search mailing lists: %s", err.Error())},
 			},
 			IsError: true,
 		}, nil, nil
@@ -601,22 +536,8 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           mailingListConfig.LFXAPIURL,
-		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
-		DebugLogger:         mailingListConfig.DebugLogger,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := mailingListConfig.Clients
 
 	pageSize := args.PageSize
 	if pageSize <= 0 {
@@ -657,7 +578,7 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search mailing list members: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search mailing list members: %s", err.Error())},
 			},
 			IsError: true,
 		}, nil, nil

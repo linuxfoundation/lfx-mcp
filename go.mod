@@ -11,10 +11,11 @@ require (
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/linuxfoundation/lfx-v2-committee-service v0.2.23
 	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.3.0
-	github.com/linuxfoundation/lfx-v2-member-service v0.4.0
+	github.com/linuxfoundation/lfx-v2-member-service v0.4.1
 	github.com/linuxfoundation/lfx-v2-project-service v0.5.7
 	github.com/linuxfoundation/lfx-v2-query-service v0.4.12
 	github.com/modelcontextprotocol/go-sdk v1.4.1
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/remychantenay/slog-otel v1.3.5
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.67.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.42.0
@@ -54,7 +55,6 @@ require (
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
-	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect

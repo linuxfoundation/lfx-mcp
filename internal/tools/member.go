@@ -32,7 +32,7 @@ func SetMemberConfig(cfg *MemberConfig) {
 // SearchMembersArgs defines the input parameters for the search_members tool.
 type SearchMembersArgs struct {
 	ProjectUID string `json:"project_uid" jsonschema:"Project UUID (required)"`
-	Search     string `json:"search,omitempty" jsonschema:"Free-text search across company name, project name, and tier"`
+	SearchName string `json:"search_name,omitempty" jsonschema:"Search memberships by member company name (case-insensitive substring match)."`
 	TierUID    string `json:"tier_uid,omitempty" jsonschema:"Filter by membership tier UID (UUID from list_project_tiers)"`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order: newest (default), name, last_modified"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
@@ -193,7 +193,7 @@ func toKeyContactView(c *memberservice.ProjectKeyContactResponse) keyContactView
 func RegisterSearchMembers(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_members",
-		Description: "List and search memberships for a project. Use this tool when users ask about members, memberships, or member organizations for a specific project. Requires project_uid. Supports free-text search, tier_uid filter, and sort order (newest, name, last_modified). Uses cursor-based pagination via page_token.",
+		Description: "List and search memberships for a project. Use this tool when users ask about members, memberships, or member organizations for a specific project. Requires project_uid. Supports search_name for case-insensitive company name substring search, tier_uid filter, and sort order (newest, name, last_modified). Uses cursor-based pagination via page_token.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Members",
 			ReadOnlyHint: true,
@@ -326,11 +326,11 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		payload.Filter = &filterStr
 	}
 
-	if args.Search != "" {
-		payload.Search = &args.Search
+	if args.SearchName != "" {
+		payload.SearchName = &args.SearchName
 	}
 
-	logger.InfoContext(ctx, "searching members", "project_uid", args.ProjectUID, "filter_count", len(filters), "page_size", pageSize, "page_token", args.PageToken, "search", args.Search)
+	logger.InfoContext(ctx, "searching members", "project_uid", args.ProjectUID, "filter_count", len(filters), "page_size", pageSize, "page_token", args.PageToken, "search_name", args.SearchName)
 
 	result, err := clients.Member.ListProjectMemberships(ctx, payload)
 	if err != nil {

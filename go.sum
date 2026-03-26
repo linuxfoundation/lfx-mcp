@@ -58,8 +58,8 @@ github.com/linuxfoundation/lfx-v2-committee-service v0.2.23 h1:UA0DF/dsUQVgFNZdR
 github.com/linuxfoundation/lfx-v2-committee-service v0.2.23/go.mod h1:Ew8lSv3US9q4d9nO+QFa7YaEb18D+LYyKwjAW+h9CQc=
 github.com/linuxfoundation/lfx-v2-mailing-list-service v0.3.0 h1:CS6zl1ZqL7GTaj3VxOwTSonK9thJQS1ea0XTru1XEBI=
 github.com/linuxfoundation/lfx-v2-mailing-list-service v0.3.0/go.mod h1:2vY8kKHA8EJi/MPTAN3fQPqX+s2Il/VSgVs4w4HmpEI=
-github.com/linuxfoundation/lfx-v2-member-service v0.4.0 h1:Hpku1pi6wXkpiNrJHDLVUySDQ9jYLnm6RqWlxPQ1qyA=
-github.com/linuxfoundation/lfx-v2-member-service v0.4.0/go.mod h1:qMzCkX1KayvzmxZQhVL2+dX1jXHqU3CcRGZ/t41vbgs=
+github.com/linuxfoundation/lfx-v2-member-service v0.4.1 h1:5ygVasdjTd77WzqLu4cPsgSfu0LdivnA3Q4szliqD64=
+github.com/linuxfoundation/lfx-v2-member-service v0.4.1/go.mod h1:qMzCkX1KayvzmxZQhVL2+dX1jXHqU3CcRGZ/t41vbgs=
 github.com/linuxfoundation/lfx-v2-project-service v0.5.7 h1:qycjiPSogIIHhRXDFSa0Zxu5ZLb/4jt9I8/JJmAJ0M4=
 github.com/linuxfoundation/lfx-v2-project-service v0.5.7/go.mod h1:JCQZhtqf6lqxG0LA55qbQrTFwV3oSdAoLKn/1BvcMe4=
 github.com/linuxfoundation/lfx-v2-query-service v0.4.12 h1:2sp/7zyhzsq8slNTWefixzjAI88yBYGYPuOjcnGke7I=

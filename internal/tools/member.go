@@ -32,7 +32,7 @@ func SetMemberConfig(cfg *MemberConfig) {
 // SearchMembersArgs defines the input parameters for the search_members tool.
 type SearchMembersArgs struct {
 	ProjectUID string `json:"project_uid" jsonschema:"Project UUID (required)"`
-	Search     string `json:"search,omitempty" jsonschema:"Free-text search across company name, project name, and tier"`
+	SearchName string `json:"search_name,omitempty" jsonschema:"Search memberships by member company name (case-insensitive substring match)."`
 	TierUID    string `json:"tier_uid,omitempty" jsonschema:"Filter by membership tier UID (UUID from list_project_tiers)"`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order: newest (default), name, last_modified"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
@@ -326,11 +326,11 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		payload.Filter = &filterStr
 	}
 
-	if args.Search != "" {
-		payload.Search = &args.Search
+	if args.SearchName != "" {
+		payload.SearchName = &args.SearchName
 	}
 
-	logger.InfoContext(ctx, "searching members", "project_uid", args.ProjectUID, "filter_count", len(filters), "page_size", pageSize, "page_token", args.PageToken, "search", args.Search)
+	logger.InfoContext(ctx, "searching members", "project_uid", args.ProjectUID, "filter_count", len(filters), "page_size", pageSize, "page_token", args.PageToken, "search_name", args.SearchName)
 
 	result, err := clients.Member.ListProjectMemberships(ctx, payload)
 	if err != nil {

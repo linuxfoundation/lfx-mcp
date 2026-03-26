@@ -32,8 +32,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	slogotel "github.com/remychantenay/slog-otel"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
 	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // Config holds all configuration for the LFX MCP server.
@@ -223,7 +223,7 @@ func main() {
 	// OTEL_TRACES_EXPORTER is unset (the default), so stdio/local-dev has zero
 	// overhead.  The shutdown func is passed to the server runner so it can be
 	// flushed inside the graceful shutdown path with a bounded context.
-	otelShutdown, err := localOtel.SetupSDK(context.Background(), Version)
+	otelCfg, otelShutdown, err := localOtel.SetupSDK(context.Background(), Version)
 	if err != nil {
 		logger.Error("failed to initialise OpenTelemetry SDK", errKey, err)
 		os.Exit(1)
@@ -274,36 +274,34 @@ func main() {
 				Timeout:   30 * time.Second,
 				Transport: otelhttp.NewTransport(http.DefaultTransport),
 			}
-			tools.SetProjectConfig(&tools.ProjectConfig{
-				LFXAPIURL:           cfg.LFXAPIURL,
+			// Create a single shared Clients instance so that the token cache
+			// persists across requests, eliminating redundant token-exchange
+			// round-trips to Auth0 on every tool invocation.
+			sharedClients, err := lfxv2.NewClients(context.Background(), lfxv2.ClientConfig{
+				APIDomain:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
 				DebugLogger:         debugLogger,
 				HTTPClient:          lfxHTTPClient,
 			})
-			tools.SetCommitteeConfig(&tools.CommitteeConfig{
-				LFXAPIURL:           cfg.LFXAPIURL,
-				TokenExchangeClient: tokenExchangeClient,
-				DebugLogger:         debugLogger,
-				HTTPClient:          lfxHTTPClient,
-			})
-			tools.SetMailingListConfig(&tools.MailingListConfig{
-				LFXAPIURL:           cfg.LFXAPIURL,
-				TokenExchangeClient: tokenExchangeClient,
-				DebugLogger:         debugLogger,
-				HTTPClient:          lfxHTTPClient,
-			})
-			tools.SetMemberConfig(&tools.MemberConfig{
-				LFXAPIURL:           cfg.LFXAPIURL,
-				TokenExchangeClient: tokenExchangeClient,
-				DebugLogger:         debugLogger,
-				HTTPClient:          lfxHTTPClient,
-			})
-			tools.SetMeetingConfig(&tools.MeetingConfig{
-				LFXAPIURL:           cfg.LFXAPIURL,
-				TokenExchangeClient: tokenExchangeClient,
-				DebugLogger:         debugLogger,
-				HTTPClient:          lfxHTTPClient,
-			})
+			if err != nil {
+				logger.Warn("failed to create shared LFX v2 clients - LFX API tools will not be available", errKey, err)
+			} else {
+				tools.SetProjectConfig(&tools.ProjectConfig{
+					Clients: sharedClients,
+				})
+				tools.SetCommitteeConfig(&tools.CommitteeConfig{
+					Clients: sharedClients,
+				})
+				tools.SetMailingListConfig(&tools.MailingListConfig{
+					Clients: sharedClients,
+				})
+				tools.SetMemberConfig(&tools.MemberConfig{
+					Clients: sharedClients,
+				})
+				tools.SetMeetingConfig(&tools.MeetingConfig{
+					Clients: sharedClients,
+				})
+			}
 		}
 	}
 
@@ -320,9 +318,9 @@ func main() {
 	// Run server based on mode.
 	switch cfg.Mode {
 	case "stdio":
-		runStdioServer(cfg, otelShutdown)
+		runStdioServer(cfg, otelCfg, otelShutdown)
 	case "http":
-		runHTTPServer(cfg, otelShutdown)
+		runHTTPServer(cfg, otelCfg, otelShutdown)
 	default:
 		logger.With(errKey, fmt.Errorf("invalid mode: %s", cfg.Mode)).Error("invalid mode (must be 'stdio' or 'http')")
 		os.Exit(1)
@@ -333,23 +331,44 @@ func main() {
 // OpenTelemetry span attributes (per the MCP semconv spec) and structured logging;
 // successful completions are logged at DEBUG, as they are observable via APM spans
 // without needing to appear in the structured log stream.
-func mcpOTelMiddleware(serverLogger *slog.Logger) mcp.Middleware {
+func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middleware {
+	// Instantiate the tracer once; reused across all calls.
+	// For HTTP requests this starts a child of the otelhttp server span.
+	// For stdio requests (no HTTP layer) this starts a new root span, giving
+	// stdio the same tracing coverage as HTTP without any extra setup.
+	tracer := otel.Tracer(serviceName)
+
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			start := time.Now()
 			sessionID := req.GetSession().ID()
+
+			// Start a dedicated MCP span. For HTTP, the otelhttp server span is
+			// already in ctx so this becomes a child; for stdio there is no
+			// parent and a fresh root span is created instead.
+			ctx, span := tracer.Start(ctx, method)
+			defer span.End()
 
 			// Bind mcp.session.id and mcp.method.name onto a child logger and
 			// store it in context so every tool handler that calls
 			// newToolLogger(ctx, req) automatically inherits both fields on all
 			// log records.
 			callLogger := serverLogger.With("mcp.session.id", sessionID, "mcp.method.name", method)
+
+			// Bind username to the logger and span if available in TokenInfo.
+			extra := req.GetExtra()
+			if extra != nil && extra.TokenInfo != nil {
+				if username, ok := extra.TokenInfo.Extra["username"].(string); ok && username != "" {
+					callLogger = callLogger.With("username", username)
+					span.SetAttributes(semconv.EnduserID(username))
+				}
+			}
+
 			ctx = tools.WithLogger(ctx, callLogger)
 
-			// Tag the active OTel span with MCP semconv attributes per
+			// Tag the MCP span with semconv attributes per
 			// https://opentelemetry.io/docs/specs/semconv/gen-ai/mcp/ so APM
 			// can filter and group by method and session without parsing logs.
-			span := trace.SpanFromContext(ctx)
 			span.SetAttributes(
 				semconv.McpMethodNameKey.String(method),
 				semconv.McpSessionID(sessionID),
@@ -357,7 +376,6 @@ func mcpOTelMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 
 			// network.transport: "pipe" for stdio (no HTTP headers), "tcp" for HTTP.
 			// Per the MCP semconv spec, stdio maps to the "pipe" transport value.
-			extra := req.GetExtra()
 			if extra != nil && extra.Header != nil {
 				span.SetAttributes(semconv.NetworkTransportTCP)
 			} else {
@@ -417,7 +435,7 @@ func mcpOTelMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 }
 
 // newServer creates and configures a new MCP server with registered tools.
-func newServer(cfg Config) *mcp.Server {
+func newServer(cfg Config, serviceName string) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "lfx-mcp-server",
 		Version: Version,
@@ -426,7 +444,7 @@ func newServer(cfg Config) *mcp.Server {
 	})
 
 	// Add middleware for OTel instrumentation and logging of all MCP method calls.
-	server.AddReceivingMiddleware(mcpOTelMiddleware(logger))
+	server.AddReceivingMiddleware(mcpOTelMiddleware(logger, serviceName))
 
 	// Register tools based on configuration.
 	enabledTools := make(map[string]bool)
@@ -555,11 +573,11 @@ func newServer(cfg Config) *mcp.Server {
 	return server
 }
 
-func runStdioServer(cfg Config, otelShutdown func(context.Context) error) {
+func runStdioServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(context.Context) error) {
 	ctx := context.Background()
 
 	// Create the MCP server.
-	server := newServer(cfg)
+	server := newServer(cfg, otelCfg.ServiceName)
 
 	// Run the server on stdio transport.
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
@@ -577,10 +595,10 @@ func runStdioServer(cfg Config, otelShutdown func(context.Context) error) {
 	}
 }
 
-func runHTTPServer(cfg Config, otelShutdown func(context.Context) error) {
+func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(context.Context) error) {
 	// Create server factory function for stateless mode.
 	createServer := func(_ *http.Request) *mcp.Server {
-		return newServer(cfg)
+		return newServer(cfg, otelCfg.ServiceName)
 	}
 
 	// Create streamable HTTP handler with stateless mode.
@@ -680,8 +698,12 @@ func runHTTPServer(cfg Config, otelShutdown func(context.Context) error) {
 			}
 
 			// Store raw token in Extra for use in token exchange.
+			// Also extract username for observability (span enduser.id, log field).
 			extra := make(map[string]any)
 			extra["raw_token"] = tokenString
+			if username := lfxauth.ExtractUsername(token); username != "" {
+				extra["username"] = username
+			}
 
 			return &auth.TokenInfo{
 				UserID:     userID,
@@ -742,11 +764,9 @@ func runHTTPServer(cfg Config, otelShutdown func(context.Context) error) {
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)
 
 	// Wrap the mux with OTel instrumentation so every inbound HTTP request gets
-	// a root span with W3C TraceContext propagation, then layer debug logging on
-	// top.  Order: otelhttp (outermost) → httpDebugLogging → mux.
+	// a root span with W3C TraceContext propagation.
 	var rootHandler http.Handler = mux
-	rootHandler = httpDebugLogging(logger)(rootHandler)
-	rootHandler = otelhttp.NewHandler(rootHandler, "lfx-mcp-server",
+	rootHandler = otelhttp.NewHandler(rootHandler, otelCfg.ServiceName,
 		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
 	)
 
@@ -819,59 +839,4 @@ func localhostOnly(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
-}
-
-// httpDebugLogging returns middleware that logs all incoming HTTP requests and their
-// completion at DEBUG level, including paths not handled by any route (404s).
-func httpDebugLogging(logger *slog.Logger) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
-
-			// Extract and trim JWT token if present.
-			logAttrs := []any{
-				"method", r.Method,
-				"path", r.URL.Path,
-				"remote_addr", r.RemoteAddr,
-			}
-
-			// Add query parameters if present.
-			if query := r.URL.RawQuery; query != "" {
-				logAttrs = append(logAttrs, "query", query)
-			}
-
-			authHeader := r.Header.Get("Authorization")
-			if authHeader != "" {
-				// Check if it's a JWT token (bearer eyJ... with exactly 2 periods).
-				lowerAuth := strings.ToLower(authHeader)
-				if strings.HasPrefix(lowerAuth, "bearer eyj") {
-					// Extract token part after "Bearer ".
-					parts := strings.SplitN(authHeader, " ", 2)
-					if len(parts) == 2 {
-						token := parts[1]
-						periodCount := strings.Count(token, ".")
-						if periodCount == 2 {
-							// Trim everything after the second period (remove signature).
-							secondPeriod := strings.LastIndex(token, ".")
-							trimmedToken := token[:secondPeriod]
-							logAttrs = append(logAttrs, "bearer_token", trimmedToken)
-						}
-					}
-				}
-			}
-
-			// Log incoming request at DEBUG level.
-			logger.Debug("http request", logAttrs...)
-
-			// Call the next handler.
-			next.ServeHTTP(w, r)
-
-			// Log completion at DEBUG level.
-			logger.Debug("http request completed",
-				"method", r.Method,
-				"path", r.URL.Path,
-				"duration_ms", time.Since(start).Milliseconds(),
-			)
-		})
-	}
 }

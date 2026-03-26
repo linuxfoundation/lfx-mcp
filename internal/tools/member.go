@@ -193,7 +193,7 @@ func toKeyContactView(c *memberservice.ProjectKeyContactResponse) keyContactView
 func RegisterSearchMembers(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_members",
-		Description: "List and search memberships for a project. Use this tool when users ask about members, memberships, or member organizations for a specific project. Requires project_uid. Supports free-text search, tier_uid filter, and sort order (newest, name, last_modified). Uses cursor-based pagination via page_token.",
+		Description: "List and search memberships for a project. Use this tool when users ask about members, memberships, or member organizations for a specific project. Requires project_uid. Supports search_name for case-insensitive company name substring search, tier_uid filter, and sort order (newest, name, last_modified). Uses cursor-based pagination via page_token.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Members",
 			ReadOnlyHint: true,

@@ -187,7 +187,7 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 	var settingsWarning string
 	if err != nil {
 		settingsWarning = fmt.Sprintf("WARNING: mailing list service settings unavailable - %s", err.Error())
-		logger.ErrorContext(ctx, "getting mailing list service settings failed, returning base only", "error", err.Error(), "uid", args.UID)
+		logger.ErrorContext(ctx, "getting mailing list service settings failed, returning base only", "error", err, "uid", args.UID)
 	} else {
 		serviceSettings = settingsResult.ServiceSettings
 	}
@@ -286,7 +286,7 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	var listSettingsWarning string
 	if err != nil {
 		listSettingsWarning = fmt.Sprintf("WARNING: mailing list settings unavailable - %s", err.Error())
-		logger.ErrorContext(ctx, "getting mailing list settings failed, returning base only", "error", err.Error(), "uid", args.UID)
+		logger.ErrorContext(ctx, "getting mailing list settings failed, returning base only", "error", err, "uid", args.UID)
 	} else {
 		mlSettings = settingsResult.MailingListSettings
 	}

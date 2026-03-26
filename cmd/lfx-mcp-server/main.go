@@ -32,8 +32,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	slogotel "github.com/remychantenay/slog-otel"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
 	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // Config holds all configuration for the LFX MCP server.
@@ -318,7 +318,7 @@ func main() {
 	// Run server based on mode.
 	switch cfg.Mode {
 	case "stdio":
-		runStdioServer(cfg, otelShutdown)
+		runStdioServer(cfg, otelCfg, otelShutdown)
 	case "http":
 		runHTTPServer(cfg, otelCfg, otelShutdown)
 	default:
@@ -331,11 +331,23 @@ func main() {
 // OpenTelemetry span attributes (per the MCP semconv spec) and structured logging;
 // successful completions are logged at DEBUG, as they are observable via APM spans
 // without needing to appear in the structured log stream.
-func mcpOTelMiddleware(serverLogger *slog.Logger) mcp.Middleware {
+func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middleware {
+	// Instantiate the tracer once; reused across all calls.
+	// For HTTP requests this starts a child of the otelhttp server span.
+	// For stdio requests (no HTTP layer) this starts a new root span, giving
+	// stdio the same tracing coverage as HTTP without any extra setup.
+	tracer := otel.Tracer(serviceName)
+
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			start := time.Now()
 			sessionID := req.GetSession().ID()
+
+			// Start a dedicated MCP span. For HTTP, the otelhttp server span is
+			// already in ctx so this becomes a child; for stdio there is no
+			// parent and a fresh root span is created instead.
+			ctx, span := tracer.Start(ctx, method)
+			defer span.End()
 
 			// Bind mcp.session.id and mcp.method.name onto a child logger and
 			// store it in context so every tool handler that calls
@@ -348,17 +360,15 @@ func mcpOTelMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 			if extra != nil && extra.TokenInfo != nil {
 				if username, ok := extra.TokenInfo.Extra["username"].(string); ok && username != "" {
 					callLogger = callLogger.With("username", username)
-					span := trace.SpanFromContext(ctx)
 					span.SetAttributes(semconv.EnduserID(username))
 				}
 			}
 
 			ctx = tools.WithLogger(ctx, callLogger)
 
-			// Tag the active OTel span with MCP semconv attributes per
+			// Tag the MCP span with semconv attributes per
 			// https://opentelemetry.io/docs/specs/semconv/gen-ai/mcp/ so APM
 			// can filter and group by method and session without parsing logs.
-			span := trace.SpanFromContext(ctx)
 			span.SetAttributes(
 				semconv.McpMethodNameKey.String(method),
 				semconv.McpSessionID(sessionID),
@@ -425,7 +435,7 @@ func mcpOTelMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 }
 
 // newServer creates and configures a new MCP server with registered tools.
-func newServer(cfg Config) *mcp.Server {
+func newServer(cfg Config, serviceName string) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "lfx-mcp-server",
 		Version: Version,
@@ -434,7 +444,7 @@ func newServer(cfg Config) *mcp.Server {
 	})
 
 	// Add middleware for OTel instrumentation and logging of all MCP method calls.
-	server.AddReceivingMiddleware(mcpOTelMiddleware(logger))
+	server.AddReceivingMiddleware(mcpOTelMiddleware(logger, serviceName))
 
 	// Register tools based on configuration.
 	enabledTools := make(map[string]bool)
@@ -563,11 +573,11 @@ func newServer(cfg Config) *mcp.Server {
 	return server
 }
 
-func runStdioServer(cfg Config, otelShutdown func(context.Context) error) {
+func runStdioServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(context.Context) error) {
 	ctx := context.Background()
 
 	// Create the MCP server.
-	server := newServer(cfg)
+	server := newServer(cfg, otelCfg.ServiceName)
 
 	// Run the server on stdio transport.
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
@@ -588,7 +598,7 @@ func runStdioServer(cfg Config, otelShutdown func(context.Context) error) {
 func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(context.Context) error) {
 	// Create server factory function for stateless mode.
 	createServer := func(_ *http.Request) *mcp.Server {
-		return newServer(cfg)
+		return newServer(cfg, otelCfg.ServiceName)
 	}
 
 	// Create streamable HTTP handler with stateless mode.

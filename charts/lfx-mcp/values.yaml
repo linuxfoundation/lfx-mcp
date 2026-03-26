@@ -167,13 +167,3 @@ externalSecretsOperator:
     targetSecretName: "lfx-mcp-secrets"
     # How often to refresh secrets from AWS
     refreshInterval: "10m"
-
-    # REQUIRED: Secrets must exist in AWS Secrets Manager (global.awsRegion)
-    dataFrom:
-    - find:
-        conversionStrategy: Default
-        decodingStrategy: None
-        tags:
-          service-lfx-mcp: enabled
-      rewrite:
-        - merge: {}

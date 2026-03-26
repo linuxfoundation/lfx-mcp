@@ -131,18 +131,19 @@ externalSecretsOperator:
 
   # ExternalSecret configuration
   externalSecret:
+    # targetSecretName is the name of the Kubernetes Secret that ESO will create and manage.
+    # Defaults to secrets.name when not set. Override this to stage a cutover: ESO populates
+    # a new secret under this name while the deployment continues reading from secrets.name.
+    targetSecretName: "lfx-mcp-secrets"
     # How often to refresh secrets from AWS
     refreshInterval: "10m"
 
-    # Secret data mappings
     # REQUIRED: Secrets must exist in AWS Secrets Manager (global.awsRegion)
-    # NOTE: client_private_key should be stored as raw PEM format (not base64-encoded)
-    data:
-      - secretKey: client_id
-        remoteRef:
-          key: /cloudops/managed-secrets/auth0/LFX_MCP_Server
-          property: client_id
-      - secretKey: client_private_key
-        remoteRef:
-          key: /cloudops/managed-secrets/auth0/LFX_MCP_Server
-          property: client_private_key
+    dataFrom:
+    - find:
+        conversionStrategy: Default
+        decodingStrategy: None
+        tags:
+          service-lfx-mcp: enabled
+      rewrite:
+        - merge: {}

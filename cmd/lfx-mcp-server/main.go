@@ -342,6 +342,17 @@ func mcpOTelMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 			// newToolLogger(ctx, req) automatically inherits both fields on all
 			// log records.
 			callLogger := serverLogger.With("mcp.session.id", sessionID, "mcp.method.name", method)
+
+			// Bind username to the logger and span if available in TokenInfo.
+			extra := req.GetExtra()
+			if extra != nil && extra.TokenInfo != nil {
+				if username, ok := extra.TokenInfo.Extra["username"].(string); ok && username != "" {
+					callLogger = callLogger.With("username", username)
+					span := trace.SpanFromContext(ctx)
+					span.SetAttributes(semconv.EnduserID(username))
+				}
+			}
+
 			ctx = tools.WithLogger(ctx, callLogger)
 
 			// Tag the active OTel span with MCP semconv attributes per
@@ -355,7 +366,6 @@ func mcpOTelMiddleware(serverLogger *slog.Logger) mcp.Middleware {
 
 			// network.transport: "pipe" for stdio (no HTTP headers), "tcp" for HTTP.
 			// Per the MCP semconv spec, stdio maps to the "pipe" transport value.
-			extra := req.GetExtra()
 			if extra != nil && extra.Header != nil {
 				span.SetAttributes(semconv.NetworkTransportTCP)
 			} else {
@@ -678,8 +688,12 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 			}
 
 			// Store raw token in Extra for use in token exchange.
+			// Also extract username for observability (span enduser.id, log field).
 			extra := make(map[string]any)
 			extra["raw_token"] = tokenString
+			if username := lfxauth.ExtractUsername(token); username != "" {
+				extra["username"] = username
+			}
 
 			return &auth.TokenInfo{
 				UserID:     userID,
@@ -740,10 +754,8 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)
 
 	// Wrap the mux with OTel instrumentation so every inbound HTTP request gets
-	// a root span with W3C TraceContext propagation, then layer debug logging on
-	// top.  Order: otelhttp (outermost) → httpDebugLogging → mux.
+	// a root span with W3C TraceContext propagation.
 	var rootHandler http.Handler = mux
-	rootHandler = httpDebugLogging(logger)(rootHandler)
 	rootHandler = otelhttp.NewHandler(rootHandler, otelCfg.ServiceName,
 		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
 	)
@@ -817,59 +829,4 @@ func localhostOnly(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
-}
-
-// httpDebugLogging returns middleware that logs all incoming HTTP requests and their
-// completion at DEBUG level, including paths not handled by any route (404s).
-func httpDebugLogging(logger *slog.Logger) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
-
-			// Extract and trim JWT token if present.
-			logAttrs := []any{
-				"method", r.Method,
-				"path", r.URL.Path,
-				"remote_addr", r.RemoteAddr,
-			}
-
-			// Add query parameters if present.
-			if query := r.URL.RawQuery; query != "" {
-				logAttrs = append(logAttrs, "query", query)
-			}
-
-			authHeader := r.Header.Get("Authorization")
-			if authHeader != "" {
-				// Check if it's a JWT token (bearer eyJ... with exactly 2 periods).
-				lowerAuth := strings.ToLower(authHeader)
-				if strings.HasPrefix(lowerAuth, "bearer eyj") {
-					// Extract token part after "Bearer ".
-					parts := strings.SplitN(authHeader, " ", 2)
-					if len(parts) == 2 {
-						token := parts[1]
-						periodCount := strings.Count(token, ".")
-						if periodCount == 2 {
-							// Trim everything after the second period (remove signature).
-							secondPeriod := strings.LastIndex(token, ".")
-							trimmedToken := token[:secondPeriod]
-							logAttrs = append(logAttrs, "bearer_token", trimmedToken)
-						}
-					}
-				}
-			}
-
-			// Log incoming request at DEBUG level.
-			logger.Debug("http request", logAttrs...)
-
-			// Call the next handler.
-			next.ServeHTTP(w, r)
-
-			// Log completion at DEBUG level.
-			logger.Debug("http request completed",
-				"method", r.Method,
-				"path", r.URL.Path,
-				"duration_ms", time.Since(start).Milliseconds(),
-			)
-		})
-	}
 }

@@ -133,6 +133,28 @@ func (v *JWTVerifier) VerifyToken(ctx context.Context, tokenString string) (jwt.
 	return token, nil
 }
 
+// ExtractUsername extracts the LFX username from a verified JWT token.
+// It reads the http://lfx.dev/claims/username custom claim set by the
+// Auth0 custom_claims action for human users.
+//
+// If the claim is absent (e.g. M2M client_credentials tokens) and the sub
+// ends in "@clients", the full sub is returned as the username so M2M callers
+// are still identifiable in logs and traces.
+//
+// Returns an empty string if neither source yields a usable value.
+func ExtractUsername(token jwt.Token) string {
+	if usernameClaim, ok := token.Get("http://lfx.dev/claims/username"); ok {
+		if username, ok := usernameClaim.(string); ok && username != "" {
+			return username
+		}
+	}
+	// Fallback for M2M tokens: Auth0 sets sub to "<clientID>@clients".
+	if sub := token.Subject(); strings.HasSuffix(sub, "@clients") {
+		return sub
+	}
+	return ""
+}
+
 // ExtractScopes extracts scopes from a JWT token.
 // Handles both "scope" (space-separated string) and "scopes" (array) claims.
 func ExtractScopes(token jwt.Token) []string {

@@ -17,6 +17,10 @@ spec:
     metadata:
       labels:
         {{- include "lfx-mcp.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       containers:
         - name: app
@@ -85,6 +89,25 @@ spec:
                   name: {{ $.Values.apiCredentials.secretName }}
                   key: {{ $secretKey }}
             {{- end }}
+            {{- end }}
+            {{- with .Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- if .Values.app.otel.endpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.app.otel.endpoint | quote }}
+            {{- end }}
+            {{- if .Values.app.otel.tracesExporter }}
+            - name: OTEL_TRACES_EXPORTER
+              value: {{ .Values.app.otel.tracesExporter | quote }}
+            {{- end }}
+            {{- if .Values.app.otel.tracesSampler }}
+            - name: OTEL_TRACES_SAMPLER
+              value: {{ .Values.app.otel.tracesSampler | quote }}
+            {{- end }}
+            {{- if .Values.app.otel.tracesSamplerArg }}
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: {{ .Values.app.otel.tracesSamplerArg | quote }}
             {{- end }}
           ports:
             - name: web

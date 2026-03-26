@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
@@ -21,6 +22,9 @@ type MemberConfig struct {
 	LFXAPIURL           string
 	TokenExchangeClient *lfxv2.TokenExchangeClient
 	DebugLogger         *slog.Logger
+	// HTTPClient is the HTTP client to use for LFX API calls.
+	// If nil, a default 30-second timeout client is created.
+	HTTPClient *http.Client
 }
 
 var memberConfig *MemberConfig
@@ -264,10 +268,10 @@ func RegisterGetMembershipKeyContact(server *mcp.Server) {
 
 // handleSearchMembers implements the search_members tool logic.
 func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchMembersArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
-		logger.Error("member tools not configured")
+		logger.ErrorContext(ctx, "member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: member tools not configured"},
@@ -278,7 +282,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -293,9 +297,10 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -345,11 +350,11 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		payload.Search = &args.Search
 	}
 
-	logger.Info("searching members", "project_uid", args.ProjectUID, "filter_count", len(filters), "page_size", pageSize, "page_token", args.PageToken, "search", args.Search)
+	logger.InfoContext(ctx, "searching members", "project_uid", args.ProjectUID, "filter_count", len(filters), "page_size", pageSize, "page_token", args.PageToken, "search", args.Search)
 
 	result, err := clients.Member.ListProjectMemberships(ctx, payload)
 	if err != nil {
-		logger.Error("ListProjectMemberships failed", "error", err)
+		logger.ErrorContext(ctx, "ListProjectMemberships failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search members: %s", lfxv2.ErrorMessage(err))},
@@ -374,7 +379,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 
 	prettyJSON, err := json.MarshalIndent(filtered, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal search result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -383,7 +388,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		}, nil, nil
 	}
 
-	logger.Info("search_members succeeded", "count", len(result.Memberships))
+	logger.InfoContext(ctx, "search_members succeeded", "count", len(result.Memberships))
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -394,10 +399,10 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 
 // handleGetMemberMembership implements the get_member_membership tool logic.
 func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, args GetMemberMembershipArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
-		logger.Error("member tools not configured")
+		logger.ErrorContext(ctx, "member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: member tools not configured"},
@@ -426,7 +431,7 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -441,9 +446,10 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -452,7 +458,7 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
-	logger.Info("fetching member membership", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
+	logger.InfoContext(ctx, "fetching member membership", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 
 	version := "1"
 	result, err := clients.Member.GetProjectMembership(ctx, &memberservice.GetProjectMembershipPayload{
@@ -461,7 +467,7 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		MembershipUID: &args.MembershipUID,
 	})
 	if err != nil {
-		logger.Error("GetProjectMembership failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
+		logger.ErrorContext(ctx, "GetProjectMembership failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get member membership: %s", lfxv2.ErrorMessage(err))},
@@ -472,7 +478,7 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 
 	prettyJSON, err := json.MarshalIndent(result.Membership, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal membership result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal membership result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -481,7 +487,7 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
-	logger.Info("get_member_membership succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
+	logger.InfoContext(ctx, "get_member_membership succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -492,10 +498,10 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 
 // handleListProjectTiers implements the list_project_tiers tool logic.
 func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args ListProjectTiersArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
-		logger.Error("member tools not configured")
+		logger.ErrorContext(ctx, "member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: member tools not configured"},
@@ -515,7 +521,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -530,9 +536,10 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -541,7 +548,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 		}, nil, nil
 	}
 
-	logger.Info("listing project tiers", "project_uid", args.ProjectUID)
+	logger.InfoContext(ctx, "listing project tiers", "project_uid", args.ProjectUID)
 
 	version := "1"
 	result, err := clients.Member.ListProjectTiers(ctx, &memberservice.ListProjectTiersPayload{
@@ -549,7 +556,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 		ProjectUID: &args.ProjectUID,
 	})
 	if err != nil {
-		logger.Error("ListProjectTiers failed", "error", err, "project_uid", args.ProjectUID)
+		logger.ErrorContext(ctx, "ListProjectTiers failed", "error", err, "project_uid", args.ProjectUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to list project tiers: %s", lfxv2.ErrorMessage(err))},
@@ -565,7 +572,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 
 	prettyJSON, err := json.MarshalIndent(tierViews, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal tiers result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal tiers result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -574,7 +581,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 		}, nil, nil
 	}
 
-	logger.Info("list_project_tiers succeeded", "project_uid", args.ProjectUID, "count", len(result.Tiers))
+	logger.InfoContext(ctx, "list_project_tiers succeeded", "project_uid", args.ProjectUID, "count", len(result.Tiers))
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -585,10 +592,10 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 
 // handleGetProjectTier implements the get_project_tier tool logic.
 func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args GetProjectTierArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
-		logger.Error("member tools not configured")
+		logger.ErrorContext(ctx, "member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: member tools not configured"},
@@ -617,7 +624,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -632,9 +639,10 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -643,7 +651,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	logger.Info("fetching project tier", "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
+	logger.InfoContext(ctx, "fetching project tier", "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
 
 	version := "1"
 	result, err := clients.Member.GetProjectTier(ctx, &memberservice.GetProjectTierPayload{
@@ -652,7 +660,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		TierUID:    &args.TierUID,
 	})
 	if err != nil {
-		logger.Error("GetProjectTier failed", "error", err, "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
+		logger.ErrorContext(ctx, "GetProjectTier failed", "error", err, "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get project tier: %s", lfxv2.ErrorMessage(err))},
@@ -663,7 +671,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 
 	prettyJSON, err := json.MarshalIndent(result.Tier, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal tier result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal tier result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -672,7 +680,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	logger.Info("get_project_tier succeeded", "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
+	logger.InfoContext(ctx, "get_project_tier succeeded", "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -683,10 +691,10 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 
 // handleGetMembershipKeyContacts implements the get_membership_key_contacts tool logic.
 func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolRequest, args GetMembershipKeyContactsArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
-		logger.Error("member tools not configured")
+		logger.ErrorContext(ctx, "member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: member tools not configured"},
@@ -715,7 +723,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -730,9 +738,10 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -741,7 +750,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	logger.Info("fetching membership key contacts", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
+	logger.InfoContext(ctx, "fetching membership key contacts", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 
 	version := "1"
 	result, err := clients.Member.ListMembershipKeyContacts(ctx, &memberservice.ListMembershipKeyContactsPayload{
@@ -750,7 +759,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		MembershipUID: &args.MembershipUID,
 	})
 	if err != nil {
-		logger.Error("ListMembershipKeyContacts failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
+		logger.ErrorContext(ctx, "ListMembershipKeyContacts failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership key contacts: %s", lfxv2.ErrorMessage(err))},
@@ -766,7 +775,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 
 	prettyJSON, err := json.MarshalIndent(contactViews, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal membership key contacts result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal membership key contacts result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -775,7 +784,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	logger.Info("get_membership_key_contacts succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
+	logger.InfoContext(ctx, "get_membership_key_contacts succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -786,10 +795,10 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 
 // handleGetMembershipKeyContact implements the get_membership_key_contact tool logic.
 func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest, args GetMembershipKeyContactArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
-		logger.Error("member tools not configured")
+		logger.ErrorContext(ctx, "member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: member tools not configured"},
@@ -827,7 +836,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -842,9 +851,10 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		APIDomain:           memberConfig.LFXAPIURL,
 		TokenExchangeClient: memberConfig.TokenExchangeClient,
 		DebugLogger:         memberConfig.DebugLogger,
+		HTTPClient:          memberConfig.HTTPClient,
 	})
 	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
+		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
@@ -853,7 +863,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		}, nil, nil
 	}
 
-	logger.Info("fetching membership key contact", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
+	logger.InfoContext(ctx, "fetching membership key contact", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 
 	version := "1"
 	result, err := clients.Member.GetMembershipKeyContact(ctx, &memberservice.GetMembershipKeyContactPayload{
@@ -863,7 +873,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		ContactUID:    &args.ContactUID,
 	})
 	if err != nil {
-		logger.Error("GetMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
+		logger.ErrorContext(ctx, "GetMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership key contact: %s", lfxv2.ErrorMessage(err))},
@@ -874,7 +884,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 
 	prettyJSON, err := json.MarshalIndent(toKeyContactView(result.Contact), "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal key contact result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal key contact result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -883,7 +893,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		}, nil, nil
 	}
 
-	logger.Info("get_membership_key_contact succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
+	logger.InfoContext(ctx, "get_membership_key_contact succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

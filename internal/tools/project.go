@@ -124,7 +124,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search projects: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search projects", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -207,7 +207,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 		logger.ErrorContext(ctx, "GetOneProjectBase failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get project: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get project", err)},
 			},
 			IsError: true,
 		}, nil, nil

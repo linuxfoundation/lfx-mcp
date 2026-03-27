@@ -337,7 +337,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		logger.ErrorContext(ctx, "ListProjectMemberships failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search members: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search members", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -435,7 +435,7 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		logger.ErrorContext(ctx, "GetProjectMembership failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get member membership: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get member membership", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -509,7 +509,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 		logger.ErrorContext(ctx, "ListProjectTiers failed", "error", err, "project_uid", args.ProjectUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to list project tiers: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to list project tiers", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -598,7 +598,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		logger.ErrorContext(ctx, "GetProjectTier failed", "error", err, "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get project tier: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get project tier", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -682,7 +682,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		logger.ErrorContext(ctx, "ListMembershipKeyContacts failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership key contacts: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get membership key contacts", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -781,7 +781,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		logger.ErrorContext(ctx, "GetMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership key contact: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get membership key contact", err)},
 			},
 			IsError: true,
 		}, nil, nil

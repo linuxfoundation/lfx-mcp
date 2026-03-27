@@ -173,7 +173,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search committees: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search committees", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -264,7 +264,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		logger.ErrorContext(ctx, "GetCommitteeBase failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get committee: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get committee", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -376,7 +376,7 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		logger.ErrorContext(ctx, "GetCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get committee member: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get committee member", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -470,7 +470,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search committee members: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search committee members", err)},
 			},
 			IsError: true,
 		}, nil, nil

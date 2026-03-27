@@ -342,7 +342,7 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search meetings: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search meetings", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -437,7 +437,7 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get meeting: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get meeting", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -551,7 +551,7 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search meeting registrants: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search meeting registrants", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -646,7 +646,7 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get meeting registrant: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get meeting registrant", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -787,7 +787,7 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search %s: %s", resourceLabel, err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search "+resourceLabel, err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -881,7 +881,7 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get %s: %s", resourceLabel, err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get "+resourceLabel, err)},
 			},
 			IsError: true,
 		}, nil, nil

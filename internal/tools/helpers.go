@@ -7,6 +7,7 @@ package tools
 import (
 	"context"
 	"log/slog"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -87,4 +88,23 @@ func boolPtr(b bool) *bool {
 // payload fields that distinguish between "unset" and "zero value".
 func strPtr(s string) *string {
 	return &s
+}
+
+// accessDeniedMessage is the user-facing message returned when a downstream
+// API call is rejected with HTTP 403.
+const accessDeniedMessage = "you do not have enough access to complete this operation. Request support @ https://support.lfx.dev"
+
+// friendlyAPIError formats an API error for display in a tool result.
+// If the error contains "response code 403" it returns a user-friendly
+// access-denied message instead of the raw internal error string.
+// The op argument is a short description of the operation (e.g.
+// "failed to get project") and is used only for non-403 errors.
+func friendlyAPIError(op string, err error) string {
+	if len(op) > 0 {
+		op = strings.ToUpper(op[:1]) + op[1:]
+	}
+	if strings.Contains(err.Error(), "response code 403") {
+		return op + ": " + accessDeniedMessage
+	}
+	return op + ": " + err.Error()
 }

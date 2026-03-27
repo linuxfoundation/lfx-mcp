@@ -174,7 +174,7 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 	if err != nil {
 		logger.ErrorContext(ctx, "CreateMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to create key contact: %s", err.Error())}},
+			Content: []mcp.Content{&mcp.TextContent{Text: friendlyAPIError("failed to create key contact", err)}},
 			IsError: true,
 		}, nil, nil
 	}
@@ -251,7 +251,7 @@ func handleUpdateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 	if err != nil {
 		logger.ErrorContext(ctx, "UpdateMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to update key contact: %s", err.Error())}},
+			Content: []mcp.Content{&mcp.TextContent{Text: friendlyAPIError("failed to update key contact", err)}},
 			IsError: true,
 		}, nil, nil
 	}
@@ -324,7 +324,7 @@ func handleDeleteMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 	if err != nil {
 		logger.ErrorContext(ctx, "DeleteMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to delete key contact: %s", err.Error())}},
+			Content: []mcp.Content{&mcp.TextContent{Text: friendlyAPIError("failed to delete key contact", err)}},
 			IsError: true,
 		}, nil, nil
 	}

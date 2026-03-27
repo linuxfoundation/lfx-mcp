@@ -174,7 +174,7 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 		logger.ErrorContext(ctx, "GetGrpsioService failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list service: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get mailing list service", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -273,7 +273,7 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		logger.ErrorContext(ctx, "GetGrpsioMailingList failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get mailing list", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -382,7 +382,7 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 		logger.ErrorContext(ctx, "GetGrpsioMailingListMember failed", "error", err, "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list member: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get mailing list member", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -469,7 +469,7 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search mailing lists: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search mailing lists", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -578,7 +578,7 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search mailing list members: %s", err.Error())},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search mailing list members", err)},
 			},
 			IsError: true,
 		}, nil, nil

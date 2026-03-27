@@ -36,7 +36,7 @@ func SetProjectConfig(cfg *ProjectConfig) {
 func RegisterSearchProjects(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_projects",
-		Description: "Search for LFX projects by name using the LFX query service",
+		Description: "Search for LFX projects by name or by parent project UID using the LFX query service",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Projects",
 			ReadOnlyHint: true,
@@ -58,7 +58,8 @@ func RegisterGetProject(server *mcp.Server) {
 
 // SearchProjectsArgs defines the input parameters for the search_projects tool.
 type SearchProjectsArgs struct {
-	Name      string `json:"name" jsonschema:"Name or partial name of the project to search for"`
+	Name      string `json:"name,omitempty" jsonschema:"Name or partial name of the project to search for"`
+	ParentUID string `json:"parent_uid,omitempty" jsonschema:"Optional UID of a foundation or umbrella project to filter child projects by"`
 	PageSize  int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -113,11 +114,17 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		payload.Name = &args.Name
 	}
 
+	if args.ParentUID != "" {
+		// The query service requires parent refs in the form "<type>:<id>".
+		parentRef := "project:" + args.ParentUID
+		payload.Parent = &parentRef
+	}
+
 	if args.PageToken != "" {
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.InfoContext(ctx, "searching projects", "name", args.Name, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching projects", "name", args.Name, "parent_uid", args.ParentUID, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {

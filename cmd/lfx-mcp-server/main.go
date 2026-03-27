@@ -346,7 +346,17 @@ func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middle
 			// Start a dedicated MCP span. For HTTP, the otelhttp server span is
 			// already in ctx so this becomes a child; for stdio there is no
 			// parent and a fresh root span is created instead.
-			ctx, span := tracer.Start(ctx, method)
+			// Build the span name following the MCP semconv format:
+			// "{mcp.method.name} {target}" where target is gen_ai.tool.name
+			// when available, otherwise just use the method name.
+			// See: https://opentelemetry.io/docs/specs/semconv/gen-ai/mcp/#server
+			spanName := method
+			if method == "tools/call" {
+				if params, ok := req.GetParams().(*mcp.CallToolParamsRaw); ok && params.Name != "" {
+					spanName = method + " " + params.Name
+				}
+			}
+			ctx, span := tracer.Start(ctx, spanName)
 			defer span.End()
 
 			// Bind mcp.session.id and mcp.method.name onto a child logger and
@@ -765,9 +775,14 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 
 	// Wrap the mux with OTel instrumentation so every inbound HTTP request gets
 	// a root span with W3C TraceContext propagation.
+	// Health-check probes are excluded from tracing to avoid cluttering the
+	// tracing backend with high-frequency, low-value spans.
 	var rootHandler http.Handler = mux
 	rootHandler = otelhttp.NewHandler(rootHandler, otelCfg.ServiceName,
 		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
+		otelhttp.WithFilter(func(r *http.Request) bool {
+			return r.URL.Path != "/livez" && r.URL.Path != "/readyz"
+		}),
 	)
 
 	httpServer := &http.Server{

@@ -92,7 +92,7 @@ func strPtr(s string) *string {
 
 // accessDeniedMessage is the user-facing message returned when a downstream
 // API call is rejected with HTTP 403.
-const accessDeniedMessage = "you do not have enough access to complete this operation. Request support @ https://support.lfx.dev"
+const accessDeniedMessage = "this resource may not exist or you may not have enough access to complete this operation. Request support @ https://support.lfx.dev"
 
 // friendlyAPIError formats an API error for display in a tool result.
 // If the error contains "response code 403" it returns a user-friendly

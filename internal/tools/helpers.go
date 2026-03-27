@@ -98,7 +98,7 @@ const accessDeniedMessage = "you do not have enough access to complete this oper
 // If the error contains "response code 403" it returns a user-friendly
 // access-denied message instead of the raw internal error string.
 // The op argument is a short description of the operation (e.g.
-// "failed to get project") and is used only for non-403 errors.
+// "failed to get project") and is prefixed to both 403 and non-403 error messages.
 func friendlyAPIError(op string, err error) string {
 	if len(op) > 0 {
 		op = strings.ToUpper(op[:1]) + op[1:]

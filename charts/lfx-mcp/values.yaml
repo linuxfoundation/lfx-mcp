@@ -109,7 +109,7 @@ secrets:
     # clientAssertionSigningKey is the key name for the private key used to sign client
     # assertions (used when authenticating with a JWT client assertion instead of a
     # client secret).
-    clientAssertionSigningKey: client_assertion_signing_key
+    clientAssertionSigningKey: client_private_key
 # apiCredentials is a TEMPORARY stop-gap for MCP clients that cannot complete a full
 # OAuth2 authorization code flow. Remove this stanza once all clients support proper
 # OAuth2.
@@ -141,3 +141,29 @@ secrets:
 #   # Secret whose values are the corresponding shared-secret passwords.
 #   keys: {}
 #   #   my-client: my_client_api_key
+
+# serviceAccount is the configuration for the Kubernetes service account (used by multiple components)
+serviceAccount:
+  # create specifies whether a service account should be created
+  create: true
+  # name is the name of the service account to use.
+  # If not set and create is true, defaults to the chart name.
+  name: "lfx-mcp"
+  # annotations to add to the service account
+  annotations: {}
+  # automountServiceAccountToken is a boolean to determine if the service account token should be automatically mounted
+  automountServiceAccountToken: true
+
+# External Secrets Operator
+externalSecretsOperator:
+  # Enable/disable External Secrets Operator integration
+  enabled: true
+
+  # ExternalSecret configuration
+  externalSecret:
+    # targetSecretName is the name of the Kubernetes Secret that ESO will create and manage.
+    # Defaults to secrets.name when not set. Override this to stage a cutover: ESO populates
+    # a new secret under this name while the deployment continues reading from secrets.name.
+    targetSecretName: "lfx-mcp-secrets"
+    # How often to refresh secrets from AWS
+    refreshInterval: "10m"

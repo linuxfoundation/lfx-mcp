@@ -20,7 +20,7 @@ import (
 // create_membership_key_contact tool.
 type CreateMembershipKeyContactArgs struct {
 	ProjectUID     string  `json:"project_uid" jsonschema:"Project UUID"`
-	ID             string  `json:"id" jsonschema:"Membership UID"`
+	MembershipUID  string  `json:"membership_uid" jsonschema:"Membership UID"`
 	Email          string  `json:"email" jsonschema:"Contact email address; used to resolve or create the Salesforce Contact record"`
 	FirstName      string  `json:"first_name" jsonschema:"Contact first name; used when creating a new Contact on miss"`
 	LastName       string  `json:"last_name" jsonschema:"Contact last name; used when creating a new Contact on miss"`
@@ -36,8 +36,8 @@ type CreateMembershipKeyContactArgs struct {
 // updated; omitted fields retain their current values.
 type UpdateMembershipKeyContactArgs struct {
 	ProjectUID     string  `json:"project_uid" jsonschema:"Project UUID"`
-	ID             string  `json:"id" jsonschema:"Membership UID"`
-	Cid            string  `json:"cid" jsonschema:"Key contact UID"`
+	MembershipUID  string  `json:"membership_uid" jsonschema:"Membership UID"`
+	ContactUID     string  `json:"contact_uid" jsonschema:"Key contact UID"`
 	Role           *string `json:"role,omitempty" jsonschema:"Contact role designation, e.g. 'Voting Representative'"`
 	Status         *string `json:"status,omitempty" jsonschema:"Role record status, e.g. 'Active'"`
 	BoardMember    *bool   `json:"board_member,omitempty" jsonschema:"Whether this contact holds a board member role"`
@@ -47,9 +47,9 @@ type UpdateMembershipKeyContactArgs struct {
 // DeleteMembershipKeyContactArgs defines the input parameters for the
 // delete_membership_key_contact tool.
 type DeleteMembershipKeyContactArgs struct {
-	ProjectUID string `json:"project_uid" jsonschema:"Project UUID"`
-	ID         string `json:"id" jsonschema:"Membership UID"`
-	Cid        string `json:"cid" jsonschema:"Key contact UID to remove"`
+	ProjectUID    string `json:"project_uid" jsonschema:"Project UUID"`
+	MembershipUID string `json:"membership_uid" jsonschema:"Membership UID"`
+	ContactUID    string `json:"contact_uid" jsonschema:"Key contact UID to remove"`
 }
 
 // --- Registration ---
@@ -100,10 +100,10 @@ func RegisterDeleteMembershipKeyContact(server *mcp.Server) {
 // --- Handlers ---
 
 func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest, args CreateMembershipKeyContactArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
-		logger.Error("member tools not configured")
+		logger.ErrorContext(ctx, "member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: "Error: member tools not configured"}},
 			IsError: true,
@@ -116,9 +116,9 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 			IsError: true,
 		}, nil, nil
 	}
-	if args.ID == "" {
+	if args.MembershipUID == "" {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "Error: id (membership UID) is required"}},
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: membership_uid is required"}},
 			IsError: true,
 		}, nil, nil
 	}
@@ -143,33 +143,21 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)}},
 			IsError: true,
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-	})
-	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))}},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	version := "1"
 	payload := &memberservice.CreateMembershipKeyContactPayload{
 		Version:        &version,
 		ProjectUID:     &args.ProjectUID,
-		ID:             &args.ID,
+		MembershipUID:  &args.MembershipUID,
 		Email:          args.Email,
 		FirstName:      args.FirstName,
 		LastName:       args.LastName,
@@ -180,27 +168,27 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		PrimaryContact: args.PrimaryContact,
 	}
 
-	logger.Info("creating membership key contact", "project_uid", args.ProjectUID, "membership_id", args.ID, "email", args.Email)
+	logger.InfoContext(ctx, "creating membership key contact", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "email", args.Email)
 
 	result, err := clients.Member.CreateMembershipKeyContact(ctx, payload)
 	if err != nil {
-		logger.Error("CreateMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_id", args.ID)
+		logger.ErrorContext(ctx, "CreateMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to create key contact: %s", lfxv2.ErrorMessage(err))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: friendlyAPIError("failed to create key contact", err)}},
 			IsError: true,
 		}, nil, nil
 	}
 
 	prettyJSON, err := json.MarshalIndent(result.Contact, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal create result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal create result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)}},
 			IsError: true,
 		}, nil, nil
 	}
 
-	logger.Info("create_membership_key_contact succeeded", "project_uid", args.ProjectUID, "membership_id", args.ID, "contact_uid", ptrStr(result.Contact.UID))
+	logger.InfoContext(ctx, "create_membership_key_contact succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", ptrStr(result.Contact.UID))
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: string(prettyJSON)}},
@@ -208,10 +196,10 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 }
 
 func handleUpdateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest, args UpdateMembershipKeyContactArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
-		logger.Error("member tools not configured")
+		logger.ErrorContext(ctx, "member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: "Error: member tools not configured"}},
 			IsError: true,
@@ -224,72 +212,60 @@ func handleUpdateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 			IsError: true,
 		}, nil, nil
 	}
-	if args.ID == "" {
+	if args.MembershipUID == "" {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "Error: id (membership UID) is required"}},
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: membership_uid is required"}},
 			IsError: true,
 		}, nil, nil
 	}
-	if args.Cid == "" {
+	if args.ContactUID == "" {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "Error: cid (key contact UID) is required"}},
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: contact_uid is required"}},
 			IsError: true,
 		}, nil, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)}},
 			IsError: true,
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-	})
-	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))}},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	version := "1"
 	result, err := clients.Member.UpdateMembershipKeyContact(ctx, &memberservice.UpdateMembershipKeyContactPayload{
 		Version:        &version,
 		ProjectUID:     &args.ProjectUID,
-		ID:             &args.ID,
-		Cid:            &args.Cid,
+		MembershipUID:  &args.MembershipUID,
+		ContactUID:     &args.ContactUID,
 		Role:           args.Role,
 		Status:         args.Status,
 		BoardMember:    args.BoardMember,
 		PrimaryContact: args.PrimaryContact,
 	})
 	if err != nil {
-		logger.Error("UpdateMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_id", args.ID, "cid", args.Cid)
+		logger.ErrorContext(ctx, "UpdateMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to update key contact: %s", lfxv2.ErrorMessage(err))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: friendlyAPIError("failed to update key contact", err)}},
 			IsError: true,
 		}, nil, nil
 	}
 
 	prettyJSON, err := json.MarshalIndent(result.Contact, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal update result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal update result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)}},
 			IsError: true,
 		}, nil, nil
 	}
 
-	logger.Info("update_membership_key_contact succeeded", "project_uid", args.ProjectUID, "membership_id", args.ID, "cid", args.Cid)
+	logger.InfoContext(ctx, "update_membership_key_contact succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: string(prettyJSON)}},
@@ -297,10 +273,10 @@ func handleUpdateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 }
 
 func handleDeleteMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest, args DeleteMembershipKeyContactArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
-		logger.Error("member tools not configured")
+		logger.ErrorContext(ctx, "member tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: "Error: member tools not configured"}},
 			IsError: true,
@@ -313,62 +289,50 @@ func handleDeleteMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 			IsError: true,
 		}, nil, nil
 	}
-	if args.ID == "" {
+	if args.MembershipUID == "" {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "Error: id (membership UID) is required"}},
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: membership_uid is required"}},
 			IsError: true,
 		}, nil, nil
 	}
-	if args.Cid == "" {
+	if args.ContactUID == "" {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "Error: cid (key contact UID) is required"}},
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: contact_uid is required"}},
 			IsError: true,
 		}, nil, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)}},
 			IsError: true,
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-	})
-	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))}},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	version := "1"
 	err = clients.Member.DeleteMembershipKeyContact(ctx, &memberservice.DeleteMembershipKeyContactPayload{
-		Version:    &version,
-		ProjectUID: &args.ProjectUID,
-		ID:         &args.ID,
-		Cid:        &args.Cid,
+		Version:       &version,
+		ProjectUID:    &args.ProjectUID,
+		MembershipUID: &args.MembershipUID,
+		ContactUID:    &args.ContactUID,
 	})
 	if err != nil {
-		logger.Error("DeleteMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_id", args.ID, "cid", args.Cid)
+		logger.ErrorContext(ctx, "DeleteMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to delete key contact: %s", lfxv2.ErrorMessage(err))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: friendlyAPIError("failed to delete key contact", err)}},
 			IsError: true,
 		}, nil, nil
 	}
 
-	logger.Info("delete_membership_key_contact succeeded", "project_uid", args.ProjectUID, "membership_id", args.ID, "cid", args.Cid)
+	logger.InfoContext(ctx, "delete_membership_key_contact succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Key contact %s successfully removed from membership %s.", args.Cid, args.ID)}},
+		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Key contact %s successfully removed from membership %s.", args.ContactUID, args.MembershipUID)}},
 	}, nil, nil
 }
 

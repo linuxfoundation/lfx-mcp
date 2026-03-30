@@ -47,6 +47,12 @@ ingress:
   # annotations are additional annotations to merge into the Ingress resource.
   annotations: {}
 
+# podAnnotations are additional annotations to merge into the pod template metadata.
+# Example use: Datadog log collection configuration.
+#   podAnnotations:
+#     ad.datadoghq.com/app.logs: '[{"service": "lfx-mcp", "source": "go"}]'
+podAnnotations: {}
+
 # app is the configuration for the application.
 app:
   # debug enables debug logging.
@@ -63,6 +69,30 @@ app:
   lfxAPIURL: ""
   # tokenEndpoint is the OAuth2 token endpoint URL used for client credentials.
   tokenEndpoint: ""
+  # otel contains OpenTelemetry exporter configuration.
+  # All values default to empty (no-op tracer) so the chart is deployment-environment agnostic.
+  # The ArgoCD values files supply the environment-specific endpoint and sample ratio.
+  otel:
+    # endpoint is the OTLP gRPC collector endpoint (e.g. "http://$(HOST_IP):4317").
+    # Leave empty to disable tracing (installs a no-op provider).
+    # Bare host:port values are assumed to be plain HTTP; supply an explicit https:// scheme for TLS.
+    endpoint: ""
+    # tracesExporter selects the traces exporter ("otlp" or "none").
+    tracesExporter: ""
+    # tracesSampler selects the trace sampler (e.g. "parentbased_traceidratio").
+    # See https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#general-sdk-configuration
+    tracesSampler: ""
+    # tracesSamplerArg is the argument for the sampler (e.g. "0.2" for 20% ratio).
+    tracesSamplerArg: ""
+  # extraEnv is a list of additional environment variables to inject into the container.
+  # Used to supply HOST_IP (from the pod's status.hostIP) and the derived OTEL endpoint.
+  # Example (set in ArgoCD values, not here):
+  #   extraEnv:
+  #     - name: HOST_IP
+  #       valueFrom:
+  #         fieldRef:
+  #           fieldPath: status.hostIP
+  extraEnv: []
 
 # secrets contains the name of the pre-existing Kubernetes Secret created by the external
 # secrets operator, along with the keys under which each credential is stored.

@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	mailinglist "github.com/linuxfoundation/lfx-v2-mailing-list-service/gen/mailing_list"
@@ -24,9 +23,9 @@ const mailingListMemberResourceType = "groupsio_member"
 
 // MailingListConfig holds configuration shared by mailing list tools.
 type MailingListConfig struct {
-	LFXAPIURL           string
-	TokenExchangeClient *lfxv2.TokenExchangeClient
-	DebugLogger         *slog.Logger
+	// Clients is the shared LFX v2 API client instance. It must be created once
+	// at startup so that its token cache persists across requests.
+	Clients *lfxv2.Clients
 }
 
 var mailingListConfig *MailingListConfig
@@ -131,10 +130,10 @@ func RegisterSearchMailingLists(server *mcp.Server) {
 
 // handleGetMailingListService implements the get_mailing_list_service tool logic.
 func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, args GetMailingListServiceArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if mailingListConfig == nil {
-		logger.Error("mailing list tools not configured")
+		logger.ErrorContext(ctx, "mailing list tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: mailing list tools not configured"},
@@ -154,7 +153,7 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -163,33 +162,19 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
+	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := mailingListConfig.Clients
 
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           mailingListConfig.LFXAPIURL,
-		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
-		DebugLogger:         mailingListConfig.DebugLogger,
-	})
-	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
-
-	logger.Info("fetching mailing list service", "uid", args.UID)
+	logger.InfoContext(ctx, "fetching mailing list service", "uid", args.UID)
 
 	baseResult, err := clients.MailingList.GetGrpsioService(ctx, &mailinglist.GetGrpsioServicePayload{
 		UID: &args.UID,
 	})
 	if err != nil {
-		logger.Error("GetGrpsioService failed", "error", err, "uid", args.UID)
+		logger.ErrorContext(ctx, "GetGrpsioService failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list service: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get mailing list service", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -199,8 +184,10 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 	settingsResult, err := clients.MailingList.GetGrpsioServiceSettings(ctx, &mailinglist.GetGrpsioServiceSettingsPayload{
 		UID: &args.UID,
 	})
+	var settingsWarning string
 	if err != nil {
-		logger.Warn("getting mailing list service settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
+		settingsWarning = fmt.Sprintf("WARNING: mailing list service settings unavailable - %s", err.Error())
+		logger.ErrorContext(ctx, "getting mailing list service settings failed, returning base only", "error", err, "uid", args.UID)
 	} else {
 		serviceSettings = settingsResult.ServiceSettings
 	}
@@ -217,7 +204,7 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal mailing list service result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal mailing list service result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -226,21 +213,25 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 		}, nil, nil
 	}
 
-	logger.Info("get_mailing_list_service succeeded", "uid", args.UID)
+	logger.InfoContext(ctx, "get_mailing_list_service succeeded", "uid", args.UID)
+
+	content := []mcp.Content{}
+	if settingsWarning != "" {
+		content = append(content, &mcp.TextContent{Text: settingsWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
 
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
+		Content: content,
 	}, nil, nil
 }
 
 // handleGetMailingList implements the get_mailing_list tool logic.
 func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args GetMailingListArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if mailingListConfig == nil {
-		logger.Error("mailing list tools not configured")
+		logger.ErrorContext(ctx, "mailing list tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: mailing list tools not configured"},
@@ -260,7 +251,7 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -269,34 +260,20 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
+	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := mailingListConfig.Clients
 
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           mailingListConfig.LFXAPIURL,
-		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
-		DebugLogger:         mailingListConfig.DebugLogger,
-	})
-	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
-
-	logger.Info("fetching mailing list", "uid", args.UID)
+	logger.InfoContext(ctx, "fetching mailing list", "uid", args.UID)
 
 	baseResult, err := clients.MailingList.GetGrpsioMailingList(ctx, &mailinglist.GetGrpsioMailingListPayload{
 		Version: "1",
 		UID:     &args.UID,
 	})
 	if err != nil {
-		logger.Error("GetGrpsioMailingList failed", "error", err, "uid", args.UID)
+		logger.ErrorContext(ctx, "GetGrpsioMailingList failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get mailing list", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -306,8 +283,10 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	settingsResult, err := clients.MailingList.GetGrpsioMailingListSettings(ctx, &mailinglist.GetGrpsioMailingListSettingsPayload{
 		UID: &args.UID,
 	})
+	var listSettingsWarning string
 	if err != nil {
-		logger.Warn("getting mailing list settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
+		listSettingsWarning = fmt.Sprintf("WARNING: mailing list settings unavailable - %s", err.Error())
+		logger.ErrorContext(ctx, "getting mailing list settings failed, returning base only", "error", err, "uid", args.UID)
 	} else {
 		mlSettings = settingsResult.MailingListSettings
 	}
@@ -324,7 +303,7 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal mailing list result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal mailing list result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -333,21 +312,25 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	logger.Info("get_mailing_list succeeded", "uid", args.UID)
+	logger.InfoContext(ctx, "get_mailing_list succeeded", "uid", args.UID)
+
+	content := []mcp.Content{}
+	if listSettingsWarning != "" {
+		content = append(content, &mcp.TextContent{Text: listSettingsWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
 
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
+		Content: content,
 	}, nil, nil
 }
 
 // handleGetMailingListMember implements the get_mailing_list_member tool logic.
 func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, args GetMailingListMemberArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if mailingListConfig == nil {
-		logger.Error("mailing list tools not configured")
+		logger.ErrorContext(ctx, "mailing list tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: mailing list tools not configured"},
@@ -376,7 +359,7 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -385,24 +368,10 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
+	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := mailingListConfig.Clients
 
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           mailingListConfig.LFXAPIURL,
-		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
-		DebugLogger:         mailingListConfig.DebugLogger,
-	})
-	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
-
-	logger.Info("fetching mailing list member", "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
+	logger.InfoContext(ctx, "fetching mailing list member", "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
 
 	result, err := clients.MailingList.GetGrpsioMailingListMember(ctx, &mailinglist.GetGrpsioMailingListMemberPayload{
 		Version:   "1",
@@ -410,10 +379,10 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 		MemberUID: args.MemberUID,
 	})
 	if err != nil {
-		logger.Error("GetGrpsioMailingListMember failed", "error", err, "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
+		logger.ErrorContext(ctx, "GetGrpsioMailingListMember failed", "error", err, "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get mailing list member: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get mailing list member", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -421,7 +390,7 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 
 	prettyJSON, err := json.MarshalIndent(result.Member, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal mailing list member result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal mailing list member result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -430,7 +399,7 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	logger.Info("get_mailing_list_member succeeded", "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
+	logger.InfoContext(ctx, "get_mailing_list_member succeeded", "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -441,10 +410,10 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 
 // handleSearchMailingLists implements the search_mailing_lists tool logic.
 func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, args SearchMailingListsArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if mailingListConfig == nil {
-		logger.Error("mailing list tools not configured")
+		logger.ErrorContext(ctx, "mailing list tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: mailing list tools not configured"},
@@ -455,7 +424,7 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -464,22 +433,8 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           mailingListConfig.LFXAPIURL,
-		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
-		DebugLogger:         mailingListConfig.DebugLogger,
-	})
-	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := mailingListConfig.Clients
 
 	pageSize := args.PageSize
 	if pageSize <= 0 {
@@ -507,14 +462,14 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.Info("searching mailing lists", "name", args.Name, "project_uid", args.ProjectUID, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching mailing lists", "name", args.Name, "project_uid", args.ProjectUID, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
-		logger.Error("QueryResources failed", "error", err)
+		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search mailing lists: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search mailing lists", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -530,13 +485,14 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		PageToken: result.PageToken,
 	}
 
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal search result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -545,21 +501,22 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		}, nil, nil
 	}
 
-	logger.Info("search_mailing_lists succeeded", "count", len(result.Resources))
+	logger.InfoContext(ctx, "search_mailing_lists succeeded", "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
 // handleSearchMailingListMembers implements the search_mailing_list_members tool logic.
 func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchMailingListMembersArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(req)
+	logger := newToolLogger(ctx, req)
 
 	if mailingListConfig == nil {
-		logger.Error("mailing list tools not configured")
+		logger.ErrorContext(ctx, "mailing list tools not configured")
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "Error: mailing list tools not configured"},
@@ -570,7 +527,7 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -579,22 +536,8 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           mailingListConfig.LFXAPIURL,
-		TokenExchangeClient: mailingListConfig.TokenExchangeClient,
-		DebugLogger:         mailingListConfig.DebugLogger,
-	})
-	if err != nil {
-		logger.Error("failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := mailingListConfig.Clients
 
 	pageSize := args.PageSize
 	if pageSize <= 0 {
@@ -628,14 +571,14 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.Info("searching mailing list members", "mailing_list_uid", args.MailingListUID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching mailing list members", "mailing_list_uid", args.MailingListUID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
-		logger.Error("QueryResources failed", "error", err)
+		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search mailing list members: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search mailing list members", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -651,13 +594,14 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		PageToken: result.PageToken,
 	}
 
+	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
-		logger.Warn("some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters")
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		logger.Error("failed to marshal search result", "error", err)
+		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
@@ -666,11 +610,12 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	logger.Info("search_mailing_list_members succeeded", "mailing_list_uid", args.MailingListUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
+	logger.InfoContext(ctx, "search_mailing_list_members succeeded", "mailing_list_uid", args.MailingListUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }

@@ -8,6 +8,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"time"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/serviceapi"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -32,7 +34,7 @@ func SetLensConfig(cfg *LensConfig) {
 func RegisterLFXLensQuery(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
 		Name:        "lfx_lens_query",
-		Description: "Query LFX Lens analytics for a project. Requires LF staff access and auditor relation to the project. Use search_projects first to find the project slug.",
+		Description: "Ask natural language questions about a project's data. LFX Lens covers the following domains: events, education, activity, contributors, maintainers, affiliations, organizations, project health, and project value. It can answer both straightforward text-to-SQL queries and more exploratory, multi-step data questions. Pass your question directly — Lens handles data exploration, SQL generation, and interpretation for each domain. Use search_projects first to find the project slug.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "LFX Lens Query",
 			ReadOnlyHint: true,
@@ -62,6 +64,13 @@ type lensFoundation struct {
 	Slug string `json:"slug"`
 }
 
+// lensQueryResponse is the JSON response from the Lens query endpoint.
+type lensQueryResponse struct {
+	Content   string `json:"content"`
+	Status    string `json:"status"`
+	SessionID string `json:"session_id"`
+}
+
 // --- Tool handlers ---
 
 func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args LFXLensQueryArgs) (*mcp.CallToolResult, any, error) {
@@ -80,39 +89,32 @@ func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args LFXL
 		return nil, nil, err
 	}
 
-	// TODO: Proxy to Lens service API once Auth0 resource server is deployed.
-	// The actual call will be:
-	//
-	//   POST /workflows/lfx-lens-mcp-workflow/runs (multipart/form-data)
-	//   Fields: message (string), additional_data (JSON: {"foundation": {"slug": "<slug>"}}), stream ("false")
-	//   Authorization: Bearer <m2m_token>
-	//
-	// Response: {"content": "...", "content_type": "str", "status": "COMPLETED"}
-	//
-	// payload := lensWorkflowRequest{
-	// 	Input: args.Input,
-	// 	AdditionalData: lensWorkflowAdditional{
-	// 		Foundation: lensFoundation{Slug: args.ProjectSlug},
-	// 	},
-	// }
-	// body, statusCode, err := lensConfig.ServiceClient.PostJSON(ctx, "/workflows/lfx-lens-mcp-workflow/runs", payload)
-	// if err != nil {
-	// 	return nil, nil, fmt.Errorf("Lens API call failed: %w", err)
-	// }
-	// if statusCode != http.StatusOK {
-	// 	return nil, nil, fmt.Errorf("Lens service returned status %d: %s", statusCode, string(body))
-	// }
-
-	_ = ctx // used by actual API call
-
-	dummyResponse := map[string]string{
-		"content":      fmt.Sprintf("[dry-run] LFX Lens query for project %q: %s", args.ProjectSlug, args.Input),
-		"content_type": "str",
-		"status":       "COMPLETED",
+	additionalData, err := json.Marshal(lensWorkflowAdditional{
+		Foundation: lensFoundation{Slug: args.ProjectSlug},
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal additional_data: %w", err)
 	}
-	body, _ := json.Marshal(dummyResponse)
+
+	body, statusCode, err := lensConfig.ServiceClient.PostMultipart(ctx, "/lfx-lens/mcp/query", map[string]string{
+		"message":         args.Input,
+		"additional_data": string(additionalData),
+		"user_id":         req.Extra.TokenInfo.UserID,
+		"session_id":      req.Extra.TokenInfo.UserID + "-" + time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("Lens API call failed: %w", err)
+	}
+	if statusCode != http.StatusOK {
+		return nil, nil, fmt.Errorf("Lens service returned status %d: %s", statusCode, string(body))
+	}
+
+	var resp lensQueryResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, nil, fmt.Errorf("failed to parse Lens response: %w", err)
+	}
 
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: string(body)}},
+		Content: []mcp.Content{&mcp.TextContent{Text: resp.Content}},
 	}, nil, nil
 }

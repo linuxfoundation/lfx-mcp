@@ -153,17 +153,3 @@ serviceAccount:
   annotations: {}
   # automountServiceAccountToken is a boolean to determine if the service account token should be automatically mounted
   automountServiceAccountToken: true
-
-# External Secrets Operator
-externalSecretsOperator:
-  # Enable/disable External Secrets Operator integration
-  enabled: true
-
-  # ExternalSecret configuration
-  externalSecret:
-    # targetSecretName is the name of the Kubernetes Secret that ESO will create and manage.
-    # Defaults to secrets.name when not set. Override this to stage a cutover: ESO populates
-    # a new secret under this name while the deployment continues reading from secrets.name.
-    targetSecretName: "lfx-mcp-secrets"
-    # How often to refresh secrets from AWS
-    refreshInterval: "10m"

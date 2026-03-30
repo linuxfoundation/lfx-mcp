@@ -222,8 +222,9 @@ func RegisterDeleteCommitteeMember(server *mcp.Server) {
 
 // --- Handler helpers ---
 
-// committeeWriteClients creates LFX v2 clients for committee write operations,
-// returning the clients and MCP logger, or an error tool result.
+// committeeWriteClients returns the shared LFX v2 clients for committee write
+// operations with the MCP token attached to the context, plus an MCP logger.
+// On error it returns a non-nil tool result that callers must return immediately.
 func committeeWriteClients(ctx context.Context, req *mcp.CallToolRequest) (context.Context, *lfxv2.Clients, *slog.Logger, *mcp.CallToolResult) {
 	logger := newToolLogger(ctx, req)
 
@@ -248,25 +249,8 @@ func committeeWriteClients(ctx context.Context, req *mcp.CallToolRequest) (conte
 		}
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           committeeConfig.LFXAPIURL,
-		TokenExchangeClient: committeeConfig.TokenExchangeClient,
-		DebugLogger:         committeeConfig.DebugLogger,
-		HTTPClient:          committeeConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return ctx, nil, logger, &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}
-	}
-
-	return ctx, clients, logger, nil
+	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
+	return ctx, committeeConfig.Clients, logger, nil
 }
 
 // --- Committee handlers ---
@@ -307,7 +291,7 @@ func handleCreateCommittee(ctx context.Context, req *mcp.CallToolRequest, args C
 		logger.ErrorContext(ctx, "CreateCommittee failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to create committee: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to create committee", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -361,7 +345,7 @@ func handleUpdateCommittee(ctx context.Context, req *mcp.CallToolRequest, args U
 		logger.ErrorContext(ctx, "GetCommitteeBase failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to fetch committee for update: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to fetch committee for update", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -431,7 +415,7 @@ func handleUpdateCommittee(ctx context.Context, req *mcp.CallToolRequest, args U
 		logger.ErrorContext(ctx, "UpdateCommitteeBase failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to update committee: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to update committee", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -485,7 +469,7 @@ func handleUpdateCommitteeSettings(ctx context.Context, req *mcp.CallToolRequest
 		logger.ErrorContext(ctx, "GetCommitteeSettings failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to fetch committee settings for update: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to fetch committee settings for update", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -519,7 +503,7 @@ func handleUpdateCommitteeSettings(ctx context.Context, req *mcp.CallToolRequest
 		logger.ErrorContext(ctx, "UpdateCommitteeSettings failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to update committee settings: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to update committee settings", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -571,7 +555,7 @@ func handleDeleteCommittee(ctx context.Context, req *mcp.CallToolRequest, args D
 		logger.ErrorContext(ctx, "GetCommitteeBase failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to fetch committee for delete: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to fetch committee for delete", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -586,7 +570,7 @@ func handleDeleteCommittee(ctx context.Context, req *mcp.CallToolRequest, args D
 		logger.ErrorContext(ctx, "DeleteCommittee failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to delete committee: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to delete committee", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -700,7 +684,7 @@ func handleCreateCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 		logger.ErrorContext(ctx, "CreateCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to create committee member: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to create committee member", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -765,7 +749,7 @@ func handleUpdateCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 		logger.ErrorContext(ctx, "GetCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to fetch committee member for update: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to fetch committee member for update", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -846,7 +830,7 @@ func handleUpdateCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 		logger.ErrorContext(ctx, "UpdateCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to update committee member: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to update committee member", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -909,7 +893,7 @@ func handleDeleteCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 		logger.ErrorContext(ctx, "GetCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to fetch committee member for delete: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to fetch committee member for delete", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -925,7 +909,7 @@ func handleDeleteCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 		logger.ErrorContext(ctx, "DeleteCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to delete committee member: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to delete committee member", err)},
 			},
 			IsError: true,
 		}, nil, nil

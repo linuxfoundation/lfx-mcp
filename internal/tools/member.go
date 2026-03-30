@@ -8,8 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"net/http"
 	"strings"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
@@ -19,12 +17,9 @@ import (
 
 // MemberConfig holds configuration shared by member tools.
 type MemberConfig struct {
-	LFXAPIURL           string
-	TokenExchangeClient *lfxv2.TokenExchangeClient
-	DebugLogger         *slog.Logger
-	// HTTPClient is the HTTP client to use for LFX API calls.
-	// If nil, a default 30-second timeout client is created.
-	HTTPClient *http.Client
+	// Clients is the shared LFX v2 API client instance. It must be created once
+	// at startup so that its token cache persists across requests.
+	Clients *lfxv2.Clients
 }
 
 var memberConfig *MemberConfig
@@ -37,7 +32,7 @@ func SetMemberConfig(cfg *MemberConfig) {
 // SearchMembersArgs defines the input parameters for the search_members tool.
 type SearchMembersArgs struct {
 	ProjectUID string `json:"project_uid" jsonschema:"Project UUID (required)"`
-	Search     string `json:"search,omitempty" jsonschema:"Free-text search across company name, project name, and tier"`
+	SearchName string `json:"search_name,omitempty" jsonschema:"Search memberships by member company name (case-insensitive substring match)."`
 	TierUID    string `json:"tier_uid,omitempty" jsonschema:"Filter by membership tier UID (UUID from list_project_tiers)"`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order: newest (default), name, last_modified"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
@@ -198,7 +193,7 @@ func toKeyContactView(c *memberservice.ProjectKeyContactResponse) keyContactView
 func RegisterSearchMembers(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_members",
-		Description: "List and search memberships for a project. Use this tool when users ask about members, memberships, or member organizations for a specific project. Requires project_uid. Supports free-text search, tier_uid filter, and sort order (newest, name, last_modified). Uses cursor-based pagination via page_token.",
+		Description: "List and search memberships for a project. Use this tool when users ask about members, memberships, or member organizations for a specific project. Requires project_uid. Supports search_name for case-insensitive company name substring search, tier_uid filter, and sort order (newest, name, last_modified). Uses cursor-based pagination via page_token.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Members",
 			ReadOnlyHint: true,
@@ -291,23 +286,8 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-		HTTPClient:          memberConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	if args.ProjectUID == "" {
 		return &mcp.CallToolResult{
@@ -346,18 +326,18 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		payload.Filter = &filterStr
 	}
 
-	if args.Search != "" {
-		payload.Search = &args.Search
+	if args.SearchName != "" {
+		payload.SearchName = &args.SearchName
 	}
 
-	logger.InfoContext(ctx, "searching members", "project_uid", args.ProjectUID, "filter_count", len(filters), "page_size", pageSize, "page_token", args.PageToken, "search", args.Search)
+	logger.InfoContext(ctx, "searching members", "project_uid", args.ProjectUID, "filter_count", len(filters), "page_size", pageSize, "page_token", args.PageToken, "search_name", args.SearchName)
 
 	result, err := clients.Member.ListProjectMemberships(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "ListProjectMemberships failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search members: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search members", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -440,23 +420,8 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-		HTTPClient:          memberConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	logger.InfoContext(ctx, "fetching member membership", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 
@@ -470,7 +435,7 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		logger.ErrorContext(ctx, "GetProjectMembership failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get member membership: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get member membership", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -530,23 +495,8 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-		HTTPClient:          memberConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	logger.InfoContext(ctx, "listing project tiers", "project_uid", args.ProjectUID)
 
@@ -559,7 +509,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 		logger.ErrorContext(ctx, "ListProjectTiers failed", "error", err, "project_uid", args.ProjectUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to list project tiers: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to list project tiers", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -633,23 +583,8 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-		HTTPClient:          memberConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	logger.InfoContext(ctx, "fetching project tier", "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
 
@@ -663,7 +598,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		logger.ErrorContext(ctx, "GetProjectTier failed", "error", err, "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get project tier: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get project tier", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -732,23 +667,8 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-		HTTPClient:          memberConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	logger.InfoContext(ctx, "fetching membership key contacts", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 
@@ -762,7 +682,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		logger.ErrorContext(ctx, "ListMembershipKeyContacts failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership key contacts: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get membership key contacts", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -845,23 +765,8 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-		HTTPClient:          memberConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	logger.InfoContext(ctx, "fetching membership key contact", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 
@@ -876,7 +781,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		logger.ErrorContext(ctx, "GetMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get membership key contact: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get membership key contact", err)},
 			},
 			IsError: true,
 		}, nil, nil

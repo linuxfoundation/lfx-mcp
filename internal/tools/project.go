@@ -8,8 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"net/http"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	projectservice "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/project_service"
@@ -22,12 +20,9 @@ const projectResourceType = "project"
 
 // ProjectConfig holds configuration shared by project tools.
 type ProjectConfig struct {
-	LFXAPIURL           string
-	TokenExchangeClient *lfxv2.TokenExchangeClient
-	DebugLogger         *slog.Logger
-	// HTTPClient is the HTTP client to use for LFX API calls.
-	// If nil, a default 30-second timeout client is created.
-	HTTPClient *http.Client
+	// Clients is the shared LFX v2 API client instance. It must be created once
+	// at startup so that its token cache persists across requests.
+	Clients *lfxv2.Clients
 }
 
 var projectConfig *ProjectConfig
@@ -41,7 +36,7 @@ func SetProjectConfig(cfg *ProjectConfig) {
 func RegisterSearchProjects(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_projects",
-		Description: "Search for LFX projects by name using the LFX query service",
+		Description: "Search for LFX projects by name or by parent project UID using the LFX query service",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Projects",
 			ReadOnlyHint: true,
@@ -63,7 +58,8 @@ func RegisterGetProject(server *mcp.Server) {
 
 // SearchProjectsArgs defines the input parameters for the search_projects tool.
 type SearchProjectsArgs struct {
-	Name      string `json:"name" jsonschema:"Name or partial name of the project to search for"`
+	Name      string `json:"name,omitempty" jsonschema:"Name or partial name of the project to search for"`
+	ParentUID string `json:"parent_uid,omitempty" jsonschema:"Optional UID of a foundation or umbrella project to filter child projects by"`
 	PageSize  int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -98,23 +94,8 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           projectConfig.LFXAPIURL,
-		TokenExchangeClient: projectConfig.TokenExchangeClient,
-		DebugLogger:         projectConfig.DebugLogger,
-		HTTPClient:          projectConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = projectConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := projectConfig.Clients
 
 	pageSize := args.PageSize
 	if pageSize <= 0 {
@@ -133,18 +114,24 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		payload.Name = &args.Name
 	}
 
+	if args.ParentUID != "" {
+		// The query service requires parent refs in the form "<type>:<id>".
+		parentRef := "project:" + args.ParentUID
+		payload.Parent = &parentRef
+	}
+
 	if args.PageToken != "" {
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.InfoContext(ctx, "searching projects", "name", args.Name, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching projects", "name", args.Name, "parent_uid", args.ParentUID, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to search projects: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search projects", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -215,23 +202,8 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           projectConfig.LFXAPIURL,
-		TokenExchangeClient: projectConfig.TokenExchangeClient,
-		DebugLogger:         projectConfig.DebugLogger,
-		HTTPClient:          projectConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))},
-			},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = projectConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := projectConfig.Clients
 
 	logger.InfoContext(ctx, "fetching project", "uid", args.UID)
 
@@ -242,7 +214,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 		logger.ErrorContext(ctx, "GetOneProjectBase failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to get project: %s", lfxv2.ErrorMessage(err))},
+				&mcp.TextContent{Text: friendlyAPIError("failed to get project", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -257,8 +229,8 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 	})
 	var settingsWarning string
 	if err != nil {
-		settingsWarning = fmt.Sprintf("WARNING: project settings unavailable - %s", lfxv2.ErrorMessage(err))
-		logger.ErrorContext(ctx, "getting project settings failed, returning base only", "error", lfxv2.ErrorMessage(err), "uid", args.UID)
+		settingsWarning = fmt.Sprintf("WARNING: project settings unavailable - %s", err.Error())
+		logger.ErrorContext(ctx, "getting project settings failed, returning base only", "error", err, "uid", args.UID)
 	} else {
 		projectSettings = settingsResult.ProjectSettings
 	}

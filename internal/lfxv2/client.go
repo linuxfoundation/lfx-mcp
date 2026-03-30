@@ -11,8 +11,9 @@
 //
 // # Usage in MCP Tools
 //
-// Tools should extract the raw MCP token from the request and attach it to the
-// context before making LFX API calls:
+// A single *Clients instance should be created once at startup (via NewClients)
+// and shared across all tool invocations. Per-request, call WithMCPToken to
+// attach the caller's MCP bearer token to the context before making LFX API calls:
 //
 //	func handleMyTool(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallToolResult, any, error) {
 //	    // Extract raw MCP token from request.
@@ -21,27 +22,20 @@
 //	        return nil, nil, err
 //	    }
 //
-//	    // Attach token to context for LFX API calls.
-//	    ctx = lfxv2.WithMCPToken(ctx, mcpToken)
+//	    // Attach token to context; the shared clients instance handles exchange.
+//	    ctx = sharedClients.WithMCPToken(ctx, mcpToken)
 //
-//	    // Create clients with token exchange enabled.
-//	    clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-//	        APIDomain: "https://api.lfx.dev",
-//	        TokenExchangeClient: tokenExchangeClient, // shared instance
-//	    })
-//	    if err != nil {
-//	        return nil, nil, err
-//	    }
-//
-//	    // Make API calls - token exchange happens automatically.
-//	    result, err := clients.Project.GetOneProjectBase(ctx, &projectservice.GetOneProjectBasePayload{})
+//	    // Make API calls - token exchange and caching happen automatically.
+//	    result, err := sharedClients.Project.GetOneProjectBase(ctx, &projectservice.GetOneProjectBasePayload{})
 //	    // ...
 //	}
 //
 // # Token Caching
 //
-// Exchanged tokens are cached per MCP token to avoid redundant exchanges.
-// The cache is thread-safe and automatically expires tokens with a 5-minute buffer.
+// Exchanged tokens are cached per MCP token inside the long-lived *Clients
+// instance to avoid redundant token-exchange round-trips on every request.
+// The cache is goroutine-safe and automatically expires tokens with a
+// fixed buffer of 5 minutes before their exp claim.
 package lfxv2
 
 import (
@@ -51,9 +45,9 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"sync"
 	"time"
 
+	gocache "github.com/patrickmn/go-cache"
 	goahttp "goa.design/goa/v3/http"
 
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
@@ -149,15 +143,8 @@ type Clients struct {
 
 	tokenExchangeClient *TokenExchangeClient
 
-	// Token cache: maps MCP token -> exchanged LFX token info.
-	mu         sync.RWMutex
-	tokenCache map[string]*cachedToken
-}
-
-// cachedToken holds an exchanged LFX API token with its expiration.
-type cachedToken struct {
-	accessToken string
-	expiry      time.Time
+	// tokenCache maps MCP token -> exchanged LFX token string, with per-entry TTL.
+	tokenCache *gocache.Cache
 }
 
 // NewClients initializes and returns LFX v2 API service clients.
@@ -177,7 +164,8 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 	// Wrap HTTP client with auth interceptor if token exchange is enabled.
 	clients := &Clients{
 		tokenExchangeClient: cfg.TokenExchangeClient,
-		tokenCache:          make(map[string]*cachedToken),
+		// No default expiration (TTL is set per item); run cleanup every 10 minutes.
+		tokenCache: gocache.New(gocache.NoExpiration, 10*time.Minute),
 	}
 
 	if cfg.DebugLogger != nil {
@@ -397,6 +385,13 @@ func (dt *debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+// WithMCPToken attaches mcpToken to ctx so the auth interceptor can retrieve
+// it when forwarding requests to LFX APIs. Call this once per inbound request
+// before invoking any LFX API method on the shared *Clients instance.
+func (c *Clients) WithMCPToken(ctx context.Context, mcpToken string) context.Context {
+	return WithMCPToken(ctx, mcpToken)
+}
+
 // wrapWithAuthInterceptor wraps an HTTP client with automatic token exchange.
 func (c *Clients) wrapWithAuthInterceptor(client *http.Client) *http.Client {
 	originalTransport := client.Transport
@@ -463,24 +458,9 @@ func (c *Clients) getOrExchangeToken(ctx context.Context, mcpToken string) (stri
 		cacheKey = m2mCacheKey
 	}
 
-	// Check cache first (read lock).
-	c.mu.RLock()
-	cached, exists := c.tokenCache[cacheKey]
-	c.mu.RUnlock()
-
-	// Return cached token if valid.
-	if exists && time.Now().Before(cached.expiry) {
-		return cached.accessToken, nil
-	}
-
-	// Need to fetch token (write lock).
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Double-check cache in case another goroutine just updated it.
-	cached, exists = c.tokenCache[cacheKey]
-	if exists && time.Now().Before(cached.expiry) {
-		return cached.accessToken, nil
+	// Return cached token if present and not yet expired.
+	if accessToken, found := c.tokenCache.Get(cacheKey); found {
+		return accessToken.(string), nil
 	}
 
 	// Obtain LFX token via the appropriate grant type.
@@ -495,12 +475,10 @@ func (c *Clients) getOrExchangeToken(ctx context.Context, mcpToken string) (stri
 		return "", err
 	}
 
-	// Cache the token with a 5-minute buffer before expiry.
+	// Cache the token with a 5-minute buffer before its exp claim.
 	expiryBuffer := 5 * time.Minute
-	c.tokenCache[cacheKey] = &cachedToken{
-		accessToken: resp.AccessToken,
-		expiry:      time.Now().Add(time.Duration(resp.ExpiresIn)*time.Second - expiryBuffer),
-	}
+	ttl := time.Duration(resp.ExpiresIn)*time.Second - expiryBuffer
+	c.tokenCache.Set(cacheKey, resp.AccessToken, ttl)
 
 	return resp.AccessToken, nil
 }

@@ -176,9 +176,13 @@ func ConfigFromEnv(serviceVersion string) Config {
 }
 
 // SetupSDK bootstraps the OpenTelemetry pipeline using environment variables.
-// Call the returned shutdown function (e.g. via defer) for proper cleanup.
-func SetupSDK(ctx context.Context, serviceVersion string) (shutdown func(context.Context) error, err error) {
-	return SetupSDKWithConfig(ctx, ConfigFromEnv(serviceVersion))
+// It returns the resolved Config (including the effective ServiceName) so that
+// callers can use it for otelhttp instrumentation and similar. Call the returned
+// shutdown function (e.g. via defer) for proper cleanup.
+func SetupSDK(ctx context.Context, serviceVersion string) (cfg Config, shutdown func(context.Context) error, err error) {
+	cfg = ConfigFromEnv(serviceVersion)
+	shutdown, err = SetupSDKWithConfig(ctx, cfg)
+	return
 }
 
 // SetupSDKWithConfig bootstraps the OpenTelemetry pipeline with the provided configuration.

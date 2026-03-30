@@ -150,21 +150,8 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-		HTTPClient:          memberConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))}},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	version := "1"
 	payload := &memberservice.CreateMembershipKeyContactPayload{
@@ -187,7 +174,7 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 	if err != nil {
 		logger.ErrorContext(ctx, "CreateMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID)
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to create key contact: %s", lfxv2.ErrorMessage(err))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: friendlyAPIError("failed to create key contact", err)}},
 			IsError: true,
 		}, nil, nil
 	}
@@ -247,21 +234,8 @@ func handleUpdateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-		HTTPClient:          memberConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))}},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	version := "1"
 	result, err := clients.Member.UpdateMembershipKeyContact(ctx, &memberservice.UpdateMembershipKeyContactPayload{
@@ -277,7 +251,7 @@ func handleUpdateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 	if err != nil {
 		logger.ErrorContext(ctx, "UpdateMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to update key contact: %s", lfxv2.ErrorMessage(err))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: friendlyAPIError("failed to update key contact", err)}},
 			IsError: true,
 		}, nil, nil
 	}
@@ -337,21 +311,8 @@ func handleDeleteMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		}, nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           memberConfig.LFXAPIURL,
-		TokenExchangeClient: memberConfig.TokenExchangeClient,
-		DebugLogger:         memberConfig.DebugLogger,
-		HTTPClient:          memberConfig.HTTPClient,
-	})
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create LFX v2 clients", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))}},
-			IsError: true,
-		}, nil, nil
-	}
+	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := memberConfig.Clients
 
 	version := "1"
 	err = clients.Member.DeleteMembershipKeyContact(ctx, &memberservice.DeleteMembershipKeyContactPayload{
@@ -363,7 +324,7 @@ func handleDeleteMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 	if err != nil {
 		logger.ErrorContext(ctx, "DeleteMembershipKeyContact failed", "error", err, "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to delete key contact: %s", lfxv2.ErrorMessage(err))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: friendlyAPIError("failed to delete key contact", err)}},
 			IsError: true,
 		}, nil, nil
 	}

@@ -440,6 +440,18 @@ func (a *authInterceptor) RoundTrip(req *http.Request) (*http.Response, error) {
 // covers them all rather than one entry per unique M2M subject token.
 const m2mCacheKey = "__m2m__"
 
+// GetExchangedToken returns the exchanged V2 API token for the MCP token
+// stored in the context. It reuses the token cache, so repeated calls within
+// the same request are cheap. This is used by the access-check client which
+// needs the V2 token as an explicit string rather than via the auth interceptor.
+func (c *Clients) GetExchangedToken(ctx context.Context) (string, error) {
+	mcpToken := mcpTokenFromContext(ctx)
+	if mcpToken == "" {
+		return "", fmt.Errorf("MCP token not found in context")
+	}
+	return c.getOrExchangeToken(ctx, mcpToken)
+}
+
 // getOrExchangeToken gets a cached LFX token or obtains a new one.
 // For user tokens, it performs RFC 8693 token exchange.
 // For M2M tokens (Auth0 @clients subject), it uses the client_credentials grant

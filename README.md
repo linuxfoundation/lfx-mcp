@@ -24,6 +24,28 @@ This endpoint uses the [Streamable HTTP](https://modelcontextprotocol.io/specifi
 
 **Linux Foundation SSO does not support Dynamic Client Registration (DCR) or Client ID Metadata Documents (CIMD) at this time.** Please file an issue to request additional client support.
 
+### OpenCode
+
+Add the following to your `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "lfx-mcp-server": {
+      "type": "remote",
+      "url": "https://mcp.lfx.dev/mcp",
+      "enabled": true,
+      "oauth": {
+        "clientId": "LnBd9qGpwjXNs26aZxeXSkTCs0ac4zgM"
+      }
+    }
+  }
+}
+```
+
+See the [OpenCode MCP documentation](https://opencode.ai/docs/mcp-servers) for more details.
+
 ### Claude
 
 Add the LFX MCP Server in **Settings → Integrations → Add Integration**:

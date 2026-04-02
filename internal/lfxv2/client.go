@@ -279,8 +279,11 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		memberHTTPClient.UpdateMembershipKeyContact(),
 		memberHTTPClient.DeleteMembershipKeyContact(),
 		memberHTTPClient.GetMembershipKeyContact(),
+		memberHTTPClient.ListB2bOrgs(),
+		memberHTTPClient.ListB2bOrgMemberships(),
 		memberHTTPClient.Readyz(),
 		memberHTTPClient.Livez(),
+		memberHTTPClient.DebugVars(),
 	)
 
 	// Initialize project service client.

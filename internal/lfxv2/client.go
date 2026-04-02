@@ -215,6 +215,14 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		committeeHTTPClient.RejectApplication(),
 		committeeHTTPClient.JoinCommittee(),
 		committeeHTTPClient.LeaveCommittee(),
+		committeeHTTPClient.GetCommitteeLink(),
+		committeeHTTPClient.ListCommitteeLinks(),
+		committeeHTTPClient.CreateCommitteeLink(),
+		committeeHTTPClient.DeleteCommitteeLink(),
+		committeeHTTPClient.GetCommitteeLinkFolder(),
+		committeeHTTPClient.ListCommitteeLinkFolders(),
+		committeeHTTPClient.CreateCommitteeLinkFolder(),
+		committeeHTTPClient.DeleteCommitteeLinkFolder(),
 	)
 
 	// Initialize mailing list service client.

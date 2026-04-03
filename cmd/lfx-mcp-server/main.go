@@ -117,6 +117,8 @@ var defaultTools = []string{
 	"get_past_meeting_transcript",
 	"search_past_meeting_summaries",
 	"get_past_meeting_summary",
+	"search_b2b_orgs",
+	"list_b2b_org_memberships",
 }
 
 var logger *slog.Logger
@@ -578,6 +580,12 @@ func newServer(cfg Config, serviceName string) *mcp.Server {
 	}
 	if enabledTools["get_past_meeting_summary"] {
 		tools.RegisterGetPastMeetingSummary(server)
+	}
+	if enabledTools["search_b2b_orgs"] {
+		tools.RegisterSearchB2bOrgs(server)
+	}
+	if enabledTools["list_b2b_org_memberships"] {
+		tools.RegisterListB2bOrgMemberships(server)
 	}
 
 	return server

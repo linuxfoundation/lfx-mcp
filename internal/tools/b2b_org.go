@@ -42,6 +42,65 @@ type b2bOrgView struct {
 	UpdatedAt     *string  `json:"updated_at,omitempty"`
 }
 
+// b2bOrgMembershipView is a filtered view of ProjectMembershipResponse for
+// MCP responses from the list_b2b_org_memberships tool (org drill-down).
+// Omitted fields: b2b_org_uid (redundant input), company_name/logo/domain
+// (always the same org for every result), tier_family (always "Membership"),
+// tier_product_type (always null), and membership_type (raw Salesforce record
+// type ID). project_uid and project_slug are included because this is a
+// cross-project view and callers need to identify which project each
+// membership belongs to.
+type b2bOrgMembershipView struct {
+	UID              *string  `json:"uid,omitempty"`
+	TierUID          *string  `json:"tier_uid,omitempty"`
+	ProjectUID       *string  `json:"project_uid,omitempty"`
+	ProjectSlug      *string  `json:"project_slug,omitempty"`
+	Status           *string  `json:"status,omitempty"`
+	Year             *string  `json:"year,omitempty"`
+	Tier             *string  `json:"tier,omitempty"`
+	AutoRenew        *bool    `json:"auto_renew,omitempty"`
+	RenewalType      *string  `json:"renewal_type,omitempty"`
+	Price            *float64 `json:"price,omitempty"`
+	AnnualFullPrice  *float64 `json:"annual_full_price,omitempty"`
+	PaymentFrequency *string  `json:"payment_frequency,omitempty"`
+	PaymentTerms     *string  `json:"payment_terms,omitempty"`
+	AgreementDate    *string  `json:"agreement_date,omitempty"`
+	PurchaseDate     *string  `json:"purchase_date,omitempty"`
+	StartDate        *string  `json:"start_date,omitempty"`
+	EndDate          *string  `json:"end_date,omitempty"`
+	TierName         *string  `json:"tier_name,omitempty"`
+	CreatedAt        *string  `json:"created_at,omitempty"`
+	UpdatedAt        *string  `json:"updated_at,omitempty"`
+}
+
+// toB2bOrgMembershipView converts a ProjectMembershipResponse to the filtered
+// MCP view for list_b2b_org_memberships, dropping b2b_org_uid (redundant
+// input) and company fields (same org for every row in an org-scoped query).
+func toB2bOrgMembershipView(m *memberservice.ProjectMembershipResponse) b2bOrgMembershipView {
+	return b2bOrgMembershipView{
+		UID:              m.UID,
+		TierUID:          m.TierUID,
+		ProjectUID:       m.ProjectUID,
+		ProjectSlug:      m.ProjectSlug,
+		Status:           m.Status,
+		Year:             m.Year,
+		Tier:             m.Tier,
+		AutoRenew:        m.AutoRenew,
+		RenewalType:      m.RenewalType,
+		Price:            m.Price,
+		AnnualFullPrice:  m.AnnualFullPrice,
+		PaymentFrequency: m.PaymentFrequency,
+		PaymentTerms:     m.PaymentTerms,
+		AgreementDate:    m.AgreementDate,
+		PurchaseDate:     m.PurchaseDate,
+		StartDate:        m.StartDate,
+		EndDate:          m.EndDate,
+		TierName:         m.TierName,
+		CreatedAt:        m.CreatedAt,
+		UpdatedAt:        m.UpdatedAt,
+	}
+}
+
 // toB2bOrgView converts a B2bOrgResponse to the MCP view.
 func toB2bOrgView(o *memberservice.B2bOrgResponse) b2bOrgView {
 	return b2bOrgView{
@@ -243,9 +302,9 @@ func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, 
 		}, nil, nil
 	}
 
-	views := make([]membershipView, 0, len(result.Memberships))
+	views := make([]b2bOrgMembershipView, 0, len(result.Memberships))
 	for _, m := range result.Memberships {
-		views = append(views, toMembershipView(m))
+		views = append(views, toB2bOrgMembershipView(m))
 	}
 
 	// Warn if any membership has a project_slug but no project_uid, which
@@ -261,7 +320,7 @@ func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, 
 	}
 
 	type listResult struct {
-		Memberships []membershipView            `json:"memberships"`
+		Memberships []b2bOrgMembershipView      `json:"memberships"`
 		Metadata    *memberservice.ListMetadata `json:"metadata,omitempty"`
 	}
 	output := listResult{

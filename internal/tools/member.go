@@ -81,12 +81,16 @@ type membershipTierView struct {
 }
 
 // membershipView is a filtered view of ProjectMembershipResponse for MCP
-// responses. Redundant fields omitted: project_uid (required input),
-// tier_family (always "Membership"), tier_product_type (always null), and
-// membership_type (a raw Salesforce record type ID, not useful to callers).
+// responses from the search_members tool (project drill-down). Omitted fields:
+// project_uid and project_slug (redundant — same for every result in a
+// project-scoped query), tier_family (always "Membership"), tier_product_type
+// (always null), and membership_type (a raw Salesforce record type ID, not
+// useful to callers). Company fields are renamed with a b2b_org_ prefix to
+// align with b2b tool naming conventions.
 type membershipView struct {
 	UID              *string  `json:"uid,omitempty"`
 	TierUID          *string  `json:"tier_uid,omitempty"`
+	B2bOrgUID        *string  `json:"b2b_org_uid,omitempty"`
 	Status           *string  `json:"status,omitempty"`
 	Year             *string  `json:"year,omitempty"`
 	Tier             *string  `json:"tier,omitempty"`
@@ -100,9 +104,9 @@ type membershipView struct {
 	PurchaseDate     *string  `json:"purchase_date,omitempty"`
 	StartDate        *string  `json:"start_date,omitempty"`
 	EndDate          *string  `json:"end_date,omitempty"`
-	CompanyName      *string  `json:"company_name,omitempty"`
-	CompanyLogoURL   *string  `json:"company_logo_url,omitempty"`
-	CompanyDomain    *string  `json:"company_domain,omitempty"`
+	B2bOrgName       *string  `json:"b2b_org_name,omitempty"`
+	B2bOrgLogoURL    *string  `json:"b2b_org_logo_url,omitempty"`
+	B2bOrgDomain     *string  `json:"b2b_org_domain,omitempty"`
 	TierName         *string  `json:"tier_name,omitempty"`
 	CreatedAt        *string  `json:"created_at,omitempty"`
 	UpdatedAt        *string  `json:"updated_at,omitempty"`
@@ -141,11 +145,13 @@ func toMembershipTierView(t *memberservice.MembershipTierResponse) membershipTie
 }
 
 // toMembershipView converts a ProjectMembershipResponse to the filtered MCP
-// view, dropping redundant fields.
+// view for search_members, dropping project_uid/slug (redundant in a
+// project-scoped query) and renaming company fields to b2b_org_ prefix.
 func toMembershipView(m *memberservice.ProjectMembershipResponse) membershipView {
 	return membershipView{
 		UID:              m.UID,
 		TierUID:          m.TierUID,
+		B2bOrgUID:        m.B2bOrgUID,
 		Status:           m.Status,
 		Year:             m.Year,
 		Tier:             m.Tier,
@@ -159,9 +165,9 @@ func toMembershipView(m *memberservice.ProjectMembershipResponse) membershipView
 		PurchaseDate:     m.PurchaseDate,
 		StartDate:        m.StartDate,
 		EndDate:          m.EndDate,
-		CompanyName:      m.CompanyName,
-		CompanyLogoURL:   m.CompanyLogoURL,
-		CompanyDomain:    m.CompanyDomain,
+		B2bOrgName:       m.CompanyName,
+		B2bOrgLogoURL:    m.CompanyLogoURL,
+		B2bOrgDomain:     m.CompanyDomain,
 		TierName:         m.TierName,
 		CreatedAt:        m.CreatedAt,
 		UpdatedAt:        m.UpdatedAt,

@@ -248,6 +248,18 @@ func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, 
 		views = append(views, toMembershipView(m))
 	}
 
+	// Warn if any membership has a project_slug but no project_uid, which
+	// indicates the project is not yet onboarded into LFX Self Service.
+	var onboardingWarning string
+	if len(result.Memberships) > 0 {
+		for _, m := range result.Memberships {
+			if m.ProjectSlug != nil && *m.ProjectSlug != "" && (m.ProjectUID == nil || *m.ProjectUID == "") {
+				onboardingWarning = "WARNING: projects missing a `project_uid` are not yet onboarded into *LFX Self Service*"
+				break
+			}
+		}
+	}
+
 	type listResult struct {
 		Memberships []membershipView            `json:"memberships"`
 		Metadata    *memberservice.ListMetadata `json:"metadata,omitempty"`
@@ -270,9 +282,10 @@ func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, 
 
 	logger.InfoContext(ctx, "list_b2b_org_memberships succeeded", "b2b_org_uid", args.B2bOrgUID, "count", len(result.Memberships))
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(prettyJSON)},
-		},
-	}, nil, nil
+	content := []mcp.Content{}
+	if onboardingWarning != "" {
+		content = append(content, &mcp.TextContent{Text: onboardingWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
 }

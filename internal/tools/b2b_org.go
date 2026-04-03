@@ -101,6 +101,7 @@ func toB2bOrgMembershipView(m *memberservice.ProjectMembershipResponse) b2bOrgMe
 	}
 }
 
+// toB2bOrgView converts a B2bOrgResponse to the MCP view.
 func toB2bOrgView(o *memberservice.B2bOrgResponse) b2bOrgView {
 	return b2bOrgView{
 		UID:           o.UID,

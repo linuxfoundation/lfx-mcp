@@ -126,6 +126,8 @@ var defaultTools = []string{
 	"get_past_meeting_summary",
 	"onboarding_list_memberships",
 	"lfx_lens_query",
+	"search_b2b_orgs",
+	"list_b2b_org_memberships",
 }
 
 var logger *slog.Logger
@@ -315,7 +317,7 @@ func main() {
 				tools.SetMeetingConfig(&tools.MeetingConfig{
 					Clients: sharedClients,
 				})
-				}
+			}
 
 			// Configure service API infrastructure (shared across onboarding, lens, etc.).
 			slugResolver := lfxv2.NewSlugResolver()
@@ -662,6 +664,12 @@ func newServer(cfg Config, serviceName string) *mcp.Server {
 	}
 	if enabledTools["get_past_meeting_summary"] {
 		tools.RegisterGetPastMeetingSummary(server)
+	}
+	if enabledTools["search_b2b_orgs"] {
+		tools.RegisterSearchB2bOrgs(server)
+	}
+	if enabledTools["list_b2b_org_memberships"] {
+		tools.RegisterListB2bOrgMemberships(server)
 	}
 
 	// Service API tools.

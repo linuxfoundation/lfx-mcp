@@ -22,6 +22,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name | default .Chart.Name }}
       containers:
         - name: app
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"

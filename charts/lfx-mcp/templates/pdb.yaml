@@ -1,0 +1,30 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- $hasMin := hasKey .Values.podDisruptionBudget "minAvailable" }}
+{{- $hasMax := hasKey .Values.podDisruptionBudget "maxUnavailable" }}
+{{- if and $hasMin $hasMax }}
+  {{- fail "podDisruptionBudget: cannot set both minAvailable and maxUnavailable" }}
+{{- end }}
+{{- if not (or $hasMin $hasMax) }}
+  {{- fail "podDisruptionBudget: either minAvailable or maxUnavailable must be set" }}
+{{- end }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "lfx-mcp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lfx-mcp.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "lfx-mcp.selectorLabels" . | nindent 6 }}
+  {{- if $hasMin }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if $hasMax }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+{{- end }}

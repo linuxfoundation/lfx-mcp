@@ -53,6 +53,17 @@ ingress:
 #     ad.datadoghq.com/app.logs: '[{"service": "lfx-mcp", "source": "go"}]'
 podAnnotations: {}
 
+# podDisruptionBudget configures the PodDisruptionBudget for the deployment.
+# Set enabled: true and either minAvailable or maxUnavailable (not both) via
+# the ArgoCD values files to protect the service during node disruptions.
+podDisruptionBudget:
+  # enabled controls whether the PodDisruptionBudget resource is created.
+  enabled: false
+  # minAvailable is the minimum number of pods that must remain available during a disruption.
+  # minAvailable: 1
+  # maxUnavailable is the maximum number of pods that may be unavailable during a disruption.
+  # maxUnavailable: 1
+
 # app is the configuration for the application.
 app:
   # debug enables debug logging.

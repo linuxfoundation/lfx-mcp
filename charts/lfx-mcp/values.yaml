@@ -13,16 +13,18 @@ image:
 # replicaCount is the number of replicas for the deployment.
 replicaCount: 1
 
-# resources is the configuration for container resource limits and requests.
-resources:
-  # limits is the maximum amount of resources the container can use.
-  limits:
-    cpu: 500m
-    memory: 256Mi
-  # requests is the amount of resources the container requests.
-  requests:
-    cpu: 50m
-    memory: 64Mi
+# resources is the configuration for container resource requests and limits.
+# No defaults are set here — resource sizing is environment-specific and
+# should be configured via your values overrides (e.g. ArgoCD values files).
+# Example:
+#   resources:
+#     requests:
+#       cpu: 5m
+#       memory: 16Mi
+#     limits:
+#       cpu: 50m
+#       memory: 64Mi
+resources: {}
 
 # service is the configuration for the Kubernetes service.
 service:

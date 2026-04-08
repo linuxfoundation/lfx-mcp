@@ -132,6 +132,11 @@ var defaultTools = []string{
 
 var logger *slog.Logger
 
+// schemaCache is shared across per-request server instances in HTTP/stateless mode.
+// It caches the reflection-based JSON schema for each tool argument type so that
+// schemas are computed only once rather than on every incoming request.
+var schemaCache = mcp.NewSchemaCache()
+
 func main() {
 	k := koanf.New(".")
 
@@ -536,7 +541,8 @@ func newServer(cfg Config, serviceName string) *mcp.Server {
 		Name:    "lfx-mcp-server",
 		Version: Version,
 	}, &mcp.ServerOptions{
-		Logger: logger,
+		Logger:      logger,
+		SchemaCache: schemaCache,
 	})
 
 	// Add middleware for OTel instrumentation and logging of all MCP method calls.

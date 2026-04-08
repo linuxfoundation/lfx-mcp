@@ -28,29 +28,29 @@ func SetOnboardingConfig(cfg *OnboardingConfig) {
 
 // --- Tool registration ---
 
-// RegisterOnboardingListMemberships registers the onboarding_list_memberships tool.
-func RegisterOnboardingListMemberships(server *mcp.Server) {
+// RegisterListMembershipActions registers the list_membership_actions tool.
+func RegisterListMembershipActions(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "onboarding_list_memberships",
+		Name:        "list_membership_actions",
 		Description: "List memberships for a project with per-agent action and todo counts. Use search_projects first to find the project slug.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:        "List Onboarding Memberships",
+			Title:        "List Membership Actions",
 			ReadOnlyHint: true,
 		},
-	}, WriteScopes(), handleOnboardingListMemberships)
+	}, WriteScopes(), handleListMembershipActions)
 }
 
 // --- Tool args ---
 
-// OnboardingListMembershipsArgs defines the input for onboarding_list_memberships.
-type OnboardingListMembershipsArgs struct {
+// ListMembershipActionsArgs defines the input for list_membership_actions.
+type ListMembershipActionsArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'agentic-ai-foundation')"`
 	Status      string `json:"status,omitempty" jsonschema:"Filter by status,enum=all,enum=pending,enum=in_progress,enum=closed"`
 }
 
 // --- Tool handlers ---
 
-func handleOnboardingListMemberships(ctx context.Context, req *mcp.CallToolRequest, args OnboardingListMembershipsArgs) (*mcp.CallToolResult, any, error) {
+func handleListMembershipActions(ctx context.Context, req *mcp.CallToolRequest, args ListMembershipActionsArgs) (*mcp.CallToolResult, any, error) {
 	if onboardingConfig == nil {
 		return nil, nil, fmt.Errorf("onboarding tools not configured")
 	}
@@ -89,7 +89,7 @@ func handleOnboardingListMemberships(ctx context.Context, req *mcp.CallToolReque
 		"project_slug": args.ProjectSlug,
 		"status":       status,
 		"memberships":  []any{},
-		"message":      fmt.Sprintf("[dry-run] Would list memberships for project %q with status %q", args.ProjectSlug, status),
+		"message":      fmt.Sprintf("[dry-run] Would list membership actions for project %q with status %q", args.ProjectSlug, status),
 	}
 	body, _ := json.Marshal(dummyResponse)
 

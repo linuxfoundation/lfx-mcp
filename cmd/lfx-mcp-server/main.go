@@ -124,8 +124,8 @@ var defaultTools = []string{
 	"get_past_meeting_transcript",
 	"search_past_meeting_summaries",
 	"get_past_meeting_summary",
-	"onboarding_list_memberships",
-	"lfx_lens_query",
+	"list_membership_actions",
+	"query_lfx_lens",
 	"search_b2b_orgs",
 	"list_b2b_org_memberships",
 }
@@ -679,11 +679,11 @@ func newServer(cfg Config, serviceName string) *mcp.Server {
 	}
 
 	// Service API tools.
-	if enabledTools["onboarding_list_memberships"] {
-		tools.RegisterOnboardingListMemberships(server)
+	if enabledTools["list_membership_actions"] {
+		tools.RegisterListMembershipActions(server)
 	}
-	if enabledTools["lfx_lens_query"] {
-		tools.RegisterLFXLensQuery(server)
+	if enabledTools["query_lfx_lens"] {
+		tools.RegisterQueryLFXLens(server)
 	}
 
 	return server

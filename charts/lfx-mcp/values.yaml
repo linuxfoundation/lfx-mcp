@@ -13,16 +13,32 @@ image:
 # replicaCount is the number of replicas for the deployment.
 replicaCount: 1
 
-# resources is the configuration for container resource limits and requests.
-resources:
-  # limits is the maximum amount of resources the container can use.
-  limits:
-    cpu: 500m
-    memory: 256Mi
-  # requests is the amount of resources the container requests.
-  requests:
-    cpu: 50m
-    memory: 64Mi
+# terminationGracePeriodSeconds is the duration the pod has to terminate gracefully after
+# receiving SIGTERM. The Go HTTP server shuts down with a 10-second timeout, so 30 seconds
+# provides ample margin for in-flight requests to complete and OTel spans to flush.
+terminationGracePeriodSeconds: 30
+
+# topologySpreadConstraints controls how pods are spread across topology domains (e.g. nodes).
+# The default spreads pods evenly across nodes using a soft constraint (ScheduleAnyway) so
+# that scheduling is never blocked on small clusters. Override to DoNotSchedule in your
+# values overrides for strict HA in production.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+
+# resources is the configuration for container resource requests and limits.
+# No defaults are set here — resource sizing is environment-specific and
+# should be configured via your values overrides.
+# Example:
+#   resources:
+#     requests:
+#       cpu: 5m
+#       memory: 16Mi
+#     limits:
+#       cpu: 50m
+#       memory: 64Mi
+resources: {}
 
 # service is the configuration for the Kubernetes service.
 service:
@@ -53,6 +69,17 @@ ingress:
 #     ad.datadoghq.com/app.logs: '[{"service": "lfx-mcp", "source": "go"}]'
 podAnnotations: {}
 
+# podDisruptionBudget configures the PodDisruptionBudget for the deployment.
+# Set enabled: true and either minAvailable or maxUnavailable (not both) via
+# the values overrides to protect the service during node disruptions.
+podDisruptionBudget:
+  # enabled controls whether the PodDisruptionBudget resource is created.
+  enabled: false
+  # minAvailable is the minimum number of pods that must remain available during a disruption.
+  # minAvailable: 1
+  # maxUnavailable is the maximum number of pods that may be unavailable during a disruption.
+  # maxUnavailable: 1
+
 # app is the configuration for the application.
 app:
   # debug enables debug logging.
@@ -71,7 +98,7 @@ app:
   tokenEndpoint: ""
   # otel contains OpenTelemetry exporter configuration.
   # All values default to empty (no-op tracer) so the chart is deployment-environment agnostic.
-  # The ArgoCD values files supply the environment-specific endpoint and sample ratio.
+  # The values overrides supply the environment-specific endpoint and sample ratio.
   otel:
     # endpoint is the OTLP gRPC collector endpoint (e.g. "http://$(HOST_IP):4317").
     # Leave empty to disable tracing (installs a no-op provider).
@@ -86,7 +113,7 @@ app:
     tracesSamplerArg: ""
   # extraEnv is a list of additional environment variables to inject into the container.
   # Used to supply HOST_IP (from the pod's status.hostIP) and the derived OTEL endpoint.
-  # Example (set in ArgoCD values, not here):
+  # Example (set in your values overrides, not here):
   #   extraEnv:
   #     - name: HOST_IP
   #       valueFrom:

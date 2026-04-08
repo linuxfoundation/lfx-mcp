@@ -14,7 +14,7 @@ require (
 	github.com/linuxfoundation/lfx-v2-member-service v0.5.0
 	github.com/linuxfoundation/lfx-v2-project-service v0.6.0
 	github.com/linuxfoundation/lfx-v2-query-service v0.4.13
-	github.com/modelcontextprotocol/go-sdk v1.4.1
+	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/remychantenay/slog-otel v1.3.5
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.67.0

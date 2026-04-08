@@ -13,7 +13,7 @@ The LFX MCP Server is a Model Context Protocol (MCP) implementation that provide
 - **Language**: Go 1.26.0+
 - **Protocol**: Model Context Protocol (MCP) 2024-11-05
 - **SDK**: Official MCP Go SDK v1.5.0+
-- **Transport**: JSON-RPC 2.0 over stdio
+- **Transport**: JSON-RPC 2.0 over stdio and Streamable HTTP
 - **Schema**: Automatic JSON schema generation via struct tags
 
 ## Architecture Overview
@@ -53,7 +53,7 @@ The HTTP server is designed to run across multiple pods without coordination:
 
 - **`Stateless: true`** is set on `StreamableHTTPHandler` (`main.go`). This instructs the SDK to skip session-ID validation and use a temporary session per request, so any pod can handle any request.
 - **Per-request server factory**: `newServer()` is called for each incoming HTTP request, so no MCP-level state accumulates across requests.
-- **`SchemaCache`**: A package-level `schemaCache` is shared across per-request server instances. This avoids re-running reflection-based JSON schema generation for every request — schemas are computed once at startup and reused.
+- **`SchemaCache`**: A package-level `schemaCache` is shared across per-request server instances. This avoids re-running reflection-based JSON schema generation for every request — schemas are computed on first use and then reused across subsequent requests in the same pod.
 - **Streamable HTTP vs. old SSE transport**: Responses may use SSE framing (`text/event-stream`) within a single request/response cycle. This is not the deprecated long-lived SSE transport, so no connection affinity is needed between requests.
 - **No sticky sessions required**: Because all state is either per-request or independently cached per pod, round-robin load balancing works without Kubernetes session affinity.
 - **In-memory caches are all safe**: Token exchange, slug resolver, client credentials, and JWKS caches are performance-only; each pod warms independently and misses trigger upstream re-fetches.

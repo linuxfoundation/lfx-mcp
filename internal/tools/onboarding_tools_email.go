@@ -14,10 +14,10 @@ import (
 
 // --- Tool registration ---
 
-// RegisterOnboardingToolsEmailListTemplates registers the onboarding_tools_email_list_templates tool.
-func RegisterOnboardingToolsEmailListTemplates(server *mcp.Server) {
+// RegisterListOnboardingEmailTemplates registers the list_onboarding_email_templates tool.
+func RegisterListOnboardingEmailTemplates(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "onboarding_tools_email_list_templates",
+		Name:        "list_onboarding_email_templates",
 		Description: "List all available email templates for a project. Use this to discover what templates exist before rendering or sending.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "List Email Templates",
@@ -26,11 +26,11 @@ func RegisterOnboardingToolsEmailListTemplates(server *mcp.Server) {
 	}, WriteScopes(), handleOnboardingToolsEmailListTemplates)
 }
 
-// RegisterOnboardingToolsEmailRenderTemplate registers the onboarding_tools_email_render_template tool.
-func RegisterOnboardingToolsEmailRenderTemplate(server *mcp.Server) {
+// RegisterRenderOnboardingEmailTemplate registers the render_onboarding_email_template tool.
+func RegisterRenderOnboardingEmailTemplate(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "onboarding_tools_email_render_template",
-		Description: "Render an email template with variables and return a preview. Does not send anything. Use this to preview what an email will look like before sending, or to confirm the template and variables are correct. Depends on: onboarding_tools_email_list_templates (for template_name).",
+		Name:        "render_onboarding_email_template",
+		Description: "Render an email template with variables and return a preview. Does not send anything. Use this to preview what an email will look like before sending, or to confirm the template and variables are correct. Depends on: list_onboarding_email_templates (for template_name).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Render Email Template",
 			ReadOnlyHint: true,
@@ -38,11 +38,11 @@ func RegisterOnboardingToolsEmailRenderTemplate(server *mcp.Server) {
 	}, WriteScopes(), handleOnboardingToolsEmailRenderTemplate)
 }
 
-// RegisterOnboardingToolsEmailSend registers the onboarding_tools_email_send tool.
-func RegisterOnboardingToolsEmailSend(server *mcp.Server) {
+// RegisterSendOnboardingEmail registers the send_onboarding_email tool.
+func RegisterSendOnboardingEmail(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "onboarding_tools_email_send",
-		Description: "Send a templated email to a recipient via AWS SES. Use this to send onboarding or welcome emails to key contacts or members. Always render the template first to confirm content before sending. Depends on: onboarding_tools_email_render_template (call first to preview), onboarding_tools_email_list_templates (for template_name).",
+		Name:        "send_onboarding_email",
+		Description: "Send a templated email to a recipient via AWS SES. Use this to send onboarding or welcome emails to key contacts or members. Always render the template first to confirm content before sending. Depends on: render_onboarding_email_template (call first to preview), list_onboarding_email_templates (for template_name).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Send Email",
 			DestructiveHint: boolPtr(false),
@@ -57,14 +57,14 @@ type EmailProjectSlugArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug (e.g. 'pytorch')"`
 }
 
-// EmailRenderTemplateArgs defines the input for onboarding_tools_email_render_template.
+// EmailRenderTemplateArgs defines the input for render_onboarding_email_template.
 type EmailRenderTemplateArgs struct {
 	ProjectSlug  string            `json:"project_slug" jsonschema:"Project slug (e.g. 'pytorch')"`
 	TemplateName string            `json:"template_name" jsonschema:"Name of the email template"`
 	Variables    map[string]string `json:"variables,omitempty" jsonschema:"Jinja2 template variables (e.g. company_name, project_name)"`
 }
 
-// EmailSendArgs defines the input for onboarding_tools_email_send.
+// EmailSendArgs defines the input for send_onboarding_email.
 type EmailSendArgs struct {
 	ProjectSlug  string            `json:"project_slug" jsonschema:"Project slug (e.g. 'pytorch')"`
 	ToEmail      string            `json:"to_email" jsonschema:"Recipient email address"`

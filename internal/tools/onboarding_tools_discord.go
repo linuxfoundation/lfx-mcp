@@ -15,11 +15,11 @@ import (
 
 // --- Tool registration ---
 
-// RegisterOnboardingToolsDiscordGetConfig registers the onboarding_tools_discord_get_config tool.
-func RegisterOnboardingToolsDiscordGetConfig(server *mcp.Server) {
+// RegisterGetOnboardingDiscordConfig registers the get_onboarding_discord_config tool.
+func RegisterGetOnboardingDiscordConfig(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "onboarding_tools_discord_get_config",
-		Description: "Check if Discord is configured for a project. IMPORTANT: Always call this before using any other onboarding_tools_discord_* tool. If configured is false, tell the user they need to set up Discord in the LFX Project Control Center (PCC) first.",
+		Name:        "get_onboarding_discord_config",
+		Description: "Check if Discord is configured for a project. IMPORTANT: Always call this before using any other *_onboarding_discord_* tool. If configured is false, tell the user they need to set up Discord in the LFX Project Control Center (PCC) first.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Discord Config",
 			ReadOnlyHint: true,
@@ -27,11 +27,11 @@ func RegisterOnboardingToolsDiscordGetConfig(server *mcp.Server) {
 	}, WriteScopes(), handleOnboardingToolsDiscordGetConfig)
 }
 
-// RegisterOnboardingToolsDiscordListRoles registers the onboarding_tools_discord_list_roles tool.
-func RegisterOnboardingToolsDiscordListRoles(server *mcp.Server) {
+// RegisterListOnboardingDiscordRoles registers the list_onboarding_discord_roles tool.
+func RegisterListOnboardingDiscordRoles(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "onboarding_tools_discord_list_roles",
-		Description: "List all roles in the project's Discord guild. Use this to discover what roles exist before assigning one, or when the user asks about the role structure. Depends on: onboarding_tools_discord_get_config (call first).",
+		Name:        "list_onboarding_discord_roles",
+		Description: "List all roles in the project's Discord guild. Use this to discover what roles exist before assigning one, or when the user asks about the role structure. Depends on: get_onboarding_discord_config (call first).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "List Discord Roles",
 			ReadOnlyHint: true,
@@ -39,11 +39,11 @@ func RegisterOnboardingToolsDiscordListRoles(server *mcp.Server) {
 	}, WriteScopes(), handleOnboardingToolsDiscordListRoles)
 }
 
-// RegisterOnboardingToolsDiscordFindRole registers the onboarding_tools_discord_find_role tool.
-func RegisterOnboardingToolsDiscordFindRole(server *mcp.Server) {
+// RegisterFindOnboardingDiscordRole registers the find_onboarding_discord_role tool.
+func RegisterFindOnboardingDiscordRole(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "onboarding_tools_discord_find_role",
-		Description: "Find a Discord role by name. Use this when you know the role name and need its ID for assignment or checking. Depends on: onboarding_tools_discord_get_config (call first).",
+		Name:        "find_onboarding_discord_role",
+		Description: "Find a Discord role by name. Use this when you know the role name and need its ID for assignment or checking. Depends on: get_onboarding_discord_config (call first).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Find Discord Role",
 			ReadOnlyHint: true,
@@ -51,11 +51,11 @@ func RegisterOnboardingToolsDiscordFindRole(server *mcp.Server) {
 	}, WriteScopes(), handleOnboardingToolsDiscordFindRole)
 }
 
-// RegisterOnboardingToolsDiscordFindUser registers the onboarding_tools_discord_find_user tool.
-func RegisterOnboardingToolsDiscordFindUser(server *mcp.Server) {
+// RegisterFindOnboardingDiscordUser registers the find_onboarding_discord_user tool.
+func RegisterFindOnboardingDiscordUser(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "onboarding_tools_discord_find_user",
-		Description: "Find a Discord guild member by name and optional email. Use this to match a person (e.g. a key contact or committee member) to their Discord account. Returns up to 5 candidates ranked by similarity score — the caller must decide which match is correct. Depends on: onboarding_tools_discord_get_config (call first).",
+		Name:        "find_onboarding_discord_user",
+		Description: "Find a Discord guild member by name and optional email. Use this to match a person (e.g. a key contact or committee member) to their Discord account. Returns up to 5 candidates ranked by similarity score — the caller must decide which match is correct. Depends on: get_onboarding_discord_config (call first).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Find Discord User",
 			ReadOnlyHint: true,
@@ -63,11 +63,11 @@ func RegisterOnboardingToolsDiscordFindUser(server *mcp.Server) {
 	}, WriteScopes(), handleOnboardingToolsDiscordFindUser)
 }
 
-// RegisterOnboardingToolsDiscordCheckUserRole registers the onboarding_tools_discord_check_user_role tool.
-func RegisterOnboardingToolsDiscordCheckUserRole(server *mcp.Server) {
+// RegisterCheckOnboardingDiscordUserRole registers the check_onboarding_discord_user_role tool.
+func RegisterCheckOnboardingDiscordUserRole(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "onboarding_tools_discord_check_user_role",
-		Description: "Check whether a Discord user already has a specific role. Call this before assign_role to avoid redundant assignments. Depends on: onboarding_tools_discord_find_user (for user_id), onboarding_tools_discord_find_role or list_roles (for role_id).",
+		Name:        "check_onboarding_discord_user_role",
+		Description: "Check whether a Discord user already has a specific role. Call this before assign_role to avoid redundant assignments. Depends on: find_onboarding_discord_user (for user_id), find_onboarding_discord_role or list_onboarding_discord_roles (for role_id).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Check Discord User Role",
 			ReadOnlyHint: true,
@@ -75,11 +75,11 @@ func RegisterOnboardingToolsDiscordCheckUserRole(server *mcp.Server) {
 	}, WriteScopes(), handleOnboardingToolsDiscordCheckUserRole)
 }
 
-// RegisterOnboardingToolsDiscordAssignRole registers the onboarding_tools_discord_assign_role tool.
-func RegisterOnboardingToolsDiscordAssignRole(server *mcp.Server) {
+// RegisterAssignOnboardingDiscordRole registers the assign_onboarding_discord_role tool.
+func RegisterAssignOnboardingDiscordRole(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "onboarding_tools_discord_assign_role",
-		Description: "Assign a Discord role to a user. Adding users to private channels means assigning them the corresponding role. Depends on: onboarding_tools_discord_check_user_role (call first to confirm user does not already have the role), onboarding_tools_discord_find_user (for user_id), onboarding_tools_discord_find_role or list_roles (for role_id).",
+		Name:        "assign_onboarding_discord_role",
+		Description: "Assign a Discord role to a user. Adding users to private channels means assigning them the corresponding role. Depends on: check_onboarding_discord_user_role (call first to confirm user does not already have the role), find_onboarding_discord_user (for user_id), find_onboarding_discord_role or list_onboarding_discord_roles (for role_id).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Assign Discord Role",
 			DestructiveHint: boolPtr(false),
@@ -94,27 +94,27 @@ type DiscordProjectSlugArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug (e.g. 'pytorch')"`
 }
 
-// DiscordFindRoleArgs defines the input for onboarding_tools_discord_find_role.
+// DiscordFindRoleArgs defines the input for find_onboarding_discord_role.
 type DiscordFindRoleArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug (e.g. 'pytorch')"`
 	RoleName    string `json:"role_name" jsonschema:"Role name to search for"`
 }
 
-// DiscordFindUserArgs defines the input for onboarding_tools_discord_find_user.
+// DiscordFindUserArgs defines the input for find_onboarding_discord_user.
 type DiscordFindUserArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug (e.g. 'pytorch')"`
 	Name        string `json:"name" jsonschema:"Member name to search for"`
 	Email       string `json:"email,omitempty" jsonschema:"Email address; local part used as additional search term"`
 }
 
-// DiscordCheckUserRoleArgs defines the input for onboarding_tools_discord_check_user_role.
+// DiscordCheckUserRoleArgs defines the input for check_onboarding_discord_user_role.
 type DiscordCheckUserRoleArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug (e.g. 'pytorch')"`
 	UserID      string `json:"user_id" jsonschema:"Discord user ID"`
 	RoleID      string `json:"role_id" jsonschema:"Discord role ID"`
 }
 
-// DiscordAssignRoleArgs defines the input for onboarding_tools_discord_assign_role.
+// DiscordAssignRoleArgs defines the input for assign_onboarding_discord_role.
 type DiscordAssignRoleArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug (e.g. 'pytorch')"`
 	UserID      string `json:"user_id" jsonschema:"Discord user ID"`

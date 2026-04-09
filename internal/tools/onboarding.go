@@ -28,10 +28,10 @@ func SetOnboardingConfig(cfg *OnboardingConfig) {
 
 // --- Tool registration ---
 
-// RegisterOnboardingGuidedListMemberships registers the onboarding_guided_list_memberships tool.
-func RegisterOnboardingGuidedListMemberships(server *mcp.Server) {
+// RegisterListMembershipActions registers the list_membership_actions tool.
+func RegisterListMembershipActions(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "onboarding_guided_list_memberships",
+		Name:        "list_membership_actions",
 		Description: "List memberships for a project with per-agent action and todo counts. Use search_projects first to find the project slug.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "List Onboarding Memberships",
@@ -42,7 +42,7 @@ func RegisterOnboardingGuidedListMemberships(server *mcp.Server) {
 
 // --- Tool args ---
 
-// OnboardingListMembershipsArgs defines the input for onboarding_guided_list_memberships.
+// OnboardingListMembershipsArgs defines the input for list_membership_actions.
 type OnboardingListMembershipsArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'agentic-ai-foundation')"`
 	Status      string `json:"status,omitempty" jsonschema:"Filter by status,enum=all,enum=pending,enum=in_progress,enum=closed"`

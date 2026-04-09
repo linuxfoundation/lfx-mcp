@@ -45,7 +45,7 @@ func RegisterSendOnboardingEmail(server *mcp.Server) {
 		Description: "Send a templated email to a recipient via AWS SES. Use this to send onboarding or welcome emails to key contacts or members. Always render the template first to confirm content before sending. Depends on: render_onboarding_email_template (call first to preview), list_onboarding_email_templates (for template_name).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Send Email",
-			DestructiveHint: boolPtr(false),
+			DestructiveHint: boolPtr(true),
 		},
 	}, WriteScopes(), handleOnboardingToolsEmailSend)
 }

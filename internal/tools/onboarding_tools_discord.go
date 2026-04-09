@@ -235,7 +235,7 @@ func handleOnboardingToolsDiscordCheckUserRole(ctx context.Context, req *mcp.Cal
 		return nil, nil, err
 	}
 
-	path := fmt.Sprintf("/member-onboarding/tools/discord/%s/users/%s/roles/%s", args.ProjectSlug, args.UserID, args.RoleID)
+	path := fmt.Sprintf("/member-onboarding/tools/discord/%s/users/%s/roles/%s", args.ProjectSlug, url.PathEscape(args.UserID), url.PathEscape(args.RoleID))
 	body, statusCode, err := onboardingConfig.ServiceClient.Get(ctx, path, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("onboarding API call failed: %w", err)

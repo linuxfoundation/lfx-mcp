@@ -124,7 +124,16 @@ var defaultTools = []string{
 	"get_past_meeting_transcript",
 	"search_past_meeting_summaries",
 	"get_past_meeting_summary",
-	"onboarding_list_memberships",
+	"onboarding_guided_list_memberships",
+	"onboarding_tools_discord_get_config",
+	"onboarding_tools_discord_list_roles",
+	"onboarding_tools_discord_find_role",
+	"onboarding_tools_discord_find_user",
+	"onboarding_tools_discord_check_user_role",
+	"onboarding_tools_discord_assign_role",
+	"onboarding_tools_email_list_templates",
+	"onboarding_tools_email_render_template",
+	"onboarding_tools_email_send",
 	"lfx_lens_query",
 	"search_b2b_orgs",
 	"list_b2b_org_memberships",
@@ -679,8 +688,35 @@ func newServer(cfg Config, serviceName string) *mcp.Server {
 	}
 
 	// Service API tools.
-	if enabledTools["onboarding_list_memberships"] {
-		tools.RegisterOnboardingListMemberships(server)
+	if enabledTools["onboarding_guided_list_memberships"] {
+		tools.RegisterOnboardingGuidedListMemberships(server)
+	}
+	if enabledTools["onboarding_tools_discord_get_config"] {
+		tools.RegisterOnboardingToolsDiscordGetConfig(server)
+	}
+	if enabledTools["onboarding_tools_discord_list_roles"] {
+		tools.RegisterOnboardingToolsDiscordListRoles(server)
+	}
+	if enabledTools["onboarding_tools_discord_find_role"] {
+		tools.RegisterOnboardingToolsDiscordFindRole(server)
+	}
+	if enabledTools["onboarding_tools_discord_find_user"] {
+		tools.RegisterOnboardingToolsDiscordFindUser(server)
+	}
+	if enabledTools["onboarding_tools_discord_check_user_role"] {
+		tools.RegisterOnboardingToolsDiscordCheckUserRole(server)
+	}
+	if enabledTools["onboarding_tools_discord_assign_role"] {
+		tools.RegisterOnboardingToolsDiscordAssignRole(server)
+	}
+	if enabledTools["onboarding_tools_email_list_templates"] {
+		tools.RegisterOnboardingToolsEmailListTemplates(server)
+	}
+	if enabledTools["onboarding_tools_email_render_template"] {
+		tools.RegisterOnboardingToolsEmailRenderTemplate(server)
+	}
+	if enabledTools["onboarding_tools_email_send"] {
+		tools.RegisterOnboardingToolsEmailSend(server)
 	}
 	if enabledTools["lfx_lens_query"] {
 		tools.RegisterLFXLensQuery(server)

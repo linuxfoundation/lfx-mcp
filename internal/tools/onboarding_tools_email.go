@@ -21,7 +21,7 @@ func RegisterListOnboardingEmailTemplates(server *mcp.Server) {
 		Description: "List all available email templates for a project. Use this to discover what templates exist before rendering or sending.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "List Email Templates",
-			ReadOnlyHint: true,
+			DestructiveHint: boolPtr(false),
 		},
 	}, WriteScopes(), handleOnboardingToolsEmailListTemplates)
 }
@@ -33,7 +33,7 @@ func RegisterRenderOnboardingEmailTemplate(server *mcp.Server) {
 		Description: "Render an email template with variables and return a preview. Does not send anything. Use this to preview what an email will look like before sending, or to confirm the template and variables are correct. Depends on: list_onboarding_email_templates (for template_name).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Render Email Template",
-			ReadOnlyHint: true,
+			DestructiveHint: boolPtr(false),
 		},
 	}, WriteScopes(), handleOnboardingToolsEmailRenderTemplate)
 }

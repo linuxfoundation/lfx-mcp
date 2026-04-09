@@ -35,7 +35,7 @@ func RegisterListMembershipActions(server *mcp.Server) {
 		Description: "List memberships for a project with per-agent action and todo counts. Use search_projects first to find the project slug.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "List Onboarding Memberships",
-			ReadOnlyHint: true,
+			DestructiveHint: boolPtr(false),
 		},
 	}, WriteScopes(), handleOnboardingListMemberships)
 }

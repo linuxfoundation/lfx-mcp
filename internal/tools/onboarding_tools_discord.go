@@ -22,7 +22,7 @@ func RegisterGetOnboardingDiscordConfig(server *mcp.Server) {
 		Description: "Check if Discord is configured for a project. IMPORTANT: Always call this before using any other *_onboarding_discord_* tool. If configured is false, tell the user they need to set up Discord in the LFX Project Control Center (PCC) first.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Discord Config",
-			ReadOnlyHint: true,
+			DestructiveHint: boolPtr(false),
 		},
 	}, WriteScopes(), handleOnboardingToolsDiscordGetConfig)
 }
@@ -34,7 +34,7 @@ func RegisterListOnboardingDiscordRoles(server *mcp.Server) {
 		Description: "List all roles in the project's Discord guild. Use this to discover what roles exist before assigning one, or when the user asks about the role structure. Depends on: get_onboarding_discord_config (call first).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "List Discord Roles",
-			ReadOnlyHint: true,
+			DestructiveHint: boolPtr(false),
 		},
 	}, WriteScopes(), handleOnboardingToolsDiscordListRoles)
 }
@@ -46,7 +46,7 @@ func RegisterFindOnboardingDiscordRole(server *mcp.Server) {
 		Description: "Find a Discord role by name. Use this when you know the role name and need its ID for assignment or checking. Depends on: get_onboarding_discord_config (call first).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Find Discord Role",
-			ReadOnlyHint: true,
+			DestructiveHint: boolPtr(false),
 		},
 	}, WriteScopes(), handleOnboardingToolsDiscordFindRole)
 }
@@ -58,7 +58,7 @@ func RegisterFindOnboardingDiscordUser(server *mcp.Server) {
 		Description: "Find a Discord guild member by name and optional email. Use this to match a person (e.g. a key contact or committee member) to their Discord account. Returns up to 5 candidates ranked by similarity score — the caller must decide which match is correct. Depends on: get_onboarding_discord_config (call first).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Find Discord User",
-			ReadOnlyHint: true,
+			DestructiveHint: boolPtr(false),
 		},
 	}, WriteScopes(), handleOnboardingToolsDiscordFindUser)
 }
@@ -70,7 +70,7 @@ func RegisterCheckOnboardingDiscordUserRole(server *mcp.Server) {
 		Description: "Check whether a Discord user already has a specific role. Call this before assign_role to avoid redundant assignments. Depends on: find_onboarding_discord_user (for user_id), find_onboarding_discord_role or list_onboarding_discord_roles (for role_id).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Check Discord User Role",
-			ReadOnlyHint: true,
+			DestructiveHint: boolPtr(false),
 		},
 	}, WriteScopes(), handleOnboardingToolsDiscordCheckUserRole)
 }

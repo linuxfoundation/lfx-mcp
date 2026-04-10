@@ -1,7 +1,7 @@
 # Copyright The Linux Foundation and each contributor to LFX.
 # SPDX-License-Identifier: MIT
 
-.PHONY: all build clean check fmt vet lint test test-coverage run help deps install-tools docker-build ko-build
+.PHONY: all build clean check fmt vet lint test test-coverage run help deps install-tools docker-build ko-build megalinter
 
 # Build variables
 BINARY_NAME=lfx-mcp-server
@@ -107,6 +107,11 @@ ko-build:
 	@echo "Building ko image..."
 	KO_DOCKER_REPO=$(DOCKER_IMAGE) VERSION=$(VERSION) ko build -L --bare --tags local ./cmd/lfx-mcp-server
 
+# Run MegaLinter locally via Docker (matches CI Go flavor at v9).
+megalinter:
+	docker pull oxsecurity/megalinter-go:v9
+	docker run --rm --platform linux/amd64 -v '$(CURDIR):/tmp/lint:rw' oxsecurity/megalinter-go:v9
+
 # Show help
 help:
 	@echo "Available targets:"
@@ -124,4 +129,5 @@ help:
 	@echo "  install-tools  - Install development tools"
 	@echo "  docker-build   - Build Docker image"
 	@echo "  ko-build       - Build ko image locally with :local tag"
+	@echo "  megalinter     - Run MegaLinter locally via Docker"
 	@echo "  help           - Show this help message"

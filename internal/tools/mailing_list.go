@@ -42,22 +42,22 @@ type GetMailingListServiceArgs struct {
 
 // GetMailingListArgs defines the input parameters for the get_mailing_list tool.
 type GetMailingListArgs struct {
-	UID string `json:"uid" jsonschema:"The UID of the mailing list to retrieve"`
+	ID string `json:"id" jsonschema:"The Groups.io numeric group ID of the mailing list to retrieve (e.g. 145670)"`
 }
 
 // GetMailingListMemberArgs defines the input parameters for the get_mailing_list_member tool.
 type GetMailingListMemberArgs struct {
-	MailingListUID string `json:"mailing_list_uid" jsonschema:"The UID of the mailing list"`
-	MemberUID      string `json:"member_uid" jsonschema:"The UID of the mailing list member"`
+	MailingListID string `json:"mailing_list_id" jsonschema:"The Groups.io numeric group ID of the mailing list (e.g. 145670)"`
+	MemberID      string `json:"member_id" jsonschema:"The Groups.io numeric member ID (e.g. 14875835)"`
 }
 
 // SearchMailingListMembersArgs defines the input parameters for the search_mailing_list_members tool.
 type SearchMailingListMembersArgs struct {
-	MailingListUID string `json:"mailing_list_uid,omitempty" jsonschema:"Optional UID of the mailing list to filter members by"`
-	ProjectUID     string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter mailing list members by project"`
-	Name           string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
-	PageSize       int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10)"`
-	PageToken      string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	MailingListID string `json:"mailing_list_id,omitempty" jsonschema:"Optional Groups.io numeric group ID of the mailing list to filter members by (e.g. 145670)"`
+	ProjectUID    string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter mailing list members by project"`
+	Name          string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
+	PageSize      int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10)"`
+	PageToken     string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // SearchMailingListsArgs defines the input parameters for the search_mailing_lists tool.
@@ -84,7 +84,7 @@ func RegisterGetMailingListService(server *mcp.Server) {
 func RegisterGetMailingList(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "get_mailing_list",
-		Description: "Get a mailing list's base info and settings by its UID. Privileged settings may be omitted if the caller lacks sufficient permissions.",
+		Description: "Get a mailing list by its Groups.io numeric group ID (e.g. 145670).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Mailing List",
 			ReadOnlyHint: true,
@@ -96,7 +96,7 @@ func RegisterGetMailingList(server *mcp.Server) {
 func RegisterGetMailingListMember(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "get_mailing_list_member",
-		Description: "Get a specific mailing list member by mailing list UID and member UID.",
+		Description: "Get a specific mailing list member by Groups.io mailing list ID and member ID.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Mailing List Member",
 			ReadOnlyHint: true,
@@ -108,7 +108,7 @@ func RegisterGetMailingListMember(server *mcp.Server) {
 func RegisterSearchMailingListMembers(server *mcp.Server) {
 	AddToolWithScopes(server, &mcp.Tool{
 		Name:        "search_mailing_list_members",
-		Description: "Search for LFX mailing list members. Optionally filter by mailing list UID, project UID, and/or name. At least one filter is recommended but not required.",
+		Description: "Search for LFX mailing list members. Optionally filter by Groups.io mailing list ID, project UID, and/or name. At least one filter is recommended but not required.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Mailing List Members",
 			ReadOnlyHint: true,
@@ -167,11 +167,11 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 
 	logger.InfoContext(ctx, "fetching mailing list service", "uid", args.UID)
 
-	baseResult, err := clients.MailingList.GetGrpsioService(ctx, &mailinglist.GetGrpsioServicePayload{
-		UID: &args.UID,
+	baseResult, err := clients.MailingList.GetGroupsioService(ctx, &mailinglist.GetGroupsioServicePayload{
+		ServiceID: args.UID,
 	})
 	if err != nil {
-		logger.ErrorContext(ctx, "GetGrpsioService failed", "error", err, "uid", args.UID)
+		logger.ErrorContext(ctx, "GetGroupsioService failed", "error", err, "uid", args.UID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: friendlyAPIError("failed to get mailing list service", err)},
@@ -180,29 +180,7 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 		}, nil, nil
 	}
 
-	var serviceSettings *mailinglist.GrpsIoServiceSettings
-	settingsResult, err := clients.MailingList.GetGrpsioServiceSettings(ctx, &mailinglist.GetGrpsioServiceSettingsPayload{
-		UID: &args.UID,
-	})
-	var settingsWarning string
-	if err != nil {
-		settingsWarning = fmt.Sprintf("WARNING: mailing list service settings unavailable - %s", err.Error())
-		logger.ErrorContext(ctx, "getting mailing list service settings failed, returning base only", "error", err, "uid", args.UID)
-	} else {
-		serviceSettings = settingsResult.ServiceSettings
-	}
-
-	type serviceResult struct {
-		Base     *mailinglist.GrpsIoServiceWithReadonlyAttributes `json:"base"`
-		Settings *mailinglist.GrpsIoServiceSettings               `json:"settings,omitempty"`
-	}
-
-	out := serviceResult{
-		Base:     baseResult.Service,
-		Settings: serviceSettings,
-	}
-
-	prettyJSON, err := json.MarshalIndent(out, "", "  ")
+	prettyJSON, err := json.MarshalIndent(baseResult, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal mailing list service result", "error", err)
 		return &mcp.CallToolResult{
@@ -215,14 +193,10 @@ func handleGetMailingListService(ctx context.Context, req *mcp.CallToolRequest, 
 
 	logger.InfoContext(ctx, "get_mailing_list_service succeeded", "uid", args.UID)
 
-	content := []mcp.Content{}
-	if settingsWarning != "" {
-		content = append(content, &mcp.TextContent{Text: settingsWarning})
-	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-
 	return &mcp.CallToolResult{
-		Content: content,
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(prettyJSON)},
+		},
 	}, nil, nil
 }
 
@@ -240,10 +214,10 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	if args.UID == "" {
+	if args.ID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: uid is required"},
+				&mcp.TextContent{Text: "Error: id is required"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -263,14 +237,13 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := mailingListConfig.Clients
 
-	logger.InfoContext(ctx, "fetching mailing list", "uid", args.UID)
+	logger.InfoContext(ctx, "fetching mailing list", "id", args.ID)
 
-	baseResult, err := clients.MailingList.GetGrpsioMailingList(ctx, &mailinglist.GetGrpsioMailingListPayload{
-		Version: "1",
-		UID:     &args.UID,
+	baseResult, err := clients.MailingList.GetGroupsioMailingList(ctx, &mailinglist.GetGroupsioMailingListPayload{
+		SubgroupID: args.ID,
 	})
 	if err != nil {
-		logger.ErrorContext(ctx, "GetGrpsioMailingList failed", "error", err, "uid", args.UID)
+		logger.ErrorContext(ctx, "GetGroupsioMailingList failed", "error", err, "id", args.ID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: friendlyAPIError("failed to get mailing list", err)},
@@ -279,29 +252,7 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	var mlSettings *mailinglist.GrpsIoMailingListSettings
-	settingsResult, err := clients.MailingList.GetGrpsioMailingListSettings(ctx, &mailinglist.GetGrpsioMailingListSettingsPayload{
-		UID: &args.UID,
-	})
-	var listSettingsWarning string
-	if err != nil {
-		listSettingsWarning = fmt.Sprintf("WARNING: mailing list settings unavailable - %s", err.Error())
-		logger.ErrorContext(ctx, "getting mailing list settings failed, returning base only", "error", err, "uid", args.UID)
-	} else {
-		mlSettings = settingsResult.MailingListSettings
-	}
-
-	type mailingListResult struct {
-		Base     *mailinglist.GrpsIoMailingListWithReadonlyAttributes `json:"base"`
-		Settings *mailinglist.GrpsIoMailingListSettings               `json:"settings,omitempty"`
-	}
-
-	out := mailingListResult{
-		Base:     baseResult.MailingList,
-		Settings: mlSettings,
-	}
-
-	prettyJSON, err := json.MarshalIndent(out, "", "  ")
+	prettyJSON, err := json.MarshalIndent(baseResult, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal mailing list result", "error", err)
 		return &mcp.CallToolResult{
@@ -312,16 +263,12 @@ func handleGetMailingList(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		}, nil, nil
 	}
 
-	logger.InfoContext(ctx, "get_mailing_list succeeded", "uid", args.UID)
-
-	content := []mcp.Content{}
-	if listSettingsWarning != "" {
-		content = append(content, &mcp.TextContent{Text: listSettingsWarning})
-	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	logger.InfoContext(ctx, "get_mailing_list succeeded", "id", args.ID)
 
 	return &mcp.CallToolResult{
-		Content: content,
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(prettyJSON)},
+		},
 	}, nil, nil
 }
 
@@ -339,19 +286,19 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	if args.MailingListUID == "" {
+	if args.MailingListID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: mailing_list_uid is required"},
+				&mcp.TextContent{Text: "Error: mailing_list_id is required"},
 			},
 			IsError: true,
 		}, nil, nil
 	}
 
-	if args.MemberUID == "" {
+	if args.MemberID == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: member_uid is required"},
+				&mcp.TextContent{Text: "Error: member_id is required"},
 			},
 			IsError: true,
 		}, nil, nil
@@ -371,15 +318,14 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := mailingListConfig.Clients
 
-	logger.InfoContext(ctx, "fetching mailing list member", "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
+	logger.InfoContext(ctx, "fetching mailing list member", "mailing_list_id", args.MailingListID, "member_id", args.MemberID)
 
-	result, err := clients.MailingList.GetGrpsioMailingListMember(ctx, &mailinglist.GetGrpsioMailingListMemberPayload{
-		Version:   "1",
-		UID:       args.MailingListUID,
-		MemberUID: args.MemberUID,
+	result, err := clients.MailingList.GetGroupsioMember(ctx, &mailinglist.GetGroupsioMemberPayload{
+		SubgroupID: args.MailingListID,
+		MemberID:   args.MemberID,
 	})
 	if err != nil {
-		logger.ErrorContext(ctx, "GetGrpsioMailingListMember failed", "error", err, "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
+		logger.ErrorContext(ctx, "GetGroupsioMember failed", "error", err, "mailing_list_id", args.MailingListID, "member_id", args.MemberID)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: friendlyAPIError("failed to get mailing list member", err)},
@@ -388,7 +334,7 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	prettyJSON, err := json.MarshalIndent(result.Member, "", "  ")
+	prettyJSON, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal mailing list member result", "error", err)
 		return &mcp.CallToolResult{
@@ -399,7 +345,7 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	logger.InfoContext(ctx, "get_mailing_list_member succeeded", "mailing_list_uid", args.MailingListUID, "member_uid", args.MemberUID)
+	logger.InfoContext(ctx, "get_mailing_list_member succeeded", "mailing_list_id", args.MailingListID, "member_id", args.MemberID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -553,8 +499,8 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 	}
 
 	var tags []string
-	if args.MailingListUID != "" {
-		tags = append(tags, fmt.Sprintf("mailing_list_uid:%s", args.MailingListUID))
+	if args.MailingListID != "" {
+		tags = append(tags, fmt.Sprintf("mailing_list_uid:%s", args.MailingListID))
 	}
 	if args.ProjectUID != "" {
 		tags = append(tags, fmt.Sprintf("project_uid:%s", args.ProjectUID))
@@ -571,7 +517,7 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.InfoContext(ctx, "searching mailing list members", "mailing_list_uid", args.MailingListUID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching mailing list members", "mailing_list_id", args.MailingListID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
@@ -610,7 +556,7 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		}, nil, nil
 	}
 
-	logger.InfoContext(ctx, "search_mailing_list_members succeeded", "mailing_list_uid", args.MailingListUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
+	logger.InfoContext(ctx, "search_mailing_list_members succeeded", "mailing_list_id", args.MailingListID, "project_uid", args.ProjectUID, "count", len(result.Resources))
 
 	content := []mcp.Content{}
 	if pageWarning != "" {

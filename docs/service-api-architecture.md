@@ -13,10 +13,10 @@ The MCP server acts as the authorization gateway: before proxying a request to a
 
 Service tools enforce two layers of authorization: **MCP scopes** (checked at dispatch) and **V2 relations** (checked inside the handler via OpenFGA). Both must pass.
 
-| Service | MCP Scope | Required V2 Relation | Additional | Rationale |
-|---------|-----------|---------------------|------------|-----------|
-| **Member Onboarding** | `manage:all` | `writer` | — | Managing onboarding workflows is a write-level project operation |
-| **LFX Lens** | `read:all` | `auditor` | `lf_staff` claim | Analytics/reporting requires auditor-level read access; staff-only |
+| Service               | MCP Scope    | Required V2 Relation | Additional       | Rationale                                                          |
+|-----------------------|--------------|----------------------|------------------|--------------------------------------------------------------------|
+| **Member Onboarding** | `manage:all` | `writer`             | —                | Managing onboarding workflows is a write-level project operation   |
+| **LFX Lens**          | `read:all`   | `auditor`            | `lf_staff` claim | Analytics/reporting requires auditor-level read access; staff-only |
 
 MCP scopes act as an upper bound on what a token can do — like a reduced-scope PAT in GitHub. Even if a user has `writer` access to a project in OpenFGA, a `read:all`-only MCP token cannot call onboarding tools.
 
@@ -26,11 +26,11 @@ MCP scopes act as an upper bound on what a token can do — like a reduced-scope
 
 All three tokens are issued by Auth0. The MCP server's M2M client (`LFX MCP Server`) authenticates to Auth0 for both the token exchange and client credentials grants — same client, different grant types.
 
-| Token | Type | Purpose | Grant type | User identity? |
-|-------|------|---------|-----------|----------------|
-| MCP JWT | User | Authenticates the human user | Authorization code (OAuth login) | Yes |
-| V2 Token | User-delegated | Slug resolution + access-check | Token exchange (RFC 8693): M2M client credentials + user's MCP JWT | Yes (delegated) |
-| Service Token | Machine (M2M) | Authenticates MCP server to Lens/Onboarding | Client credentials: M2M client credentials only | No — pure machine |
+| Token         | Type           | Purpose                                     | Grant type                                                         | User identity?    |
+|---------------|----------------|---------------------------------------------|--------------------------------------------------------------------|-------------------|
+| MCP JWT       | User           | Authenticates the human user                | Authorization code (OAuth login)                                   | Yes               |
+| V2 Token      | User-delegated | Slug resolution + access-check              | Token exchange (RFC 8693): M2M client credentials + user's MCP JWT | Yes (delegated)   |
+| Service Token | Machine (M2M)  | Authenticates MCP server to Lens/Onboarding | Client credentials: M2M client credentials only                    | No — pure machine |
 
 ---
 
@@ -149,19 +149,19 @@ Results are cached in-memory (slug→UUID mappings are stable).
 
 All tools require the `lf_staff` JWT claim and `auditor` relation to the project.
 
-| MCP Tool | Backend Endpoint | Method | Description |
-|----------|-----------------|--------|-------------|
+| MCP Tool         | Backend Endpoint                        | Method | Description                                                                                                   |
+|------------------|-----------------------------------------|--------|---------------------------------------------------------------------------------------------------------------|
 | `lfx_lens_query` | `/workflows/lfx-lens-mcp-workflow/runs` | `POST` | Query LFX Lens analytics for a project. Accepts a natural language question and returns an analytics summary. |
 
 #### LFX Lens API
 
 `POST /workflows/lfx-lens-mcp-workflow/runs` accepts `multipart/form-data`:
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `message` | string | Yes | The user's natural language question |
-| `additional_data` | JSON string | Yes | `{"foundation": {"slug": "<foundation_slug>"}}` |
-| `stream` | string | No | `"false"` (default) or `"true"` |
+| Field             | Type        | Required | Description                                     |
+|-------------------|-------------|----------|-------------------------------------------------|
+| `message`         | string      | Yes      | The user's natural language question            |
+| `additional_data` | JSON string | Yes      | `{"foundation": {"slug": "<foundation_slug>"}}` |
+| `stream`          | string      | No       | `"false"` (default) or `"true"`                 |
 
 Response:
 ```json
@@ -181,33 +181,33 @@ The onboarding service exposes two sets of endpoints:
 - **Custom REST endpoints** under `/member-onboarding/` — for memberships and agent configs.
 - **AgentOS framework endpoints** under `/agents/{agent_id}/runs` — for running AI agents.
 
-| MCP Tool | Backend Endpoint | Method | Description |
-|----------|-----------------|--------|-------------|
-| `onboarding_list_memberships` | `/member-onboarding/{slug}/memberships` | `GET` | List memberships for a project with per-agent action/todo counts. Accepts `status` filter (`all`, `pending`, `in_progress`, `closed`). |
-| `onboarding_get_membership` | `/member-onboarding/{slug}/memberships/{id}` | `GET` | Get a single membership with full agent details. |
-| `onboarding_run_agent` | `/agents/{agent_id}/runs` | `POST` | Run a specific onboarding agent for a membership. Supports a `preview` flag to dry-run the agent without executing side effects. |
+| MCP Tool                      | Backend Endpoint                             | Method | Description                                                                                                                            |
+|-------------------------------|----------------------------------------------|--------|----------------------------------------------------------------------------------------------------------------------------------------|
+| `onboarding_list_memberships` | `/member-onboarding/{slug}/memberships`      | `GET`  | List memberships for a project with per-agent action/todo counts. Accepts `status` filter (`all`, `pending`, `in_progress`, `closed`). |
+| `onboarding_get_membership`   | `/member-onboarding/{slug}/memberships/{id}` | `GET`  | Get a single membership with full agent details.                                                                                       |
+| `onboarding_run_agent`        | `/agents/{agent_id}/runs`                    | `POST` | Run a specific onboarding agent for a membership. Supports a `preview` flag to dry-run the agent without executing side effects.       |
 
 #### Agent IDs
 
-| Agent ID | Description |
-|----------|-------------|
-| `member-onboarding-slack` | Adds members to Slack channels |
-| `member-onboarding-email` | Sends onboarding emails based on templates |
-| `member-onboarding-discord` | Assigns Discord roles to members |
-| `member-onboarding-github` | Creates PRs / file changes in GitHub repos |
-| `member-onboarding-committees` | Adds members to LFX committees |
-| `member-onboarding-hubspot-workflow` | Enrolls contacts in HubSpot workflows |
+| Agent ID                             | Description                                |
+|--------------------------------------|--------------------------------------------|
+| `member-onboarding-slack`            | Adds members to Slack channels             |
+| `member-onboarding-email`            | Sends onboarding emails based on templates |
+| `member-onboarding-discord`          | Assigns Discord roles to members           |
+| `member-onboarding-github`           | Creates PRs / file changes in GitHub repos |
+| `member-onboarding-committees`       | Adds members to LFX committees             |
+| `member-onboarding-hubspot-workflow` | Enrolls contacts in HubSpot workflows      |
 
 #### AgentOS Run Endpoint
 
 `POST /agents/{agent_id}/runs` accepts `multipart/form-data`:
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `message` | string | Yes | Text input describing what the agent should do |
-| `stream` | boolean | No | Enable streaming via Server-Sent Events |
-| `session_id` | string | No | Session ID for context continuity |
-| `user_id` | string | No | User context identifier |
+| Field        | Type    | Required | Description                                    |
+|--------------|---------|----------|------------------------------------------------|
+| `message`    | string  | Yes      | Text input describing what the agent should do |
+| `stream`     | boolean | No       | Enable streaming via Server-Sent Events        |
+| `session_id` | string  | No       | Session ID for context continuity              |
+| `user_id`    | string  | No       | User context identifier                        |
 
 The `preview` flag is handled at the MCP tool level by routing to the `member-onboarding-preview` agent ID instead of the requested agent. This returns predicted actions and prerequisite status without executing side effects.
 
@@ -226,12 +226,12 @@ Verbs are consistent with the V2 tools: `search`, `get`, `list`, `create`, `upda
 
 ## Auth0 Resource Servers
 
-| Resource Server | Audience | Used By | Scopes |
-|----------------|----------|---------|--------|
-| LFX MCP API | `mcp.lfx.dev/mcp` | Claude, Cursor, Inspector | `read:all`, `manage:all` |
-| LFX V2 API | `lfx-api.v2.cluster.lfx.dev/` | MCP server (token exchange) | `access:api` |
-| LFX Lens API | configured via `LFXMCP_LENS_API_AUDIENCE` | MCP server (client credentials) | `access:api` |
-| Member Onboarding API | configured via `LFXMCP_ONBOARDING_API_AUDIENCE` | MCP server (client credentials) | `access:api` |
+| Resource Server       | Audience                                        | Used By                         | Scopes                   |
+|-----------------------|-------------------------------------------------|---------------------------------|--------------------------|
+| LFX MCP API           | `mcp.lfx.dev/mcp`                               | Claude, Cursor, Inspector       | `read:all`, `manage:all` |
+| LFX V2 API            | `lfx-api.v2.cluster.lfx.dev/`                   | MCP server (token exchange)     | `access:api`             |
+| LFX Lens API          | configured via `LFXMCP_LENS_API_AUDIENCE`       | MCP server (client credentials) | `access:api`             |
+| Member Onboarding API | configured via `LFXMCP_ONBOARDING_API_AUDIENCE` | MCP server (client credentials) | `access:api`             |
 
 ---
 
@@ -239,12 +239,12 @@ Verbs are consistent with the V2 tools: `search`, `get`, `list`, `create`, `upda
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `LFXMCP_ONBOARDING_API_URL` | Base URL of the member onboarding service |
+| Variable                         | Description                                                  |
+|----------------------------------|--------------------------------------------------------------|
+| `LFXMCP_ONBOARDING_API_URL`      | Base URL of the member onboarding service                    |
 | `LFXMCP_ONBOARDING_API_AUDIENCE` | Auth0 resource server audience for the member onboarding API |
-| `LFXMCP_LENS_API_URL` | Base URL of the LFX Lens service |
-| `LFXMCP_LENS_API_AUDIENCE` | Auth0 resource server audience for the LFX Lens API |
+| `LFXMCP_LENS_API_URL`            | Base URL of the LFX Lens service                             |
+| `LFXMCP_LENS_API_AUDIENCE`       | Auth0 resource server audience for the LFX Lens API          |
 
 Existing M2M credentials (`LFXMCP_CLIENT_ID`, `LFXMCP_CLIENT_SECRET` or `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY`, `LFXMCP_TOKEN_ENDPOINT`) are reused for both token exchange (V2 access-check) and client credentials grants (service API authentication).
 

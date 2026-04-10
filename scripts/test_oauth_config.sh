@@ -19,31 +19,31 @@ echo ""
 WORKSPACE="${1:-dev}"
 DEBUG_FLAG=""
 if [[ "$2" == "--debug" || "$2" == "-d" ]]; then
-    DEBUG_FLAG="-debug"
-    echo "Running tests with debug logging enabled..."
+	DEBUG_FLAG="-debug"
+	echo "Running tests with debug logging enabled..."
 fi
 
 # Set environment based on workspace.
 case $WORKSPACE in
-    dev)
-        AUTH0_DOMAIN="linuxfoundation-dev.auth0.com"
-        LFX_MCP_API_URL="https://lfx-mcp.dev.v2.cluster.linuxfound.info/mcp"
-        LFX_V2_API_URL="https://lfx-api.dev.v2.cluster.linuxfound.info"
-        ;;
-    staging)
-        AUTH0_DOMAIN="linuxfoundation-staging.auth0.com"
-        LFX_MCP_API_URL="https://lfx-mcp.staging.v2.cluster.linuxfound.info/mcp"
-        LFX_V2_API_URL="https://lfx-api.staging.v2.cluster.linuxfound.info"
-        ;;
-    prod)
-        AUTH0_DOMAIN="sso.linuxfoundation.org"
-        LFX_MCP_API_URL="https://mcp.lfx.dev/mcp"
-        LFX_V2_API_URL="https://lfx-api.v2.cluster.lfx.dev"
-        ;;
-    *)
-        echo -e "${RED}Error: Invalid workspace '$WORKSPACE'. Use dev, staging, or prod${NC}"
-        exit 1
-        ;;
+dev)
+	AUTH0_DOMAIN="linuxfoundation-dev.auth0.com"
+	LFX_MCP_API_URL="https://lfx-mcp.dev.v2.cluster.linuxfound.info/mcp"
+	LFX_V2_API_URL="https://lfx-api.dev.v2.cluster.linuxfound.info"
+	;;
+staging)
+	AUTH0_DOMAIN="linuxfoundation-staging.auth0.com"
+	LFX_MCP_API_URL="https://lfx-mcp.staging.v2.cluster.linuxfound.info/mcp"
+	LFX_V2_API_URL="https://lfx-api.staging.v2.cluster.linuxfound.info"
+	;;
+prod)
+	AUTH0_DOMAIN="sso.linuxfoundation.org"
+	LFX_MCP_API_URL="https://mcp.lfx.dev/mcp"
+	LFX_V2_API_URL="https://lfx-api.v2.cluster.lfx.dev"
+	;;
+*)
+	echo -e "${RED}Error: Invalid workspace '$WORKSPACE'. Use dev, staging, or prod${NC}"
+	exit 1
+	;;
 esac
 
 TOKEN_ENDPOINT="https://$AUTH0_DOMAIN/oauth/token"
@@ -58,9 +58,9 @@ echo ""
 
 # Build the server if needed.
 if [ ! -f "./bin/lfx-mcp-server" ]; then
-    echo -e "${YELLOW}Building server...${NC}"
-    make build
-    echo ""
+	echo -e "${YELLOW}Building server...${NC}"
+	make build
+	echo ""
 fi
 
 # Test 1: Check Protected Resource Metadata endpoint.
@@ -69,11 +69,11 @@ echo "Starting server with OAuth configuration..."
 
 # Start server in background with HTTP mode.
 LFXMCP_MODE=http \
-LFXMCP_HTTP_PORT=8081 \
-LFXMCP_MCP_API_AUTH_SERVERS="https://$AUTH0_DOMAIN" \
-LFXMCP_MCP_API_PUBLIC_URL="$LFX_MCP_API_URL" \
-LFXMCP_TOOLS=hello_world \
-./bin/lfx-mcp-server $DEBUG_FLAG &
+	LFXMCP_HTTP_PORT=8081 \
+	LFXMCP_MCP_API_AUTH_SERVERS="https://$AUTH0_DOMAIN" \
+	LFXMCP_MCP_API_PUBLIC_URL="$LFX_MCP_API_URL" \
+	LFXMCP_TOOLS=hello_world \
+	./bin/lfx-mcp-server $DEBUG_FLAG &
 SERVER_PID=$!
 
 # Wait for server to start.
@@ -95,15 +95,15 @@ SCOPES=$(echo "$PRM_RESPONSE" | jq -r '.scopes_supported[]' | tr '\n' ', ' | sed
 
 echo -e "${BLUE}Validation:${NC}"
 if [ "$RESOURCE" == "$LFX_MCP_API_URL" ]; then
-    echo -e "${GREEN}✓ Resource identifier: $RESOURCE${NC}"
+	echo -e "${GREEN}✓ Resource identifier: $RESOURCE${NC}"
 else
-    echo -e "${RED}✗ Resource identifier mismatch: expected $LFX_MCP_API_URL, got $RESOURCE${NC}"
+	echo -e "${RED}✗ Resource identifier mismatch: expected $LFX_MCP_API_URL, got $RESOURCE${NC}"
 fi
 
 if [ "$AUTH_SERVER" == "https://$AUTH0_DOMAIN/" ]; then
-    echo -e "${GREEN}✓ Authorization server: $AUTH_SERVER${NC}"
+	echo -e "${GREEN}✓ Authorization server: $AUTH_SERVER${NC}"
 else
-    echo -e "${RED}✗ Authorization server mismatch: expected https://$AUTH0_DOMAIN/, got $AUTH_SERVER${NC}"
+	echo -e "${RED}✗ Authorization server mismatch: expected https://$AUTH0_DOMAIN/, got $AUTH_SERVER${NC}"
 fi
 
 echo -e "${GREEN}✓ Bearer methods: $BEARER_METHODS${NC}"
@@ -125,8 +125,8 @@ echo ""
 echo -e "${BLUE}=== Test 3: MCP Endpoint Accessibility ===${NC}"
 echo "Testing MCP endpoint without authentication..."
 MCP_RESPONSE=$(curl -s -X POST http://127.0.0.1:8081/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}')
+	-H "Content-Type: application/json" \
+	-d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}')
 
 echo -e "${GREEN}MCP Initialize Response:${NC}"
 echo "$MCP_RESPONSE" | jq '.'
@@ -135,17 +135,17 @@ echo ""
 # Check if response contains server info.
 SERVER_NAME=$(echo "$MCP_RESPONSE" | jq -r '.result.serverInfo.name // empty')
 if [ -n "$SERVER_NAME" ]; then
-    echo -e "${GREEN}✓ MCP server responding: $SERVER_NAME${NC}"
+	echo -e "${GREEN}✓ MCP server responding: $SERVER_NAME${NC}"
 else
-    echo -e "${YELLOW}⚠ MCP server may require authentication for initialize${NC}"
+	echo -e "${YELLOW}⚠ MCP server may require authentication for initialize${NC}"
 fi
 echo ""
 
 # Test 4: List tools.
 echo -e "${BLUE}=== Test 4: List Available Tools ===${NC}"
 TOOLS_RESPONSE=$(curl -s -X POST http://127.0.0.1:8081/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
+	-H "Content-Type: application/json" \
+	-d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
 
 echo -e "${GREEN}Available Tools:${NC}"
 echo "$TOOLS_RESPONSE" | jq '.result.tools[]?.name // empty' | tr '\n' ' '

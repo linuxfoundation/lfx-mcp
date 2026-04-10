@@ -35,6 +35,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Config holds all configuration for the LFX MCP server.
@@ -456,7 +457,7 @@ func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middle
 					spanName = method + " " + params.Name
 				}
 			}
-			ctx, span := tracer.Start(ctx, spanName)
+			ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindServer))
 			defer span.End()
 
 			// Bind mcp.session.id and mcp.method.name onto a child logger and

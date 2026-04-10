@@ -334,6 +334,9 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
+	// Mask v1 user ID — see LFXV2-1466.
+	result.UserID = nil
+
 	prettyJSON, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal mailing list member result", "error", err)
@@ -533,6 +536,14 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+	}
+
+	// Strip v1 user_id and internal source field from indexed data — see LFXV2-1466.
+	for _, r := range result.Resources {
+		if data, ok := r.Data.(map[string]any); ok {
+			delete(data, "user_id")
+			delete(data, "source")
+		}
 	}
 
 	out := searchResult{

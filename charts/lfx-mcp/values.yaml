@@ -96,6 +96,14 @@ app:
   lfxAPIURL: ""
   # tokenEndpoint is the OAuth2 token endpoint URL used for client credentials.
   tokenEndpoint: ""
+  # lensApiUrl is the base URL of the LFX Lens service.
+  lensApiUrl: ""
+  # lensApiAudience is the Auth0 resource server audience for the LFX Lens API.
+  lensApiAudience: ""
+  # memberOnboardingApiUrl is the base URL of the member onboarding service.
+  memberOnboardingApiUrl: ""
+  # memberOnboardingApiAudience is the Auth0 resource server audience for the member onboarding API.
+  memberOnboardingApiAudience: ""
   # otel contains OpenTelemetry exporter configuration.
   # All values default to empty (no-op tracer) so the chart is deployment-environment agnostic.
   # The values overrides supply the environment-specific endpoint and sample ratio.

@@ -14,7 +14,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that c
 
 The LFX MCP Server is available as a hosted, production service at:
 
-```
+```text
 https://mcp.lfx.dev/mcp
 ```
 
@@ -119,71 +119,71 @@ Before hitting **Connect**, follow the **Open Auth Settings** button, then selec
 
 ### Projects
 
-| Tool | Description |
-|------|-------------|
+| Tool              | Description                                                   |
+|-------------------|---------------------------------------------------------------|
 | `search_projects` | Search for LFX projects by name with typeahead and pagination |
-| `get_project` | Get a project's base info and settings by UID |
+| `get_project`     | Get a project's base info and settings by UID                 |
 
 ### Committees
 
-| Tool | Description |
-|------|-------------|
-| `search_committees` | Search for committees by name; optionally filter by project |
-| `get_committee` | Get a committee's base info and settings by UID |
-| `create_committee` | Create a new committee under a project |
-| `update_committee` | Update a committee's base information |
+| Tool                        | Description                                                                               |
+|-----------------------------|-------------------------------------------------------------------------------------------|
+| `search_committees`         | Search for committees by name; optionally filter by project                               |
+| `get_committee`             | Get a committee's base info and settings by UID                                           |
+| `create_committee`          | Create a new committee under a project                                                    |
+| `update_committee`          | Update a committee's base information                                                     |
 | `update_committee_settings` | Update a committee's settings (visibility, email requirements, meeting attendee defaults) |
-| `delete_committee` | Delete a committee by UID |
-| `search_committee_members` | Search committee members; filter by committee, project, or name |
-| `get_committee_member` | Get a specific committee member by committee and member UID |
-| `create_committee_member` | Add a new member to a committee |
-| `update_committee_member` | Update an existing committee member's information |
-| `delete_committee_member` | Remove a member from a committee |
+| `delete_committee`          | Delete a committee by UID                                                                 |
+| `search_committee_members`  | Search committee members; filter by committee, project, or name                           |
+| `get_committee_member`      | Get a specific committee member by committee and member UID                               |
+| `create_committee_member`   | Add a new member to a committee                                                           |
+| `update_committee_member`   | Update an existing committee member's information                                         |
+| `delete_committee_member`   | Remove a member from a committee                                                          |
 
 ### Mailing Lists
 
-| Tool | Description |
-|------|-------------|
-| `search_mailing_lists` | Search for mailing lists by name; optionally filter by project |
-| `get_mailing_list` | Get a mailing list's base info and settings by UID |
-| `get_mailing_list_service` | Get a mailing list service's base info and settings by UID |
-| `search_mailing_list_members` | Search mailing list members; filter by list, project, or name |
-| `get_mailing_list_member` | Get a specific mailing list member by list and member UID |
+| Tool                          | Description                                                    |
+|-------------------------------|----------------------------------------------------------------|
+| `search_mailing_lists`        | Search for mailing lists by name; optionally filter by project |
+| `get_mailing_list`            | Get a mailing list's base info and settings by UID             |
+| `get_mailing_list_service`    | Get a mailing list service's base info and settings by UID     |
+| `search_mailing_list_members` | Search mailing list members; filter by list, project, or name  |
+| `get_mailing_list_member`     | Get a specific mailing list member by list and member UID      |
 
 ### Members
 
-| Tool | Description |
-|------|-------------|
-| `search_members` | Search and filter members (memberships) by status, tier, organization, and more |
-| `get_member_membership` | Get a single member's membership details by member and membership ID |
-| `get_membership_key_contacts` | Get key contacts (primary contacts, board members) for a membership |
+| Tool                          | Description                                                                     |
+|-------------------------------|---------------------------------------------------------------------------------|
+| `search_members`              | Search and filter members (memberships) by status, tier, organization, and more |
+| `get_member_membership`       | Get a single member's membership details by member and membership ID            |
+| `get_membership_key_contacts` | Get key contacts (primary contacts, board members) for a membership             |
 
 ### Meetings
 
-| Tool | Description |
-|------|-------------|
-| `search_meetings` | Search for meetings; filter by project, committee, date range |
-| `get_meeting` | Get a meeting by UID |
+| Tool                         | Description                                                       |
+|------------------------------|-------------------------------------------------------------------|
+| `search_meetings`            | Search for meetings; filter by project, committee, date range     |
+| `get_meeting`                | Get a meeting by UID                                              |
 | `search_meeting_registrants` | Search meeting registrants; filter by meeting, committee, project |
-| `get_meeting_registrant` | Get a meeting registrant by UID |
+| `get_meeting_registrant`     | Get a meeting registrant by UID                                   |
 
 ### Past Meeting Data
 
-| Tool | Description |
-|------|-------------|
+| Tool                               | Description                                                             |
+|------------------------------------|-------------------------------------------------------------------------|
 | `search_past_meeting_participants` | Search past meeting participants; filter by meeting, committee, project |
-| `get_past_meeting_participant` | Get a past meeting participant by UID |
-| `search_past_meeting_transcripts` | Search past meeting transcripts; filter by meeting, committee, project |
-| `get_past_meeting_transcript` | Get a past meeting transcript by UID |
-| `search_past_meeting_summaries` | Search past meeting summaries; filter by meeting, committee, project |
-| `get_past_meeting_summary` | Get a past meeting summary by UID |
+| `get_past_meeting_participant`     | Get a past meeting participant by UID                                   |
+| `search_past_meeting_transcripts`  | Search past meeting transcripts; filter by meeting, committee, project  |
+| `get_past_meeting_transcript`      | Get a past meeting transcript by UID                                    |
+| `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, committee, project    |
+| `get_past_meeting_summary`         | Get a past meeting summary by UID                                       |
 
 ### Utility
 
-| Tool | Description |
-|------|-------------|
-| `hello_world` | Simple greeting tool for testing MCP connectivity |
-| `user_info` | Get the authenticated user's OpenID Connect profile |
+| Tool          | Description                                         |
+|---------------|-----------------------------------------------------|
+| `hello_world` | Simple greeting tool for testing MCP connectivity   |
+| `user_info`   | Get the authenticated user's OpenID Connect profile |
 
 ## License
 

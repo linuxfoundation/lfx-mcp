@@ -8,8 +8,8 @@ set -e
 # Parse command line arguments
 DEBUG_FLAG=""
 if [[ "$1" == "--debug" || "$1" == "-d" ]]; then
-    DEBUG_FLAG="-debug"
-    echo "Running tests with debug logging enabled..."
+	DEBUG_FLAG="-debug"
+	echo "Running tests with debug logging enabled..."
 fi
 
 echo "Testing LFX MCP Server..."
@@ -89,7 +89,7 @@ echo ""
 echo "All tests completed successfully! 🎉"
 echo ""
 if [[ -n "$DEBUG_FLAG" ]]; then
-    echo "Tests ran with debug logging enabled (logs on stderr)"
+	echo "Tests ran with debug logging enabled (logs on stderr)"
 fi
 echo ""
 echo "The LFX MCP Server is working correctly with:"

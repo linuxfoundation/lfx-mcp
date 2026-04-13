@@ -167,13 +167,13 @@ func handleMyTool(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs
 
 **Key differences:**
 
-| Feature | Server Logging | MCP Client Logging |
-|---------|---------------|-------------------|
-| Audience | Server operators | Client users/developers |
-| Output | stdout/stderr | MCP protocol notifications |
-| Control | `-debug` flag | Client's `SetLoggingLevel` |
-| Format | JSON to files | JSON over protocol |
-| Use case | Debugging server | Debugging tool execution |
+| Feature  | Server Logging   | MCP Client Logging         |
+|----------|------------------|----------------------------|
+| Audience | Server operators | Client users/developers    |
+| Output   | stdout/stderr    | MCP protocol notifications |
+| Control  | `-debug` flag    | Client's `SetLoggingLevel` |
+| Format   | JSON to files    | JSON over protocol         |
+| Use case | Debugging server | Debugging tool execution   |
 
 ### Server Log Structure
 
@@ -232,9 +232,9 @@ The MCP Go SDK provides a simple pattern for adding tools. Tools are implemented
 
 Two scope constants are defined in `internal/tools/scopes.go`:
 
-| Constant | Value | Used for |
-|----------|-------|----------|
-| `ScopeRead` | `read:all` | Tools with `ReadOnlyHint: true` |
+| Constant      | Value        | Used for                                            |
+|---------------|--------------|-----------------------------------------------------|
+| `ScopeRead`   | `read:all`   | Tools with `ReadOnlyHint: true`                     |
 | `ScopeManage` | `manage:all` | Tools where `ReadOnlyHint` is `false` (the default) |
 
 Use the helper functions `ReadScopes()` and `WriteScopes()` when registering tools.
@@ -488,27 +488,27 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 
 **Configuration Precedence:** Environment variables **override** command-line flags. This allows command-line flags to provide defaults while environment variables can override them in containerized deployments.
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `LFXMCP_MODE` | Transport mode (`stdio` or `http`) | stdio | No |
-| `LFXMCP_HTTP_HOST` | HTTP server host | 127.0.0.1 | No |
-| `LFXMCP_HTTP_PORT` | HTTP server port | 8080 | No |
-| `LFXMCP_HTTP_PUBLIC_URL` | Public URL for HTTP transport | - | No |
-| `LFXMCP_DEBUG` | Enable debug logging | false | No |
-| `LFXMCP_DEBUG_TRAFFIC` | Enable HTTP request/response wire logging for outbound LFX API calls | false | No |
-| `LFXMCP_TOOLS` | Comma-separated list of tools to enable | - | No |
-| `LFXMCP_MCP_API_AUTH_SERVERS` | Comma-separated list of authorization server URLs | - | No |
-| `LFXMCP_MCP_API_PUBLIC_URL` | Public URL for MCP API (for OAuth PRM) | - | No |
-| `LFXMCP_MCP_API_SCOPES` | OAuth scopes as comma-separated list | - | No |
-| `LFXMCP_CLIENT_ID` | OAuth client ID for authentication | - | No |
-| `LFXMCP_CLIENT_SECRET` | OAuth client secret | - | No |
-| `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | PEM-encoded RSA private key for client assertion | - | No |
-| `LFXMCP_TOKEN_ENDPOINT` | OAuth2 token endpoint URL for token exchange | - | No |
-| `LFXMCP_LFX_API_URL` | LFX API URL (used as token exchange audience) | - | No |
-| `LFXMCP_ONBOARDING_API_URL` | Base URL of the member onboarding service | - | No |
-| `LFXMCP_ONBOARDING_API_AUDIENCE` | Auth0 resource server audience for the member onboarding API | - | No |
-| `LFXMCP_LENS_API_URL` | Base URL of the LFX Lens service | - | No |
-| `LFXMCP_LENS_API_AUDIENCE` | Auth0 resource server audience for the LFX Lens API | - | No |
+| Variable                              | Description                                                          | Default   | Required |
+|---------------------------------------|----------------------------------------------------------------------|-----------|----------|
+| `LFXMCP_MODE`                         | Transport mode (`stdio` or `http`)                                   | stdio     | No       |
+| `LFXMCP_HTTP_HOST`                    | HTTP server host                                                     | 127.0.0.1 | No       |
+| `LFXMCP_HTTP_PORT`                    | HTTP server port                                                     | 8080      | No       |
+| `LFXMCP_HTTP_PUBLIC_URL`              | Public URL for HTTP transport                                        | -         | No       |
+| `LFXMCP_DEBUG`                        | Enable debug logging                                                 | false     | No       |
+| `LFXMCP_DEBUG_TRAFFIC`                | Enable HTTP request/response wire logging for outbound LFX API calls | false     | No       |
+| `LFXMCP_TOOLS`                        | Comma-separated list of tools to enable                              | -         | No       |
+| `LFXMCP_MCP_API_AUTH_SERVERS`         | Comma-separated list of authorization server URLs                    | -         | No       |
+| `LFXMCP_MCP_API_PUBLIC_URL`           | Public URL for MCP API (for OAuth PRM)                               | -         | No       |
+| `LFXMCP_MCP_API_SCOPES`               | OAuth scopes as comma-separated list                                 | -         | No       |
+| `LFXMCP_CLIENT_ID`                    | OAuth client ID for authentication                                   | -         | No       |
+| `LFXMCP_CLIENT_SECRET`                | OAuth client secret                                                  | -         | No       |
+| `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | PEM-encoded RSA private key for client assertion                     | -         | No       |
+| `LFXMCP_TOKEN_ENDPOINT`               | OAuth2 token endpoint URL for token exchange                         | -         | No       |
+| `LFXMCP_LFX_API_URL`                  | LFX API URL (used as token exchange audience)                        | -         | No       |
+| `LFXMCP_ONBOARDING_API_URL`           | Base URL of the member onboarding service                            | -         | No       |
+| `LFXMCP_ONBOARDING_API_AUDIENCE`      | Auth0 resource server audience for the member onboarding API         | -         | No       |
+| `LFXMCP_LENS_API_URL`                 | Base URL of the LFX Lens service                                     | -         | No       |
+| `LFXMCP_LENS_API_AUDIENCE`            | Auth0 resource server audience for the LFX Lens API                  | -         | No       |
 
 **Example:**
 

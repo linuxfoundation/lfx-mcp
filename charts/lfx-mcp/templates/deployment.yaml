@@ -72,6 +72,22 @@ spec:
               value: {{ .Values.app.tokenEndpoint | quote }}
             - name: LFXMCP_LFX_API_URL
               value: {{ .Values.app.lfxAPIURL | quote }}
+            {{- if .Values.app.lensApiUrl }}
+            - name: LFXMCP_LENS_API_URL
+              value: {{ .Values.app.lensApiUrl | quote }}
+            {{- end }}
+            {{- if .Values.app.lensApiAudience }}
+            - name: LFXMCP_LENS_API_AUDIENCE
+              value: {{ .Values.app.lensApiAudience | quote }}
+            {{- end }}
+            {{- if .Values.app.memberOnboardingApiUrl }}
+            - name: LFXMCP_ONBOARDING_API_URL
+              value: {{ .Values.app.memberOnboardingApiUrl | quote }}
+            {{- end }}
+            {{- if .Values.app.memberOnboardingApiAudience }}
+            - name: LFXMCP_ONBOARDING_API_AUDIENCE
+              value: {{ .Values.app.memberOnboardingApiAudience | quote }}
+            {{- end }}
             - name: LFXMCP_CLIENT_ID
               valueFrom:
                 secretKeyRef:

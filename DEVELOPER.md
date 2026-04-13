@@ -40,23 +40,23 @@ The HTTP server listens at `http://localhost:8080/mcp` by default.
 
 Environment variables use the `LFXMCP_` prefix and **override** their corresponding flags.
 
-| Flag | Env Var | Default | Description |
-|------|---------|---------|-------------|
-| `-mode` | `LFXMCP_MODE` | `stdio` | Transport mode: `stdio` or `http` |
-| `-http.host` | `LFXMCP_HTTP_HOST` | `127.0.0.1` | HTTP server bind address |
-| `-http.port` | `LFXMCP_HTTP_PORT` | `8080` | HTTP server port |
-| `-http.public_url` | `LFXMCP_HTTP_PUBLIC_URL` | — | Public URL for HTTP transport (reverse proxies) |
-| `-debug` | `LFXMCP_DEBUG` | `false` | Enable debug logging with source locations |
-| `-debug_traffic` | `LFXMCP_DEBUG_TRAFFIC` | `false` | Log outbound LFX API request/response bodies |
-| `-tools` | `LFXMCP_TOOLS` | — | Comma-separated list of tools to enable |
-| `-mcp_api.auth_servers` | `LFXMCP_MCP_API_AUTH_SERVERS` | — | OAuth authorization server URLs (comma-separated) |
-| `-mcp_api.public_url` | `LFXMCP_MCP_API_PUBLIC_URL` | — | Public URL for MCP API (OAuth PRM) |
-| `-mcp_api.scopes` | `LFXMCP_MCP_API_SCOPES` | — | OAuth scopes (comma-separated) |
-| `-client_id` | `LFXMCP_CLIENT_ID` | — | OAuth client ID for token exchange |
-| `-client_secret` | `LFXMCP_CLIENT_SECRET` | — | OAuth client secret |
-| `-client_assertion_signing_key` | `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | — | PEM-encoded RSA private key for client assertion (RFC 7523) |
-| `-token_endpoint` | `LFXMCP_TOKEN_ENDPOINT` | — | OAuth2 token endpoint URL (RFC 8693) |
-| `-lfx_api_url` | `LFXMCP_LFX_API_URL` | — | LFX API base URL (token exchange audience) |
+| Flag                            | Env Var                               | Default     | Description                                                 |
+|---------------------------------|---------------------------------------|-------------|-------------------------------------------------------------|
+| `-mode`                         | `LFXMCP_MODE`                         | `stdio`     | Transport mode: `stdio` or `http`                           |
+| `-http.host`                    | `LFXMCP_HTTP_HOST`                    | `127.0.0.1` | HTTP server bind address                                    |
+| `-http.port`                    | `LFXMCP_HTTP_PORT`                    | `8080`      | HTTP server port                                            |
+| `-http.public_url`              | `LFXMCP_HTTP_PUBLIC_URL`              | —           | Public URL for HTTP transport (reverse proxies)             |
+| `-debug`                        | `LFXMCP_DEBUG`                        | `false`     | Enable debug logging with source locations                  |
+| `-debug_traffic`                | `LFXMCP_DEBUG_TRAFFIC`                | `false`     | Log outbound LFX API request/response bodies                |
+| `-tools`                        | `LFXMCP_TOOLS`                        | —           | Comma-separated list of tools to enable                     |
+| `-mcp_api.auth_servers`         | `LFXMCP_MCP_API_AUTH_SERVERS`         | —           | OAuth authorization server URLs (comma-separated)           |
+| `-mcp_api.public_url`           | `LFXMCP_MCP_API_PUBLIC_URL`           | —           | Public URL for MCP API (OAuth PRM)                          |
+| `-mcp_api.scopes`               | `LFXMCP_MCP_API_SCOPES`               | —           | OAuth scopes (comma-separated)                              |
+| `-client_id`                    | `LFXMCP_CLIENT_ID`                    | —           | OAuth client ID for token exchange                          |
+| `-client_secret`                | `LFXMCP_CLIENT_SECRET`                | —           | OAuth client secret                                         |
+| `-client_assertion_signing_key` | `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | —           | PEM-encoded RSA private key for client assertion (RFC 7523) |
+| `-token_endpoint`               | `LFXMCP_TOKEN_ENDPOINT`               | —           | OAuth2 token endpoint URL (RFC 8693)                        |
+| `-lfx_api_url`                  | `LFXMCP_LFX_API_URL`                  | —           | LFX API base URL (token exchange audience)                  |
 
 ## Code Quality
 
@@ -208,17 +208,17 @@ For more detail on tool annotations, JSON schema tags, content types, and the MC
 
 ## Build System
 
-| Target | Description |
-|--------|-------------|
-| `all` | Clean, check, and build (default) |
-| `build` | Compile the binary |
-| `clean` | Remove build artifacts |
-| `fmt` | Format Go code |
-| `vet` | Run go vet |
-| `lint` | Run golangci-lint |
-| `check` | Run fmt, vet, and lint |
-| `run` | Build and run in stdio mode |
-| `test` | Run Go tests |
-| `test-coverage` | Run tests with coverage |
-| `deps` | Download and tidy dependencies |
-| `install-tools` | Install development tools |
+| Target          | Description                       |
+|-----------------|-----------------------------------|
+| `all`           | Clean, check, and build (default) |
+| `build`         | Compile the binary                |
+| `clean`         | Remove build artifacts            |
+| `fmt`           | Format Go code                    |
+| `vet`           | Run go vet                        |
+| `lint`          | Run golangci-lint                 |
+| `check`         | Run fmt, vet, and lint            |
+| `run`           | Build and run in stdio mode       |
+| `test`          | Run Go tests                      |
+| `test-coverage` | Run tests with coverage           |
+| `deps`          | Download and tidy dependencies    |
+| `install-tools` | Install development tools         |

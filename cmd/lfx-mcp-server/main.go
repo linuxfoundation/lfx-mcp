@@ -125,16 +125,14 @@ var defaultTools = []string{
 	"get_past_meeting_transcript",
 	"search_past_meeting_summaries",
 	"get_past_meeting_summary",
-	"list_membership_actions",
-	"get_onboarding_discord_config",
-	"list_onboarding_discord_roles",
-	"find_onboarding_discord_role",
-	"find_onboarding_discord_user",
-	"check_onboarding_discord_user_role",
-	"assign_onboarding_discord_role",
-	"list_onboarding_email_templates",
-	"render_onboarding_email_template",
-	"send_onboarding_email",
+	// "list_membership_actions", // TODO: uncomment when guided onboarding flow is ready.
+	"list_discord_roles",
+	"find_discord_role",
+	"find_discord_user",
+	"check_discord_user_role",
+	"assign_discord_role",
+	"list_email_templates",
+	"send_email",
 	"query_lfx_lens",
 	"search_b2b_orgs",
 	"list_b2b_org_memberships",
@@ -689,35 +687,30 @@ func newServer(cfg Config, serviceName string) *mcp.Server {
 	}
 
 	// Service API tools.
-	if enabledTools["list_membership_actions"] {
-		tools.RegisterListMembershipActions(server)
+	// TODO: uncomment when guided onboarding flow is ready.
+	// if enabledTools["list_membership_actions"] {
+	// 	tools.RegisterListMembershipActions(server)
+	// }
+	if enabledTools["list_discord_roles"] {
+		tools.RegisterListDiscordRoles(server)
 	}
-	if enabledTools["get_onboarding_discord_config"] {
-		tools.RegisterGetOnboardingDiscordConfig(server)
+	if enabledTools["find_discord_role"] {
+		tools.RegisterFindDiscordRole(server)
 	}
-	if enabledTools["list_onboarding_discord_roles"] {
-		tools.RegisterListOnboardingDiscordRoles(server)
+	if enabledTools["find_discord_user"] {
+		tools.RegisterFindDiscordUser(server)
 	}
-	if enabledTools["find_onboarding_discord_role"] {
-		tools.RegisterFindOnboardingDiscordRole(server)
+	if enabledTools["check_discord_user_role"] {
+		tools.RegisterCheckDiscordUserRole(server)
 	}
-	if enabledTools["find_onboarding_discord_user"] {
-		tools.RegisterFindOnboardingDiscordUser(server)
+	if enabledTools["assign_discord_role"] {
+		tools.RegisterAssignDiscordRole(server)
 	}
-	if enabledTools["check_onboarding_discord_user_role"] {
-		tools.RegisterCheckOnboardingDiscordUserRole(server)
+	if enabledTools["list_email_templates"] {
+		tools.RegisterListEmailTemplates(server)
 	}
-	if enabledTools["assign_onboarding_discord_role"] {
-		tools.RegisterAssignOnboardingDiscordRole(server)
-	}
-	if enabledTools["list_onboarding_email_templates"] {
-		tools.RegisterListOnboardingEmailTemplates(server)
-	}
-	if enabledTools["render_onboarding_email_template"] {
-		tools.RegisterRenderOnboardingEmailTemplate(server)
-	}
-	if enabledTools["send_onboarding_email"] {
-		tools.RegisterSendOnboardingEmail(server)
+	if enabledTools["send_email"] {
+		tools.RegisterSendEmail(server)
 	}
 	if enabledTools["query_lfx_lens"] {
 		tools.RegisterQueryLFXLens(server)

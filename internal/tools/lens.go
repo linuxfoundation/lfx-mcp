@@ -44,8 +44,8 @@ func RegisterQueryLFXLens(server *mcp.Server) {
 
 // --- Tool args ---
 
-// LFXLensQueryArgs defines the input for query_lfx_lens.
-type LFXLensQueryArgs struct {
+// QueryLFXLensArgs defines the input for query_lfx_lens.
+type QueryLFXLensArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf')"`
 	Input       string `json:"input" jsonschema:"Natural language query about the project (e.g. 'How many active maintainers does this project have?')"`
 }
@@ -73,7 +73,7 @@ type lensQueryResponse struct {
 
 // --- Tool handlers ---
 
-func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args LFXLensQueryArgs) (*mcp.CallToolResult, any, error) {
+func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args QueryLFXLensArgs) (*mcp.CallToolResult, any, error) {
 	if lensConfig == nil {
 		return nil, nil, fmt.Errorf("LFX Lens tools not configured")
 	}

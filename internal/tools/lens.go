@@ -30,10 +30,10 @@ func SetLensConfig(cfg *LensConfig) {
 
 // --- Tool registration ---
 
-// RegisterLFXLensQuery registers the lfx_lens_query tool.
-func RegisterLFXLensQuery(server *mcp.Server) {
+// RegisterQueryLFXLens registers the query_lfx_lens tool.
+func RegisterQueryLFXLens(server *mcp.Server) {
 	AddServiceTool(server, &mcp.Tool{
-		Name:        "lfx_lens_query",
+		Name:        "query_lfx_lens",
 		Description: "Ask natural language questions about a project's data. LFX Lens covers the following domains: events, education, activity, contributors, maintainers, affiliations, organizations, project health, and project value. It can answer both straightforward text-to-SQL queries and more exploratory, multi-step data questions. Pass your question directly — Lens handles data exploration, SQL generation, and interpretation for each domain. Use search_projects first to find the project slug.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "LFX Lens Query",
@@ -44,8 +44,8 @@ func RegisterLFXLensQuery(server *mcp.Server) {
 
 // --- Tool args ---
 
-// LFXLensQueryArgs defines the input for lfx_lens_query.
-type LFXLensQueryArgs struct {
+// QueryLFXLensArgs defines the input for query_lfx_lens.
+type QueryLFXLensArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf')"`
 	Input       string `json:"input" jsonschema:"Natural language query about the project (e.g. 'How many active maintainers does this project have?')"`
 }
@@ -73,7 +73,7 @@ type lensQueryResponse struct {
 
 // --- Tool handlers ---
 
-func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args LFXLensQueryArgs) (*mcp.CallToolResult, any, error) {
+func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args QueryLFXLensArgs) (*mcp.CallToolResult, any, error) {
 	if lensConfig == nil {
 		return nil, nil, fmt.Errorf("LFX Lens tools not configured")
 	}

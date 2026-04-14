@@ -125,8 +125,15 @@ var defaultTools = []string{
 	"get_past_meeting_transcript",
 	"search_past_meeting_summaries",
 	"get_past_meeting_summary",
-	"onboarding_list_memberships",
-	"lfx_lens_query",
+	// "list_membership_actions", // TODO: uncomment when guided onboarding flow is ready.
+	"list_discord_roles",
+	"find_discord_role",
+	"find_discord_user",
+	"check_discord_user_role",
+	"assign_discord_role",
+	"list_email_templates",
+	"send_email",
+	"query_lfx_lens",
 	"search_b2b_orgs",
 	"list_b2b_org_memberships",
 }
@@ -680,11 +687,33 @@ func newServer(cfg Config, serviceName string) *mcp.Server {
 	}
 
 	// Service API tools.
-	if enabledTools["onboarding_list_memberships"] {
-		tools.RegisterOnboardingListMemberships(server)
+	// TODO: uncomment when guided onboarding flow is ready.
+	// if enabledTools["list_membership_actions"] {
+	// 	tools.RegisterListMembershipActions(server)
+	// }
+	if enabledTools["list_discord_roles"] {
+		tools.RegisterListDiscordRoles(server)
 	}
-	if enabledTools["lfx_lens_query"] {
-		tools.RegisterLFXLensQuery(server)
+	if enabledTools["find_discord_role"] {
+		tools.RegisterFindDiscordRole(server)
+	}
+	if enabledTools["find_discord_user"] {
+		tools.RegisterFindDiscordUser(server)
+	}
+	if enabledTools["check_discord_user_role"] {
+		tools.RegisterCheckDiscordUserRole(server)
+	}
+	if enabledTools["assign_discord_role"] {
+		tools.RegisterAssignDiscordRole(server)
+	}
+	if enabledTools["list_email_templates"] {
+		tools.RegisterListEmailTemplates(server)
+	}
+	if enabledTools["send_email"] {
+		tools.RegisterSendEmail(server)
+	}
+	if enabledTools["query_lfx_lens"] {
+		tools.RegisterQueryLFXLens(server)
 	}
 
 	return server

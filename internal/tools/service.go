@@ -36,10 +36,9 @@ const (
 // AddServiceTool registers a tool that proxies to an internal service API.
 //
 // Service tools enforce two layers of authorization:
-//  1. MCP JWT scopes (read:all / manage:all) — checked at dispatch by
-//     [AddToolWithScopes]. This ensures a reduced-scope MCP token cannot
-//     access tools beyond its granted scopes, regardless of the user's
-//     underlying permissions.
+//  1. MCP JWT scopes (read:all / manage:all) — enforced at registration time
+//     in newServer(). Tools the caller cannot invoke are not registered for
+//     that request and therefore never appear in tools/list.
 //  2. V2 access-check (OpenFGA) — checked inside the tool handler via
 //     [ServiceAuth.AuthorizeProject]. This verifies the user has the
 //     required project-level relationship (e.g., "writer" or "auditor").

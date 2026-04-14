@@ -544,7 +544,11 @@ func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middle
 }
 
 // newServer creates and configures a new MCP server with registered tools.
-func newServer(cfg Config, serviceName string) *mcp.Server {
+//
+// callerScopes, when non-nil, restricts which tools are registered to those
+// the caller is authorized to invoke. A nil value (stdio mode / no auth)
+// registers all enabled tools without restriction.
+func newServer(cfg Config, serviceName string, callerScopes []string) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "lfx-mcp-server",
 		Version: Version,
@@ -556,163 +560,168 @@ func newServer(cfg Config, serviceName string) *mcp.Server {
 	// Add middleware for OTel instrumentation and logging of all MCP method calls.
 	server.AddReceivingMiddleware(mcpOTelMiddleware(logger, serviceName))
 
-	// Register tools based on configuration.
+	// Determine which scope classes the caller holds. A nil callerScopes means
+	// no auth (stdio mode) — register everything.
+	canRead := callerScopes == nil || tools.HasAnyScope(callerScopes, tools.ReadScopes())
+	canManage := callerScopes == nil || tools.HasAnyScope(callerScopes, tools.WriteScopes())
+
+	// Register tools based on configuration and caller scopes.
 	enabledTools := make(map[string]bool)
 	for _, tool := range cfg.Tools {
 		enabledTools[strings.TrimSpace(tool)] = true
 	}
 
-	if enabledTools["hello_world"] {
+	if enabledTools["hello_world"] && canRead {
 		tools.RegisterHelloWorld(server)
 	}
-	if enabledTools["user_info"] {
+	if enabledTools["user_info"] && canRead {
 		tools.RegisterUserInfo(server)
 	}
-	if enabledTools["search_projects"] {
+	if enabledTools["search_projects"] && canRead {
 		tools.RegisterSearchProjects(server)
 	}
-	if enabledTools["get_project"] {
+	if enabledTools["get_project"] && canRead {
 		tools.RegisterGetProject(server)
 	}
-	if enabledTools["search_committees"] {
+	if enabledTools["search_committees"] && canRead {
 		tools.RegisterSearchCommittees(server)
 	}
-	if enabledTools["get_committee"] {
+	if enabledTools["get_committee"] && canRead {
 		tools.RegisterGetCommittee(server)
 	}
-	if enabledTools["get_committee_member"] {
+	if enabledTools["get_committee_member"] && canRead {
 		tools.RegisterGetCommitteeMember(server)
 	}
-	if enabledTools["search_committee_members"] {
+	if enabledTools["search_committee_members"] && canRead {
 		tools.RegisterSearchCommitteeMembers(server)
 	}
-	if enabledTools["create_committee"] {
+	if enabledTools["create_committee"] && canManage {
 		tools.RegisterCreateCommittee(server)
 	}
-	if enabledTools["update_committee"] {
+	if enabledTools["update_committee"] && canManage {
 		tools.RegisterUpdateCommittee(server)
 	}
-	if enabledTools["update_committee_settings"] {
+	if enabledTools["update_committee_settings"] && canManage {
 		tools.RegisterUpdateCommitteeSettings(server)
 	}
-	if enabledTools["delete_committee"] {
+	if enabledTools["delete_committee"] && canManage {
 		tools.RegisterDeleteCommittee(server)
 	}
-	if enabledTools["create_committee_member"] {
+	if enabledTools["create_committee_member"] && canManage {
 		tools.RegisterCreateCommitteeMember(server)
 	}
-	if enabledTools["update_committee_member"] {
+	if enabledTools["update_committee_member"] && canManage {
 		tools.RegisterUpdateCommitteeMember(server)
 	}
-	if enabledTools["delete_committee_member"] {
+	if enabledTools["delete_committee_member"] && canManage {
 		tools.RegisterDeleteCommitteeMember(server)
 	}
-	if enabledTools["get_mailing_list_service"] {
+	if enabledTools["get_mailing_list_service"] && canRead {
 		tools.RegisterGetMailingListService(server)
 	}
-	if enabledTools["get_mailing_list"] {
+	if enabledTools["get_mailing_list"] && canRead {
 		tools.RegisterGetMailingList(server)
 	}
-	if enabledTools["get_mailing_list_member"] {
+	if enabledTools["get_mailing_list_member"] && canRead {
 		tools.RegisterGetMailingListMember(server)
 	}
-	if enabledTools["search_mailing_lists"] {
+	if enabledTools["search_mailing_lists"] && canRead {
 		tools.RegisterSearchMailingLists(server)
 	}
-	if enabledTools["search_mailing_list_members"] {
+	if enabledTools["search_mailing_list_members"] && canRead {
 		tools.RegisterSearchMailingListMembers(server)
 	}
-	if enabledTools["list_project_tiers"] {
+	if enabledTools["list_project_tiers"] && canRead {
 		tools.RegisterListProjectTiers(server)
 	}
-	if enabledTools["get_project_tier"] {
+	if enabledTools["get_project_tier"] && canRead {
 		tools.RegisterGetProjectTier(server)
 	}
-	if enabledTools["search_members"] {
+	if enabledTools["search_members"] && canRead {
 		tools.RegisterSearchMembers(server)
 	}
-	if enabledTools["get_member_membership"] {
+	if enabledTools["get_member_membership"] && canRead {
 		tools.RegisterGetMemberMembership(server)
 	}
-	if enabledTools["get_membership_key_contacts"] {
+	if enabledTools["get_membership_key_contacts"] && canRead {
 		tools.RegisterGetMembershipKeyContacts(server)
 	}
-	if enabledTools["get_membership_key_contact"] {
+	if enabledTools["get_membership_key_contact"] && canRead {
 		tools.RegisterGetMembershipKeyContact(server)
 	}
-	if enabledTools["create_membership_key_contact"] {
+	if enabledTools["create_membership_key_contact"] && canManage {
 		tools.RegisterCreateMembershipKeyContact(server)
 	}
-	if enabledTools["update_membership_key_contact"] {
+	if enabledTools["update_membership_key_contact"] && canManage {
 		tools.RegisterUpdateMembershipKeyContact(server)
 	}
-	if enabledTools["delete_membership_key_contact"] {
+	if enabledTools["delete_membership_key_contact"] && canManage {
 		tools.RegisterDeleteMembershipKeyContact(server)
 	}
-	if enabledTools["search_meetings"] {
+	if enabledTools["search_meetings"] && canRead {
 		tools.RegisterSearchMeetings(server)
 	}
-	if enabledTools["get_meeting"] {
+	if enabledTools["get_meeting"] && canRead {
 		tools.RegisterGetMeeting(server)
 	}
-	if enabledTools["search_meeting_registrants"] {
+	if enabledTools["search_meeting_registrants"] && canRead {
 		tools.RegisterSearchMeetingRegistrants(server)
 	}
-	if enabledTools["get_meeting_registrant"] {
+	if enabledTools["get_meeting_registrant"] && canRead {
 		tools.RegisterGetMeetingRegistrant(server)
 	}
-	if enabledTools["search_past_meeting_participants"] {
+	if enabledTools["search_past_meeting_participants"] && canRead {
 		tools.RegisterSearchPastMeetingParticipants(server)
 	}
-	if enabledTools["get_past_meeting_participant"] {
+	if enabledTools["get_past_meeting_participant"] && canRead {
 		tools.RegisterGetPastMeetingParticipant(server)
 	}
-	if enabledTools["search_past_meeting_transcripts"] {
+	if enabledTools["search_past_meeting_transcripts"] && canRead {
 		tools.RegisterSearchPastMeetingTranscripts(server)
 	}
-	if enabledTools["get_past_meeting_transcript"] {
+	if enabledTools["get_past_meeting_transcript"] && canRead {
 		tools.RegisterGetPastMeetingTranscript(server)
 	}
-	if enabledTools["search_past_meeting_summaries"] {
+	if enabledTools["search_past_meeting_summaries"] && canRead {
 		tools.RegisterSearchPastMeetingSummaries(server)
 	}
-	if enabledTools["get_past_meeting_summary"] {
+	if enabledTools["get_past_meeting_summary"] && canRead {
 		tools.RegisterGetPastMeetingSummary(server)
 	}
-	if enabledTools["search_b2b_orgs"] {
+	if enabledTools["search_b2b_orgs"] && canRead {
 		tools.RegisterSearchB2bOrgs(server)
 	}
-	if enabledTools["list_b2b_org_memberships"] {
+	if enabledTools["list_b2b_org_memberships"] && canRead {
 		tools.RegisterListB2bOrgMemberships(server)
 	}
 
 	// Service API tools.
 	// TODO: uncomment when guided onboarding flow is ready.
-	// if enabledTools["list_membership_actions"] {
+	// if enabledTools["list_membership_actions"] && canManage {
 	// 	tools.RegisterListMembershipActions(server)
 	// }
-	if enabledTools["list_discord_roles"] {
+	if enabledTools["list_discord_roles"] && canManage {
 		tools.RegisterListDiscordRoles(server)
 	}
-	if enabledTools["find_discord_role"] {
+	if enabledTools["find_discord_role"] && canManage {
 		tools.RegisterFindDiscordRole(server)
 	}
-	if enabledTools["find_discord_user"] {
+	if enabledTools["find_discord_user"] && canManage {
 		tools.RegisterFindDiscordUser(server)
 	}
-	if enabledTools["check_discord_user_role"] {
+	if enabledTools["check_discord_user_role"] && canManage {
 		tools.RegisterCheckDiscordUserRole(server)
 	}
-	if enabledTools["assign_discord_role"] {
+	if enabledTools["assign_discord_role"] && canManage {
 		tools.RegisterAssignDiscordRole(server)
 	}
-	if enabledTools["list_email_templates"] {
+	if enabledTools["list_email_templates"] && canManage {
 		tools.RegisterListEmailTemplates(server)
 	}
-	if enabledTools["send_email"] {
+	if enabledTools["send_email"] && canManage {
 		tools.RegisterSendEmail(server)
 	}
-	if enabledTools["query_lfx_lens"] {
+	if enabledTools["query_lfx_lens"] && canRead {
 		tools.RegisterQueryLFXLens(server)
 	}
 
@@ -722,8 +731,9 @@ func newServer(cfg Config, serviceName string) *mcp.Server {
 func runStdioServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(context.Context) error) {
 	ctx := context.Background()
 
-	// Create the MCP server.
-	server := newServer(cfg, otelCfg.ServiceName)
+	// Create the MCP server. Pass nil scopes so all enabled tools are registered
+	// without restriction (stdio has no auth context).
+	server := newServer(cfg, otelCfg.ServiceName, nil)
 
 	// Run the server on stdio transport.
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
@@ -742,9 +752,14 @@ func runStdioServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(cont
 }
 
 func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(context.Context) error) {
-	// Create server factory function for stateless mode.
-	createServer := func(_ *http.Request) *mcp.Server {
-		return newServer(cfg, otelCfg.ServiceName)
+	// Create server factory function for stateless mode. Each incoming request
+	// gets a fresh server with tools filtered to the caller's scopes.
+	createServer := func(r *http.Request) *mcp.Server {
+		var callerScopes []string
+		if ti := auth.TokenInfoFromContext(r.Context()); ti != nil {
+			callerScopes = ti.Scopes
+		}
+		return newServer(cfg, otelCfg.ServiceName, callerScopes)
 	}
 
 	// Create streamable HTTP handler with stateless mode.

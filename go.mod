@@ -9,11 +9,11 @@ require (
 	github.com/knadh/koanf/providers/env/v2 v2.0.0
 	github.com/knadh/koanf/v2 v2.3.4
 	github.com/lestrrat-go/jwx/v2 v2.1.6
-	github.com/linuxfoundation/lfx-v2-committee-service v0.2.29
-	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.4.7
-	github.com/linuxfoundation/lfx-v2-member-service v0.5.1
-	github.com/linuxfoundation/lfx-v2-project-service v0.6.1
-	github.com/linuxfoundation/lfx-v2-query-service v0.4.14
+	github.com/linuxfoundation/lfx-v2-committee-service v0.2.31
+	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.4.9
+	github.com/linuxfoundation/lfx-v2-member-service v0.5.2
+	github.com/linuxfoundation/lfx-v2-project-service v0.6.2
+	github.com/linuxfoundation/lfx-v2-query-service v0.4.15
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/remychantenay/slog-otel v1.3.5
@@ -31,7 +31,7 @@ require (
 	go.opentelemetry.io/otel/sdk/log v0.19.0
 	go.opentelemetry.io/otel/sdk/metric v1.43.0
 	go.opentelemetry.io/otel/trace v1.43.0
-	goa.design/goa/v3 v3.25.3
+	goa.design/goa/v3 v3.26.0
 )
 
 require (
@@ -68,8 +68,8 @@ require (
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260406210006-6f92a3bedf2d // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260406210006-6f92a3bedf2d // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/grpc v1.80.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

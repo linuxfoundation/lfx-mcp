@@ -567,8 +567,8 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if callerToken != nil {
 		callerScopes = callerToken.Scopes
 	}
-	canRead := callerToken == nil || tools.HasAnyScope(callerScopes, tools.ReadScopes())
-	canManage := callerToken == nil || tools.HasAnyScope(callerScopes, tools.WriteScopes())
+	canManage := callerToken == nil || tools.HasAnyScope(callerScopes, []string{tools.ScopeManage})
+	canRead := callerToken == nil || canManage || tools.HasAnyScope(callerScopes, []string{tools.ScopeRead})
 	isStaff := callerToken == nil || tools.IsLFStaff(callerToken)
 
 	// Register tools based on configuration and caller scopes.

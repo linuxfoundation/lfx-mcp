@@ -70,62 +70,62 @@ type SearchMailingListsArgs struct {
 
 // RegisterGetMailingListService registers the get_mailing_list_service tool with the MCP server.
 func RegisterGetMailingListService(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_mailing_list_service",
 		Description: "Get a mailing list service's base info and settings by its UID. Privileged settings may be omitted if the caller lacks sufficient permissions.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Mailing List Service",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetMailingListService)
+	}, handleGetMailingListService)
 }
 
 // RegisterGetMailingList registers the get_mailing_list tool with the MCP server.
 func RegisterGetMailingList(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_mailing_list",
 		Description: "Get a mailing list by its Groups.io numeric group ID (e.g. 145670).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Mailing List",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetMailingList)
+	}, handleGetMailingList)
 }
 
 // RegisterGetMailingListMember registers the get_mailing_list_member tool with the MCP server.
 func RegisterGetMailingListMember(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_mailing_list_member",
 		Description: "Get a specific mailing list member by Groups.io mailing list ID and member ID.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Mailing List Member",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetMailingListMember)
+	}, handleGetMailingListMember)
 }
 
 // RegisterSearchMailingListMembers registers the search_mailing_list_members tool with the MCP server.
 func RegisterSearchMailingListMembers(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_mailing_list_members",
 		Description: "Search for LFX mailing list members. Optionally filter by Groups.io mailing list ID, project UID, and/or name. At least one filter is recommended but not required.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Mailing List Members",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleSearchMailingListMembers)
+	}, handleSearchMailingListMembers)
 }
 
 // RegisterSearchMailingLists registers the search_mailing_lists tool with the MCP server.
 func RegisterSearchMailingLists(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_mailing_lists",
 		Description: "Search for LFX mailing lists by name using the LFX query service. Optionally filter by project UID.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Mailing Lists",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleSearchMailingLists)
+	}, handleSearchMailingLists)
 }
 
 // handleGetMailingListService implements the get_mailing_list_service tool logic.

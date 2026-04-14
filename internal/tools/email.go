@@ -15,19 +15,19 @@ import (
 
 // RegisterListEmailTemplates registers the list_email_templates tool.
 func RegisterListEmailTemplates(server *mcp.Server) {
-	AddServiceTool(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_email_templates",
 		Description: "List all available email templates for a project. Use this to discover what templates exist before drafting or sending.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "List Email Templates",
 			DestructiveHint: boolPtr(false),
 		},
-	}, WriteScopes(), handleListEmailTemplates)
+	}, handleListEmailTemplates)
 }
 
 // RegisterSendEmail registers the send_email tool.
 func RegisterSendEmail(server *mcp.Server) {
-	AddServiceTool(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name: "send_email",
 		Description: `Send a templated email via LFX mail servers. Supports two modes:
 - mode=draft: render a preview of the email without sending. Always draft first to confirm content.
@@ -37,7 +37,7 @@ Use list_email_templates first to find available template names.`,
 			Title:           "Send Email",
 			DestructiveHint: boolPtr(true),
 		},
-	}, WriteScopes(), handleSendEmail)
+	}, handleSendEmail)
 }
 
 // --- Tool args ---

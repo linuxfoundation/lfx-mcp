@@ -4,10 +4,6 @@
 // Package tools provides MCP tool implementations for the LFX MCP server.
 package tools
 
-import (
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-)
-
 // Scope constants used to gate tool access based on the caller's JWT scopes.
 // These MUST match the scopes defined on the Auth0 resource server for the
 // LFX MCP API (see auth0-terraform resource_servers.tf, lfx_mcp_api).
@@ -50,21 +46,6 @@ func ValidateScopes(configured []string, warn func(msg string, args ...any)) []s
 	return configured
 }
 
-// AddToolWithScopes registers a tool on the server. The requiredScopes
-// parameter is retained for documentation and call-site clarity, but scope
-// enforcement is performed at registration time in newServer() rather than at
-// dispatch time — tools the caller cannot invoke are simply not registered for
-// that request and therefore never appear in tools/list.
-func AddToolWithScopes[In, Out any](
-	server *mcp.Server,
-	tool *mcp.Tool,
-	requiredScopes []string,
-	handler mcp.ToolHandlerFor[In, Out],
-) {
-	_ = requiredScopes
-	mcp.AddTool(server, tool, handler)
-}
-
 // HasAnyScope returns true if tokenScopes contains at least one of the
 // required scopes.
 func HasAnyScope(tokenScopes, required []string) bool {
@@ -78,14 +59,4 @@ func HasAnyScope(tokenScopes, required []string) bool {
 		}
 	}
 	return false
-}
-
-// ReadScopes returns the scope list for read-only tools.
-func ReadScopes() []string {
-	return []string{ScopeRead}
-}
-
-// WriteScopes returns the scope list for write tools.
-func WriteScopes() []string {
-	return []string{ScopeManage}
 }

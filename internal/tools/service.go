@@ -33,24 +33,6 @@ const (
 	RelationAuditor = "auditor"
 )
 
-// AddServiceTool registers a tool that proxies to an internal service API.
-//
-// Service tools enforce two layers of authorization:
-//  1. MCP JWT scopes (read:all / manage:all) — enforced at registration time
-//     in newServer(). Tools the caller cannot invoke are not registered for
-//     that request and therefore never appear in tools/list.
-//  2. V2 access-check (OpenFGA) — checked inside the tool handler via
-//     [ServiceAuth.AuthorizeProject]. This verifies the user has the
-//     required project-level relationship (e.g., "writer" or "auditor").
-func AddServiceTool[In, Out any](
-	server *mcp.Server,
-	tool *mcp.Tool,
-	scopes []string,
-	handler mcp.ToolHandlerFor[In, Out],
-) {
-	AddToolWithScopes(server, tool, scopes, handler)
-}
-
 // --- Shared service tool infrastructure ---
 
 // ServiceAuth holds the shared infrastructure needed by all service API tools
@@ -121,16 +103,6 @@ func (s *ServiceAuth) AuthorizeProject(ctx context.Context, req *mcp.CallToolReq
 }
 
 // --- Helpers ---
-
-// RequireLFStaff checks that the user has the lf_staff custom claim. Returns
-// an error if the claim is absent or false (deny by default). Returns nil only
-// when the claim is present and true.
-func RequireLFStaff(req *mcp.CallToolRequest) error {
-	if req.Extra == nil || req.Extra.TokenInfo == nil || !IsLFStaff(req.Extra.TokenInfo) {
-		return fmt.Errorf("this tool is available to Linux Foundation staff only")
-	}
-	return nil
-}
 
 // IsLFStaff returns true if the authenticated user has the lf_staff custom
 // claim set to true in their JWT. This claim is injected by an Auth0 Action

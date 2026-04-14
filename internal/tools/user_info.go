@@ -121,7 +121,7 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 			IsError: true,
 		}, nil, nil
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Response body close errors are not actionable after reading.
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

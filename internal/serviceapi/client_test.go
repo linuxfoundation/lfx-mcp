@@ -63,7 +63,7 @@ func TestGet_BearerTokenHeader(t *testing.T) {
 			t.Errorf("expected 'Bearer test-token', got %q", r.Header.Get("Authorization"))
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"ok":true}`)) //nolint:errcheck // Test handler write errors are not actionable.
 	}))
 	defer server.Close()
 
@@ -97,7 +97,7 @@ func TestGet_QueryParams(t *testing.T) {
 			t.Errorf("expected page=2, got %q", r.URL.Query().Get("page"))
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`ok`))
+		_, _ = w.Write([]byte(`ok`)) //nolint:errcheck // Test handler write errors are not actionable.
 	}))
 	defer server.Close()
 
@@ -139,7 +139,7 @@ func TestPostJSON(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"id":"new-123"}`))
+		_, _ = w.Write([]byte(`{"id":"new-123"}`)) //nolint:errcheck // Test handler write errors are not actionable.
 	}))
 	defer server.Close()
 
@@ -189,7 +189,7 @@ func TestPostMultipart(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"run_id":"run-456"}`))
+		_, _ = w.Write([]byte(`{"run_id":"run-456"}`)) //nolint:errcheck // Test handler write errors are not actionable.
 	}))
 	defer server.Close()
 
@@ -214,7 +214,7 @@ func TestPostMultipart(t *testing.T) {
 func TestGet_NonSuccessStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`{"error":"not found"}`))
+		_, _ = w.Write([]byte(`{"error":"not found"}`)) //nolint:errcheck // Test handler write errors are not actionable.
 	}))
 	defer server.Close()
 

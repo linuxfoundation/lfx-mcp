@@ -81,7 +81,7 @@ func NewTokenExchangeClient(cfg TokenExchangeConfig) (*TokenExchangeClient, erro
 		return nil, fmt.Errorf("SubjectTokenType is required")
 	}
 	if cfg.Audience == "" {
-		return nil, fmt.Errorf("Audience is required")
+		return nil, fmt.Errorf("audience is required")
 	}
 
 	httpClient := cfg.HTTPClient
@@ -188,7 +188,7 @@ func (c *TokenExchangeClient) postTokenRequest(ctx context.Context, data url.Val
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute token request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Response body close errors are not actionable after reading.
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

@@ -40,7 +40,7 @@ func TestCheckAccess_Allow(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessCheckResponse{
+		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
 			Results: []string{"project:abc-123#writer@user:auth0|testuser\ttrue"},
 		})
 	}))
@@ -63,7 +63,7 @@ func TestCheckAccess_Allow(t *testing.T) {
 func TestCheckAccess_Deny(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessCheckResponse{
+		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
 			Results: []string{"project:abc-123#writer@user:auth0|testuser\tfalse"},
 		})
 	}))
@@ -95,7 +95,7 @@ func TestCheckAccess_Batch(t *testing.T) {
 
 		// Return results in a different order than requested (as the real API does).
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessCheckResponse{
+		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
 			Results: []string{
 				"project:bbb#auditor@user:auth0|testuser\tfalse",
 				"project:aaa#writer@user:auth0|testuser\ttrue",
@@ -133,16 +133,20 @@ func TestCheckAccess_HashSeparator(t *testing.T) {
 	var capturedBody accessCheckRequest
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&capturedBody)
+		if err := json.NewDecoder(r.Body).Decode(&capturedBody); err != nil {
+			t.Errorf("failed to decode request body: %v", err)
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessCheckResponse{
+		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
 			Results: []string{"project:my-uuid#writer@user:auth0|testuser\ttrue"},
 		})
 	}))
 	defer server.Close()
 
 	client := NewAccessCheckClient(server.URL, server.Client())
-	client.CheckProjectAccess(context.Background(), "token", "my-uuid", "writer")
+	_ = client.CheckProjectAccess(context.Background(), "token", "my-uuid", "writer") //nolint:errcheck // Return value intentionally ignored; test checks side effects.
 
 	if len(capturedBody.Requests) != 1 {
 		t.Fatalf("expected 1 request, got %d", len(capturedBody.Requests))
@@ -156,7 +160,7 @@ func TestCheckAccess_HashSeparator(t *testing.T) {
 func TestCheckAccess_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error":"invalid token"}`))
+		_, _ = w.Write([]byte(`{"error":"invalid token"}`)) //nolint:errcheck // Test handler write errors are not actionable.
 	}))
 	defer server.Close()
 
@@ -170,7 +174,7 @@ func TestCheckAccess_HTTPError(t *testing.T) {
 func TestCheckAccess_MalformedJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`not json`))
+		_, _ = w.Write([]byte(`not json`)) //nolint:errcheck // Test handler write errors are not actionable.
 	}))
 	defer server.Close()
 
@@ -185,7 +189,7 @@ func TestCheckAccess_ResultCountMismatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		// Return 1 result for 2 requests.
-		json.NewEncoder(w).Encode(accessCheckResponse{
+		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
 			Results: []string{"project:a#writer@user:auth0|testuser\ttrue"},
 		})
 	}))
@@ -201,7 +205,7 @@ func TestCheckAccess_ResultCountMismatch(t *testing.T) {
 func TestCheckProjectAccess_Allow(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessCheckResponse{
+		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
 			Results: []string{"project:uuid-123#writer@user:auth0|testuser\ttrue"},
 		})
 	}))
@@ -217,7 +221,7 @@ func TestCheckProjectAccess_Allow(t *testing.T) {
 func TestCheckProjectAccess_Deny(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessCheckResponse{
+		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
 			Results: []string{"project:uuid-123#writer@user:auth0|testuser\tfalse"},
 		})
 	}))

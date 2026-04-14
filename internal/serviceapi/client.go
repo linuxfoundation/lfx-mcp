@@ -151,7 +151,7 @@ func (c *Client) do(req *http.Request) ([]byte, int, error) {
 	if err != nil {
 		return nil, 0, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Response body close errors are not actionable after reading.
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

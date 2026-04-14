@@ -133,7 +133,11 @@ func TestCheckAccess_HashSeparator(t *testing.T) {
 	var capturedBody accessCheckRequest
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewDecoder(r.Body).Decode(&capturedBody) //nolint:errcheck // Test handler decode errors are not actionable.
+		if err := json.NewDecoder(r.Body).Decode(&capturedBody); err != nil {
+			t.Errorf("failed to decode request body: %v", err)
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
 			Results: []string{"project:my-uuid#writer@user:auth0|testuser\ttrue"},

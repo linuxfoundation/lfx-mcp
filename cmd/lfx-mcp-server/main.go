@@ -151,6 +151,7 @@ func main() {
 	// Define flags.
 	f := flag.NewFlagSet("lfx-mcp-server", flag.ExitOnError)
 	f.Usage = func() {
+		// Writing usage text to the flag output is best-effort; errors here are not recoverable.
 		_, _ = fmt.Fprintf(f.Output(), "lfx-mcp-server %s\n\nUsage:\n", Version)
 		f.PrintDefaults()
 	}

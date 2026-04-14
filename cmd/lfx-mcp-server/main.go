@@ -545,10 +545,11 @@ func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middle
 
 // newServer creates and configures a new MCP server with registered tools.
 //
-// callerScopes, when non-nil, restricts which tools are registered to those
-// the caller is authorized to invoke. A nil value (stdio mode / no auth)
-// registers all enabled tools without restriction.
-func newServer(cfg Config, serviceName string, callerScopes []string) *mcp.Server {
+// callerToken, when non-nil, restricts which tools are registered to those
+// the caller is authorized to invoke based on their JWT scopes and custom
+// claims. A nil value (stdio mode / no auth) registers all enabled tools
+// without restriction.
+func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "lfx-mcp-server",
 		Version: Version,
@@ -560,10 +561,15 @@ func newServer(cfg Config, serviceName string, callerScopes []string) *mcp.Serve
 	// Add middleware for OTel instrumentation and logging of all MCP method calls.
 	server.AddReceivingMiddleware(mcpOTelMiddleware(logger, serviceName))
 
-	// Determine which scope classes the caller holds. A nil callerScopes means
-	// no auth (stdio mode) — register everything.
-	canRead := callerScopes == nil || tools.HasAnyScope(callerScopes, tools.ReadScopes())
-	canManage := callerScopes == nil || tools.HasAnyScope(callerScopes, tools.WriteScopes())
+	// Determine which scope classes and custom claims the caller holds.
+	// A nil callerToken means no auth (stdio mode) — register everything.
+	var callerScopes []string
+	if callerToken != nil {
+		callerScopes = callerToken.Scopes
+	}
+	canRead := callerToken == nil || tools.HasAnyScope(callerScopes, tools.ReadScopes())
+	canManage := callerToken == nil || tools.HasAnyScope(callerScopes, tools.WriteScopes())
+	isStaff := callerToken == nil || tools.IsLFStaff(callerToken)
 
 	// Register tools based on configuration and caller scopes.
 	enabledTools := make(map[string]bool)
@@ -721,7 +727,7 @@ func newServer(cfg Config, serviceName string, callerScopes []string) *mcp.Serve
 	if enabledTools["send_email"] && canManage {
 		tools.RegisterSendEmail(server)
 	}
-	if enabledTools["query_lfx_lens"] && canRead {
+	if enabledTools["query_lfx_lens"] && canRead && isStaff {
 		tools.RegisterQueryLFXLens(server)
 	}
 
@@ -731,7 +737,7 @@ func newServer(cfg Config, serviceName string, callerScopes []string) *mcp.Serve
 func runStdioServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(context.Context) error) {
 	ctx := context.Background()
 
-	// Create the MCP server. Pass nil scopes so all enabled tools are registered
+	// Create the MCP server. Pass nil token so all enabled tools are registered
 	// without restriction (stdio has no auth context).
 	server := newServer(cfg, otelCfg.ServiceName, nil)
 
@@ -753,13 +759,10 @@ func runStdioServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(cont
 
 func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(context.Context) error) {
 	// Create server factory function for stateless mode. Each incoming request
-	// gets a fresh server with tools filtered to the caller's scopes.
+	// gets a fresh server with tools filtered to the caller's token (scopes and
+	// custom claims).
 	createServer := func(r *http.Request) *mcp.Server {
-		var callerScopes []string
-		if ti := auth.TokenInfoFromContext(r.Context()); ti != nil {
-			callerScopes = ti.Scopes
-		}
-		return newServer(cfg, otelCfg.ServiceName, callerScopes)
+		return newServer(cfg, otelCfg.ServiceName, auth.TokenInfoFromContext(r.Context()))
 	}
 
 	// Create streamable HTTP handler with stateless mode.

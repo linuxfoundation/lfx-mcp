@@ -83,7 +83,7 @@ func (c *AccessCheckClient) CheckAccess(ctx context.Context, token string, reque
 	if err != nil {
 		return nil, fmt.Errorf("access-check request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Response body close errors are not actionable after reading.
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

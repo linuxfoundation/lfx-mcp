@@ -94,10 +94,10 @@ func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args Quer
 		"session_id":      req.Extra.TokenInfo.UserID + "-" + time.Now().UTC().Format("2006-01-02T15:04:05Z"),
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("Lens API call failed: %w", err)
+		return nil, nil, fmt.Errorf("lens API call failed: %w", err)
 	}
 	if statusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("Lens service returned status %d: %s", statusCode, string(body))
+		return nil, nil, fmt.Errorf("lens service returned status %d: %s", statusCode, string(body))
 	}
 
 	var resp lensQueryResponse

@@ -151,7 +151,7 @@ func main() {
 	// Define flags.
 	f := flag.NewFlagSet("lfx-mcp-server", flag.ExitOnError)
 	f.Usage = func() {
-		fmt.Fprintf(f.Output(), "lfx-mcp-server %s\n\nUsage:\n", Version)
+		_, _ = fmt.Fprintf(f.Output(), "lfx-mcp-server %s\n\nUsage:\n", Version)
 		f.PrintDefaults()
 	}
 	f.String("mode", "stdio", "Transport mode: stdio or http")

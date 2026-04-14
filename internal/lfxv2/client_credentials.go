@@ -62,7 +62,7 @@ func NewClientCredentialsClient(cfg ClientCredentialsConfig) (*ClientCredentials
 		return nil, fmt.Errorf("either ClientSecret or ClientAssertionSigningKey is required")
 	}
 	if cfg.Audience == "" {
-		return nil, fmt.Errorf("Audience is required")
+		return nil, fmt.Errorf("audience is required")
 	}
 
 	httpClient := cfg.HTTPClient
@@ -137,7 +137,7 @@ func (c *ClientCredentialsClient) fetchToken(ctx context.Context) (token string,
 	if err != nil {
 		return "", 0, fmt.Errorf("client credentials request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Response body close errors are not actionable after reading.
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

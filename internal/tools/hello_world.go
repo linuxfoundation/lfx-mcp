@@ -19,7 +19,7 @@ type HelloWorldArgs struct {
 
 // RegisterHelloWorld registers the hello_world tool with the MCP server.
 func RegisterHelloWorld(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "hello_world",
 		Description: "A simple hello world tool that greets the user with an optional custom message",
 		Annotations: &mcp.ToolAnnotations{
@@ -27,7 +27,7 @@ func RegisterHelloWorld(server *mcp.Server) {
 			ReadOnlyHint:  true,
 			OpenWorldHint: boolPtr(false),
 		},
-	}, ReadScopes(), handleHelloWorld)
+	}, handleHelloWorld)
 }
 
 // handleHelloWorld implements the hello_world tool logic.

@@ -57,7 +57,7 @@ type DeleteMembershipKeyContactArgs struct {
 // RegisterCreateMembershipKeyContact registers the create_membership_key_contact
 // tool with the MCP server.
 func RegisterCreateMembershipKeyContact(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_membership_key_contact",
 		Description: "Add a key contact to a membership. The contact is resolved by email address; if no matching Salesforce Contact exists one will be created using the supplied first name, last name, and title. Requires writer permission on the project.",
 		Annotations: &mcp.ToolAnnotations{
@@ -65,13 +65,13 @@ func RegisterCreateMembershipKeyContact(server *mcp.Server) {
 			ReadOnlyHint:    false,
 			DestructiveHint: boolPtr(false),
 		},
-	}, WriteScopes(), handleCreateMembershipKeyContact)
+	}, handleCreateMembershipKeyContact)
 }
 
 // RegisterUpdateMembershipKeyContact registers the update_membership_key_contact
 // tool with the MCP server.
 func RegisterUpdateMembershipKeyContact(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_membership_key_contact",
 		Description: "Update an existing key contact on a membership. Only the fields that are provided will be changed. Requires writer permission on the project.",
 		Annotations: &mcp.ToolAnnotations{
@@ -80,13 +80,13 @@ func RegisterUpdateMembershipKeyContact(server *mcp.Server) {
 			DestructiveHint: boolPtr(true),
 			IdempotentHint:  true,
 		},
-	}, WriteScopes(), handleUpdateMembershipKeyContact)
+	}, handleUpdateMembershipKeyContact)
 }
 
 // RegisterDeleteMembershipKeyContact registers the delete_membership_key_contact
 // tool with the MCP server.
 func RegisterDeleteMembershipKeyContact(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "delete_membership_key_contact",
 		Description: "Remove a key contact from a membership. This also invalidates the key-contacts cache for the membership. Requires writer permission on the project.",
 		Annotations: &mcp.ToolAnnotations{
@@ -94,7 +94,7 @@ func RegisterDeleteMembershipKeyContact(server *mcp.Server) {
 			ReadOnlyHint:    false,
 			DestructiveHint: boolPtr(true),
 		},
-	}, WriteScopes(), handleDeleteMembershipKeyContact)
+	}, handleDeleteMembershipKeyContact)
 }
 
 // --- Handlers ---

@@ -117,26 +117,26 @@ func toB2bOrgView(o *memberservice.B2bOrgResponse) b2bOrgView {
 
 // RegisterSearchB2bOrgs registers the search_b2b_orgs tool with the MCP server.
 func RegisterSearchB2bOrgs(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_b2b_orgs",
 		Description: "Search and list B2B organizations. Use this tool when users ask about B2B orgs, member companies, or organizations across LFX. Supports search_name for case-insensitive name substring search and sort order (newest, name, last_modified). Uses cursor-based pagination via page_token.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search B2B Orgs",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleSearchB2bOrgs)
+	}, handleSearchB2bOrgs)
 }
 
 // RegisterListB2bOrgMemberships registers the list_b2b_org_memberships tool with the MCP server.
 func RegisterListB2bOrgMemberships(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_b2b_org_memberships",
 		Description: "List all project memberships for a given B2B organization across all projects. Use this tool when users ask which projects or foundations a B2B org is a member of, or want to see all memberships for a company. Requires b2b_org_uid. Uses cursor-based pagination via page_token.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "List B2B Org Memberships",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleListB2bOrgMemberships)
+	}, handleListB2bOrgMemberships)
 }
 
 // handleSearchB2bOrgs implements the search_b2b_orgs tool logic.

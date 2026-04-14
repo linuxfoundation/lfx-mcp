@@ -45,122 +45,122 @@ func SetMeetingConfig(cfg *MeetingConfig) {
 
 // RegisterSearchMeetings registers the search_meetings tool with the MCP server.
 func RegisterSearchMeetings(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_meetings",
 		Description: "Search for LFX meetings using the query service. Supports filtering by project, committee, date range, and other fields.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Meetings",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleSearchMeetings)
+	}, handleSearchMeetings)
 }
 
 // RegisterGetMeeting registers the get_meeting tool with the MCP server.
 func RegisterGetMeeting(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_meeting",
 		Description: "Get an LFX meeting by its UID using the query service.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Meeting",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetMeeting)
+	}, handleGetMeeting)
 }
 
 // RegisterSearchMeetingRegistrants registers the search_meeting_registrants tool with the MCP server.
 func RegisterSearchMeetingRegistrants(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_meeting_registrants",
 		Description: "Search for LFX meeting registrants using the query service. Supports filtering by meeting, committee, project, date range, and other fields.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Meeting Registrants",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleSearchMeetingRegistrants)
+	}, handleSearchMeetingRegistrants)
 }
 
 // RegisterGetMeetingRegistrant registers the get_meeting_registrant tool with the MCP server.
 func RegisterGetMeetingRegistrant(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_meeting_registrant",
 		Description: "Get an LFX meeting registrant by its UID using the query service.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Meeting Registrant",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetMeetingRegistrant)
+	}, handleGetMeetingRegistrant)
 }
 
 // RegisterSearchPastMeetingParticipants registers the search_past_meeting_participants tool with the MCP server.
 func RegisterSearchPastMeetingParticipants(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meeting_participants",
 		Description: "Search for LFX past meeting participants using the query service. Supports filtering by meeting, committee, project, and other fields.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Past Meeting Participants",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleSearchPastMeetingParticipants)
+	}, handleSearchPastMeetingParticipants)
 }
 
 // RegisterGetPastMeetingParticipant registers the get_past_meeting_participant tool with the MCP server.
 func RegisterGetPastMeetingParticipant(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_past_meeting_participant",
 		Description: "Get an LFX past meeting participant by its UID using the query service.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Past Meeting Participant",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetPastMeetingParticipant)
+	}, handleGetPastMeetingParticipant)
 }
 
 // RegisterSearchPastMeetingTranscripts registers the search_past_meeting_transcripts tool with the MCP server.
 func RegisterSearchPastMeetingTranscripts(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meeting_transcripts",
 		Description: "Search for LFX past meeting transcripts using the query service. Supports filtering by meeting, committee, project, and other fields.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Past Meeting Transcripts",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleSearchPastMeetingTranscripts)
+	}, handleSearchPastMeetingTranscripts)
 }
 
 // RegisterGetPastMeetingTranscript registers the get_past_meeting_transcript tool with the MCP server.
 func RegisterGetPastMeetingTranscript(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_past_meeting_transcript",
 		Description: "Get an LFX past meeting transcript by its UID using the query service.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Past Meeting Transcript",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetPastMeetingTranscript)
+	}, handleGetPastMeetingTranscript)
 }
 
 // RegisterSearchPastMeetingSummaries registers the search_past_meeting_summaries tool with the MCP server.
 func RegisterSearchPastMeetingSummaries(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meeting_summaries",
 		Description: "Search for LFX past meeting summaries using the query service. Supports filtering by meeting, committee, project, and other fields.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Past Meeting Summaries",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleSearchPastMeetingSummaries)
+	}, handleSearchPastMeetingSummaries)
 }
 
 // RegisterGetPastMeetingSummary registers the get_past_meeting_summary tool with the MCP server.
 func RegisterGetPastMeetingSummary(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_past_meeting_summary",
 		Description: "Get an LFX past meeting summary by its UID using the query service.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Past Meeting Summary",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetPastMeetingSummary)
+	}, handleGetPastMeetingSummary)
 }
 
 // SearchMeetingsArgs defines the input parameters for the search_meetings tool.

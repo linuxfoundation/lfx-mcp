@@ -34,14 +34,14 @@ func SetUserInfoConfig(cfg *UserInfoConfig) {
 
 // RegisterUserInfo registers the user_info tool with the MCP server.
 func RegisterUserInfo(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "user_info",
 		Description: "Get the authenticated user's OpenID Connect profile by proxying to the /userinfo endpoint",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "User Info",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleUserInfo)
+	}, handleUserInfo)
 }
 
 // handleUserInfo implements the user_info tool logic.

@@ -42,7 +42,7 @@ Client (Claude, etc.) → JSON-RPC 2.0 → stdio transport → MCP Server → To
 ### Key Design Principles
 
 1. **Simplicity**: Minimal abstraction layers using the official MCP Go SDK
-2. **Extensibility**: Easy to add new tools through the `AddToolWithScopes` pattern
+2. **Extensibility**: Easy to add new tools through `mcp.AddTool` and `newServer` scope gating
 3. **Type Safety**: Strong typing with automatic schema generation
 4. **Testability**: Simple stdio testing via JSON-RPC messages
 5. **Observability**: Structured JSON logging with optional debug mode
@@ -226,7 +226,7 @@ mcpLogger.Error("tool operation failed", "error", err)
 
 ## Adding New Tools
 
-The MCP Go SDK provides a simple pattern for adding tools. Tools are implemented in the `internal/tools` package and registered with the server. Every tool **must** be registered via `AddToolWithScopes` (defined in `internal/tools/scopes.go`) so that scope enforcement is applied automatically in HTTP mode. In stdio mode (no auth), the scope check is skipped.
+The MCP Go SDK provides a simple pattern for adding tools. Tools are implemented in the `internal/tools` package and registered with the server. Each `Register<ToolName>` function calls `mcp.AddTool` directly. Scope enforcement happens exclusively at registration time in `newServer()` — tools the caller cannot invoke are simply not registered for that request and therefore never appear in `tools/list`.
 
 ### Scope Enforcement
 
@@ -237,17 +237,20 @@ Two scope constants are defined in `internal/tools/scopes.go`:
 | `ScopeRead`   | `read:all`   | Tools with `ReadOnlyHint: true`                     |
 | `ScopeManage` | `manage:all` | Tools where `ReadOnlyHint` is `false` (the default) |
 
-Use the helper functions `ReadScopes()` and `WriteScopes()` when registering tools.
+`newServer()` computes two booleans from the caller's JWT scopes and gates each tool registration on the appropriate one:
 
-When a caller's JWT token lacks the required scope, the tool returns a structured `IsError` result (not a JSON-RPC error), keeping the failure inside the MCP tool-call protocol.
+- `canManage` — true when the token holds `manage:all`.
+- `canRead` — true when `canManage` is true **or** the token holds `read:all`. A `manage:all` token implicitly has read access.
+
+In stdio mode (no auth token), both flags are `true` and all enabled tools are registered without restriction.
 
 ### Tool Implementation Steps
 
 1. **Create a new file** in `internal/tools/` (e.g., `my_tool.go`)
 2. **Define the input struct** with JSON schema tags
 3. **Implement the handler function** with tool logic
-4. **Create a registration function** using `AddToolWithScopes` with the correct scope
-5. **Call the registration function** in `main.go`
+4. **Create a registration function** calling `mcp.AddTool` directly
+5. **Call the registration function** in `main.go`, gated on the appropriate scope boolean (`canRead` or `canManage`)
 
 ### Example Tool Implementation
 
@@ -274,14 +277,14 @@ type MyToolArgs struct {
 
 // RegisterMyTool registers the my_tool tool with the MCP server.
 func RegisterMyTool(server *mcp.Server) {
-    AddToolWithScopes(server, &mcp.Tool{
+    mcp.AddTool(server, &mcp.Tool{
         Name:        "my_tool",
         Description: "Brief description of what the tool does",
         Annotations: &mcp.ToolAnnotations{
             Title:        "My Tool",
             ReadOnlyHint: true,
         },
-    }, ReadScopes(), handleMyTool)
+    }, handleMyTool)
 }
 
 // handleMyTool implements the my_tool tool logic.
@@ -296,18 +299,20 @@ func handleMyTool(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs
 }
 ```
 
-For a **write tool** (where `ReadOnlyHint` is `false` / unset), use `WriteScopes()` instead:
+For a **write tool** (where `ReadOnlyHint` is `false` / unset):
 
 ```go
 func RegisterMyWriteTool(server *mcp.Server) {
-    AddToolWithScopes(server, &mcp.Tool{
+    mcp.AddTool(server, &mcp.Tool{
         Name:        "create_thing",
         Description: "Create a new thing",
         Annotations: &mcp.ToolAnnotations{
             Title:           "Create Thing",
+            // DestructiveHint: always set explicitly on write tools.
+            // false for create operations; true for update and delete.
             DestructiveHint: boolPtr(false),
         },
-    }, WriteScopes(), handleCreateThing)
+    }, handleCreateThing)
 }
 ```
 
@@ -580,7 +585,7 @@ func(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallT
 
 1. **Add Tools**: Create new tools in `internal/tools/` following the established pattern
 2. **Tool Organization**: One tool per file (e.g., `hello_world.go`, `my_tool.go`)
-3. **Registration Pattern**: Each tool should have a `Register<ToolName>(server)` function that calls `AddToolWithScopes` with `ReadScopes()` or `WriteScopes()` — never call `mcp.AddTool` directly
+3. **Registration Pattern**: Each tool should have a `Register<ToolName>(server)` function that calls `mcp.AddTool` directly — never use wrapper functions for scope enforcement
 4. **Schema Tags**: Always include descriptive `jsonschema` tags
 5. **Testing**: Test new tools with the test script (`./scripts/test_server.sh`)
 6. **Documentation**: Update README.md for user-facing changes

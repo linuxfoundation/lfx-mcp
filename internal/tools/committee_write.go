@@ -135,19 +135,19 @@ type DeleteCommitteeMemberArgs struct {
 
 // RegisterCreateCommittee registers the create_committee tool with the MCP server.
 func RegisterCreateCommittee(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_committee",
 		Description: "Create a new committee under a project.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Create Committee",
 			DestructiveHint: boolPtr(false),
 		},
-	}, WriteScopes(), handleCreateCommittee)
+	}, handleCreateCommittee)
 }
 
 // RegisterUpdateCommittee registers the update_committee tool with the MCP server.
 func RegisterUpdateCommittee(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_committee",
 		Description: "Update a committee's base information (name, category, visibility, etc.). Only provided fields are changed; omitted fields keep their current values.",
 		Annotations: &mcp.ToolAnnotations{
@@ -155,12 +155,12 @@ func RegisterUpdateCommittee(server *mcp.Server) {
 			DestructiveHint: boolPtr(true),
 			IdempotentHint:  true,
 		},
-	}, WriteScopes(), handleUpdateCommittee)
+	}, handleUpdateCommittee)
 }
 
 // RegisterUpdateCommitteeSettings registers the update_committee_settings tool with the MCP server.
 func RegisterUpdateCommitteeSettings(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_committee_settings",
 		Description: "Update a committee's settings (member visibility, email requirements, meeting attendee defaults). Only provided fields are changed; omitted fields keep their current values.",
 		Annotations: &mcp.ToolAnnotations{
@@ -168,36 +168,36 @@ func RegisterUpdateCommitteeSettings(server *mcp.Server) {
 			DestructiveHint: boolPtr(true),
 			IdempotentHint:  true,
 		},
-	}, WriteScopes(), handleUpdateCommitteeSettings)
+	}, handleUpdateCommitteeSettings)
 }
 
 // RegisterDeleteCommittee registers the delete_committee tool with the MCP server.
 func RegisterDeleteCommittee(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "delete_committee",
 		Description: "Delete a committee by its UID.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Delete Committee",
 			DestructiveHint: boolPtr(true),
 		},
-	}, WriteScopes(), handleDeleteCommittee)
+	}, handleDeleteCommittee)
 }
 
 // RegisterCreateCommitteeMember registers the create_committee_member tool with the MCP server.
 func RegisterCreateCommitteeMember(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_committee_member",
 		Description: "Add a new member to a committee.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Create Committee Member",
 			DestructiveHint: boolPtr(false),
 		},
-	}, WriteScopes(), handleCreateCommitteeMember)
+	}, handleCreateCommitteeMember)
 }
 
 // RegisterUpdateCommitteeMember registers the update_committee_member tool with the MCP server.
 func RegisterUpdateCommitteeMember(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_committee_member",
 		Description: "Update an existing committee member's information. Only provided fields are changed; omitted fields keep their current values.",
 		Annotations: &mcp.ToolAnnotations{
@@ -205,19 +205,19 @@ func RegisterUpdateCommitteeMember(server *mcp.Server) {
 			DestructiveHint: boolPtr(true),
 			IdempotentHint:  true,
 		},
-	}, WriteScopes(), handleUpdateCommitteeMember)
+	}, handleUpdateCommitteeMember)
 }
 
 // RegisterDeleteCommitteeMember registers the delete_committee_member tool with the MCP server.
 func RegisterDeleteCommitteeMember(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "delete_committee_member",
 		Description: "Remove a member from a committee.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Delete Committee Member",
 			DestructiveHint: boolPtr(true),
 		},
-	}, WriteScopes(), handleDeleteCommitteeMember)
+	}, handleDeleteCommitteeMember)
 }
 
 // --- Handler helpers ---

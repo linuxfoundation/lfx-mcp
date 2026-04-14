@@ -54,62 +54,62 @@ func handleServiceResponse(body []byte, statusCode int) (*mcp.CallToolResult, er
 
 // RegisterListDiscordRoles registers the list_discord_roles tool.
 func RegisterListDiscordRoles(server *mcp.Server) {
-	AddServiceTool(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_discord_roles",
 		Description: "List all roles in the project's Discord guild. Use this to discover what roles exist before assigning one, or when the user asks about the role structure.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:        "List Discord Roles",
+			Title:           "List Discord Roles",
 			DestructiveHint: boolPtr(false),
 		},
-	}, WriteScopes(), handleListDiscordRoles)
+	}, handleListDiscordRoles)
 }
 
 // RegisterFindDiscordRole registers the find_discord_role tool.
 func RegisterFindDiscordRole(server *mcp.Server) {
-	AddServiceTool(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "find_discord_role",
 		Description: "Find a Discord role by name. Use this when you know the role name and need its ID for assignment or checking.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:        "Find Discord Role",
+			Title:           "Find Discord Role",
 			DestructiveHint: boolPtr(false),
 		},
-	}, WriteScopes(), handleFindDiscordRole)
+	}, handleFindDiscordRole)
 }
 
 // RegisterFindDiscordUser registers the find_discord_user tool.
 func RegisterFindDiscordUser(server *mcp.Server) {
-	AddServiceTool(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "find_discord_user",
 		Description: "Find a Discord guild member by name and optional email. Use this to match a person (e.g. a key contact or committee member) to their Discord account. Returns up to 5 candidates ranked by similarity score — the caller must decide which match is correct.",
 		Annotations: &mcp.ToolAnnotations{
-			Title:        "Find Discord User",
+			Title:           "Find Discord User",
 			DestructiveHint: boolPtr(false),
 		},
-	}, WriteScopes(), handleFindDiscordUser)
+	}, handleFindDiscordUser)
 }
 
 // RegisterCheckDiscordUserRole registers the check_discord_user_role tool.
 func RegisterCheckDiscordUserRole(server *mcp.Server) {
-	AddServiceTool(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "check_discord_user_role",
 		Description: "Check whether a Discord user already has a specific role. Call this before assign_discord_role to avoid redundant assignments. Depends on: find_discord_user (for user_id), find_discord_role or list_discord_roles (for role_id).",
 		Annotations: &mcp.ToolAnnotations{
-			Title:        "Check Discord User Role",
+			Title:           "Check Discord User Role",
 			DestructiveHint: boolPtr(false),
 		},
-	}, WriteScopes(), handleCheckDiscordUserRole)
+	}, handleCheckDiscordUserRole)
 }
 
 // RegisterAssignDiscordRole registers the assign_discord_role tool.
 func RegisterAssignDiscordRole(server *mcp.Server) {
-	AddServiceTool(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "assign_discord_role",
 		Description: "Assign a Discord role to a user. Adding users to private channels means assigning them the corresponding role. Depends on: check_discord_user_role (call first to confirm user does not already have the role), find_discord_user (for user_id), find_discord_role or list_discord_roles (for role_id).",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Assign Discord Role",
 			DestructiveHint: boolPtr(false),
 		},
-	}, WriteScopes(), handleAssignDiscordRole)
+	}, handleAssignDiscordRole)
 }
 
 // --- Tool args ---

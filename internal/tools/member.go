@@ -197,74 +197,74 @@ func toKeyContactView(c *memberservice.ProjectKeyContactResponse) keyContactView
 
 // RegisterSearchMembers registers the search_members tool with the MCP server.
 func RegisterSearchMembers(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_members",
 		Description: "List and search memberships for a project. Use this tool when users ask about members, memberships, or member organizations for a specific project. Requires project_uid. Supports search_name for case-insensitive company name substring search, tier_uid filter, and sort order (newest, name, last_modified). Uses cursor-based pagination via page_token.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Members",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleSearchMembers)
+	}, handleSearchMembers)
 }
 
 // RegisterGetMemberMembership registers the get_member_membership tool with the MCP server.
 func RegisterGetMemberMembership(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_member_membership",
 		Description: "Get a single membership by project UID and membership ID. Use this when users ask for details about a specific membership.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Member Membership",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetMemberMembership)
+	}, handleGetMemberMembership)
 }
 
 // RegisterListProjectTiers registers the list_project_tiers tool with the MCP server.
 func RegisterListProjectTiers(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_project_tiers",
 		Description: "List all membership tiers (e.g. Gold, Silver, Bronze) defined for a project. Use this to discover available tier UIDs before filtering search_members by tier_uid.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "List Project Tiers",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleListProjectTiers)
+	}, handleListProjectTiers)
 }
 
 // RegisterGetProjectTier registers the get_project_tier tool with the MCP server.
 func RegisterGetProjectTier(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_project_tier",
 		Description: "Get a single membership tier by project UID and tier UID.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Project Tier",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetProjectTier)
+	}, handleGetProjectTier)
 }
 
 // RegisterGetMembershipKeyContacts registers the get_membership_key_contacts tool with the MCP server.
 func RegisterGetMembershipKeyContacts(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_membership_key_contacts",
 		Description: "Get key contacts for a membership by project UID and membership ID. Returns the people associated with a membership such as primary contacts and board members.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Membership Key Contacts",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetMembershipKeyContacts)
+	}, handleGetMembershipKeyContacts)
 }
 
 // RegisterGetMembershipKeyContact registers the get_membership_key_contact tool with the MCP server.
 func RegisterGetMembershipKeyContact(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_membership_key_contact",
 		Description: "Get a single key contact for a membership by project UID, membership UID, and key contact UID.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Membership Key Contact",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetMembershipKeyContact)
+	}, handleGetMembershipKeyContact)
 }
 
 // handleSearchMembers implements the search_members tool logic.

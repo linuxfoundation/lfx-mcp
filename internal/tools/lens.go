@@ -32,14 +32,14 @@ func SetLensConfig(cfg *LensConfig) {
 
 // RegisterQueryLFXLens registers the query_lfx_lens tool.
 func RegisterQueryLFXLens(server *mcp.Server) {
-	AddServiceTool(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "query_lfx_lens",
 		Description: "Ask natural language questions about a project's data. LFX Lens covers the following domains: events, education, activity, contributors, maintainers, affiliations, organizations, project health, and project value. It can answer both straightforward text-to-SQL queries and more exploratory, multi-step data questions. Pass your question directly — Lens handles data exploration, SQL generation, and interpretation for each domain. Use search_projects first to find the project slug.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "LFX Lens Query",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleLFXLensQuery)
+	}, handleLFXLensQuery)
 }
 
 // --- Tool args ---
@@ -50,16 +50,12 @@ type QueryLFXLensArgs struct {
 	Input       string `json:"input" jsonschema:"Natural language query about the project (e.g. 'How many active maintainers does this project have?')"`
 }
 
-// lensWorkflowRequest is the JSON body sent to the Lens workflow endpoint.
-type lensWorkflowRequest struct {
-	Input          string                 `json:"input"`
-	AdditionalData lensWorkflowAdditional `json:"additional_data"`
-}
-
+// lensWorkflowAdditional is the additional_data payload sent to the Lens workflow endpoint.
 type lensWorkflowAdditional struct {
 	Foundation lensFoundation `json:"foundation"`
 }
 
+// lensFoundation holds the project slug for the Lens workflow request.
 type lensFoundation struct {
 	Slug string `json:"slug"`
 }
@@ -76,11 +72,6 @@ type lensQueryResponse struct {
 func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args QueryLFXLensArgs) (*mcp.CallToolResult, any, error) {
 	if lensConfig == nil {
 		return nil, nil, fmt.Errorf("LFX Lens tools not configured")
-	}
-
-	// Staff check — LFX Lens is staff-only.
-	if err := RequireLFStaff(req); err != nil {
-		return nil, nil, err
 	}
 
 	// Project-level authorization — auditor relation required.

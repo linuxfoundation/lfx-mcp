@@ -184,6 +184,16 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		PageToken *string              `json:"page_token,omitempty"`
 	}
 
+	// Strip the unreliable total_members field from indexed committee data. The
+	// query service index does not maintain an accurate member count, so this
+	// field is always zero regardless of actual membership. Removing it prevents
+	// MCP clients from incorrectly concluding that a committee has no members.
+	for _, r := range result.Resources {
+		if data, ok := r.Data.(map[string]any); ok {
+			delete(data, "total_members")
+		}
+	}
+
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
@@ -283,6 +293,14 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		logger.ErrorContext(ctx, "getting privileged committee settings failed, returning base only", "error", err, "uid", args.UID)
 	} else {
 		committeeSettings = settingsResult.CommitteeSettings
+	}
+
+	// Strip the unreliable TotalMembers field from the committee base. The
+	// service does not populate this count reliably, so it is always zero
+	// regardless of actual membership. Removing it prevents MCP clients from
+	// incorrectly concluding that a committee has no members.
+	if baseResult.CommitteeBase != nil {
+		baseResult.CommitteeBase.TotalMembers = nil
 	}
 
 	type committeeResult struct {

@@ -27,10 +27,6 @@ const (
 	// RelationWriter is required for tools that mutate project resources
 	// (e.g., member onboarding).
 	RelationWriter = "writer"
-
-	// RelationAuditor is required for tools that read privileged project
-	// data (e.g., LFX Lens analytics).
-	RelationAuditor = "auditor"
 )
 
 // --- Shared service tool infrastructure ---

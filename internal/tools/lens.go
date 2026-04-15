@@ -74,11 +74,11 @@ func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args Quer
 		return nil, nil, fmt.Errorf("LFX Lens tools not configured")
 	}
 
-	// Project-level authorization — auditor relation required.
-	ctx, err := lensConfig.AuthorizeProject(ctx, req, args.ProjectSlug, RelationAuditor)
-	if err != nil {
-		return nil, nil, err
-	}
+	// No project-level access-check: the tool is already restricted to LF
+	// staff at registration time (isStaff gate in newServer), and LF staff
+	// are being granted auditor on all projects. The self-service auditor
+	// relation check is omitted because it does not exist for non-onboarded
+	// projects, which would incorrectly block legitimate staff queries.
 
 	additionalData, err := json.Marshal(lensWorkflowAdditional{
 		Foundation: lensFoundation{Slug: args.ProjectSlug},

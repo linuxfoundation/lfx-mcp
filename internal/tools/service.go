@@ -83,7 +83,7 @@ func (s *ServiceAuth) AuthorizeProject(ctx context.Context, req *mcp.CallToolReq
 	projectUUID, err := s.SlugResolver.Resolve(ctx, clients, slug)
 	if err != nil {
 		logger.Error("failed to resolve project slug", "error", err, "slug", slug)
-		return ctx, fmt.Errorf("failed to resolve project slug %q: %s", slug, accessDeniedMessage)
+		return ctx, slugResolveError(slug, err)
 	}
 
 	// Get exchanged V2 token for access-check.

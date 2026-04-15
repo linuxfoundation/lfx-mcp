@@ -80,6 +80,13 @@ func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args Quer
 	// relation check is omitted because it does not exist for non-onboarded
 	// projects, which would incorrectly block legitimate staff queries.
 
+	// Derive a user ID for the Lens API. In stdio mode TokenInfo is nil
+	// (unauthenticated local use), so fall back to a stable anonymous value.
+	userID := AnonymousUserID
+	if req.Extra.TokenInfo != nil && req.Extra.TokenInfo.UserID != "" {
+		userID = req.Extra.TokenInfo.UserID
+	}
+
 	additionalData, err := json.Marshal(lensWorkflowAdditional{
 		Foundation: lensFoundation{Slug: args.ProjectSlug},
 	})
@@ -90,8 +97,8 @@ func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args Quer
 	body, statusCode, err := lensConfig.ServiceClient.PostMultipart(ctx, "/lfx-lens/mcp/query", map[string]string{
 		"message":         args.Input,
 		"additional_data": string(additionalData),
-		"user_id":         req.Extra.TokenInfo.UserID,
-		"session_id":      req.Extra.TokenInfo.UserID + "-" + time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+		"user_id":         userID,
+		"session_id":      userID + "-" + time.Now().UTC().Format("2006-01-02T15:04:05Z"),
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("lens API call failed: %w", err)

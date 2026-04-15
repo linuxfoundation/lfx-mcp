@@ -363,7 +363,9 @@ func main() {
 					onboardingClient, err := serviceapi.NewClient(serviceapi.Config{
 						BaseURL:     cfg.OnboardingAPIURL,
 						TokenSource: ccClient,
-						HTTPClient:  &http.Client{Timeout: 30 * time.Second},
+						// Wrap with OTel transport so onboarding API calls appear as
+						// child spans under the active request trace.
+						HTTPClient:  &http.Client{Timeout: 30 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 						DebugLogger: debugLogger,
 					})
 					if err != nil {
@@ -388,7 +390,9 @@ func main() {
 					lensClient, err := serviceapi.NewClient(serviceapi.Config{
 						BaseURL:     cfg.LensAPIURL,
 						TokenSource: ccClient,
-						HTTPClient:  &http.Client{Timeout: 120 * time.Second},
+						// Wrap with OTel transport so Lens API calls appear as child
+						// spans under the active request trace.
+						HTTPClient:  &http.Client{Timeout: 120 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 						DebugLogger: debugLogger,
 					})
 					if err != nil {

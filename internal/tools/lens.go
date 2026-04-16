@@ -35,7 +35,7 @@ func SetLensConfig(cfg *LensConfig) {
 func RegisterQueryLFXLens(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "query_lfx_lens",
-		Description: `Ask natural language questions about a project's data. LFX Lens covers: events, education, activity, contributors, maintainers, affiliations, organizations, project health, and project value. It handles data exploration, SQL generation, and interpretation. Use search_projects first to find the project slug.
+		Description: `Ask natural language questions about a project's data. LFX Lens covers: events, education, activity, contributors, maintainers, affiliations, organizations, project health, and project value. It handles data exploration, SQL generation and execution. Use search_projects first to find the project slug.
 
 This tool works in two modes:
 1. START a query: pass project_slug and input. Returns run_id, session_id, and status=PENDING.

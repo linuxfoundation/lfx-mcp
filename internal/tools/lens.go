@@ -46,7 +46,7 @@ func RegisterResolveSlugLFXLens(server *mcp.Server) {
 func RegisterQueryLFXLens(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "query_lfx_lens",
-		Description: "Ask natural language questions about a project's data. LFX Lens covers the following domains: events, education, activity, contributors, maintainers, affiliations, organizations, project health, and project value. It can answer both straightforward text-to-SQL queries and more exploratory, multi-step data questions. Pass your question directly — Lens handles data exploration, SQL generation, and interpretation for each domain. Use search_projects first to find the project slug.",
+		Description: "Ask natural language questions about a project's data. LFX Lens covers the following domains: events, education, activity, contributors, maintainers, affiliations, organizations, project health, and project value. It can answer both straightforward text-to-SQL queries and more exploratory, multi-step data questions. Pass your question directly — Lens handles data exploration, SQL generation, and interpretation for each domain. Use resolve_slug_lfx_lens first to find the project slug.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "LFX Lens Query",
 			ReadOnlyHint: true,

@@ -134,6 +134,7 @@ var defaultTools = []string{
 	"list_email_templates",
 	"send_email",
 	"query_lfx_lens",
+	"resolve_slug_lfx_lens",
 	"search_b2b_orgs",
 	"list_b2b_org_memberships",
 }
@@ -734,6 +735,9 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	if enabledTools["query_lfx_lens"] && canRead && isStaff {
 		tools.RegisterQueryLFXLens(server)
+	}
+	if enabledTools["resolve_slug_lfx_lens"] && canRead && isStaff {
+		tools.RegisterResolveSlugLFXLens(server)
 	}
 
 	return server

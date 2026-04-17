@@ -71,7 +71,7 @@ type lensFoundation struct {
 	Slug string `json:"slug"`
 }
 
-// lensQueryResponse is the unified JSON response from start and poll endpoints.
+// lensQueryResponse is the JSON response from agno's built-in workflow endpoints.
 type lensQueryResponse struct {
 	Content    string `json:"content,omitempty"`
 	Status     string `json:"status"`
@@ -79,6 +79,8 @@ type lensQueryResponse struct {
 	RunID      string `json:"run_id,omitempty"`
 	WorkflowID string `json:"workflow_id,omitempty"`
 }
+
+const lensWorkflowID = "lfx-lens-mcp-workflow"
 
 // --- Tool handlers ---
 
@@ -112,11 +114,13 @@ func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args Quer
 		return nil, nil, fmt.Errorf("failed to marshal additional_data: %w", err)
 	}
 
-	body, statusCode, err := lensConfig.ServiceClient.PostMultipart(ctx, "/lfx-lens/mcp/query", map[string]string{
+	startPath := fmt.Sprintf("/workflows/%s/runs", lensWorkflowID)
+	body, statusCode, err := lensConfig.ServiceClient.PostMultipart(ctx, startPath, map[string]string{
 		"message":         args.Input,
 		"additional_data": string(additionalData),
 		"user_id":         userID,
 		"session_id":      sessionID,
+		"stream":          "false",
 		"background":      "true",
 	})
 	if err != nil {
@@ -141,7 +145,7 @@ func handleLFXLensQuery(ctx context.Context, req *mcp.CallToolRequest, args Quer
 
 // pollLFXLensQuery polls for the result of a background workflow run.
 func pollLFXLensQuery(ctx context.Context, runID, sessionID string) (*mcp.CallToolResult, any, error) {
-	pollPath := fmt.Sprintf("/lfx-lens/mcp/query/poll/%s", runID)
+	pollPath := fmt.Sprintf("/workflows/%s/runs/%s", lensWorkflowID, runID)
 	pollQuery := url.Values{"session_id": {sessionID}}
 
 	body, statusCode, err := lensConfig.ServiceClient.Get(ctx, pollPath, pollQuery)

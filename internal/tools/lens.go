@@ -48,8 +48,8 @@ This tool runs synchronously and returns the full answer in one call. Queries ty
 
 // QueryLFXLensArgs defines the input for query_lfx_lens.
 type QueryLFXLensArgs struct {
-	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf')."`
-	Input       string `json:"input" jsonschema:"Natural language query about the project."`
+	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf') (required)"`
+	Input       string `json:"input" jsonschema:"Natural language query about the project (required)"`
 }
 
 // lensWorkflowAdditional is the additional_data payload sent to the Lens workflow endpoint.

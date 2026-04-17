@@ -592,6 +592,40 @@ func(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallT
 7. **Code Quality**: Run `make check` before commits
 8. **Package Comments**: Every new `*.go` file must include a `// Package <name> ...` doc comment immediately above the `package` declaration (required by Megalinter's revive `package-comments` rule)
 
+## Release Process
+
+Releases follow [semantic versioning](https://semver.org/) (`vMAJOR.MINOR.PATCH`). The current series is v0.x; do not increment the major version unless explicitly instructed.
+
+### Version bump guidelines
+
+| Change type | Version component |
+|---|---|
+| Bug fixes, tool description/schema wording tweaks, operational changes (Helm, CI) | **patch** |
+| New tools or substantial updates to existing tools | **minor** |
+| Breaking changes or explicit instruction | **major** (only when told) |
+
+### Cutting a release
+
+Do **not** create or push git tags manually. Instead, use the GitHub Releases UI (or `gh` CLI) to create a release; GitHub will create the tag automatically.
+
+Steps via `gh`:
+
+```bash
+# Determine the next version by inspecting the latest tag.
+LATEST=$(git tag --sort=-v:refname | head -1)  # e.g. v0.7.6
+# Bump appropriately (patch example):
+NEXT=v0.7.7
+
+gh release create "$NEXT" \
+  --generate-notes \
+  --latest
+```
+
+- `--generate-notes` automatically generates release notes from merged PRs since the previous tag.
+- `--latest` marks the release as the latest on the GitHub Releases page.
+
+No additional steps (e.g. building binaries, updating a changelog file) are required.
+
 ## Future Extensions
 
 The skeleton is designed for easy extension with LFX-specific tools:

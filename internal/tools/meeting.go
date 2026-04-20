@@ -166,7 +166,7 @@ func RegisterGetPastMeeting(server *mcp.Server) {
 // SearchMeetingsArgs defines the input parameters for the search_meetings tool.
 type SearchMeetingsArgs struct {
 	Name         string   `json:"name,omitempty" jsonschema:"Name or partial name of the meeting to search for"`
-	ProjectUID   string   `json:"project_uid,omitempty" jsonschema:"Filter meetings by project UID"`
+	ProjectUID   string   `json:"project_uid,omitempty" jsonschema:"Filter meetings by project UID (ignored when committee_uid is set)"`
 	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter meetings by committee UID"`
 	DateField    string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set)"`
 	DateFrom     string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
@@ -184,7 +184,7 @@ type GetMeetingArgs struct {
 
 // SearchMeetingRegistrantsArgs defines the input parameters for the search_meeting_registrants tool.
 type SearchMeetingRegistrantsArgs struct {
-	MeetingID    string   `json:"meeting_id,omitempty" jsonschema:"Filter registrants by meeting ID; takes precedence over committee_uid"`
+	MeetingID    string   `json:"meeting_id,omitempty" jsonschema:"Filter registrants by meeting ID"`
 	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter registrants by committee UID (ignored when meeting_id is set)"`
 	Name         string   `json:"name,omitempty" jsonschema:"Name or partial name of the registrant to search for"`
 	Filters      []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters (e.g. host:true or type:committee)"`

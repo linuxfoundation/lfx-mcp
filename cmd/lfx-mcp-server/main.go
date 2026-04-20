@@ -134,6 +134,11 @@ var defaultTools = []string{
 	"list_email_templates",
 	"send_email",
 	"query_lfx_lens",
+	"list_metrics_lfx_lens",
+	"get_dimensions_lfx_lens",
+	"get_entities_lfx_lens",
+	"list_saved_queries_lfx_lens",
+	"query_metrics_lfx_lens",
 	"search_b2b_orgs",
 	"list_b2b_org_memberships",
 }
@@ -734,6 +739,21 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	if enabledTools["query_lfx_lens"] && canRead && isStaff {
 		tools.RegisterQueryLFXLens(server)
+	}
+	if enabledTools["list_metrics_lfx_lens"] && canRead && isStaff {
+		tools.RegisterListMetrics(server)
+	}
+	if enabledTools["get_dimensions_lfx_lens"] && canRead && isStaff {
+		tools.RegisterGetDimensions(server)
+	}
+	if enabledTools["get_entities_lfx_lens"] && canRead && isStaff {
+		tools.RegisterGetEntities(server)
+	}
+	if enabledTools["list_saved_queries_lfx_lens"] && canRead && isStaff {
+		tools.RegisterListSavedQueries(server)
+	}
+	if enabledTools["query_metrics_lfx_lens"] && canRead && isStaff {
+		tools.RegisterQueryMetrics(server)
 	}
 
 	return server

@@ -34,7 +34,11 @@ func SetLensConfig(cfg *LensConfig) {
 func RegisterQueryLFXLens(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "query_lfx_lens",
-		Description: `Ask natural language questions about a project's data. LFX Lens covers: events, education, activity, contributors, maintainers, affiliations, organizations, project health, and project value. It handles data exploration, SQL generation and execution. Use search_projects first to find the project slug.
+		Description: `Ask natural language questions about a project's data using ad-hoc SQL generation. Use this as a fallback when the question does NOT map to a known metric from list_metrics — for example, listing specific contributors, exploring raw data, or answering questions that require custom joins.
+
+LFX Lens covers: events, education, activity, contributors, maintainers, affiliations, organizations, project health, and project value. Use search_projects first to find the project slug.
+
+Prefer query_metrics for quantitative questions (counts, revenue, scores) — it is faster and deterministic. Use this tool for exploratory or ad-hoc questions that don't fit a structured metric query.
 
 This tool runs synchronously and returns the full answer in one call. Queries typically take 30–60 seconds — please wait for the result without retrying.`,
 		Annotations: &mcp.ToolAnnotations{

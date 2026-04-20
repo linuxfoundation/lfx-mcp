@@ -613,7 +613,8 @@ Steps via `gh`:
 ```bash
 # Determine the next version by inspecting the latest tag.
 LATEST=$(git tag --sort=-v:refname | head -1)  # e.g. v0.7.6
-# Bump appropriately (patch example):
+echo "Latest tag: $LATEST"
+# Bump appropriately from the latest tag (patch example):
 NEXT=v0.7.7
 
 gh release create "$NEXT" \
@@ -624,7 +625,8 @@ gh release create "$NEXT" \
 - `--generate-notes` automatically generates release notes from merged PRs since the previous tag.
 - `--latest` marks the release as the latest on the GitHub Releases page.
 
-No additional steps (e.g. building binaries, updating a changelog file) are required.
+No additional manual steps (e.g. building binaries, updating a changelog file) are required before creating the release.
+After creating the release, verify that the GitHub Actions **Publish Tagged Release** workflow triggered by the new tag completes successfully; otherwise release artifacts such as published images/charts may be missing even though the GitHub Release exists.
 
 ## Future Extensions
 

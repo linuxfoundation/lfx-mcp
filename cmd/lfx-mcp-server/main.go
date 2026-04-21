@@ -575,7 +575,7 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	canManage := callerToken == nil || tools.HasAnyScope(callerScopes, []string{tools.ScopeManage})
 	canRead := callerToken == nil || canManage || tools.HasAnyScope(callerScopes, []string{tools.ScopeRead})
-	_ = callerToken == nil || tools.IsLFStaff(callerToken) // TODO: restore isStaff before merging
+	isStaff := callerToken == nil || tools.IsLFStaff(callerToken)
 
 	// Register tools based on configuration and caller scopes.
 	enabledTools := make(map[string]bool)
@@ -733,10 +733,10 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["send_email"] && canManage {
 		tools.RegisterSendEmail(server)
 	}
-	if enabledTools["query_lfx_lens"] && canRead { // TODO: restore && isStaff before merging
+	if enabledTools["query_lfx_lens"] && canRead && isStaff {
 		tools.RegisterQueryLFXLens(server)
 	}
-	if enabledTools["query_lfx_semantic_layer"] && canRead { // TODO: restore && isStaff before merging
+	if enabledTools["query_lfx_semantic_layer"] && canRead && isStaff {
 		tools.RegisterSemanticLayer(server)
 	}
 

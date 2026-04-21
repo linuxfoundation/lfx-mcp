@@ -47,7 +47,7 @@ func SetMeetingConfig(cfg *MeetingConfig) {
 func RegisterSearchMeetings(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_meetings",
-		Description: "Search for LFX meetings using the query service. Supports filtering by project, committee, date range, and other fields.",
+		Description: "Search for LFX meetings (committee calls, working group sessions) using the query service. For event data (conferences, registrations, attendees, speakers, sponsorships), use query_lfx_semantic_layer or query_lfx_lens instead.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Meetings",
 			ReadOnlyHint: true,

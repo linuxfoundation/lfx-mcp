@@ -121,10 +121,10 @@ var defaultTools = []string{
 	"get_meeting_registrant",
 	"search_past_meeting_participants",
 	"get_past_meeting_participant",
-	"search_past_meeting_transcripts",
-	"get_past_meeting_transcript",
 	"search_past_meeting_summaries",
 	"get_past_meeting_summary",
+	"search_past_meetings",
+	"get_past_meeting",
 	// "list_membership_actions", // TODO: uncomment when guided onboarding flow is ready.
 	"list_discord_roles",
 	"find_discord_role",
@@ -688,17 +688,17 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["get_past_meeting_participant"] && canRead {
 		tools.RegisterGetPastMeetingParticipant(server)
 	}
-	if enabledTools["search_past_meeting_transcripts"] && canRead {
-		tools.RegisterSearchPastMeetingTranscripts(server)
-	}
-	if enabledTools["get_past_meeting_transcript"] && canRead {
-		tools.RegisterGetPastMeetingTranscript(server)
-	}
 	if enabledTools["search_past_meeting_summaries"] && canRead {
 		tools.RegisterSearchPastMeetingSummaries(server)
 	}
 	if enabledTools["get_past_meeting_summary"] && canRead {
 		tools.RegisterGetPastMeetingSummary(server)
+	}
+	if enabledTools["search_past_meetings"] && canRead {
+		tools.RegisterSearchPastMeetings(server)
+	}
+	if enabledTools["get_past_meeting"] && canRead {
+		tools.RegisterGetPastMeeting(server)
 	}
 	if enabledTools["search_b2b_orgs"] && canRead {
 		tools.RegisterSearchB2bOrgs(server)

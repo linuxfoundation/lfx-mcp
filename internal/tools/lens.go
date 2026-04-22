@@ -172,9 +172,16 @@ Actions:
 
 - get_dimensions: Get group_by/filter fields for specific metrics. Use when list_metrics returned too many results to include dimensions.
 
-- query: Execute a metric query. The where clause MUST include a project_slug filter — the project_slug parameter alone does not filter the data. To find the correct project_slug dimension, look in the dimensions list from list_metrics for the one ending in __project_slug (e.g. registration_id__project_slug, not event_id__project_slug). Different metrics use different entity prefixes. Set a reasonable limit (10-50) to avoid huge results.
+- query: Execute a metric query. Critical rules:
+  1. The where clause MUST include a project scope filter — the project_slug parameter alone does not filter the data. Check the dimensions list for the correct one (e.g. registration_id__project_slug). Some models don't have project_slug — they use project_name instead. In that case, use the full project name from search_projects (e.g. "Cloud Native Computing Foundation (CNCF)").
+  2. Different metrics use different entity prefixes — always check the dimensions list from list_metrics to find the correct qualified_names. Do not guess prefixes.
+  3. Set a reasonable limit (10-50) to avoid huge results.
 
-- describe: Get detailed syntax reference and examples for any action.`,
+- describe: Get detailed syntax reference and examples for any action.
+
+Tips:
+- Contributors and code-related data (commits, PRs, insertions, deletions) are in the activities model — search for "activities" in list_metrics.
+- Events metrics use project_name rather than project_slug for filtering.`,
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "LFX Insights Semantic Layer",
 			ReadOnlyHint: true,
@@ -190,7 +197,7 @@ type SemanticLayerLFXLensArgs struct {
 	Metrics     string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names from list_metrics (for get_dimensions and query)"`
 	Search      string `json:"search,omitempty" jsonschema:"Search term to filter results (for list_metrics and get_dimensions)"`
 	GroupBy     string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names to group by (for query)"`
-	Where       string `json:"where,omitempty" jsonschema:"Filter expression for query. MUST include a project_slug filter, e.g. {{ Dimension('event_id__project_slug') }} = 'cncf'. The project_slug param is for validation only — it does not auto-filter."`
+	Where       string `json:"where,omitempty" jsonschema:"Required for query action. MUST include a project scope filter using {{ Dimension('qualified_name') }} = 'value' syntax. Find the correct project_slug or project_name dimension from list_metrics dimensions. Example: {{ Dimension('registration_id__project_slug') }} = 'cncf'"`
 	OrderBy     string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields, prefix with - for descending (for query)"`
 	Limit       int    `json:"limit,omitempty" jsonschema:"Max rows to return, max 500 (for query)"`
 }
@@ -351,6 +358,13 @@ func handleLensQueryMetrics(ctx context.Context, args SemanticLayerLFXLensArgs) 
 	if len(metrics) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: "Error: metrics parameter is required for query"}},
+			IsError: true,
+		}, nil, nil
+	}
+
+	if args.Where == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: where is required for query — must include a project scope filter (e.g. {{ Dimension('entity__project_slug') }} = 'slug')"}},
 			IsError: true,
 		}, nil, nil
 	}

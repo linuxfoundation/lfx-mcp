@@ -172,7 +172,7 @@ Actions:
 
 - get_dimensions: Get group_by/filter fields for specific metrics. Use when list_metrics returned too many results to include dimensions.
 
-- query: Execute a metric query. The where clause MUST include a project_slug filter scoped to the project_slug — the project_slug parameter alone does not filter the data. Set a reasonable limit (10-50) to avoid huge results.
+- query: Execute a metric query. The where clause MUST include a project_slug filter — the project_slug parameter alone does not filter the data. To find the correct project_slug dimension, look in the dimensions list from list_metrics for the one ending in __project_slug (e.g. registration_id__project_slug, not event_id__project_slug). Different metrics use different entity prefixes. Set a reasonable limit (10-50) to avoid huge results.
 
 - describe: Get detailed syntax reference and examples for any action.`,
 		Annotations: &mcp.ToolAnnotations{
@@ -263,7 +263,7 @@ Examples:
   order_by: "-avg_project_health_score"
   limit: 10
 
-Note: project_slug is always required. The where clause MUST include a project_slug filter — the project_slug parameter is used for authorization only, it does not auto-filter the data.`,
+Important: project_slug is always required. The where clause MUST include a project_slug filter — the project_slug parameter is used for authorization only, it does not auto-filter the data.`,
 }
 
 func handleSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args SemanticLayerLFXLensArgs) (*mcp.CallToolResult, any, error) {

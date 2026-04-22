@@ -45,6 +45,7 @@ Always use this tool for:
 - Maintainer names or maintainer+activities data joins, where activities data is the code activities model
 	with code contributions, PRs, commits etc (e.g. "top maintainers by contributions", "who maintains Kubernetes?")
 - Maintainer time series and trends (the maintainer model lacks good time granularity)
+- Event sponsorships (the semantic layer should be used for events and event registration data not related to sponsorships)
 
 Also use this tool for:
 - Open-ended or exploratory analysis (e.g. "which projects need attention?", "contribution overview")
@@ -152,7 +153,7 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 func RegisterSemanticLayer(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "query_lfx_semantic_layer",
-		Description: `LFX Insights Semantic Layer — pre-aggregated metrics for code activities & contributions, maintainer counts, project health scores, projects, events & sponsorships, and education & certifications. Returns deterministic results in seconds.
+		Description: `LFX Insights Semantic Layer — pre-aggregated metrics for code activities & contributions, maintainer counts, project health scores, projects, events & evenet registrations, and education & certifications. Returns deterministic results in seconds.
 
 Best for direct, well-scoped questions: totals, counts, averages, breakdowns by a single dimension, and time series (e.g. "total activities for CNCF", "active maintainers by organization", "health score trend by month", "total enrollments by course"). This is also the right tool for contributor/activity questions — it has full contributor data including names, organizations, and activity breakdowns.
 
@@ -163,6 +164,7 @@ Use query_lfx_lens INSTEAD for:
 - Questions involving subprojects (e.g. "health scores by project")
 - Cross-domain joins (maintainers and contributors are separate models)
 - Any question where this tool is struggling or returning errors
+- Event sponsorships. All other event and event registration data is fine here
 
 Use search_projects first to find the project slug. Then call list_metrics to discover available metrics.
 
@@ -172,16 +174,18 @@ Actions:
 
 - get_dimensions: Get group_by/filter fields for specific metrics. Use when list_metrics returned too many results to include dimensions.
 
-- query: Execute a metric query. Critical rules:
+- query: Execute a metric query. CRITICAL rules:
   1. The where clause MUST include a project scope filter — the project_slug parameter alone does not filter the data. Check the dimensions list for the correct one (e.g. registration_id__project_slug). Some models don't have project_slug — they use project_name instead. In that case, use the full project name from search_projects (e.g. "Cloud Native Computing Foundation (CNCF)").
   2. Different metrics use different entity prefixes — always check the dimensions list from list_metrics to find the correct qualified_names. Do not guess prefixes.
   3. Set a reasonable limit (10-50) to avoid huge results.
+	4. If you have loaded in metrics and dimensions, and you still can't get the data you are looking for in 5 query turns or less, use query_lfx_lens.
 
 - describe: Get detailed syntax reference and examples for any action.
 
 Tips:
 - Contributors and code-related data (commits, PRs, insertions, deletions) are in the activities model — search for "activities" in list_metrics.
-- Events metrics use project_name rather than project_slug for filtering.`,
+- Events metrics use project_name rather than project_slug for filtering.
+- Questions about The Linux Foundation (slug is tlf) still need to be scoped with the correct where clause.`,
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "LFX Insights Semantic Layer",
 			ReadOnlyHint: true,

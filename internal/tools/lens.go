@@ -187,12 +187,12 @@ type SemanticLayerLFXLensArgs struct {
 	ProjectSlug string   `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf') (required)"`
 	Action      string   `json:"action" jsonschema:"Required. Start with list_metrics — often enough to go straight to query. Best for activities, maintainer counts, health scores, projects, events, education. For memberships, maintainer names/trends, open-ended, subproject, or exploratory questions use query_lfx_lens instead. Values: list_metrics, get_dimensions, query, describe"`
 	Target      string   `json:"target,omitempty" jsonschema:"For action=describe only: which action to get help for (e.g. 'query')"`
-	Metrics string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names from list_metrics (for get_dimensions and query)"`
-	Search  string `json:"search,omitempty" jsonschema:"Search term to filter results (for list_metrics and get_dimensions)"`
-	GroupBy string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names to group by (for query)"`
-	Where   string `json:"where,omitempty" jsonschema:"Filter expression for query. MUST include a project_slug filter, e.g. {{ Dimension('event_id__project_slug') }} = 'cncf'. The project_slug param is for validation only — it does not auto-filter."`
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields, prefix with - for descending (for query)"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"Max rows to return, max 500 (for query)"`
+	Metrics     string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names from list_metrics (for get_dimensions and query)"`
+	Search      string `json:"search,omitempty" jsonschema:"Search term to filter results (for list_metrics and get_dimensions)"`
+	GroupBy     string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names to group by (for query)"`
+	Where       string `json:"where,omitempty" jsonschema:"Filter expression for query. MUST include a project_slug filter, e.g. {{ Dimension('event_id__project_slug') }} = 'cncf'. The project_slug param is for validation only — it does not auto-filter."`
+	OrderBy     string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields, prefix with - for descending (for query)"`
+	Limit       int    `json:"limit,omitempty" jsonschema:"Max rows to return, max 500 (for query)"`
 }
 
 var lensDescribeTexts = map[string]string{
@@ -214,27 +214,27 @@ Dimensions are attributes you can group by or filter on. The qualified_name in t
 Use this when list_metrics returned too many results to include dimensions inline, or when you need full dimension detail (descriptions, types, time granularities).
 
 Parameters:
-  metrics (required): metric names to get dimensions for
+  metrics (required): comma-separated metric names to get dimensions for
   search (optional): filter dimensions by name
 
 Examples:
-  action: "get_dimensions", metrics: ["active_maintainers"]
+  action: "get_dimensions", metrics: "active_maintainers"
   → finds: maintainer_key__account_name, maintainer_key__project_slug, maintainer_key__platform, ...
 
-  action: "get_dimensions", metrics: ["current_membership_revenue"]
+  action: "get_dimensions", metrics: "current_membership_revenue"
   → finds: asset_id__membership_tier, asset_id__project_slug, asset_id__account_name, ...`,
 
 	"query": `query — Execute a metric query against the Semantic Layer.
 
 Parameters:
-  metrics (required): metric names to query.
-  group_by (optional): dimension qualified_names (from list_metrics dimensions or get_dimensions response).
-  where (optional): MetricFlow filter expressions. Use the qualified_name from dimensions:
+  metrics (required): comma-separated metric names to query.
+  group_by (optional): comma-separated dimension qualified_names from list_metrics or get_dimensions.
+  where (optional): MetricFlow filter expression. Use the qualified_name from dimensions:
     - Categorical: {{ Dimension('qualified_name') }} = 'value'
     - Time: {{ TimeDimension('qualified_name', 'GRAIN') }} >= '2024-01-01'
     - Dates must be yyyy-mm-dd format.
-  order_by (optional): fields to sort by. Must also appear in group_by or metrics. Prefix with - for descending.
-  limit (optional): max rows to return (max 500). Always set a reasonable limit to avoid huge result sets — use 10-20 for "top N" queries, 50-100 for breakdowns.
+  order_by (optional): comma-separated sort fields. Must also appear in group_by or metrics. Prefix with - for descending.
+  limit (optional): max rows to return (max 500). Use 10-20 for "top N" queries, 50-100 for breakdowns.
 
 For lookback queries (e.g. "last 6 months"), prefer order_by descending on a time dimension + limit, rather than complex where filters.
 
@@ -243,21 +243,24 @@ Examples:
 "How many active maintainers does CNCF have?"
   project_slug: "cncf"
   action: "query"
-  metrics: ["active_maintainers"]
+  metrics: "active_maintainers"
+  where: "{{ Dimension('maintainer_key__project_slug') }} = 'cncf'"
 
 "Membership revenue by tier for CNCF"
   project_slug: "cncf"
   action: "query"
-  metrics: ["current_membership_revenue"]
-  group_by: ["asset_id__membership_tier"]
-  order_by: ["-current_membership_revenue"]
+  metrics: "current_membership_revenue"
+  group_by: "asset_id__membership_tier"
+  where: "{{ Dimension('asset_id__project_slug') }} = 'cncf'"
+  order_by: "-current_membership_revenue"
 
 "Top 10 projects by health score"
   project_slug: "cncf"
   action: "query"
-  metrics: ["avg_project_health_score"]
-  group_by: ["health_metric_key__project_slug", "health_metric_key__project_name"]
-  order_by: ["-avg_project_health_score"]
+  metrics: "avg_project_health_score"
+  group_by: "health_metric_key__project_slug, health_metric_key__project_name"
+  where: "{{ Dimension('health_metric_key__foundation_slug') }} = 'cncf'"
+  order_by: "-avg_project_health_score"
   limit: 10
 
 Note: project_slug is always required. The where clause MUST include a project_slug filter — the project_slug parameter is used for authorization only, it does not auto-filter the data.`,
@@ -352,6 +355,13 @@ func handleLensQueryMetrics(ctx context.Context, args SemanticLayerLFXLensArgs) 
 		}, nil, nil
 	}
 
+	if args.Limit > 500 {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: limit must be 500 or less"}},
+			IsError: true,
+		}, nil, nil
+	}
+
 	reqBody := map[string]any{
 		"metrics":      metrics,
 		"project_slug": args.ProjectSlug,
@@ -400,7 +410,14 @@ func parseCSV(s string) []string {
 		cleaned := strings.ReplaceAll(s, `\"`, `"`)
 		var arr []string
 		if err := json.Unmarshal([]byte(cleaned), &arr); err == nil {
-			return arr
+			out := make([]string, 0, len(arr))
+			for _, p := range arr {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					out = append(out, p)
+				}
+			}
+			return out
 		}
 	}
 	parts := strings.Split(s, ",")

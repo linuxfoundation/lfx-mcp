@@ -180,7 +180,7 @@ Actions:
 - describe: Get detailed syntax reference and examples for any action.
 
 Tips:
-- Contributors and code-related data (commits, PRs, insertions, deletions) is in the activities model — search for "activities" in list_metrics.
+- Contributors and code-related data (commits, PRs, insertions, deletions) are in the activities model — search for "activities" in list_metrics.
 - Events metrics use project_name rather than project_slug for filtering.`,
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "LFX Insights Semantic Layer",
@@ -197,7 +197,7 @@ type SemanticLayerLFXLensArgs struct {
 	Metrics     string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names from list_metrics (for get_dimensions and query)"`
 	Search      string `json:"search,omitempty" jsonschema:"Search term to filter results (for list_metrics and get_dimensions)"`
 	GroupBy     string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names to group by (for query)"`
-	Where       string `json:"where" jsonschema:"Required for query. MUST include a project scope filter using {{ Dimension('qualified_name') }} = 'value' syntax. Find the correct project_slug or project_name dimension from list_metrics dimensions. Example: {{ Dimension('registration_id__project_slug') }} = 'cncf'"`
+	Where       string `json:"where,omitempty" jsonschema:"Required for query action. MUST include a project scope filter using {{ Dimension('qualified_name') }} = 'value' syntax. Find the correct project_slug or project_name dimension from list_metrics dimensions. Example: {{ Dimension('registration_id__project_slug') }} = 'cncf'"`
 	OrderBy     string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields, prefix with - for descending (for query)"`
 	Limit       int    `json:"limit,omitempty" jsonschema:"Max rows to return, max 500 (for query)"`
 }
@@ -358,6 +358,13 @@ func handleLensQueryMetrics(ctx context.Context, args SemanticLayerLFXLensArgs) 
 	if len(metrics) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: "Error: metrics parameter is required for query"}},
+			IsError: true,
+		}, nil, nil
+	}
+
+	if args.Where == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: where is required for query — must include a project scope filter (e.g. {{ Dimension('entity__project_slug') }} = 'slug')"}},
 			IsError: true,
 		}, nil, nil
 	}

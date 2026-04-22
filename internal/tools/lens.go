@@ -153,7 +153,7 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 func RegisterSemanticLayer(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "query_lfx_semantic_layer",
-		Description: `LFX Insights Semantic Layer — pre-aggregated metrics for code activities & contributions, maintainer counts, project health scores, projects, events & evenet registrations, and education & certifications. Returns deterministic results in seconds.
+		Description: `LFX Insights Semantic Layer — pre-aggregated metrics for code activities & contributions, maintainer counts, project health scores, projects, events & event registrations, and education & certifications. Returns deterministic results in seconds.
 
 Best for direct, well-scoped questions: totals, counts, averages, breakdowns by a single dimension, and time series (e.g. "total activities for CNCF", "active maintainers by organization", "health score trend by month", "total enrollments by course"). This is also the right tool for contributor/activity questions — it has full contributor data including names, organizations, and activity breakdowns.
 

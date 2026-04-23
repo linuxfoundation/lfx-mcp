@@ -43,8 +43,8 @@ func RegisterQueryLFXLens(server *mcp.Server) {
 Always use this tool for:
 - All membership questions (e.g. "current members", "membership revenue by tier", "churn rate")
 - Maintainer names or maintainer+activities data joins, where activities data is the code activities model
-	with code contributions, PRs, commits etc (e.g. "top maintainers by contributions", "who maintains Kubernetes?").
-	IMPORTANT: activities data (contributors, PRs, code contributions etc) not involving maintainers should use the semantic layer.
+  with code contributions, PRs, commits etc (e.g. "top maintainers by contributions", "who maintains Kubernetes?").
+  IMPORTANT: activities data (contributors, PRs, code contributions etc) not involving maintainers should use query_lfx_semantic_layer.
 - Maintainer time series and trends (the maintainer model lacks good time granularity)
 - Event sponsorships (the semantic layer should be used for events and event registration data not related to sponsorships)
 

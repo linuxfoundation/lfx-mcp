@@ -43,7 +43,8 @@ func RegisterQueryLFXLens(server *mcp.Server) {
 Always use this tool for:
 - All membership questions (e.g. "current members", "membership revenue by tier", "churn rate")
 - Maintainer names or maintainer+activities data joins, where activities data is the code activities model
-	with code contributions, PRs, commits etc (e.g. "top maintainers by contributions", "who maintains Kubernetes?")
+  with code contributions, PRs, commits etc (e.g. "top maintainers by contributions", "who maintains Kubernetes?").
+  IMPORTANT: activities data (contributors, PRs, code contributions etc) not involving maintainers should use query_lfx_semantic_layer.
 - Maintainer time series and trends (the maintainer model lacks good time granularity)
 - Event sponsorships (the semantic layer should be used for events and event registration data not related to sponsorships)
 
@@ -57,7 +58,9 @@ Important: questions just about contributors/activities (without maintainer join
 
 Use search_projects first to find the project slug.
 
-This tool runs synchronously. Queries take 15–30 seconds — please wait for the result without retrying.`,
+This tool runs synchronously. Queries take 15–30 seconds — please wait for the result without retrying.
+Tips:
+- This tool returns at most 200 rows per request. If you need more results, explicitly request pagination, for example "page 2", "next 200 rows", or "use LIMIT/OFFSET pagination with a stable ORDER BY" (e.g. all registrations for an event).`,
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "LFX Lens Query",
 			ReadOnlyHint: true,
@@ -184,6 +187,7 @@ Actions:
 
 Tips:
 - Contributors and code-related data (commits, PRs, insertions, deletions) are in the activities model — search for "activities" in list_metrics.
+  IMPORTANT: Questions about contributors and code-related topics that do not involve maintainers should prefer this tool.
 - Events metrics use project_name rather than project_slug for filtering.
 - Questions about The Linux Foundation (slug is tlf) still need to be scoped with the correct where clause.`,
 		Annotations: &mcp.ToolAnnotations{

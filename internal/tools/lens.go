@@ -187,7 +187,7 @@ Actions:
 
 Tips:
 - Contributors and code-related data (commits, PRs, insertions, deletions) are in the activities model — search for "activities" in list_metrics.
-  IMPORTANT: questions about contributors and code related questions not involving maintainers should prefer this tool.
+  IMPORTANT: Questions about contributors and code-related topics that do not involve maintainers should prefer this tool.
 - Events metrics use project_name rather than project_slug for filtering.
 - Questions about The Linux Foundation (slug is tlf) still need to be scoped with the correct where clause.`,
 		Annotations: &mcp.ToolAnnotations{

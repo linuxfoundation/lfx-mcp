@@ -58,8 +58,8 @@ Important: questions just about contributors/activities (without maintainer join
 Use search_projects first to find the project slug.
 
 This tool runs synchronously. Queries take 15–30 seconds — please wait for the result without retrying.
-Tips: 
-- This tool has a limit of 200 rows per request. If you are looking for more rows, specify the pagination. E.g. all registrations for an event.`,
+Tips:
+- This tool returns at most 200 rows per request. If you need more results, explicitly request pagination, for example "page 2", "next 200 rows", or "use LIMIT/OFFSET pagination with a stable ORDER BY" (e.g. all registrations for an event).`,
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "LFX Lens Query",
 			ReadOnlyHint: true,

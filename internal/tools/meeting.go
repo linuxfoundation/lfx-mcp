@@ -185,7 +185,7 @@ func RegisterSearchPastMeetings(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meetings",
-		Description: "Search for LFX past meetings (v1_past_meeting) using the query service. Supports filtering by project, committee, meeting ID, date range, and name.",
+		Description: "Search for LFX past meetings using the query service. Supports filtering by project, committee, meeting ID, date range, and name.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Past Meetings",
 			ReadOnlyHint: true,
@@ -197,7 +197,7 @@ func RegisterSearchPastMeetings(server *mcp.Server, asGroups bool) {
 func RegisterGetPastMeeting(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_past_meeting",
-		Description: "Get an LFX past meeting (v1_past_meeting) by its UID using the query service.",
+		Description: "Get an LFX past meeting by its UID using the query service.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Past Meeting",
 			ReadOnlyHint: true,
@@ -214,7 +214,7 @@ type SearchMeetingsArgs struct {
 	DateFrom     string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo       string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
 	Filters      []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters (e.g. visibility:public or status:active)"`
-	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
 	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -244,7 +244,7 @@ type SearchMeetingRegistrantsArgs struct {
 	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter registrants by committee UID (ignored when meeting_id is set)"`
 	Name         string   `json:"name,omitempty" jsonschema:"Name or partial name of the registrant to search for"`
 	Filters      []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters (e.g. host:true or type:committee)"`
-	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
 	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -267,10 +267,10 @@ type GetMeetingRegistrantArgs struct {
 
 // SearchPastMeetingParticipantsArgs defines the input parameters for the search_past_meeting_participants tool.
 type SearchPastMeetingParticipantsArgs struct {
-	MeetingID string   `json:"meeting_id,omitempty" jsonschema:"Filter participants by meeting ID (best available; ~25% of participants may not be reachable by this filter)"`
+	MeetingID string   `json:"meeting_id,omitempty" jsonschema:"Filter participants by meeting ID"`
 	Name      string   `json:"name,omitempty" jsonschema:"Name or partial name of the participant to search for"`
 	Filters   []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters"`
-	Sort      string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	Sort      string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
 	PageSize  int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -285,7 +285,7 @@ type SearchPastMeetingSummariesArgs struct {
 	MeetingID string   `json:"meeting_id,omitempty" jsonschema:"Filter summaries by meeting ID"`
 	Name      string   `json:"name,omitempty" jsonschema:"Name or partial name of the summary to search for"`
 	Filters   []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters"`
-	Sort      string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	Sort      string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
 	PageSize  int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -346,7 +346,7 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 	}
 
 	// committee_uid takes precedence over project_uid when both are provided
-	// because committee is indexed as a parent_ref for v1_meeting.
+	// because committee resolves to a more specific parent reference.
 	if args.CommitteeUID != "" {
 		parentRef := "committee:" + args.CommitteeUID
 		payload.Parent = &parentRef
@@ -941,14 +941,14 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 // SearchPastMeetingsArgs defines the input parameters for the search_past_meetings tool.
 type SearchPastMeetingsArgs struct {
 	Name         string   `json:"name,omitempty" jsonschema:"Name or partial name of the past meeting to search for"`
-	ProjectUID   string   `json:"project_uid,omitempty" jsonschema:"Filter past meetings by project UID (via parent_ref; ~70% coverage)"`
-	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter past meetings by committee UID (via tag; ~29% coverage)"`
-	MeetingID    string   `json:"meeting_id,omitempty" jsonschema:"Filter past meetings by meeting ID (via tag; ~87% coverage)"`
-	DateField    string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default data.start_time); also accepts data.end_time"`
+	ProjectUID   string   `json:"project_uid,omitempty" jsonschema:"Filter past meetings by project UID"`
+	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter past meetings by committee UID"`
+	MeetingID    string   `json:"meeting_id,omitempty" jsonschema:"Filter past meetings by meeting ID"`
+	DateField    string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set); also accepts end_time"`
 	DateFrom     string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo       string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
 	Filters      []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters"`
-	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
 	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -956,14 +956,14 @@ type SearchPastMeetingsArgs struct {
 // SearchPastMeetingsGroupArgs is the groups-mode variant of SearchPastMeetingsArgs.
 type SearchPastMeetingsGroupArgs struct {
 	Name       string   `json:"name,omitempty" jsonschema:"Name or partial name of the past meeting to search for"`
-	ProjectUID string   `json:"project_uid,omitempty" jsonschema:"Filter past meetings by project UID (via parent_ref; ~70% coverage)"`
-	GroupUID   string   `json:"group_uid,omitempty" jsonschema:"Filter past meetings by group UID (also known as committee UID; via tag; ~29% coverage)"`
-	MeetingID  string   `json:"meeting_id,omitempty" jsonschema:"Filter past meetings by meeting ID (via tag; ~87% coverage)"`
-	DateField  string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default data.start_time); also accepts data.end_time"`
+	ProjectUID string   `json:"project_uid,omitempty" jsonschema:"Filter past meetings by project UID"`
+	GroupUID   string   `json:"group_uid,omitempty" jsonschema:"Filter past meetings by group UID (also known as committee UID)"`
+	MeetingID  string   `json:"meeting_id,omitempty" jsonschema:"Filter past meetings by meeting ID"`
+	DateField  string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set); also accepts end_time"`
 	DateFrom   string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo     string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
 	Filters    []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters"`
-	Sort       string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	Sort       string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
 	PageSize   int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken  string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -1089,7 +1089,7 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 	if args.DateFrom != "" || args.DateTo != "" {
 		dateField := args.DateField
 		if dateField == "" {
-			dateField = "data.start_time"
+			dateField = "start_time"
 		}
 		payload.DateField = &dateField
 		if args.DateFrom != "" {

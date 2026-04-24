@@ -44,7 +44,21 @@ func SetMeetingConfig(cfg *MeetingConfig) {
 }
 
 // RegisterSearchMeetings registers the search_meetings tool with the MCP server.
-func RegisterSearchMeetings(server *mcp.Server) {
+// When asGroups is true, the tool description uses group-oriented language and
+// the committee_uid parameter is renamed to group_uid; otherwise the standard
+// committee terminology is used.
+func RegisterSearchMeetings(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "search_meetings",
+			Description: "Search for LFX meetings (group calls, also called committee calls, working group sessions) using the query service. IMPORTANT: When the user asks about events, or for event data (conferences, registrations, attendees, speakers, sponsorships), use query_lfx_semantic_layer (preferred) or query_lfx_lens if semantic layer struggles.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:        "Search Meetings",
+				ReadOnlyHint: true,
+			},
+		}, handleSearchMeetingsGroupMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_meetings",
 		Description: "Search for LFX meetings (committee calls, working group sessions) using the query service. IMPORTANT: When the user asks about events, or for event data (conferences, registrations, attendees, speakers, sponsorships), use query_lfx_semantic_layer (preferred) or query_lfx_lens if semantic layer struggles.",
@@ -68,7 +82,21 @@ func RegisterGetMeeting(server *mcp.Server) {
 }
 
 // RegisterSearchMeetingRegistrants registers the search_meeting_registrants tool with the MCP server.
-func RegisterSearchMeetingRegistrants(server *mcp.Server) {
+// When asGroups is true, the tool description uses group-oriented language and
+// the committee_uid parameter is renamed to group_uid; otherwise the standard
+// committee terminology is used.
+func RegisterSearchMeetingRegistrants(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "search_meeting_registrants",
+			Description: "Search for LFX meeting registrants using the query service. Supports filtering by meeting, group (also known as committee), project, date range, and other fields.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:        "Search Meeting Registrants",
+				ReadOnlyHint: true,
+			},
+		}, handleSearchMeetingRegistrantsGroupMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_meeting_registrants",
 		Description: "Search for LFX meeting registrants using the query service. Supports filtering by meeting, committee, project, date range, and other fields.",
@@ -140,7 +168,21 @@ func RegisterGetPastMeetingSummary(server *mcp.Server) {
 }
 
 // RegisterSearchPastMeetings registers the search_past_meetings tool with the MCP server.
-func RegisterSearchPastMeetings(server *mcp.Server) {
+// When asGroups is true, the tool description uses group-oriented language and
+// the committee_uid parameter is renamed to group_uid; otherwise the standard
+// committee terminology is used.
+func RegisterSearchPastMeetings(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "search_past_meetings",
+			Description: "Search for LFX past meetings (v1_past_meeting) using the query service. Supports filtering by project, group (also known as committee), meeting ID, date range, and name.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:        "Search Past Meetings",
+				ReadOnlyHint: true,
+			},
+		}, handleSearchPastMeetingsGroupMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meetings",
 		Description: "Search for LFX past meetings (v1_past_meeting) using the query service. Supports filtering by project, committee, meeting ID, date range, and name.",
@@ -177,6 +219,20 @@ type SearchMeetingsArgs struct {
 	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
+// SearchMeetingsGroupArgs is the groups-mode variant of SearchMeetingsArgs.
+type SearchMeetingsGroupArgs struct {
+	Name       string   `json:"name,omitempty" jsonschema:"Name or partial name of the meeting to search for"`
+	ProjectUID string   `json:"project_uid,omitempty" jsonschema:"Filter meetings by project UID (ignored when group_uid is set)"`
+	GroupUID   string   `json:"group_uid,omitempty" jsonschema:"Filter meetings by group UID (also known as committee UID)"`
+	DateField  string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set)"`
+	DateFrom   string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
+	DateTo     string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
+	Filters    []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters (e.g. visibility:public or status:active)"`
+	Sort       string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	PageSize   int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken  string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+}
+
 // GetMeetingArgs defines the input parameters for the get_meeting tool.
 type GetMeetingArgs struct {
 	UID string `json:"uid" jsonschema:"The UID of the meeting to retrieve"`
@@ -191,6 +247,17 @@ type SearchMeetingRegistrantsArgs struct {
 	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
 	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+}
+
+// SearchMeetingRegistrantsGroupArgs is the groups-mode variant of SearchMeetingRegistrantsArgs.
+type SearchMeetingRegistrantsGroupArgs struct {
+	MeetingID string   `json:"meeting_id,omitempty" jsonschema:"Filter registrants by meeting ID"`
+	GroupUID  string   `json:"group_uid,omitempty" jsonschema:"Filter registrants by group UID (also known as committee UID; ignored when meeting_id is set)"`
+	Name      string   `json:"name,omitempty" jsonschema:"Name or partial name of the registrant to search for"`
+	Filters   []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters (e.g. host:true or type:committee)"`
+	Sort      string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	PageSize  int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // GetMeetingRegistrantArgs defines the input parameters for the get_meeting_registrant tool.
@@ -886,9 +953,71 @@ type SearchPastMeetingsArgs struct {
 	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
+// SearchPastMeetingsGroupArgs is the groups-mode variant of SearchPastMeetingsArgs.
+type SearchPastMeetingsGroupArgs struct {
+	Name       string   `json:"name,omitempty" jsonschema:"Name or partial name of the past meeting to search for"`
+	ProjectUID string   `json:"project_uid,omitempty" jsonschema:"Filter past meetings by project UID (via parent_ref; ~70% coverage)"`
+	GroupUID   string   `json:"group_uid,omitempty" jsonschema:"Filter past meetings by group UID (also known as committee UID; via tag; ~29% coverage)"`
+	MeetingID  string   `json:"meeting_id,omitempty" jsonschema:"Filter past meetings by meeting ID (via tag; ~87% coverage)"`
+	DateField  string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default data.start_time); also accepts data.end_time"`
+	DateFrom   string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
+	DateTo     string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
+	Filters    []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters"`
+	Sort       string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	PageSize   int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken  string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+}
+
 // GetPastMeetingArgs defines the input parameters for the get_past_meeting tool.
 type GetPastMeetingArgs struct {
 	UID string `json:"uid" jsonschema:"The UID of the past meeting to retrieve"`
+}
+
+// handleSearchPastMeetings implements the search_past_meetings tool logic.
+// handleSearchMeetingsGroupMode adapts group-mode args to the meetings handler.
+func handleSearchMeetingsGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingsGroupArgs) (*mcp.CallToolResult, any, error) {
+	return handleSearchMeetings(ctx, req, SearchMeetingsArgs{
+		Name:         args.Name,
+		ProjectUID:   args.ProjectUID,
+		CommitteeUID: args.GroupUID,
+		DateField:    args.DateField,
+		DateFrom:     args.DateFrom,
+		DateTo:       args.DateTo,
+		Filters:      args.Filters,
+		Sort:         args.Sort,
+		PageSize:     args.PageSize,
+		PageToken:    args.PageToken,
+	})
+}
+
+// handleSearchMeetingRegistrantsGroupMode adapts group-mode args to the meeting registrants handler.
+func handleSearchMeetingRegistrantsGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingRegistrantsGroupArgs) (*mcp.CallToolResult, any, error) {
+	return handleSearchMeetingRegistrants(ctx, req, SearchMeetingRegistrantsArgs{
+		MeetingID:    args.MeetingID,
+		CommitteeUID: args.GroupUID,
+		Name:         args.Name,
+		Filters:      args.Filters,
+		Sort:         args.Sort,
+		PageSize:     args.PageSize,
+		PageToken:    args.PageToken,
+	})
+}
+
+// handleSearchPastMeetingsGroupMode adapts group-mode args to the past meetings handler.
+func handleSearchPastMeetingsGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchPastMeetingsGroupArgs) (*mcp.CallToolResult, any, error) {
+	return handleSearchPastMeetings(ctx, req, SearchPastMeetingsArgs{
+		Name:         args.Name,
+		ProjectUID:   args.ProjectUID,
+		CommitteeUID: args.GroupUID,
+		MeetingID:    args.MeetingID,
+		DateField:    args.DateField,
+		DateFrom:     args.DateFrom,
+		DateTo:       args.DateTo,
+		Filters:      args.Filters,
+		Sort:         args.Sort,
+		PageSize:     args.PageSize,
+		PageToken:    args.PageToken,
+	})
 }
 
 // handleSearchPastMeetings implements the search_past_meetings tool logic.

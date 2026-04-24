@@ -973,7 +973,6 @@ type GetPastMeetingArgs struct {
 	UID string `json:"uid" jsonschema:"The UID of the past meeting to retrieve"`
 }
 
-// handleSearchPastMeetings implements the search_past_meetings tool logic.
 // handleSearchMeetingsGroupMode adapts group-mode args to the meetings handler.
 func handleSearchMeetingsGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingsGroupArgs) (*mcp.CallToolResult, any, error) {
 	return handleSearchMeetings(ctx, req, SearchMeetingsArgs{

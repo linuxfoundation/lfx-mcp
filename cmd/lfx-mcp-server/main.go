@@ -104,6 +104,16 @@ var committeeToGroupToolNames = map[string]string{
 	"delete_committee_member":   "delete_group_member",
 }
 
+// groupToCommitteeToolNames is the reverse of committeeToGroupToolNames, mapping
+// group-mode tool names back to their canonical committee-mode equivalents.
+var groupToCommitteeToolNames = func() map[string]string {
+	m := make(map[string]string, len(committeeToGroupToolNames))
+	for committee, group := range committeeToGroupToolNames {
+		m[group] = committee
+	}
+	return m
+}()
+
 // defaultTools is the list of tools enabled by default.
 var defaultTools = []string{
 	"search_projects",
@@ -597,13 +607,6 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	isStaff := callerToken == nil || tools.IsLFStaff(callerToken)
 
 	// Register tools based on configuration and caller scopes.
-	// Build a reverse map so group-mode names in LFXMCP_TOOLS are resolved to their
-	// canonical committee-mode names before any registration checks.
-	groupToCommitteeToolNames := make(map[string]string, len(committeeToGroupToolNames))
-	for committee, group := range committeeToGroupToolNames {
-		groupToCommitteeToolNames[group] = committee
-	}
-
 	enabledTools := make(map[string]bool)
 	for _, tool := range cfg.Tools {
 		name := strings.TrimSpace(tool)

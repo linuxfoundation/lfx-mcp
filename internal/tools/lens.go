@@ -62,7 +62,7 @@ This tool runs synchronously. Queries take 15–30 seconds — please wait for t
 Tips:
 - This tool returns at most 200 rows per request. If you need more results, explicitly request pagination, for example "page 2", "next 200 rows", or "use LIMIT/OFFSET pagination with a stable ORDER BY" (e.g. all registrations for an event).`,
 		Annotations: &mcp.ToolAnnotations{
-			Title:        "LFX Lens Query",
+			Title:        "Query LFX Lens",
 			ReadOnlyHint: true,
 		},
 	}, handleQueryLFXLens)
@@ -191,7 +191,7 @@ Tips:
 - Events metrics use project_name rather than project_slug for filtering.
 - Questions about The Linux Foundation (slug is tlf) still need to be scoped with the correct where clause.`,
 		Annotations: &mcp.ToolAnnotations{
-			Title:        "LFX Insights Semantic Layer",
+			Title:        "Query LFX Semantic Layer",
 			ReadOnlyHint: true,
 		},
 	}, handleSemanticLayer)

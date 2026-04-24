@@ -35,8 +35,21 @@ func SetCommitteeConfig(cfg *CommitteeConfig) {
 	committeeConfig = cfg
 }
 
-// RegisterSearchCommittees registers the search_committees tool with the MCP server.
-func RegisterSearchCommittees(server *mcp.Server) {
+// RegisterSearchCommittees registers the search_committees (or search_groups) tool with the MCP server.
+// When asGroups is true, the tool is registered under the "search_groups" name with group-oriented
+// descriptions; otherwise the standard committee terminology is used.
+func RegisterSearchCommittees(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "search_groups",
+			Description: "Search for LFX groups (also called committees) by name using the LFX query service. Optionally filter by project UID.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:        "Search Groups",
+				ReadOnlyHint: true,
+			},
+		}, handleSearchCommitteesGroupMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committees",
 		Description: "Search for LFX committees by name using the LFX query service. Optionally filter by project UID.",
@@ -47,8 +60,21 @@ func RegisterSearchCommittees(server *mcp.Server) {
 	}, handleSearchCommittees)
 }
 
-// RegisterGetCommittee registers the get_committee tool with the MCP server.
-func RegisterGetCommittee(server *mcp.Server) {
+// RegisterGetCommittee registers the get_committee (or get_group) tool with the MCP server.
+// When asGroups is true, the tool is registered under the "get_group" name with group-oriented
+// descriptions; otherwise the standard committee terminology is used.
+func RegisterGetCommittee(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "get_group",
+			Description: "Get an LFX group's (also called committee) base info and settings by its UID. Privileged group settings may be omitted if the caller lacks sufficient permissions.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:        "Get Group",
+				ReadOnlyHint: true,
+			},
+		}, handleGetCommitteeGroupMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_committee",
 		Description: "Get an LFX committee's base info and settings by its UID. Privileged committee settings may be omitted if the caller lacks sufficient permissions.",
@@ -59,8 +85,21 @@ func RegisterGetCommittee(server *mcp.Server) {
 	}, handleGetCommittee)
 }
 
-// RegisterGetCommitteeMember registers the get_committee_member tool with the MCP server.
-func RegisterGetCommitteeMember(server *mcp.Server) {
+// RegisterGetCommitteeMember registers the get_committee_member (or get_group_member) tool with the MCP server.
+// When asGroups is true, the tool is registered under the "get_group_member" name with group-oriented
+// descriptions; otherwise the standard committee terminology is used.
+func RegisterGetCommitteeMember(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "get_group_member",
+			Description: "Get a specific group (also called committee) member by group UID and member UID.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:        "Get Group Member",
+				ReadOnlyHint: true,
+			},
+		}, handleGetCommitteeMemberGroupMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_committee_member",
 		Description: "Get a specific committee member by committee UID and member UID.",
@@ -71,8 +110,21 @@ func RegisterGetCommitteeMember(server *mcp.Server) {
 	}, handleGetCommitteeMember)
 }
 
-// RegisterSearchCommitteeMembers registers the search_committee_members tool with the MCP server.
-func RegisterSearchCommitteeMembers(server *mcp.Server) {
+// RegisterSearchCommitteeMembers registers the search_committee_members (or search_group_members) tool with the MCP server.
+// When asGroups is true, the tool is registered under the "search_group_members" name with group-oriented
+// descriptions; otherwise the standard committee terminology is used.
+func RegisterSearchCommitteeMembers(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "search_group_members",
+			Description: "Search for LFX group (also called committee) members. Optionally filter by group UID, project UID, and/or name. At least one filter is recommended but not required.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:        "Search Group Members",
+				ReadOnlyHint: true,
+			},
+		}, handleSearchCommitteeMembersGroupMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committee_members",
 		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID, and/or name. At least one filter is recommended but not required.",
@@ -91,15 +143,34 @@ type SearchCommitteesArgs struct {
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
+// SearchGroupsArgs defines the input parameters for the search_groups tool (groups mode).
+type SearchGroupsArgs struct {
+	Name       string `json:"name,omitempty" jsonschema:"Name or partial name of the group to search for"`
+	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter groups by project"`
+	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+}
+
 // GetCommitteeArgs defines the input parameters for the get_committee tool.
 type GetCommitteeArgs struct {
 	UID string `json:"uid" jsonschema:"The UID of the committee to retrieve"`
+}
+
+// GetGroupArgs defines the input parameters for the get_group tool (groups mode).
+type GetGroupArgs struct {
+	UID string `json:"uid" jsonschema:"The UID of the group to retrieve"`
 }
 
 // GetCommitteeMemberArgs defines the input parameters for the get_committee_member tool.
 type GetCommitteeMemberArgs struct {
 	CommitteeUID string `json:"committee_uid" jsonschema:"The UID of the committee"`
 	MemberUID    string `json:"member_uid" jsonschema:"The UID of the committee member"`
+}
+
+// GetGroupMemberArgs defines the input parameters for the get_group_member tool (groups mode).
+type GetGroupMemberArgs struct {
+	GroupUID  string `json:"group_uid" jsonschema:"The UID of the group"`
+	MemberUID string `json:"member_uid" jsonschema:"The UID of the group member"`
 }
 
 // SearchCommitteeMembersArgs defines the input parameters for the search_committee_members tool.
@@ -109,6 +180,49 @@ type SearchCommitteeMembersArgs struct {
 	Name         string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
 	PageSize     int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+}
+
+// SearchGroupMembersArgs defines the input parameters for the search_group_members tool (groups mode).
+type SearchGroupMembersArgs struct {
+	GroupUID   string `json:"group_uid,omitempty" jsonschema:"Optional UID of the group to filter members by"`
+	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter group members by project"`
+	Name       string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
+	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+}
+
+// handleSearchCommitteesGroupMode adapts group-mode args to the committee handler.
+func handleSearchCommitteesGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupsArgs) (*mcp.CallToolResult, any, error) {
+	return handleSearchCommittees(ctx, req, SearchCommitteesArgs{
+		Name:       args.Name,
+		ProjectUID: args.ProjectUID,
+		PageSize:   args.PageSize,
+		PageToken:  args.PageToken,
+	})
+}
+
+// handleGetCommitteeGroupMode adapts group-mode args to the committee handler.
+func handleGetCommitteeGroupMode(ctx context.Context, req *mcp.CallToolRequest, args GetGroupArgs) (*mcp.CallToolResult, any, error) {
+	return handleGetCommittee(ctx, req, GetCommitteeArgs{UID: args.UID})
+}
+
+// handleGetCommitteeMemberGroupMode adapts group-mode args to the committee member handler.
+func handleGetCommitteeMemberGroupMode(ctx context.Context, req *mcp.CallToolRequest, args GetGroupMemberArgs) (*mcp.CallToolResult, any, error) {
+	return handleGetCommitteeMember(ctx, req, GetCommitteeMemberArgs{
+		CommitteeUID: args.GroupUID,
+		MemberUID:    args.MemberUID,
+	})
+}
+
+// handleSearchCommitteeMembersGroupMode adapts group-mode args to the committee members handler.
+func handleSearchCommitteeMembersGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupMembersArgs) (*mcp.CallToolResult, any, error) {
+	return handleSearchCommitteeMembers(ctx, req, SearchCommitteeMembersArgs{
+		CommitteeUID: args.GroupUID,
+		ProjectUID:   args.ProjectUID,
+		Name:         args.Name,
+		PageSize:     args.PageSize,
+		PageToken:    args.PageToken,
+	})
 }
 
 // handleSearchCommittees implements the search_committees tool logic.

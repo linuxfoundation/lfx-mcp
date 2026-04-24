@@ -956,14 +956,14 @@ type SearchPastMeetingsArgs struct {
 // SearchPastMeetingsGroupArgs is the groups-mode variant of SearchPastMeetingsArgs.
 type SearchPastMeetingsGroupArgs struct {
 	Name       string   `json:"name,omitempty" jsonschema:"Name or partial name of the past meeting to search for"`
-	ProjectUID string   `json:"project_uid,omitempty" jsonschema:"Filter past meetings by project UID (via parent_ref; ~70% coverage)"`
-	GroupUID   string   `json:"group_uid,omitempty" jsonschema:"Filter past meetings by group UID (also known as committee UID; via tag; ~29% coverage)"`
-	MeetingID  string   `json:"meeting_id,omitempty" jsonschema:"Filter past meetings by meeting ID (via tag; ~87% coverage)"`
-	DateField  string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default data.start_time); also accepts data.end_time"`
+	ProjectUID string   `json:"project_uid,omitempty" jsonschema:"Filter past meetings by project UID"`
+	GroupUID   string   `json:"group_uid,omitempty" jsonschema:"Filter past meetings by group UID (also known as committee UID)"`
+	MeetingID  string   `json:"meeting_id,omitempty" jsonschema:"Filter past meetings by meeting ID"`
+	DateField  string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set); also accepts end_time"`
 	DateFrom   string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo     string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
 	Filters    []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters"`
-	Sort       string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	Sort       string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
 	PageSize   int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken  string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -1089,7 +1089,7 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 	if args.DateFrom != "" || args.DateTo != "" {
 		dateField := args.DateField
 		if dateField == "" {
-			dateField = "data.start_time"
+			dateField = "start_time"
 		}
 		payload.DateField = &dateField
 		if args.DateFrom != "" {

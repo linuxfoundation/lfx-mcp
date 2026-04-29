@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"sync"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
@@ -54,18 +53,21 @@ type ProjectSummary struct {
 
 // handleGetProjectSummary returns a rolled-up complexity fact sheet for a project.
 func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args GetProjectSummaryArgs) (*mcp.CallToolResult, any, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(ctx, req)
 
 	if projectConfig == nil {
+		logger.ErrorContext(ctx, "project tools not configured")
 		return errorResult("project tools not configured"), nil, nil
 	}
 
 	if args.UID == "" {
+		logger.ErrorContext(ctx, "uid is required")
 		return errorResult("uid is required"), nil, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
 		return errorResult(fmt.Sprintf("failed to extract MCP token: %v", err)), nil, nil
 	}
 
@@ -103,7 +105,7 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 			Version: version, Type: &childType, Parent: &parent,
 		})
 		if err != nil {
-			logger.Warn("failed to count child projects", "error", err.Error())
+			logger.WarnContext(ctx, "failed to count child projects", "error", err)
 			addWarning("child_project_count unavailable: " + err.Error())
 			return
 		}
@@ -118,7 +120,7 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 			Version: version, Type: &commType, Parent: &parent,
 		})
 		if err != nil {
-			logger.Warn("failed to count committees", "error", err.Error())
+			logger.WarnContext(ctx, "failed to count committees", "error", err)
 			addWarning("committee_count unavailable: " + err.Error())
 			return
 		}
@@ -134,7 +136,7 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 			Filters: []string{"category:Working Group"},
 		})
 		if err != nil {
-			logger.Warn("failed to count working groups", "error", err.Error())
+			logger.WarnContext(ctx, "failed to count working groups", "error", err)
 			addWarning("working_group_count unavailable: " + err.Error())
 			return
 		}
@@ -149,7 +151,7 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 			Version: version, Type: &mtgType, Parent: &parent,
 		})
 		if err != nil {
-			logger.Warn("failed to count meetings", "error", err.Error())
+			logger.WarnContext(ctx, "failed to count meetings", "error", err)
 			addWarning("meeting_count unavailable: " + err.Error())
 			return
 		}
@@ -165,7 +167,8 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 		UID: &args.UID,
 	})
 	if err != nil {
-		return errorResult(fmt.Sprintf("failed to get project: %s", err.Error())), nil, nil
+		logger.ErrorContext(ctx, "GetOneProjectBase failed", "error", err, "uid", args.UID)
+		return errorResult(friendlyAPIError("failed to get project", err)), nil, nil
 	}
 
 	p := baseResult.Project
@@ -197,10 +200,11 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 
 	prettyJSON, err := json.MarshalIndent(dims, "", "  ")
 	if err != nil {
+		logger.ErrorContext(ctx, "failed to marshal project summary", "error", err, "uid", args.UID)
 		return errorResult(fmt.Sprintf("failed to format result: %v", err)), nil, nil
 	}
 
-	logger.Info("get_project_summary succeeded", "uid", args.UID)
+	logger.InfoContext(ctx, "get_project_summary succeeded", "uid", args.UID)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -208,5 +212,4 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 		},
 	}, nil, nil
 }
-
 

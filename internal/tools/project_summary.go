@@ -19,7 +19,7 @@ import (
 
 // RegisterGetProjectSummary registers the get_project_summary tool.
 func RegisterGetProjectSummary(server *mcp.Server) {
-	AddToolWithScopes(server, &mcp.Tool{
+	mcp.AddTool(server, &mcp.Tool{
 		Name: "get_project_summary",
 		Description: "Get a rolled-up fact sheet for an LFX project: child project count, " +
 			"committee count, working group count, meeting count, plus base project metadata " +
@@ -29,7 +29,7 @@ func RegisterGetProjectSummary(server *mcp.Server) {
 			Title:        "Get Project Summary",
 			ReadOnlyHint: true,
 		},
-	}, ReadScopes(), handleGetProjectSummary)
+	}, handleGetProjectSummary)
 }
 
 // GetProjectSummaryArgs defines input parameters for get_project_summary.
@@ -69,16 +69,8 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 		return errorResult(fmt.Sprintf("failed to extract MCP token: %v", err)), nil, nil
 	}
 
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
-
-	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
-		APIDomain:           projectConfig.LFXAPIURL,
-		TokenExchangeClient: projectConfig.TokenExchangeClient,
-		DebugLogger:         projectConfig.DebugLogger,
-	})
-	if err != nil {
-		return errorResult(fmt.Sprintf("failed to connect to LFX API: %s", lfxv2.ErrorMessage(err))), nil, nil
-	}
+	ctx = projectConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := projectConfig.Clients
 
 	parent := "project:" + args.UID
 	version := "1"
@@ -111,8 +103,8 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 			Version: version, Type: &childType, Parent: &parent,
 		})
 		if err != nil {
-			logger.Warn("failed to count child projects", "error", lfxv2.ErrorMessage(err))
-			addWarning("child_project_count unavailable: " + lfxv2.ErrorMessage(err))
+			logger.Warn("failed to count child projects", "error", err.Error())
+			addWarning("child_project_count unavailable: " + err.Error())
 			return
 		}
 		mu.Lock()
@@ -126,8 +118,8 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 			Version: version, Type: &commType, Parent: &parent,
 		})
 		if err != nil {
-			logger.Warn("failed to count committees", "error", lfxv2.ErrorMessage(err))
-			addWarning("committee_count unavailable: " + lfxv2.ErrorMessage(err))
+			logger.Warn("failed to count committees", "error", err.Error())
+			addWarning("committee_count unavailable: " + err.Error())
 			return
 		}
 		mu.Lock()
@@ -142,8 +134,8 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 			Filters: []string{"category:Working Group"},
 		})
 		if err != nil {
-			logger.Warn("failed to count working groups", "error", lfxv2.ErrorMessage(err))
-			addWarning("working_group_count unavailable: " + lfxv2.ErrorMessage(err))
+			logger.Warn("failed to count working groups", "error", err.Error())
+			addWarning("working_group_count unavailable: " + err.Error())
 			return
 		}
 		mu.Lock()
@@ -157,8 +149,8 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 			Version: version, Type: &mtgType, Parent: &parent,
 		})
 		if err != nil {
-			logger.Warn("failed to count meetings", "error", lfxv2.ErrorMessage(err))
-			addWarning("meeting_count unavailable: " + lfxv2.ErrorMessage(err))
+			logger.Warn("failed to count meetings", "error", err.Error())
+			addWarning("meeting_count unavailable: " + err.Error())
 			return
 		}
 		mu.Lock()
@@ -173,7 +165,7 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 		UID: &args.UID,
 	})
 	if err != nil {
-		return errorResult(fmt.Sprintf("failed to get project: %s", lfxv2.ErrorMessage(err))), nil, nil
+		return errorResult(fmt.Sprintf("failed to get project: %s", err.Error())), nil, nil
 	}
 
 	p := baseResult.Project
@@ -217,12 +209,4 @@ func handleGetProjectSummary(ctx context.Context, req *mcp.CallToolRequest, args
 	}, nil, nil
 }
 
-// errorResult is a convenience helper for returning a tool error response.
-func errorResult(msg string) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Error: " + msg},
-		},
-		IsError: true,
-	}
-}
+

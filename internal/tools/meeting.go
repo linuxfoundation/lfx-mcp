@@ -147,7 +147,7 @@ func RegisterGetPastMeetingParticipant(server *mcp.Server) {
 func RegisterSearchPastMeetingSummaries(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meeting_summaries",
-		Description: "Search for LFX past meeting summaries using the query service. Supports filtering by past meeting ID, project UID, and name.",
+		Description: "Search for LFX past meeting summaries using the query service. Supports filtering by past meeting ID (the meeting_and_occurrence_id value, e.g. 91461158520-1771596000000), project UID, and name.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Past Meeting Summaries",
 			ReadOnlyHint: true,

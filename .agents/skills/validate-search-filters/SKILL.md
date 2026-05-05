@@ -29,11 +29,8 @@ and optionally apply fixes.
   that the mechanism works.
 - `payload.Parent` in the query service is a single string. A tool that
   accepts both `project_uid` and `committee_uid` can only send one at a time.
-- `handleSearchPastMeetingResource` is a shared handler used only by
-  `v1_past_meeting_summary` (and `v1_past_meeting_transcript` if added).
-  `v1_past_meeting_participant` has its own dedicated handler
-  `handleSearchPastMeetingParticipants`. Changes to the shared handler affect
-  all resource types that use it simultaneously.
+- `handleSearchPastMeetingParticipants` and `handleSearchPastMeetingSummaries`
+  are dedicated handlers — each owns its own filter logic independently.
 - When sampling documents, use `"size": 3` to keep output small. Use
   `_source` filtering to request only `tags` and `parent_refs` fields.
 
@@ -254,9 +251,6 @@ each broken filter:
   `payload.Parent = "<type>:<uid>"`.
 - **Wrong tag key**: use the key that actually appears in the index.
 - **Not indexed**: remove the parameter from the args struct and handler.
-- **Shared handler impact**: if the fix is in `handleSearchPastMeetingResource`,
-  verify that the change is correct for all resource types that use it
-  (`v1_past_meeting_participant`, `v1_past_meeting_summary`, and any others).
 
 After applying fixes, run `make build` to confirm compilation succeeds.
 

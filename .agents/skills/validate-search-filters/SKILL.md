@@ -5,9 +5,10 @@ license: MIT
 compatibility: Requires kubectl configured against the LFX v2 Kubernetes cluster (dev or prod) with aws-vault access. The OpenSearch cluster is an AWS-managed OpenSearch Service domain reachable only from within the cluster network — queries are tunnelled through the NATS box pod using kubectl exec.
 ---
 
-Validate every search tool filter parameter in `internal/tools/` against the
-live OpenSearch `resources` index and the upstream indexer-contract
-documentation. Produce a per-filter verdict table and optionally apply fixes.
+Validate every filter parameter across all tools that use the query service SDK
+in `internal/tools/` against the live OpenSearch `resources` index and the
+upstream indexer-contract documentation. Produce a per-filter verdict table
+and optionally apply fixes.
 
 ## Gotchas
 
@@ -18,7 +19,7 @@ documentation. Produce a per-filter verdict table and optionally apply fixes.
   in namespace `lfx`.
 - Discover the OpenSearch URL dynamically from the indexer deployment env var
   `OPENSEARCH_URL`. The index name is in `OPENSEARCH_INDEX` (currently
-  `resources`).
+  `resources`). Combine them into `OPENSEARCH_BASEURL` as shown in Step 1.
 - `tags` entries may have empty values (e.g. `"committee_uid:"`,
   `"project_uid:"`) — these are indexed but useless for filtering. A tag key
   is only valid evidence when at least one document has a non-empty value for
@@ -44,11 +45,16 @@ NATS_POD=$(aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
   -l 'app.kubernetes.io/component=nats-box,app.kubernetes.io/instance=lfx-platform' \
   -o jsonpath='{.items[0].metadata.name}')
 
-# Resolve OpenSearch URL and index from the indexer deployment.
-OS_ENV=$(aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
+# Resolve OpenSearch URL and index from the indexer deployment env vars.
+OPENSEARCH_URL=$(aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
   get deploy -n lfx lfx-v2-indexer-service \
-  -o jsonpath='{.spec.template.spec.containers[0].env}')
-# Extract OPENSEARCH_URL and OPENSEARCH_INDEX from OS_ENV (jq or grep).
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="OPENSEARCH_URL")].value}')
+OPENSEARCH_INDEX=$(aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
+  get deploy -n lfx lfx-v2-indexer-service \
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="OPENSEARCH_INDEX")].value}')
+
+# Build the base URL used in all search queries below.
+OPENSEARCH_BASEURL="$OPENSEARCH_URL/$OPENSEARCH_INDEX"
 
 # Verify connectivity — halt if this returns an error or empty body.
 aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
@@ -75,11 +81,18 @@ parameter is sent to the query service. The mechanisms are:
 | `payload.Name = "<value>"` | `Name` | `name` (text search) |
 | `payload.DateField` / `DateFrom` / `DateTo` | date range | date fields |
 
-Current search tools and their structured filter parameters (update this list
-if new tools are added):
+Current tools using the query service SDK and their structured filter parameters
+(update this list if new tools are added):
 
 | Tool | Resource type | Parameter | Mechanism | Sent as |
 |---|---|---|---|---|
+| `search_projects` | `project` | `parent_uid` | Parent | `project:<uid>` |
+| `search_committees` | `committee` | `project_uid` | Parent | `project:<uid>` |
+| `search_committee_members` | `committee_member` | `committee_uid` | Tag | `committee_uid:<uid>` |
+| `search_committee_members` | `committee_member` | `project_uid` | Tag | `project_uid:<uid>` |
+| `search_mailing_lists` | `groupsio_mailing_list` | `project_uid` | Parent | `project:<uid>` |
+| `search_mailing_list_members` | `groupsio_member` | `mailing_list_id` | Tag | `mailing_list_uid:<id>` |
+| `search_mailing_list_members` | `groupsio_member` | `project_uid` | Tag | `project_uid:<uid>` |
 | `search_meetings` | `v1_meeting` | `committee_uid` | Parent (preferred) | `committee:<uid>` |
 | `search_meetings` | `v1_meeting` | `project_uid` | Parent (fallback) | `project:<uid>` |
 | `search_meeting_registrants` | `v1_meeting_registrant` | `meeting_id` | Parent (preferred) | `meeting:<id>` |
@@ -102,21 +115,25 @@ Known contract URLs:
 - `v1_meeting`, `v1_meeting_registrant`, `v1_past_meeting_participant`,
   `v1_past_meeting_transcript`, `v1_past_meeting_summary`:
   https://github.com/linuxfoundation/lfx-v2-meeting-service/blob/main/docs/indexer-contract.md
+- `project`, `committee`, `committee_member`, `groupsio_mailing_list`,
+  `groupsio_member`: search for `indexer-contract.md` in the relevant service
+  repos (e.g. `lfx-v2-project-service`, `lfx-v2-committee-service`,
+  `lfx-v2-mailing-list-service`) and add the URLs here when found.
 
 Fetch each URL and record which tag keys and parent_ref prefixes the contract
 defines for each resource type.
 
 ## Step 4 — Sample the live index
 
-For each resource type, run the following queries via the NATS box. Replace
-`$NATS_POD`, `$OPENSEARCH_URL`, and `$INDEX` with the values from Step 1.
+For each resource type, run the following queries via the NATS box. Use the
+`$NATS_POD` and `$OPENSEARCH_BASEURL` variables set in Step 1.
 
 **Sample tags and parent_refs from 3 documents:**
 
 ```bash
 aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
   exec -n lfx "$NATS_POD" -- \
-  curl -s -X GET "$OPENSEARCH_URL/$INDEX/_search" \
+  curl -s -X GET "$OPENSEARCH_BASEURL/_search" \
   -H 'Content-Type: application/json' \
   -d '{
     "size": 3,
@@ -132,7 +149,7 @@ aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
 ```bash
 aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
   exec -n lfx "$NATS_POD" -- \
-  curl -s -X GET "$OPENSEARCH_URL/$INDEX/_search" \
+  curl -s -X GET "$OPENSEARCH_BASEURL/_search" \
   -H 'Content-Type: application/json' \
   -d '{
     "size": 1,
@@ -156,7 +173,7 @@ aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
 ```bash
 aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
   exec -n lfx "$NATS_POD" -- \
-  curl -s -X GET "$OPENSEARCH_URL/$INDEX/_search" \
+  curl -s -X GET "$OPENSEARCH_BASEURL/_search" \
   -H 'Content-Type: application/json' \
   -d '{
     "size": 1,

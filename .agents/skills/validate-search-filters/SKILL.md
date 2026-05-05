@@ -2,7 +2,7 @@
 name: validate-search-filters
 description: Validate MCP search tool filter parameters against the live OpenSearch resources index and upstream indexer-contract documentation. Use after any filter bug report or indexer contract change to identify broken, missing, or incorrectly implemented filter parameters.
 license: MIT
-compatibility: Requires kubectl configured against the LFX v2 Kubernetes cluster (dev or prod) with aws-vault access. The OpenSearch cluster is an AWS-managed OpenSearch Service domain reachable only from within the cluster network — queries are tunnelled through the NATS box pod using kubectl exec.
+compatibility: Requires kubectl configured against the LFX v2 Kubernetes cluster (dev or prod). The OpenSearch cluster is an AWS-managed OpenSearch Service domain reachable only from within the cluster network — queries are tunnelled through the NATS box pod using kubectl exec.
 ---
 
 Validate every filter parameter across all tools that use the query service SDK
@@ -29,10 +29,11 @@ and optionally apply fixes.
   that the mechanism works.
 - `payload.Parent` in the query service is a single string. A tool that
   accepts both `project_uid` and `committee_uid` can only send one at a time.
-- `handleSearchPastMeetingResource` is a shared handler used by
-  `v1_past_meeting_participant`, `v1_past_meeting_summary`, and
-  (if added) `v1_past_meeting_transcript`. Changes to its filter logic affect
-  all three resource types simultaneously.
+- `handleSearchPastMeetingResource` is a shared handler used only by
+  `v1_past_meeting_summary` (and `v1_past_meeting_transcript` if added).
+  `v1_past_meeting_participant` has its own dedicated handler
+  `handleSearchPastMeetingParticipants`. Changes to the shared handler affect
+  all resource types that use it simultaneously.
 - When sampling documents, use `"size": 3` to keep output small. Use
   `_source` filtering to request only `tags` and `parent_refs` fields.
 
@@ -40,33 +41,29 @@ and optionally apply fixes.
 
 ```bash
 # Resolve the NATS box pod name.
-NATS_POD=$(aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
-  get pod -n lfx \
+NATS_POD=$(kubectl get pod -n lfx \
   -l 'app.kubernetes.io/component=nats-box,app.kubernetes.io/instance=lfx-platform' \
   -o jsonpath='{.items[0].metadata.name}')
 
 # Resolve OpenSearch URL and index from the indexer deployment env vars.
-OPENSEARCH_URL=$(aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
-  get deploy -n lfx lfx-v2-indexer-service \
+OPENSEARCH_URL=$(kubectl get deploy -n lfx lfx-v2-indexer-service \
   -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="OPENSEARCH_URL")].value}')
-OPENSEARCH_INDEX=$(aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
-  get deploy -n lfx lfx-v2-indexer-service \
+OPENSEARCH_INDEX=$(kubectl get deploy -n lfx lfx-v2-indexer-service \
   -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="OPENSEARCH_INDEX")].value}')
 
 # Build the base URL used in all search queries below.
 OPENSEARCH_BASEURL="$OPENSEARCH_URL/$OPENSEARCH_INDEX"
 
 # Verify connectivity — halt if this returns an error or empty body.
-aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
-  exec -n lfx "$NATS_POD" -- \
-  curl -s "$OPENSEARCH_URL/"
+# Use --max-time 15 to prevent the curl from hanging and triggering OOMKill (exit 137).
+kubectl exec -n lfx "$NATS_POD" -- \
+  curl -s --max-time 15 "$OPENSEARCH_URL/"
 ```
 
 If the connectivity check fails, stop and report: **OpenSearch unreachable —
-check cluster access and aws-vault session.**
+check cluster access.**
 
-Substitute `lfx-prod` / `prod-lfx-v2` with `lfx-dev` / `dev-lfx-v2` if you
-need to target the dev cluster instead.
+Substitute the kubectl context as needed to target dev vs. prod.
 
 ## Step 2 — Enumerate search tools and their filter mappings
 
@@ -100,56 +97,68 @@ Current tools using the query service SDK and their structured filter parameters
 | `search_past_meetings` | `v1_past_meeting` | `project_uid` | Parent | `project:<uid>` |
 | `search_past_meetings` | `v1_past_meeting` | `committee_uid` | Tag | `committee_uid:<uid>` |
 | `search_past_meetings` | `v1_past_meeting` | `meeting_id` | Tag | `meeting_id:<id>` |
-| `search_past_meeting_participants` | `v1_past_meeting_participant` | `meeting_id` | Tag | `meeting_id:<id>` |
-| `search_past_meeting_summaries` | `v1_past_meeting_summary` | `meeting_id` | Tag | `meeting_id:<id>` |
+| `search_past_meeting_participants` | `v1_past_meeting_participant` | `past_meeting_id` | Parent (preferred) | `past_meeting:<meeting_and_occurrence_id>` |
+| `search_past_meeting_participants` | `v1_past_meeting_participant` | `project_uid` | Parent (fallback) | `project:<uid>` |
+| `search_past_meeting_summaries` | `v1_past_meeting_summary` | `past_meeting_id` | Parent (preferred) | `past_meeting:<meeting_and_occurrence_id>` |
+| `search_past_meeting_summaries` | `v1_past_meeting_summary` | `project_uid` | Parent (fallback) | `project:<uid>` |
 
 Re-read the handler code to verify this table is current before proceeding.
 
 ## Step 3 — Fetch indexer contracts
 
-Fetch the indexer-contract documentation for each resource type and extract
-the **Tags** table and **Parent References** table.
+Fetch the indexer-contract documentation for each resource type. The contracts
+define the canonical set of tag keys and parent_ref prefixes each service
+publishes. This information is **required** for the Step 6 report — every
+filter parameter must be cross-referenced against the contract.
 
 Known contract URLs:
 
-- `v1_meeting`, `v1_meeting_registrant`, `v1_past_meeting_participant`,
-  `v1_past_meeting_transcript`, `v1_past_meeting_summary`:
+- `v1_meeting`, `v1_meeting_registrant`, `v1_past_meeting`,
+  `v1_past_meeting_participant`, `v1_past_meeting_transcript`,
+  `v1_past_meeting_summary`:
   https://github.com/linuxfoundation/lfx-v2-meeting-service/blob/main/docs/indexer-contract.md
-- `project`, `committee`, `committee_member`, `groupsio_mailing_list`,
-  `groupsio_member`: search for `indexer-contract.md` in the relevant service
-  repos (e.g. `lfx-v2-project-service`, `lfx-v2-committee-service`,
-  `lfx-v2-mailing-list-service`) and add the URLs here when found.
+- `project`:
+  https://github.com/linuxfoundation/lfx-v2-project-service/blob/main/docs/indexer-contract.md
+- `committee`, `committee_member`:
+  https://github.com/linuxfoundation/lfx-v2-committee-service/blob/main/docs/indexer-contract.md
+- `groupsio_mailing_list`, `groupsio_member`:
+  https://github.com/linuxfoundation/lfx-v2-mailing-list-service/blob/main/docs/indexer-contract.md
 
-Fetch each URL and record which tag keys and parent_ref prefixes the contract
-defines for each resource type.
+Fetch each URL and extract the **Tags** table and **Parent References** table
+for each resource type. Record which tag keys and parent_ref prefixes the
+contract defines. If a URL 404s or has no contract doc, note it and continue —
+treat those filters as "no contract definition" in the report.
 
 ## Step 4 — Sample the live index
 
 For each resource type, run the following queries via the NATS box. Use the
 `$NATS_POD` and `$OPENSEARCH_BASEURL` variables set in Step 1.
 
-**Sample tags and parent_refs from 3 documents:**
+**Sample tags and parent_refs from 3 recently indexed documents (last 45 days):**
 
 ```bash
-aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
-  exec -n lfx "$NATS_POD" -- \
-  curl -s -X GET "$OPENSEARCH_BASEURL/_search" \
+kubectl exec -n lfx "$NATS_POD" -- \
+  curl -s --max-time 15 -X GET "$OPENSEARCH_BASEURL/_search" \
   -H 'Content-Type: application/json' \
   -d '{
     "size": 3,
     "_source": ["tags", "parent_refs", "object_type"],
     "query": {
-      "term": { "object_type": "<RESOURCE_TYPE>" }
+      "bool": {
+        "must": [
+          { "term": { "object_type": "<RESOURCE_TYPE>" } },
+          { "range": { "updated_at": { "gte": "now-45d" } } }
+        ]
+      }
     }
   }'
 ```
 
-**Check whether a specific tag key has any non-empty values:**
+**Check whether a specific tag key has any non-empty values (last 45 days):**
 
 ```bash
-aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
-  exec -n lfx "$NATS_POD" -- \
-  curl -s -X GET "$OPENSEARCH_BASEURL/_search" \
+kubectl exec -n lfx "$NATS_POD" -- \
+  curl -s --max-time 15 -X GET "$OPENSEARCH_BASEURL/_search" \
   -H 'Content-Type: application/json' \
   -d '{
     "size": 1,
@@ -158,7 +167,8 @@ aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
       "bool": {
         "must": [
           { "term": { "object_type": "<RESOURCE_TYPE>" } },
-          { "prefix": { "tags": "<TAG_KEY>:" } }
+          { "prefix": { "tags": "<TAG_KEY>:" } },
+          { "range": { "updated_at": { "gte": "now-45d" } } }
         ],
         "must_not": [
           { "term": { "tags": "<TAG_KEY>:" } }
@@ -168,12 +178,11 @@ aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
   }'
 ```
 
-**Check whether a specific parent_ref prefix exists:**
+**Check whether a specific parent_ref prefix exists (last 45 days):**
 
 ```bash
-aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
-  exec -n lfx "$NATS_POD" -- \
-  curl -s -X GET "$OPENSEARCH_BASEURL/_search" \
+kubectl exec -n lfx "$NATS_POD" -- \
+  curl -s --max-time 15 -X GET "$OPENSEARCH_BASEURL/_search" \
   -H 'Content-Type: application/json' \
   -d '{
     "size": 1,
@@ -182,7 +191,8 @@ aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
       "bool": {
         "must": [
           { "term": { "object_type": "<RESOURCE_TYPE>" } },
-          { "prefix": { "parent_refs": "<PREFIX>:" } }
+          { "prefix": { "parent_refs": "<PREFIX>:" } },
+          { "range": { "updated_at": { "gte": "now-45d" } } }
         ]
       }
     }
@@ -190,37 +200,50 @@ aws-vault exec lfx-prod -s -- kubectl --context=prod-lfx-v2 \
 ```
 
 Record the `total.value` from each response. A non-zero value confirms the
-key/prefix is present in the index.
+key/prefix is present in recently indexed data. If the count is zero but the
+resource type has older data, note it as "not seen in last 45 days" rather
+than immediately marking it broken — check the sample query to understand
+overall coverage before rendering a verdict.
 
 ## Step 5 — Build the truth table
 
-Cross-reference: tool parameter → mechanism → index evidence. Assign a
-verdict to each filter parameter:
+Cross-reference: tool parameter → mechanism → contract definition → index
+evidence. Assign a verdict to each filter parameter:
 
 - ✅ **Works** — the tag key or parent_ref prefix exists in the index with
-  non-empty values, matching what the tool sends.
+  non-empty values, matching what the tool sends, and the contract defines it.
 - ⚠️ **Broken** — the tool sends the wrong mechanism (e.g. tag when it should
   be parent_ref), or uses a key/prefix that does not appear in the index.
 - ❌ **Not indexed** — the data is not present in the index at all for this
   resource type; the parameter should be removed from the tool.
+- ⚠️ **No contract definition** — the filter works in the live index but is
+  not listed in the indexer-contract doc; flag for follow-up.
 
 ## Step 6 — Report findings
 
-Emit a structured markdown report grouped by tool:
+Emit a structured markdown report grouped by tool. Each row must include a
+"Contract" column that cross-references the indexer-contract documentation
+fetched in Step 3 — state whether the contract defines the tag key or
+parent_ref prefix used by the tool, and if so, whether the tool's mechanism
+matches what the contract specifies.
 
 ```markdown
 ## <tool_name> (resource type: <type>)
 
-| Parameter | Mechanism | Sent as | Index evidence | Verdict |
-|---|---|---|---|---|
-| committee_uid | Parent | committee:<uid> | parent_refs prefix "committee:" — N hits | ✅ Works |
-| project_uid | Parent | project:<uid> | parent_refs prefix "project:" — 0 hits | ⚠️ Broken |
+| Parameter | Mechanism | Sent as | Contract | Index evidence | Verdict |
+|---|---|---|---|---|---|
+| committee_uid | Parent | committee:<uid> | ✅ parent_ref `committee:` | parent_refs prefix "committee:" — N hits | ✅ Works |
+| project_uid | Parent | project:<uid> | ✅ parent_ref `project:` | parent_refs prefix "project:" — 0 hits | ⚠️ Broken |
+| meeting_id | Tag | meeting_id:<id> | ⚠️ not in contract | tag key "meeting_id:" — N hits | ⚠️ Review |
 ```
 
 After the table, state explicitly:
-- Which filters are confirmed working.
+- Which filters are confirmed working and match the contract.
 - Which are broken and why (wrong mechanism, wrong key name, etc.).
 - Which should be removed because the data is not indexed.
+- Which have no contract definition (tag/parent_ref not listed in the
+  indexer-contract doc) — flag these for follow-up even if they appear to work
+  in the live index, since undocumented fields may be removed without notice.
 
 ## Step 7 — Apply fixes (optional)
 

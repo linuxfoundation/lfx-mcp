@@ -50,9 +50,21 @@ Add the following to your `~/.config/opencode/opencode.json`:
 
 See the [OpenCode MCP documentation](https://opencode.ai/docs/mcp-servers) for more details.
 
-### Claude
+### Claude (LF enterprise)
 
-Add the LFX MCP Server in **Settings → Integrations → Add Integration**:
+If you use the Linux Foundation's enterprise Claude.ai organization, the LFX MCP Server is already provisioned as a connector — you do not need to add it manually.
+
+1. In Claude.ai, open **Settings → Connectors**.
+2. Find **LFX MCP Server** in the list of available connectors.
+3. Click **Connect**.
+4. Sign in with your **LFID** when prompted.
+5. Click **Authorize** to grant access; you will be redirected back to Claude.
+
+The connector is now active for your account.
+
+### Claude (personal account)
+
+Add the LFX MCP Server in **Settings → Connectors → Add Custom Connector **:
 
 - **URL:** `https://mcp.lfx.dev/mcp`
 - **Client ID:** `Ef9tuU5wcJJIXmNGvZyGUkZFfD8CZWar`

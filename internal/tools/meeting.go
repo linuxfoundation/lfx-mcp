@@ -123,7 +123,7 @@ func RegisterGetMeetingRegistrant(server *mcp.Server) {
 func RegisterSearchPastMeetingParticipants(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meeting_participants",
-		Description: "Search for LFX past meeting participants using the query service. Supports filtering by meeting ID and name.",
+		Description: "Search for LFX past meeting participants using the query service. Supports filtering by past meeting ID (meeting_and_occurrence_id), project UID, and name.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Past Meeting Participants",
 			ReadOnlyHint: true,
@@ -147,7 +147,7 @@ func RegisterGetPastMeetingParticipant(server *mcp.Server) {
 func RegisterSearchPastMeetingSummaries(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meeting_summaries",
-		Description: "Search for LFX past meeting summaries using the query service. Supports filtering by meeting ID and name.",
+		Description: "Search for LFX past meeting summaries using the query service. Supports filtering by past meeting ID (the meeting_and_occurrence_id value, e.g. 91461158520-1771596000000), project UID, and name.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Past Meeting Summaries",
 			ReadOnlyHint: true,
@@ -213,7 +213,6 @@ type SearchMeetingsArgs struct {
 	DateField    string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set)"`
 	DateFrom     string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo       string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
-	Filters      []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters (e.g. visibility:public or status:active)"`
 	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
 	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
@@ -227,7 +226,6 @@ type SearchMeetingsGroupArgs struct {
 	DateField  string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set)"`
 	DateFrom   string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo     string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
-	Filters    []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters (e.g. visibility:public or status:active)"`
 	Sort       string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
 	PageSize   int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken  string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
@@ -243,7 +241,6 @@ type SearchMeetingRegistrantsArgs struct {
 	MeetingID    string   `json:"meeting_id,omitempty" jsonschema:"Filter registrants by meeting ID"`
 	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter registrants by committee UID (ignored when meeting_id is set)"`
 	Name         string   `json:"name,omitempty" jsonschema:"Name or partial name of the registrant to search for"`
-	Filters      []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters (e.g. host:true or type:committee)"`
 	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
 	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
@@ -254,7 +251,6 @@ type SearchMeetingRegistrantsGroupArgs struct {
 	MeetingID string   `json:"meeting_id,omitempty" jsonschema:"Filter registrants by meeting ID"`
 	GroupUID  string   `json:"group_uid,omitempty" jsonschema:"Filter registrants by group UID (also known as committee UID; ignored when meeting_id is set)"`
 	Name      string   `json:"name,omitempty" jsonschema:"Name or partial name of the registrant to search for"`
-	Filters   []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters (e.g. host:true or type:committee)"`
 	Sort      string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
 	PageSize  int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
@@ -267,12 +263,12 @@ type GetMeetingRegistrantArgs struct {
 
 // SearchPastMeetingParticipantsArgs defines the input parameters for the search_past_meeting_participants tool.
 type SearchPastMeetingParticipantsArgs struct {
-	MeetingID string   `json:"meeting_id,omitempty" jsonschema:"Filter participants by meeting ID"`
-	Name      string   `json:"name,omitempty" jsonschema:"Name or partial name of the participant to search for"`
-	Filters   []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters"`
-	Sort      string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
-	PageSize  int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	PastMeetingID string   `json:"past_meeting_id,omitempty" jsonschema:"Filter participants by past meeting ID (the meeting_and_occurrence_id value, e.g. 91461158520-1771596000000)"`
+	ProjectUID    string   `json:"project_uid,omitempty" jsonschema:"Filter participants by project UID (ignored when past_meeting_id is set)"`
+	Name          string   `json:"name,omitempty" jsonschema:"Name or partial name of the participant to search for"`
+	Sort          string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
+	PageSize      int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken     string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // GetPastMeetingParticipantArgs defines the input parameters for the get_past_meeting_participant tool.
@@ -282,12 +278,12 @@ type GetPastMeetingParticipantArgs struct {
 
 // SearchPastMeetingSummariesArgs defines the input parameters for the search_past_meeting_summaries tool.
 type SearchPastMeetingSummariesArgs struct {
-	MeetingID string   `json:"meeting_id,omitempty" jsonschema:"Filter summaries by meeting ID"`
-	Name      string   `json:"name,omitempty" jsonschema:"Name or partial name of the summary to search for"`
-	Filters   []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters"`
-	Sort      string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
-	PageSize  int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	PastMeetingID string   `json:"past_meeting_id,omitempty" jsonschema:"Filter summaries by past meeting ID (the meeting_and_occurrence_id value, e.g. 91461158520-1771596000000)"`
+	ProjectUID    string   `json:"project_uid,omitempty" jsonschema:"Filter summaries by project UID (ignored when past_meeting_id is set)"`
+	Name          string   `json:"name,omitempty" jsonschema:"Name or partial name of the summary to search for"`
+	Sort          string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
+	PageSize      int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken     string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // GetPastMeetingSummaryArgs defines the input parameters for the get_past_meeting_summary tool.
@@ -346,7 +342,7 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 	}
 
 	// committee_uid takes precedence over project_uid when both are provided
-	// because committee resolves to a more specific parent reference.
+	// because committee resolves to a more specific filter.
 	if args.CommitteeUID != "" {
 		parentRef := "committee:" + args.CommitteeUID
 		payload.Parent = &parentRef
@@ -367,10 +363,6 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		if args.DateTo != "" {
 			payload.DateTo = &args.DateTo
 		}
-	}
-
-	if len(args.Filters) > 0 {
-		payload.Filters = args.Filters
 	}
 
 	if args.PageToken != "" {
@@ -560,8 +552,8 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 		Sort:     sort,
 	}
 
-	// meeting_id takes precedence over committee_uid because Parent can only be
-	// set once; prefer the more specific filter.
+	// meeting_id takes precedence over committee_uid because only one filter
+	// of this type can be set; prefer the more specific filter.
 	if args.MeetingID != "" {
 		parentRef := "meeting:" + args.MeetingID
 		payload.Parent = &parentRef
@@ -572,10 +564,6 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 
 	if args.Name != "" {
 		payload.Name = &args.Name
-	}
-
-	if len(args.Filters) > 0 {
-		payload.Filters = args.Filters
 	}
 
 	if args.PageToken != "" {
@@ -721,26 +709,6 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 
 // handleSearchPastMeetingParticipants implements the search_past_meeting_participants tool logic.
 func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolRequest, args SearchPastMeetingParticipantsArgs) (*mcp.CallToolResult, any, error) {
-	return handleSearchPastMeetingResource(ctx, req, pastMeetingParticipantResourceType, "past meeting participants", args.MeetingID, args.Name, args.Filters, args.Sort, args.PageSize, args.PageToken)
-}
-
-// handleGetPastMeetingParticipant implements the get_past_meeting_participant tool logic.
-func handleGetPastMeetingParticipant(ctx context.Context, req *mcp.CallToolRequest, args GetPastMeetingParticipantArgs) (*mcp.CallToolResult, any, error) {
-	return handleGetPastMeetingResource(ctx, req, pastMeetingParticipantResourceType, "past meeting participant", args.UID)
-}
-
-// handleSearchPastMeetingSummaries implements the search_past_meeting_summaries tool logic.
-func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequest, args SearchPastMeetingSummariesArgs) (*mcp.CallToolResult, any, error) {
-	return handleSearchPastMeetingResource(ctx, req, pastMeetingSummaryResourceType, "past meeting summaries", args.MeetingID, args.Name, args.Filters, args.Sort, args.PageSize, args.PageToken)
-}
-
-// handleGetPastMeetingSummary implements the get_past_meeting_summary tool logic.
-func handleGetPastMeetingSummary(ctx context.Context, req *mcp.CallToolRequest, args GetPastMeetingSummaryArgs) (*mcp.CallToolResult, any, error) {
-	return handleGetPastMeetingResource(ctx, req, pastMeetingSummaryResourceType, "past meeting summary", args.UID)
-}
-
-// handleSearchPastMeetingResource is a shared implementation for searching past meeting resource types.
-func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest, resourceType, resourceLabel, meetingID, name string, filters []string, sort string, pageSize int, pageToken string) (*mcp.CallToolResult, any, error) {
 	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
@@ -767,14 +735,17 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := meetingConfig.Clients
 
+	pageSize := args.PageSize
 	if pageSize <= 0 {
 		pageSize = 10
 	}
 
+	sort := args.Sort
 	if sort == "" {
 		sort = "name_asc"
 	}
 
+	resourceType := pastMeetingParticipantResourceType
 	payload := &querysvc.QueryResourcesPayload{
 		Version:  "1",
 		Type:     &resourceType,
@@ -782,34 +753,36 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 		Sort:     sort,
 	}
 
-	var tags []string
-	if meetingID != "" {
-		tags = append(tags, fmt.Sprintf("meeting_id:%s", meetingID))
-	}
-	if len(tags) > 0 {
-		payload.Tags = tags
-	}
-
-	if name != "" {
-		payload.Name = &name
+	// past_meeting_id takes precedence over project_uid; only one filter of this type can be set.
+	if args.PastMeetingID != "" {
+		parentRef := "past_meeting:" + args.PastMeetingID
+		payload.Parent = &parentRef
+	} else if args.ProjectUID != "" {
+		parentRef := "project:" + args.ProjectUID
+		payload.Parent = &parentRef
 	}
 
-	if len(filters) > 0 {
-		payload.Filters = filters
+	if args.Name != "" {
+		payload.Name = &args.Name
 	}
 
-	if pageToken != "" {
-		payload.PageToken = &pageToken
+	if args.PageToken != "" {
+		payload.PageToken = &args.PageToken
 	}
 
-	logger.InfoContext(ctx, "searching "+resourceLabel, "meeting_id", meetingID, "name", name, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching past meeting participants",
+		"past_meeting_id", args.PastMeetingID,
+		"project_uid", args.ProjectUID,
+		"name", args.Name,
+		"page_size", pageSize,
+	)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search "+resourceLabel, err)},
+				&mcp.TextContent{Text: friendlyAPIError("failed to search past meeting participants", err)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -841,7 +814,7 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 		}, nil, nil
 	}
 
-	logger.InfoContext(ctx, "search "+resourceLabel+" succeeded", "count", len(result.Resources))
+	logger.InfoContext(ctx, "search past meeting participants succeeded", "count", len(result.Resources))
 
 	content := []mcp.Content{}
 	if pageWarning != "" {
@@ -849,6 +822,133 @@ func handleSearchPastMeetingResource(ctx context.Context, req *mcp.CallToolReque
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
 	return &mcp.CallToolResult{Content: content}, nil, nil
+}
+
+// handleGetPastMeetingParticipant implements the get_past_meeting_participant tool logic.
+func handleGetPastMeetingParticipant(ctx context.Context, req *mcp.CallToolRequest, args GetPastMeetingParticipantArgs) (*mcp.CallToolResult, any, error) {
+	return handleGetPastMeetingResource(ctx, req, pastMeetingParticipantResourceType, "past meeting participant", args.UID)
+}
+
+// handleSearchPastMeetingSummaries implements the search_past_meeting_summaries tool logic.
+func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequest, args SearchPastMeetingSummariesArgs) (*mcp.CallToolResult, any, error) {
+	logger := newToolLogger(ctx, req)
+
+	if meetingConfig == nil {
+		logger.ErrorContext(ctx, "meeting tools not configured")
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "Error: meeting tools not configured"},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := meetingConfig.Clients
+
+	pageSize := args.PageSize
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
+	sort := args.Sort
+	if sort == "" {
+		sort = "name_asc"
+	}
+
+	resourceType := pastMeetingSummaryResourceType
+	payload := &querysvc.QueryResourcesPayload{
+		Version:  "1",
+		Type:     &resourceType,
+		PageSize: pageSize,
+		Sort:     sort,
+	}
+
+	// past_meeting_id takes precedence over project_uid; only one filter of this type can be set.
+	if args.PastMeetingID != "" {
+		parentRef := "past_meeting:" + args.PastMeetingID
+		payload.Parent = &parentRef
+	} else if args.ProjectUID != "" {
+		parentRef := "project:" + args.ProjectUID
+		payload.Parent = &parentRef
+	}
+
+	if args.Name != "" {
+		payload.Name = &args.Name
+	}
+
+	if args.PageToken != "" {
+		payload.PageToken = &args.PageToken
+	}
+
+	logger.InfoContext(ctx, "searching past meeting summaries",
+		"past_meeting_id", args.PastMeetingID,
+		"project_uid", args.ProjectUID,
+		"name", args.Name,
+		"page_size", pageSize,
+	)
+
+	result, err := clients.QuerySvc.QueryResources(ctx, payload)
+	if err != nil {
+		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: friendlyAPIError("failed to search past meeting summaries", err)},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	type searchResult struct {
+		Resources []*querysvc.Resource `json:"resources"`
+		PageToken *string              `json:"page_token,omitempty"`
+	}
+
+	out := searchResult{
+		Resources: result.Resources,
+		PageToken: result.PageToken,
+	}
+
+	var pageWarning string
+	if result.PageToken != nil && len(result.Resources) < pageSize {
+		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
+	}
+
+	prettyJSON, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
+			},
+			IsError: true,
+		}, nil, nil
+	}
+
+	logger.InfoContext(ctx, "search past meeting summaries succeeded", "past_meeting_id", args.PastMeetingID, "project_uid", args.ProjectUID, "count", len(result.Resources))
+
+	content := []mcp.Content{}
+	if pageWarning != "" {
+		content = append(content, &mcp.TextContent{Text: pageWarning})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+	return &mcp.CallToolResult{Content: content}, nil, nil
+}
+
+// handleGetPastMeetingSummary implements the get_past_meeting_summary tool logic.
+func handleGetPastMeetingSummary(ctx context.Context, req *mcp.CallToolRequest, args GetPastMeetingSummaryArgs) (*mcp.CallToolResult, any, error) {
+	return handleGetPastMeetingResource(ctx, req, pastMeetingSummaryResourceType, "past meeting summary", args.UID)
 }
 
 // handleGetPastMeetingResource is a shared implementation for getting a past meeting resource by UID.
@@ -947,30 +1047,28 @@ type SearchPastMeetingsArgs struct {
 	DateField    string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set); also accepts end_time"`
 	DateFrom     string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo       string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
-	Filters      []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters"`
 	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
 	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
-// SearchPastMeetingsGroupArgs is the groups-mode variant of SearchPastMeetingsArgs.
-type SearchPastMeetingsGroupArgs struct {
-	Name       string   `json:"name,omitempty" jsonschema:"Name or partial name of the past meeting to search for"`
-	ProjectUID string   `json:"project_uid,omitempty" jsonschema:"Filter past meetings by project UID"`
-	GroupUID   string   `json:"group_uid,omitempty" jsonschema:"Filter past meetings by group UID (also known as committee UID)"`
-	MeetingID  string   `json:"meeting_id,omitempty" jsonschema:"Filter past meetings by meeting ID"`
-	DateField  string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set); also accepts end_time"`
-	DateFrom   string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
-	DateTo     string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
-	Filters    []string `json:"filters,omitempty" jsonschema:"Direct field:value term filters"`
-	Sort       string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
-	PageSize   int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken  string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
-}
-
 // GetPastMeetingArgs defines the input parameters for the get_past_meeting tool.
 type GetPastMeetingArgs struct {
 	UID string `json:"uid" jsonschema:"The UID of the past meeting to retrieve"`
+}
+
+// SearchPastMeetingsGroupArgs is the groups-mode variant of SearchPastMeetingsArgs.
+type SearchPastMeetingsGroupArgs struct {
+	Name       string `json:"name,omitempty" jsonschema:"Name or partial name of the past meeting to search for"`
+	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Filter past meetings by project UID"`
+	GroupUID   string `json:"group_uid,omitempty" jsonschema:"Filter past meetings by group UID (also known as committee UID)"`
+	MeetingID  string `json:"meeting_id,omitempty" jsonschema:"Filter past meetings by meeting ID"`
+	DateField  string `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set); also accepts end_time"`
+	DateFrom   string `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
+	DateTo     string `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
+	Sort       string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
+	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // handleSearchMeetingsGroupMode adapts group-mode args to the meetings handler.
@@ -982,7 +1080,6 @@ func handleSearchMeetingsGroupMode(ctx context.Context, req *mcp.CallToolRequest
 		DateField:    args.DateField,
 		DateFrom:     args.DateFrom,
 		DateTo:       args.DateTo,
-		Filters:      args.Filters,
 		Sort:         args.Sort,
 		PageSize:     args.PageSize,
 		PageToken:    args.PageToken,
@@ -995,7 +1092,6 @@ func handleSearchMeetingRegistrantsGroupMode(ctx context.Context, req *mcp.CallT
 		MeetingID:    args.MeetingID,
 		CommitteeUID: args.GroupUID,
 		Name:         args.Name,
-		Filters:      args.Filters,
 		Sort:         args.Sort,
 		PageSize:     args.PageSize,
 		PageToken:    args.PageToken,
@@ -1012,7 +1108,6 @@ func handleSearchPastMeetingsGroupMode(ctx context.Context, req *mcp.CallToolReq
 		DateField:    args.DateField,
 		DateFrom:     args.DateFrom,
 		DateTo:       args.DateTo,
-		Filters:      args.Filters,
 		Sort:         args.Sort,
 		PageSize:     args.PageSize,
 		PageToken:    args.PageToken,
@@ -1098,10 +1193,6 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 		if args.DateTo != "" {
 			payload.DateTo = &args.DateTo
 		}
-	}
-
-	if len(args.Filters) > 0 {
-		payload.Filters = args.Filters
 	}
 
 	if args.PageToken != "" {

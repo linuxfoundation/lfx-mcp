@@ -183,7 +183,7 @@ sequenceDiagram
     MCP->>Auth0: token exchange (RFC 8693)<br />M2M client assertion + {mcp_jwt}
     Auth0-->>MCP: CTE token (carries user identity, cached)
 
-    MCP->>LFX: GET /committees?projectID={uuid}<br />Authorization: Bearer {cte_token}
+    MCP->>LFX: GET /committees/{uuid}<br />Authorization: Bearer {cte_token}
     LFX->>LFX: verify token + OpenFGA authz<br />(natively, no MCP involvement)
     LFX-->>MCP: committee data
     MCP-->>Client: tool result
@@ -216,7 +216,7 @@ sequenceDiagram
     Note over MCP: query_lfx_lens registered only when<br />read scope (read:all or manage:all) AND lf_staff=true
     MCP-->>Client: tools/list (includes query_lfx_lens)
 
-    User->>Client: invoke query_lfx_lens (slug="tlf")
+    User->>Client: invoke query_lfx_lens (project_slug="tlf")
     Client->>MCP: tools/call {query_lfx_lens}<br />Authorization: Bearer {mcp_jwt}
 
     Note over MCP: lf_staff=true already verified at registration
@@ -256,7 +256,7 @@ sequenceDiagram
     MCP->>MCP: verify signature, expiry, audience<br />extract scopes
     MCP-->>Client: tools/list (filtered to caller's scopes)
 
-    User->>Client: invoke send_email (slug="tlf", ...)
+    User->>Client: invoke send_email (project_slug="tlf", ...)
     Client->>MCP: tools/call {send_email}<br />Authorization: Bearer {mcp_jwt}
 
     MCP->>Auth0: token exchange (RFC 8693)<br />M2M client assertion + {mcp_jwt}

@@ -329,6 +329,16 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		projectHTTPClient.DeleteProject(),
 		projectHTTPClient.Readyz(),
 		projectHTTPClient.Livez(),
+		projectHTTPClient.CreateProjectLink(),
+		projectHTTPClient.GetProjectLink(),
+		projectHTTPClient.DeleteProjectLink(),
+		projectHTTPClient.CreateProjectFolder(),
+		projectHTTPClient.GetProjectFolder(),
+		projectHTTPClient.DeleteProjectFolder(),
+		projectHTTPClient.UploadProjectDocument(nil),
+		projectHTTPClient.GetProjectDocument(),
+		projectHTTPClient.DownloadProjectDocument(),
+		projectHTTPClient.DeleteProjectDocument(),
 	)
 
 	// Initialize query service client.

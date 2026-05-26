@@ -79,8 +79,10 @@ tokens; the scopes embedded in the M2M JWT determine which tools are registered.
 ### Static API key (stop-gap)
 
 For MCP clients that cannot complete an OAuth2 flow, static API keys can be configured via
-`LFXMCP_API_CREDENTIALS_<KEY>=<secret>` environment variables. A matching key synthesizes a
-token with a fixed scope set, so the tool-gating logic is identical to the JWT path.
+`LFXMCP_API_CREDENTIALS_<KEY>=<secret>` environment variables. A matching key is granted
+`read:all` and `manage:all` scopes — the same as a fully-privileged M2M token — so it
+participates in the same scope-based tool-gating logic. These scopes are hardcoded and not
+configurable per key.
 
 > **This mechanism is a temporary stop-gap and will be retired once all consumers support OAuth2.**
 
@@ -117,10 +119,21 @@ etc.) pass the LFX token (CTE token for end-user callers; MCP-server M2M token f
 directly to LFX API calls. Authorization is handled natively by LFX and its OpenFGA backend; the
 MCP server performs no explicit access-check of its own for these tools.
 
-### MCP-brokered service APIs (OpenFGA gate + per-service M2M token)
+### MCP-brokered service APIs (per-service M2M token)
 
 Service APIs (LFX Lens and Member Onboarding) accept only M2M tokens — they have no per-user
-authorization layer. The MCP server acts as the authorization gateway:
+authorization layer. The MCP server acts as the authorization gateway, with different access
+control mechanisms per service:
+
+**LFX Lens** — access is gated solely by the `lf_staff` claim in the caller's MCP JWT. The tool
+is not registered for non-staff callers, so no runtime access-check is performed. Because Auth0
+only injects the `lf_staff` claim into tokens issued via the authorization code flow (end-user
+logins), M2M and API-key callers never receive this claim and therefore cannot access LFX Lens
+tools today. This is a known limitation — the intended behavior for M2M access has not yet been
+defined.
+
+**Member Onboarding** — access is gated by an OpenFGA check against the LFX Self Service
+access-check endpoint:
 
 1. Obtain the appropriate LFX token: CTE token (end-user) or MCP-server M2M token (M2M /
    API-key caller).
@@ -128,14 +141,11 @@ authorization layer. The MCP server acts as the authorization gateway:
    step 1.
 3. Call the LFX access-check endpoint (`POST /access-check?v=1`, backed by OpenFGA), authorized
    with the same LFX token from step 1 — **not** the service-API M2M token. The check relation is
-   `project:{uuid}#auditor` for LFX Lens and `project:{uuid}#writer` for Member Onboarding.
+   `project:{uuid}#writer`.
 4. Acquire a separate per-service M2M token via a standard client credentials grant (same M2M
    client, different `audience`). Each service token is cached and refreshed automatically.
 5. Call the service API with the per-service M2M token. The service only ever sees that M2M
    token — no user identity is forwarded.
-
-LFX Lens additionally requires the `lf_staff` claim in the caller's MCP JWT (checked at tool
-registration time; the tool is simply not registered for non-staff callers).
 
 ---
 
@@ -213,15 +223,7 @@ sequenceDiagram
     MCP->>Auth0: token exchange (RFC 8693)<br />M2M client assertion + {mcp_jwt}
     Auth0-->>MCP: CTE token (carries user identity, cached)
 
-    MCP->>LFX: GET /query?filter=slug:tlf<br />Authorization: Bearer {cte_token}
-    LFX-->>MCP: project UUID (cached)
-
-    MCP->>LFX: POST /access-check?v=1<br />project:{uuid}#auditor<br />Authorization: Bearer {cte_token}
-    LFX-->>MCP: access granted / denied
-
-    alt access denied
-        MCP-->>Client: error: access denied
-    end
+    Note over MCP: lf_staff=true already verified<br />at tool registration; no access-check needed
 
     MCP->>Auth0: client_credentials grant<br />audience = Lens API resource server
     Auth0-->>MCP: Lens M2M token (no user identity, cached)

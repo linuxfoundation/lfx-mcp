@@ -343,7 +343,7 @@ sequenceDiagram
     LFX-->>MCP: project UUID (cached)
 
     MCP->>LFX: POST /access-check?v=1<br />project:{uuid}#writer<br />Authorization: Bearer {mcp_m2m_token}
-    Note over MCP,LFX: M2M callers cannot use CTE; access-check uses<br />the MCP-server M2M token (no end-user identity)
+    Note over MCP,LFX: M2M callers cannot use CTE: access-check uses<br />the MCP-server M2M token (no end-user identity)
     LFX-->>MCP: access granted / denied
 
     alt access denied

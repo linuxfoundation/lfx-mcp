@@ -189,7 +189,7 @@ sequenceDiagram
     MCP-->>Client: tool result
 ```
 
-### Flow 2: End-user → MCP-brokered service API
+### Flow 2: End-user → LFX Lens (staff-gated, no access-check)
 
 Representative tool: `query_lfx_lens`
 
@@ -229,7 +229,60 @@ sequenceDiagram
     MCP-->>Client: tool result
 ```
 
-### Flow 3: M2M client → LFX Self Service native pass-through
+### Flow 3: End-user → MCP-brokered service API (with CTE + access-check)
+
+Representative tool: `send_email`
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Client as MCP Client
+    participant MCP as MCP Server
+    participant Auth0
+    participant LFX as LFX Self Service API
+    participant ONB as Member Onboarding API
+
+    User->>Client: open MCP tool
+
+    Client->>MCP: GET /.well-known/oauth-protected-resource
+    MCP-->>Client: auth server URL (Auth0)
+
+    Client->>Auth0: authorization code flow
+    Auth0-->>Client: MCP JWT (aud: {mcp_public_url})
+
+    Client->>MCP: tools/list<br />Authorization: Bearer {mcp_jwt}
+    MCP->>Auth0: fetch JWKS (cached)
+    Auth0-->>MCP: public keys
+    MCP->>MCP: verify signature, expiry, audience<br />extract scopes
+    MCP-->>Client: tools/list (filtered to caller's scopes)
+
+    User->>Client: invoke send_email (slug="tlf", ...)
+    Client->>MCP: tools/call {send_email}<br />Authorization: Bearer {mcp_jwt}
+
+    MCP->>Auth0: token exchange (RFC 8693)<br />M2M client assertion + {mcp_jwt}
+    Auth0-->>MCP: CTE token (carries user identity, cached)<br />audience = LFX Self Service
+
+    MCP->>LFX: POST /query (resolve slug → UUID)<br />Authorization: Bearer {cte_token}
+    LFX-->>MCP: project UUID (cached)
+
+    MCP->>LFX: POST /access-check?v=1<br />project:{uuid}#writer<br />Authorization: Bearer {cte_token}
+    Note over MCP,LFX: access-check uses the CTE token so<br />the check is against the end-user's identity
+    LFX-->>MCP: access granted / denied
+
+    alt access denied
+        MCP-->>Client: error: access denied
+    end
+
+    MCP->>Auth0: client_credentials grant<br />audience = Onboarding API resource server
+    Auth0-->>MCP: Onboarding M2M token (cached)
+
+    MCP->>ONB: POST /member-onboarding/tools/email/{slug}/send<br />Authorization: Bearer {onboarding_m2m_token}
+    ONB->>ONB: verify JWT via JWKS
+    ONB-->>MCP: response
+    MCP-->>Client: tool result
+```
+
+### Flow 4: M2M client → LFX Self Service native pass-through
 
 Representative tool: `search_projects`
 
@@ -260,7 +313,7 @@ sequenceDiagram
     MCP-->>Client: tool result
 ```
 
-### Flow 4: M2M client → MCP-brokered service API
+### Flow 5: M2M client → MCP-brokered service API
 
 Representative tool: `send_email`
 
@@ -286,11 +339,11 @@ sequenceDiagram
     MCP->>Auth0: client_credentials grant<br />audience = LFX Self Service resource server
     Auth0-->>MCP: MCP-server M2M token<br />(no user identity, cached)
 
-    MCP->>LFX: GET /query?filter=slug:tlf<br />Authorization: Bearer {mcp_m2m_token}
+    MCP->>LFX: POST /query (resolve slug → UUID)<br />Authorization: Bearer {mcp_m2m_token}
     LFX-->>MCP: project UUID (cached)
 
     MCP->>LFX: POST /access-check?v=1<br />project:{uuid}#writer<br />Authorization: Bearer {mcp_m2m_token}
-    Note over MCP,LFX: access-check uses the MCP-server M2M token,<br />not the onboarding service M2M token
+    Note over MCP,LFX: M2M callers cannot use CTE; access-check uses<br />the MCP-server M2M token (no end-user identity)
     LFX-->>MCP: access granted / denied
 
     alt access denied

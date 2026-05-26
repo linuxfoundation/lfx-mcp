@@ -17,16 +17,16 @@ flowchart LR
 
     subgraph mcp["LFX MCP Server"]
         tools["Tool definitions"]
-        mcp_gating[Read/write/staff\ntool gating]
+        mcp_gating[Read/write/staff<br />tool gating]
         tools -.->mcp_gating
     end
 
     subgraph Upstream
-        lfx_api_gw["LFX Self Service APIs\n(pass-thru auth:\nfine-grained authorization handled by LFX)"]
-        services["Other APIs\ne.g. LFX Lens\n(MCP-brokered authorization)"]
+        lfx_api_gw["LFX Self Service APIs<br />(pass-thru auth:<br />fine-grained authorization handled by LFX)"]
+        services["Other APIs<br />e.g. LFX Lens<br />(MCP-brokered authorization)"]
     end
 
-    oauth2_cte["OAuth2 Token Exchange\n(end-user only)"]
+    oauth2_cte["OAuth2 Token Exchange<br />(end-user only)"]
 
     end_users --->|authenticated with SSO| mcp_gating
     m2m_client --->|authenticated with client credentials| mcp_gating
@@ -161,20 +161,20 @@ sequenceDiagram
     Client->>Auth0: authorization code flow
     Auth0-->>Client: MCP JWT (aud: mcp.lfx.dev)
 
-    Client->>MCP: tools/list\nAuthorization: Bearer {mcp_jwt}
+    Client->>MCP: tools/list<br />Authorization: Bearer {mcp_jwt}
     MCP->>Auth0: fetch JWKS (cached)
     Auth0-->>MCP: public keys
-    MCP->>MCP: verify signature, expiry, audience\nextract scopes + lf_staff claim
+    MCP->>MCP: verify signature, expiry, audience<br />extract scopes + lf_staff claim
     MCP-->>Client: tools/list (filtered to caller's scopes)
 
     User->>Client: invoke get_committee (slug="tlf")
-    Client->>MCP: tools/call {get_committee}\nAuthorization: Bearer {mcp_jwt}
+    Client->>MCP: tools/call {get_committee}<br />Authorization: Bearer {mcp_jwt}
 
-    MCP->>Auth0: token exchange (RFC 8693)\nM2M client assertion + {mcp_jwt}
+    MCP->>Auth0: token exchange (RFC 8693)<br />M2M client assertion + {mcp_jwt}
     Auth0-->>MCP: CTE token (carries user identity, cached)
 
-    MCP->>LFX: GET /committees?projectID=...\nAuthorization: Bearer {cte_token}
-    LFX->>LFX: verify token + OpenFGA authz\n(natively, no MCP involvement)
+    MCP->>LFX: GET /committees?projectID=...<br />Authorization: Bearer {cte_token}
+    LFX->>LFX: verify token + OpenFGA authz<br />(natively, no MCP involvement)
     LFX-->>MCP: committee data
     MCP-->>Client: tool result
 ```
@@ -189,7 +189,7 @@ sequenceDiagram
     participant Client as MCP Client
     participant MCP as MCP Server
     participant Auth0
-    participant LFX as LFX Self Service API\n(Query Svc + Access Check)
+    participant LFX as LFX Self Service API<br />(Query Svc + Access Check)
     participant Lens as LFX Lens API
 
     User->>Client: open MCP tool
@@ -200,33 +200,33 @@ sequenceDiagram
     Client->>Auth0: authorization code flow
     Auth0-->>Client: MCP JWT (aud: mcp.lfx.dev, lf_staff=true)
 
-    Client->>MCP: tools/list\nAuthorization: Bearer {mcp_jwt}
+    Client->>MCP: tools/list<br />Authorization: Bearer {mcp_jwt}
     MCP->>Auth0: fetch JWKS (cached)
     Auth0-->>MCP: public keys
-    MCP->>MCP: verify signature, expiry, audience\nextract scopes + lf_staff claim
-    Note over MCP: query_lfx_lens registered\nonly when lf_staff=true
+    MCP->>MCP: verify signature, expiry, audience<br />extract scopes + lf_staff claim
+    Note over MCP: query_lfx_lens registered<br />only when lf_staff=true
     MCP-->>Client: tools/list (includes query_lfx_lens)
 
     User->>Client: invoke query_lfx_lens (slug="tlf")
-    Client->>MCP: tools/call {query_lfx_lens}\nAuthorization: Bearer {mcp_jwt}
+    Client->>MCP: tools/call {query_lfx_lens}<br />Authorization: Bearer {mcp_jwt}
 
-    MCP->>Auth0: token exchange (RFC 8693)\nM2M client assertion + {mcp_jwt}
+    MCP->>Auth0: token exchange (RFC 8693)<br />M2M client assertion + {mcp_jwt}
     Auth0-->>MCP: CTE token (carries user identity, cached)
 
-    MCP->>LFX: GET /query?filter=slug:tlf\nAuthorization: Bearer {cte_token}
+    MCP->>LFX: GET /query?filter=slug:tlf<br />Authorization: Bearer {cte_token}
     LFX-->>MCP: project UUID (cached)
 
-    MCP->>LFX: POST /access-check?v=1\nproject:{uuid}#auditor\nAuthorization: Bearer {cte_token}
+    MCP->>LFX: POST /access-check?v=1<br />project:{uuid}#auditor<br />Authorization: Bearer {cte_token}
     LFX-->>MCP: access granted / denied
 
     alt access denied
         MCP-->>Client: error: access denied
     end
 
-    MCP->>Auth0: client_credentials grant\naudience = Lens API resource server
+    MCP->>Auth0: client_credentials grant<br />audience = Lens API resource server
     Auth0-->>MCP: Lens M2M token (no user identity, cached)
 
-    MCP->>Lens: POST /workflows/.../runs\nAuthorization: Bearer {lens_m2m_token}
+    MCP->>Lens: POST /workflows/.../runs<br />Authorization: Bearer {lens_m2m_token}
     Lens->>Lens: verify JWT via JWKS
     Lens-->>MCP: response
     MCP-->>Client: tool result
@@ -243,22 +243,22 @@ sequenceDiagram
     participant MCP as MCP Server
     participant LFX as LFX Self Service API
 
-    Client->>Auth0: client_credentials grant\naudience = MCP API resource server
+    Client->>Auth0: client_credentials grant<br />audience = MCP API resource server
     Auth0-->>Client: M2M JWT (aud: mcp.lfx.dev)
 
-    Client->>MCP: tools/list\nAuthorization: Bearer {m2m_jwt}
+    Client->>MCP: tools/list<br />Authorization: Bearer {m2m_jwt}
     MCP->>Auth0: fetch JWKS (cached)
     Auth0-->>MCP: public keys
-    MCP->>MCP: verify signature, expiry, audience\nextract scopes\ndetect M2M (subject ends in @clients)
+    MCP->>MCP: verify signature, expiry, audience<br />extract scopes<br />detect M2M (subject ends in @clients)
     MCP-->>Client: tools/list (filtered to token scopes)
 
-    Client->>MCP: tools/call {search_projects}\nAuthorization: Bearer {m2m_jwt}
+    Client->>MCP: tools/call {search_projects}<br />Authorization: Bearer {m2m_jwt}
 
-    MCP->>Auth0: client_credentials grant\naudience = LFX Self Service resource server
-    Auth0-->>MCP: MCP-server M2M token\n(no user identity, cached)
+    MCP->>Auth0: client_credentials grant<br />audience = LFX Self Service resource server
+    Auth0-->>MCP: MCP-server M2M token<br />(no user identity, cached)
 
-    MCP->>LFX: GET /projects?...\nAuthorization: Bearer {mcp_m2m_token}
-    LFX->>LFX: verify token + OpenFGA authz\n(natively, MCP server identity)
+    MCP->>LFX: GET /projects?...<br />Authorization: Bearer {mcp_m2m_token}
+    LFX->>LFX: verify token + OpenFGA authz<br />(natively, MCP server identity)
     LFX-->>MCP: project data
     MCP-->>Client: tool result
 ```
@@ -272,38 +272,38 @@ sequenceDiagram
     participant Client as M2M Client
     participant Auth0
     participant MCP as MCP Server
-    participant LFX as LFX Self Service API\n(Query Svc + Access Check)
+    participant LFX as LFX Self Service API<br />(Query Svc + Access Check)
     participant ONB as Member Onboarding API
 
-    Client->>Auth0: client_credentials grant\naudience = MCP API resource server
+    Client->>Auth0: client_credentials grant<br />audience = MCP API resource server
     Auth0-->>Client: M2M JWT (aud: mcp.lfx.dev)
 
-    Client->>MCP: tools/list\nAuthorization: Bearer {m2m_jwt}
+    Client->>MCP: tools/list<br />Authorization: Bearer {m2m_jwt}
     MCP->>Auth0: fetch JWKS (cached)
     Auth0-->>MCP: public keys
-    MCP->>MCP: verify signature, expiry, audience\nextract scopes\ndetect M2M (subject ends in @clients)
+    MCP->>MCP: verify signature, expiry, audience<br />extract scopes<br />detect M2M (subject ends in @clients)
     MCP-->>Client: tools/list (filtered to token scopes)
 
-    Client->>MCP: tools/call {onboarding_list_memberships}\nAuthorization: Bearer {m2m_jwt}
+    Client->>MCP: tools/call {onboarding_list_memberships}<br />Authorization: Bearer {m2m_jwt}
 
-    MCP->>Auth0: client_credentials grant\naudience = LFX Self Service resource server
-    Auth0-->>MCP: MCP-server M2M token\n(no user identity, cached)
+    MCP->>Auth0: client_credentials grant<br />audience = LFX Self Service resource server
+    Auth0-->>MCP: MCP-server M2M token<br />(no user identity, cached)
 
-    MCP->>LFX: GET /query?filter=slug:tlf\nAuthorization: Bearer {mcp_m2m_token}
+    MCP->>LFX: GET /query?filter=slug:tlf<br />Authorization: Bearer {mcp_m2m_token}
     LFX-->>MCP: project UUID (cached)
 
-    MCP->>LFX: POST /access-check?v=1\nproject:{uuid}#writer\nAuthorization: Bearer {mcp_m2m_token}
-    Note over MCP,LFX: access-check uses the MCP-server M2M token,\nnot the onboarding service M2M token
+    MCP->>LFX: POST /access-check?v=1<br />project:{uuid}#writer<br />Authorization: Bearer {mcp_m2m_token}
+    Note over MCP,LFX: access-check uses the MCP-server M2M token,<br />not the onboarding service M2M token
     LFX-->>MCP: access granted / denied
 
     alt access denied
         MCP-->>Client: error: access denied
     end
 
-    MCP->>Auth0: client_credentials grant\naudience = Onboarding API resource server
+    MCP->>Auth0: client_credentials grant<br />audience = Onboarding API resource server
     Auth0-->>MCP: Onboarding M2M token (cached)
 
-    MCP->>ONB: GET /member-onboarding/{slug}/memberships\nAuthorization: Bearer {onboarding_m2m_token}
+    MCP->>ONB: GET /member-onboarding/{slug}/memberships<br />Authorization: Bearer {onboarding_m2m_token}
     ONB->>ONB: verify JWT via JWKS
     ONB-->>MCP: memberships response
     MCP-->>Client: tool result

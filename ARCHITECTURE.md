@@ -57,8 +57,8 @@ Tool registration is gated on two access levels derived from the caller's token:
 | Read | token holds `read:all` **or** `manage:all` | All read-only tools |
 | Manage | token holds `manage:all` | Read + write/delete tools |
 
-An additional `isStaff` flag (derived from the `http://lfx.dev/claims/lf_staff` custom claim)
-gates the `query_lfx_lens` tool independently of scopes.
+An additional requirement of the `lf_staff` claim (from the `http://lfx.dev/claims/lf_staff`
+custom claim) gates the `query_lfx_lens` tool on top of the read scope requirement.
 
 ### End-user OAuth2 JWT
 
@@ -101,8 +101,8 @@ carries the user's identity. This is a **Custom Token Exchange** per
 [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693): the MCP server's own M2M client
 (`LFX MCP Server`) authenticates to Auth0 using a signed JWT client assertion (RS256, RFC 7523)
 or client secret, and presents the user's MCP JWT as the `subject_token`. Auth0 issues an
-LFX Self Service token that carries the user's identity. The exchanged token is cached per user
-subject and refreshed automatically on expiry.
+LFX Self Service token that carries the user's identity. The exchanged token is cached by
+inbound bearer token and refreshed automatically on expiry.
 
 ### MCP-server M2M token — M2M and API-key callers
 
@@ -125,12 +125,12 @@ Service APIs (LFX Lens and Member Onboarding) accept only M2M tokens — they ha
 authorization layer. The MCP server acts as the authorization gateway, with different access
 control mechanisms per service:
 
-**LFX Lens** — access is gated solely by the `lf_staff` claim in the caller's MCP JWT. The tool
-is not registered for non-staff callers, so no runtime access-check is performed. Because Auth0
-only injects the `lf_staff` claim into tokens issued via the authorization code flow (end-user
-logins), M2M and API-key callers never receive this claim and therefore cannot access LFX Lens
-tools today. This is a known limitation — the intended behavior for M2M access has not yet been
-defined.
+**LFX Lens** — access requires read scope (`read:all` or `manage:all`) plus the `lf_staff` claim
+in the caller's MCP JWT. The tool is not registered for callers missing either requirement, so no
+runtime access-check is performed. Because Auth0 only injects the `lf_staff` claim into tokens
+issued via the authorization code flow (end-user logins), M2M and API-key callers never receive
+this claim and therefore cannot access LFX Lens tools today. This is a known limitation — the
+intended behavior for M2M access has not yet been defined.
 
 **Member Onboarding** — access is gated by an OpenFGA check against the LFX Self Service
 access-check endpoint:
@@ -169,7 +169,7 @@ sequenceDiagram
     MCP-->>Client: auth server URL (Auth0)
 
     Client->>Auth0: authorization code flow
-    Auth0-->>Client: MCP JWT (aud: mcp.lfx.dev)
+    Auth0-->>Client: MCP JWT (aud: {mcp_public_url})
 
     Client->>MCP: tools/list<br />Authorization: Bearer {mcp_jwt}
     MCP->>Auth0: fetch JWKS (cached)
@@ -177,13 +177,13 @@ sequenceDiagram
     MCP->>MCP: verify signature, expiry, audience<br />extract scopes + lf_staff claim
     MCP-->>Client: tools/list (filtered to caller's scopes)
 
-    User->>Client: invoke get_committee (slug="tlf")
+    User->>Client: invoke get_committee (uid="{uuid}")
     Client->>MCP: tools/call {get_committee}<br />Authorization: Bearer {mcp_jwt}
 
     MCP->>Auth0: token exchange (RFC 8693)<br />M2M client assertion + {mcp_jwt}
     Auth0-->>MCP: CTE token (carries user identity, cached)
 
-    MCP->>LFX: GET /committees?projectID=...<br />Authorization: Bearer {cte_token}
+    MCP->>LFX: GET /committees?projectID={uuid}<br />Authorization: Bearer {cte_token}
     LFX->>LFX: verify token + OpenFGA authz<br />(natively, no MCP involvement)
     LFX-->>MCP: committee data
     MCP-->>Client: tool result
@@ -246,7 +246,7 @@ sequenceDiagram
     participant LFX as LFX Self Service API
 
     Client->>Auth0: client_credentials grant<br />audience = MCP API resource server
-    Auth0-->>Client: M2M JWT (aud: mcp.lfx.dev)
+    Auth0-->>Client: M2M JWT (aud: {mcp_public_url})
 
     Client->>MCP: tools/list<br />Authorization: Bearer {m2m_jwt}
     MCP->>Auth0: fetch JWKS (cached)
@@ -267,7 +267,7 @@ sequenceDiagram
 
 ### Flow 4: M2M client → MCP-brokered service API
 
-Representative tool: `onboarding_list_memberships`
+Representative tool: `send_email`
 
 ```mermaid
 sequenceDiagram
@@ -278,7 +278,7 @@ sequenceDiagram
     participant ONB as Member Onboarding API
 
     Client->>Auth0: client_credentials grant<br />audience = MCP API resource server
-    Auth0-->>Client: M2M JWT (aud: mcp.lfx.dev)
+    Auth0-->>Client: M2M JWT (aud: {mcp_public_url})
 
     Client->>MCP: tools/list<br />Authorization: Bearer {m2m_jwt}
     MCP->>Auth0: fetch JWKS (cached)
@@ -286,7 +286,7 @@ sequenceDiagram
     MCP->>MCP: verify signature, expiry, audience<br />extract scopes<br />detect M2M (subject ends in @clients)
     MCP-->>Client: tools/list (filtered to token scopes)
 
-    Client->>MCP: tools/call {onboarding_list_memberships}<br />Authorization: Bearer {m2m_jwt}
+    Client->>MCP: tools/call {send_email}<br />Authorization: Bearer {m2m_jwt}
 
     MCP->>Auth0: client_credentials grant<br />audience = LFX Self Service resource server
     Auth0-->>MCP: MCP-server M2M token<br />(no user identity, cached)
@@ -305,8 +305,8 @@ sequenceDiagram
     MCP->>Auth0: client_credentials grant<br />audience = Onboarding API resource server
     Auth0-->>MCP: Onboarding M2M token (cached)
 
-    MCP->>ONB: GET /member-onboarding/{slug}/memberships<br />Authorization: Bearer {onboarding_m2m_token}
+    MCP->>ONB: POST /member-onboarding/{slug}/send-email<br />Authorization: Bearer {onboarding_m2m_token}
     ONB->>ONB: verify JWT via JWKS
-    ONB-->>MCP: memberships response
+    ONB-->>MCP: response
     MCP-->>Client: tool result
 ```

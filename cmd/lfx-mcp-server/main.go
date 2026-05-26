@@ -60,6 +60,9 @@ type Config struct {
 	OnboardingAPIAudience string `koanf:"onboarding_api_audience"`
 	LensAPIURL            string `koanf:"lens_api_url"`
 	LensAPIAudience       string `koanf:"lens_api_audience"`
+
+	// Feature flags.
+	CommitteesAsGroups bool `koanf:"committees_as_groups"`
 }
 
 // HTTPConfig holds HTTP transport configuration.
@@ -85,6 +88,31 @@ var (
 )
 
 const errKey = "error"
+
+// committeeToGroupToolNames maps committee-mode tool names to their group-mode equivalents.
+var committeeToGroupToolNames = map[string]string{
+	"search_committees":         "search_groups",
+	"get_committee":             "get_group",
+	"get_committee_member":      "get_group_member",
+	"search_committee_members":  "search_group_members",
+	"create_committee":          "create_group",
+	"update_committee":          "update_group",
+	"update_committee_settings": "update_group_settings",
+	"delete_committee":          "delete_group",
+	"create_committee_member":   "create_group_member",
+	"update_committee_member":   "update_group_member",
+	"delete_committee_member":   "delete_group_member",
+}
+
+// groupToCommitteeToolNames is the reverse of committeeToGroupToolNames, mapping
+// group-mode tool names back to their canonical committee-mode equivalents.
+var groupToCommitteeToolNames = func() map[string]string {
+	m := make(map[string]string, len(committeeToGroupToolNames))
+	for committee, group := range committeeToGroupToolNames {
+		m[group] = committee
+	}
+	return m
+}()
 
 // defaultTools is the list of tools enabled by default.
 var defaultTools = []string{
@@ -121,10 +149,10 @@ var defaultTools = []string{
 	"get_meeting_registrant",
 	"search_past_meeting_participants",
 	"get_past_meeting_participant",
-	"search_past_meeting_transcripts",
-	"get_past_meeting_transcript",
 	"search_past_meeting_summaries",
 	"get_past_meeting_summary",
+	"search_past_meetings",
+	"get_past_meeting",
 	// "list_membership_actions", // TODO: uncomment when guided onboarding flow is ready.
 	"list_discord_roles",
 	"find_discord_role",
@@ -134,6 +162,7 @@ var defaultTools = []string{
 	"list_email_templates",
 	"send_email",
 	"query_lfx_lens",
+	"query_lfx_semantic_layer",
 	"search_b2b_orgs",
 	"list_b2b_org_memberships",
 }
@@ -169,6 +198,7 @@ func main() {
 	f.String("tools", strings.Join(defaultTools, ","), "Comma-separated list of tools to enable")
 	f.Bool("debug", false, "Enable debug logging")
 	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls")
+	f.Bool("committees_as_groups", false, "Rebrand committee tools to use 'group' terminology (feature flag)")
 	f.String("onboarding_api_url", "", "Base URL of the member onboarding service")
 	f.String("onboarding_api_audience", "", "Auth0 resource server audience for the member onboarding API")
 	f.String("lens_api_url", "", "Base URL of the LFX Lens service")
@@ -363,7 +393,9 @@ func main() {
 					onboardingClient, err := serviceapi.NewClient(serviceapi.Config{
 						BaseURL:     cfg.OnboardingAPIURL,
 						TokenSource: ccClient,
-						HTTPClient:  &http.Client{Timeout: 30 * time.Second},
+						// Wrap with OTel transport so onboarding API calls appear as
+						// child spans under the active request trace.
+						HTTPClient:  &http.Client{Timeout: 30 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 						DebugLogger: debugLogger,
 					})
 					if err != nil {
@@ -388,7 +420,9 @@ func main() {
 					lensClient, err := serviceapi.NewClient(serviceapi.Config{
 						BaseURL:     cfg.LensAPIURL,
 						TokenSource: ccClient,
-						HTTPClient:  &http.Client{Timeout: 120 * time.Second},
+						// Wrap with OTel transport so Lens API calls appear as child
+						// spans under the active request trace.
+						HTTPClient:  &http.Client{Timeout: 120 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 						DebugLogger: debugLogger,
 					})
 					if err != nil {
@@ -575,7 +609,13 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	// Register tools based on configuration and caller scopes.
 	enabledTools := make(map[string]bool)
 	for _, tool := range cfg.Tools {
-		enabledTools[strings.TrimSpace(tool)] = true
+		name := strings.TrimSpace(tool)
+		// Normalize group-mode names to committee-mode so registration logic only
+		// needs to check committee-mode keys regardless of which form was in config.
+		if canonical, ok := groupToCommitteeToolNames[name]; ok {
+			name = canonical
+		}
+		enabledTools[name] = true
 	}
 
 	if enabledTools["hello_world"] && canRead {
@@ -591,37 +631,37 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 		tools.RegisterGetProject(server)
 	}
 	if enabledTools["search_committees"] && canRead {
-		tools.RegisterSearchCommittees(server)
+		tools.RegisterSearchCommittees(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["get_committee"] && canRead {
-		tools.RegisterGetCommittee(server)
+		tools.RegisterGetCommittee(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["get_committee_member"] && canRead {
-		tools.RegisterGetCommitteeMember(server)
+		tools.RegisterGetCommitteeMember(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["search_committee_members"] && canRead {
-		tools.RegisterSearchCommitteeMembers(server)
+		tools.RegisterSearchCommitteeMembers(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["create_committee"] && canManage {
-		tools.RegisterCreateCommittee(server)
+		tools.RegisterCreateCommittee(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["update_committee"] && canManage {
-		tools.RegisterUpdateCommittee(server)
+		tools.RegisterUpdateCommittee(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["update_committee_settings"] && canManage {
-		tools.RegisterUpdateCommitteeSettings(server)
+		tools.RegisterUpdateCommitteeSettings(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["delete_committee"] && canManage {
-		tools.RegisterDeleteCommittee(server)
+		tools.RegisterDeleteCommittee(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["create_committee_member"] && canManage {
-		tools.RegisterCreateCommitteeMember(server)
+		tools.RegisterCreateCommitteeMember(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["update_committee_member"] && canManage {
-		tools.RegisterUpdateCommitteeMember(server)
+		tools.RegisterUpdateCommitteeMember(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["delete_committee_member"] && canManage {
-		tools.RegisterDeleteCommitteeMember(server)
+		tools.RegisterDeleteCommitteeMember(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["get_mailing_list_service"] && canRead {
 		tools.RegisterGetMailingListService(server)
@@ -666,13 +706,13 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 		tools.RegisterDeleteMembershipKeyContact(server)
 	}
 	if enabledTools["search_meetings"] && canRead {
-		tools.RegisterSearchMeetings(server)
+		tools.RegisterSearchMeetings(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["get_meeting"] && canRead {
 		tools.RegisterGetMeeting(server)
 	}
 	if enabledTools["search_meeting_registrants"] && canRead {
-		tools.RegisterSearchMeetingRegistrants(server)
+		tools.RegisterSearchMeetingRegistrants(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["get_meeting_registrant"] && canRead {
 		tools.RegisterGetMeetingRegistrant(server)
@@ -683,17 +723,17 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["get_past_meeting_participant"] && canRead {
 		tools.RegisterGetPastMeetingParticipant(server)
 	}
-	if enabledTools["search_past_meeting_transcripts"] && canRead {
-		tools.RegisterSearchPastMeetingTranscripts(server)
-	}
-	if enabledTools["get_past_meeting_transcript"] && canRead {
-		tools.RegisterGetPastMeetingTranscript(server)
-	}
 	if enabledTools["search_past_meeting_summaries"] && canRead {
 		tools.RegisterSearchPastMeetingSummaries(server)
 	}
 	if enabledTools["get_past_meeting_summary"] && canRead {
 		tools.RegisterGetPastMeetingSummary(server)
+	}
+	if enabledTools["search_past_meetings"] && canRead {
+		tools.RegisterSearchPastMeetings(server, cfg.CommitteesAsGroups)
+	}
+	if enabledTools["get_past_meeting"] && canRead {
+		tools.RegisterGetPastMeeting(server)
 	}
 	if enabledTools["search_b2b_orgs"] && canRead {
 		tools.RegisterSearchB2bOrgs(server)
@@ -730,6 +770,9 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	if enabledTools["query_lfx_lens"] && canRead && isStaff {
 		tools.RegisterQueryLFXLens(server)
+	}
+	if enabledTools["query_lfx_semantic_layer"] && canRead && isStaff {
+		tools.RegisterSemanticLayer(server)
 	}
 
 	return server

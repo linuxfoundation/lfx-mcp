@@ -19,7 +19,7 @@ type SearchB2bOrgsArgs struct {
 	SearchName string `json:"search_name,omitempty" jsonschema:"Search B2B organizations by name (case-insensitive substring match)."`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order: newest (default), name, last_modified"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 1000)"`
-	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque cursor from a previous response to fetch the next page"`
+	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // ListB2bOrgMembershipsArgs defines the input parameters for the list_b2b_org_memberships tool.
@@ -27,7 +27,7 @@ type ListB2bOrgMembershipsArgs struct {
 	B2bOrgUID string `json:"b2b_org_uid" jsonschema:"B2B organization UID (required)"`
 	Sort      string `json:"sort,omitempty" jsonschema:"Sort order: newest (default), name, last_modified"`
 	PageSize  int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 1000)"`
-	PageToken string `json:"page_token,omitempty" jsonschema:"Opaque cursor from a previous response to fetch the next page"`
+	PageToken string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous list response"`
 }
 
 // b2bOrgView is a filtered view of B2bOrgResponse for MCP responses.

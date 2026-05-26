@@ -6,12 +6,18 @@ package lfxv2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
 )
+
+// ErrProjectNotFound is returned by Resolve when the query service returns
+// no results for the given slug. Callers can use errors.Is to distinguish this
+// "not found" case from transport or other operational errors.
+var ErrProjectNotFound = errors.New("project not found")
 
 // SlugResolver resolves project slugs to V2 UUIDs with in-memory caching.
 //
@@ -77,7 +83,7 @@ func (r *SlugResolver) queryProjectUUID(ctx context.Context, clients *Clients, s
 	}
 
 	if result == nil || len(result.Resources) == 0 {
-		return "", fmt.Errorf("project not found for slug %q", slug)
+		return "", fmt.Errorf("%w for slug %q", ErrProjectNotFound, slug)
 	}
 
 	id := result.Resources[0].ID

@@ -19,18 +19,18 @@ import (
 // membership (lf-staff group). Uses the lfxPrefix namespace per convention.
 const ClaimLFStaff = "http://lfx.dev/claims/lf_staff"
 
-// Relation constants for V2 access-check. These are the service API equivalents
-// of ScopeRead / ScopeManage — they define what project-level relationship is
-// required, but enforcement happens inside the tool handler via the V2
+// AnonymousUserID is the sentinel user ID used when no authenticated user is
+// present (e.g., stdio mode). Matches the convention used across LFX services
+// such as Heimdall.
+const AnonymousUserID = "_anonymous"
+
+// Relation constants for V2 access-check. These define what project-level
+// relationship is required, enforced inside tool handlers via the V2
 // access-check endpoint (not at dispatch like MCP scopes).
 const (
 	// RelationWriter is required for tools that mutate project resources
 	// (e.g., member onboarding).
 	RelationWriter = "writer"
-
-	// RelationAuditor is required for tools that read privileged project
-	// data (e.g., LFX Lens analytics).
-	RelationAuditor = "auditor"
 )
 
 // --- Shared service tool infrastructure ---
@@ -83,7 +83,7 @@ func (s *ServiceAuth) AuthorizeProject(ctx context.Context, req *mcp.CallToolReq
 	projectUUID, err := s.SlugResolver.Resolve(ctx, clients, slug)
 	if err != nil {
 		logger.Error("failed to resolve project slug", "error", err, "slug", slug)
-		return ctx, fmt.Errorf("failed to resolve project slug %q: %w", slug, err)
+		return ctx, slugResolveError(slug, err)
 	}
 
 	// Get exchanged V2 token for access-check.

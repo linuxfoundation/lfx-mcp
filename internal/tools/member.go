@@ -36,7 +36,7 @@ type SearchMembersArgs struct {
 	TierUID    string `json:"tier_uid,omitempty" jsonschema:"Filter by membership tier UID (UUID from list_project_tiers)"`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order: newest (default), name, last_modified"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque cursor from a previous response to fetch the next page"`
+	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // GetMemberMembershipArgs defines the input parameters for the get_member_membership tool.

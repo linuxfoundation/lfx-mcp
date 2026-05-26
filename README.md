@@ -7,8 +7,12 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that c
 - **Explore projects** — Search and retrieve details for any LFX project
 - **Manage committees** — Search, create, update, and delete committees and their members across projects
 - **Work with mailing lists** — Search mailing lists and their subscribers
-- **Query members** — Search memberships by tier, status, organization, and more; get key contacts
-- **Track meetings** — Find upcoming meetings, registrants, past participants, transcripts, and AI-generated summaries
+- **Query members** — Search memberships by tier, status, organization, and more; get and manage key contacts
+- **Track meetings** — Find upcoming meetings, registrants, past participants, and AI-generated summaries
+- **Manage Discord roles** — List roles, find users, check and assign roles in a project's Discord guild
+- **Send emails** — Browse email templates and send templated emails via LFX mail servers
+- **Query with LFX Lens** — Ask natural-language questions about project data (events, contributors, health, and more)
+- **Search B2B organizations** — Find organizations and list their project memberships
 
 ## Connecting to the LFX MCP Server
 
@@ -46,9 +50,21 @@ Add the following to your `~/.config/opencode/opencode.json`:
 
 See the [OpenCode MCP documentation](https://opencode.ai/docs/mcp-servers) for more details.
 
-### Claude
+### Claude (LF enterprise)
 
-Add the LFX MCP Server in **Settings → Integrations → Add Integration**:
+If you use the Linux Foundation's enterprise Claude.ai organization, the LFX MCP Server is already provisioned as a connector — you do not need to add it manually.
+
+1. In Claude.ai, open **Settings → Connectors**.
+2. Find **LFX MCP Server** in the list of available connectors.
+3. Click **Connect**.
+4. Sign in with your **LFID** when prompted.
+5. Click **Authorize** to grant access; you will be redirected back to Claude.
+
+The connector is now active for your account.
+
+### Claude (personal account)
+
+Add the LFX MCP Server in **Settings → Connectors → Add Custom Connector **:
 
 - **URL:** `https://mcp.lfx.dev/mcp`
 - **Client ID:** `Ef9tuU5wcJJIXmNGvZyGUkZFfD8CZWar`
@@ -152,11 +168,17 @@ Before hitting **Connect**, follow the **Open Auth Settings** button, then selec
 
 ### Members
 
-| Tool                          | Description                                                                     |
-|-------------------------------|---------------------------------------------------------------------------------|
-| `search_members`              | Search and filter members (memberships) by status, tier, organization, and more |
-| `get_member_membership`       | Get a single member's membership details by member and membership ID            |
-| `get_membership_key_contacts` | Get key contacts (primary contacts, board members) for a membership             |
+| Tool                              | Description                                                                     |
+|-----------------------------------|---------------------------------------------------------------------------------|
+| `search_members`                  | Search and filter members (memberships) by status, tier, organization, and more |
+| `get_member_membership`           | Get a single member's membership details by member and membership ID            |
+| `list_project_tiers`              | List all membership tiers (e.g. Gold, Silver, Bronze) defined for a project     |
+| `get_project_tier`                | Get a single membership tier by project and tier UID                            |
+| `get_membership_key_contacts`     | Get key contacts (primary contacts, board members) for a membership             |
+| `get_membership_key_contact`      | Get a single key contact by project, membership, and contact UID                |
+| `create_membership_key_contact`   | Add a key contact to a membership                                               |
+| `update_membership_key_contact`   | Update an existing key contact on a membership                                  |
+| `delete_membership_key_contact`   | Remove a key contact from a membership                                          |
 
 ### Meetings
 
@@ -171,12 +193,42 @@ Before hitting **Connect**, follow the **Open Auth Settings** button, then selec
 
 | Tool                               | Description                                                             |
 |------------------------------------|-------------------------------------------------------------------------|
+| `search_past_meetings`             | Search past meetings; filter by project, committee, date range          |
+| `get_past_meeting`                 | Get a past meeting by UID                                               |
 | `search_past_meeting_participants` | Search past meeting participants; filter by meeting, committee, project |
 | `get_past_meeting_participant`     | Get a past meeting participant by UID                                   |
-| `search_past_meeting_transcripts`  | Search past meeting transcripts; filter by meeting, committee, project  |
-| `get_past_meeting_transcript`      | Get a past meeting transcript by UID                                    |
 | `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, committee, project    |
 | `get_past_meeting_summary`         | Get a past meeting summary by UID                                       |
+
+### Discord
+
+| Tool                    | Description                                                  |
+|-------------------------|--------------------------------------------------------------|
+| `list_discord_roles`    | List all roles in a project's Discord guild                  |
+| `find_discord_role`     | Find a Discord role by name                                  |
+| `find_discord_user`     | Find a Discord guild member by name and optional email       |
+| `check_discord_user_role` | Check whether a Discord user already has a specific role   |
+| `assign_discord_role`   | Assign a Discord role to a user                              |
+
+### Email
+
+| Tool                    | Description                                                  |
+|-------------------------|--------------------------------------------------------------|
+| `list_email_templates`  | List all available email templates for a project             |
+| `send_email`            | Send a templated email via LFX mail servers                  |
+
+### LFX Lens
+
+| Tool              | Description                                                                                         |
+|-------------------|-----------------------------------------------------------------------------------------------------|
+| `query_lfx_lens`  | Ask natural-language questions about a project's data (events, contributors, health, value, and more) |
+
+### B2B Organizations
+
+| Tool                       | Description                                                   |
+|----------------------------|---------------------------------------------------------------|
+| `search_b2b_orgs`          | Search and list B2B organizations                             |
+| `list_b2b_org_memberships` | List all project memberships for a B2B organization           |
 
 ### Utility
 

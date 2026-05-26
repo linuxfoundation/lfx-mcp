@@ -6,9 +6,12 @@ package tools
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 
+	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -94,7 +97,19 @@ func strPtr(s string) *string {
 // API call is rejected with HTTP 403.
 const accessDeniedMessage = "this resource may not exist or you may not have enough access to complete this operation. Request support @ https://support.lfx.dev"
 
-// friendlyAPIError formats an API error for display in a tool result.
+// slugResolveError maps a slug resolver error to a user-facing error.
+// When the error is ErrProjectNotFound (the slug returned no results from the
+// query service), it surfaces accessDeniedMessage consistent with other
+// access-denied paths. All other errors (transport failures, context
+// cancellation, etc.) are wrapped and returned as-is so operators can
+// diagnose operational issues.
+func slugResolveError(slug string, err error) error {
+	if errors.Is(err, lfxv2.ErrProjectNotFound) {
+		return fmt.Errorf("failed to get project %q: %s", slug, accessDeniedMessage)
+	}
+	return fmt.Errorf("failed to resolve project slug %q: %w", slug, err)
+}
+
 // If the error contains "response code 403" it returns a user-friendly
 // access-denied message instead of the raw internal error string.
 // The op argument is a short description of the operation (e.g.

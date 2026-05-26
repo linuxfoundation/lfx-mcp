@@ -133,8 +133,217 @@ type DeleteCommitteeMemberArgs struct {
 
 // --- Registration functions ---
 
-// RegisterCreateCommittee registers the create_committee tool with the MCP server.
-func RegisterCreateCommittee(server *mcp.Server) {
+// --- Group-mode arg structs ---
+
+// CreateGroupArgs defines the input parameters for the create_group tool (groups mode).
+type CreateGroupArgs struct {
+	ProjectUID            string  `json:"project_uid" jsonschema:"Project UID the group belongs to"`
+	Name                  string  `json:"name" jsonschema:"Name of the group"`
+	Category              string  `json:"category" jsonschema:"Category of the group"`
+	Description           *string `json:"description,omitempty" jsonschema:"Description of the group"`
+	Website               *string `json:"website,omitempty" jsonschema:"Website URL of the group"`
+	EnableVoting          bool    `json:"enable_voting,omitempty" jsonschema:"Whether voting is enabled"`
+	SSOGroupEnabled       bool    `json:"sso_group_enabled,omitempty" jsonschema:"Whether SSO group integration is enabled"`
+	RequiresReview        bool    `json:"requires_review,omitempty" jsonschema:"Whether the group requires review"`
+	Public                bool    `json:"public,omitempty" jsonschema:"Whether the group is publicly visible"`
+	CalendarPublic        *bool   `json:"calendar_public,omitempty" jsonschema:"Whether the group calendar is publicly visible"`
+	DisplayName           *string `json:"display_name,omitempty" jsonschema:"Display name of the group"`
+	ParentUID             *string `json:"parent_uid,omitempty" jsonschema:"UID of the parent group, if any"`
+	BusinessEmailRequired bool    `json:"business_email_required,omitempty" jsonschema:"Whether business email is required for members"`
+	MemberVisibility      string  `json:"member_visibility,omitempty" jsonschema:"Visibility level of member profiles to other members"`
+	ShowMeetingAttendees  bool    `json:"show_meeting_attendees,omitempty" jsonschema:"Whether to show meeting attendees by default"`
+}
+
+// UpdateGroupArgs defines the input parameters for the update_group tool (groups mode).
+// Only fields that are provided (non-nil) will be updated; omitted fields retain
+// their current values (fetch-then-merge semantics).
+type UpdateGroupArgs struct {
+	UID             string  `json:"uid" jsonschema:"UID of the group to update"`
+	ProjectUID      *string `json:"project_uid,omitempty" jsonschema:"Project UID the group belongs to"`
+	Name            *string `json:"name,omitempty" jsonschema:"Name of the group"`
+	Category        *string `json:"category,omitempty" jsonschema:"Category of the group"`
+	Description     *string `json:"description,omitempty" jsonschema:"Description of the group"`
+	Website         *string `json:"website,omitempty" jsonschema:"Website URL of the group"`
+	EnableVoting    *bool   `json:"enable_voting,omitempty" jsonschema:"Whether voting is enabled"`
+	SSOGroupEnabled *bool   `json:"sso_group_enabled,omitempty" jsonschema:"Whether SSO group integration is enabled"`
+	RequiresReview  *bool   `json:"requires_review,omitempty" jsonschema:"Whether the group requires review"`
+	Public          *bool   `json:"public,omitempty" jsonschema:"Whether the group is publicly visible"`
+	CalendarPublic  *bool   `json:"calendar_public,omitempty" jsonschema:"Whether the group calendar is publicly visible"`
+	DisplayName     *string `json:"display_name,omitempty" jsonschema:"Display name of the group"`
+	ParentUID       *string `json:"parent_uid,omitempty" jsonschema:"UID of the parent group, if any"`
+}
+
+// UpdateGroupSettingsArgs defines the input parameters for the update_group_settings tool (groups mode).
+// Only fields that are provided (non-nil) will be updated; omitted fields retain
+// their current values (fetch-then-merge semantics).
+type UpdateGroupSettingsArgs struct {
+	UID                   string  `json:"uid" jsonschema:"UID of the group whose settings to update"`
+	BusinessEmailRequired *bool   `json:"business_email_required,omitempty" jsonschema:"Whether business email is required for members"`
+	MemberVisibility      *string `json:"member_visibility,omitempty" jsonschema:"Visibility level of member profiles to other members"`
+	ShowMeetingAttendees  *bool   `json:"show_meeting_attendees,omitempty" jsonschema:"Whether to show meeting attendees by default"`
+}
+
+// DeleteGroupArgs defines the input parameters for the delete_group tool (groups mode).
+type DeleteGroupArgs struct {
+	UID string `json:"uid" jsonschema:"UID of the group to delete"`
+}
+
+// CreateGroupMemberArgs defines the input parameters for the create_group_member tool (groups mode).
+type CreateGroupMemberArgs struct {
+	GroupUID        string                           `json:"group_uid" jsonschema:"UID of the group to add the member to"`
+	Email           string                           `json:"email" jsonschema:"Primary email address of the member"`
+	AppointedBy     string                           `json:"appointed_by" jsonschema:"How the member was appointed"`
+	Status          string                           `json:"status" jsonschema:"Member status"`
+	FirstName       *string                          `json:"first_name,omitempty" jsonschema:"First name"`
+	LastName        *string                          `json:"last_name,omitempty" jsonschema:"Last name"`
+	JobTitle        *string                          `json:"job_title,omitempty" jsonschema:"Job title at organization"`
+	LinkedinProfile *string                          `json:"linkedin_profile,omitempty" jsonschema:"LinkedIn profile URL"`
+	Role            *CommitteeMemberRoleArgs         `json:"role,omitempty" jsonschema:"Group role information"`
+	Voting          *CommitteeMemberVotingArgs       `json:"voting,omitempty" jsonschema:"Voting information"`
+	Organization    *CommitteeMemberOrganizationArgs `json:"organization,omitempty" jsonschema:"Organization information"`
+}
+
+// UpdateGroupMemberArgs defines the input parameters for the update_group_member tool (groups mode).
+// Only fields that are provided (non-nil) will be updated; omitted fields retain
+// their current values (fetch-then-merge semantics).
+type UpdateGroupMemberArgs struct {
+	GroupUID        string                           `json:"group_uid" jsonschema:"UID of the group"`
+	MemberUID       string                           `json:"member_uid" jsonschema:"UID of the member to update"`
+	Email           *string                          `json:"email,omitempty" jsonschema:"Primary email address of the member"`
+	AppointedBy     *string                          `json:"appointed_by,omitempty" jsonschema:"How the member was appointed"`
+	Status          *string                          `json:"status,omitempty" jsonschema:"Member status"`
+	FirstName       *string                          `json:"first_name,omitempty" jsonschema:"First name"`
+	LastName        *string                          `json:"last_name,omitempty" jsonschema:"Last name"`
+	JobTitle        *string                          `json:"job_title,omitempty" jsonschema:"Job title at organization"`
+	LinkedinProfile *string                          `json:"linkedin_profile,omitempty" jsonschema:"LinkedIn profile URL"`
+	Role            *CommitteeMemberRoleArgs         `json:"role,omitempty" jsonschema:"Group role information"`
+	Voting          *CommitteeMemberVotingArgs       `json:"voting,omitempty" jsonschema:"Voting information"`
+	Organization    *CommitteeMemberOrganizationArgs `json:"organization,omitempty" jsonschema:"Organization information"`
+}
+
+// DeleteGroupMemberArgs defines the input parameters for the delete_group_member tool (groups mode).
+type DeleteGroupMemberArgs struct {
+	GroupUID  string `json:"group_uid" jsonschema:"UID of the group"`
+	MemberUID string `json:"member_uid" jsonschema:"UID of the member to delete"`
+}
+
+// --- Group-mode adapter handlers ---
+
+// handleCreateGroupMode adapts group-mode args to the committee create handler.
+func handleCreateGroupMode(ctx context.Context, req *mcp.CallToolRequest, args CreateGroupArgs) (*mcp.CallToolResult, any, error) {
+	return handleCreateCommittee(ctx, req, CreateCommitteeArgs{
+		ProjectUID:            args.ProjectUID,
+		Name:                  args.Name,
+		Category:              args.Category,
+		Description:           args.Description,
+		Website:               args.Website,
+		EnableVoting:          args.EnableVoting,
+		SSOGroupEnabled:       args.SSOGroupEnabled,
+		RequiresReview:        args.RequiresReview,
+		Public:                args.Public,
+		CalendarPublic:        args.CalendarPublic,
+		DisplayName:           args.DisplayName,
+		ParentUID:             args.ParentUID,
+		BusinessEmailRequired: args.BusinessEmailRequired,
+		MemberVisibility:      args.MemberVisibility,
+		ShowMeetingAttendees:  args.ShowMeetingAttendees,
+	})
+}
+
+// handleUpdateGroupMode adapts group-mode args to the committee update handler.
+func handleUpdateGroupMode(ctx context.Context, req *mcp.CallToolRequest, args UpdateGroupArgs) (*mcp.CallToolResult, any, error) {
+	return handleUpdateCommittee(ctx, req, UpdateCommitteeArgs{
+		UID:             args.UID,
+		ProjectUID:      args.ProjectUID,
+		Name:            args.Name,
+		Category:        args.Category,
+		Description:     args.Description,
+		Website:         args.Website,
+		EnableVoting:    args.EnableVoting,
+		SSOGroupEnabled: args.SSOGroupEnabled,
+		RequiresReview:  args.RequiresReview,
+		Public:          args.Public,
+		CalendarPublic:  args.CalendarPublic,
+		DisplayName:     args.DisplayName,
+		ParentUID:       args.ParentUID,
+	})
+}
+
+// handleUpdateGroupSettingsMode adapts group-mode args to the committee settings update handler.
+func handleUpdateGroupSettingsMode(ctx context.Context, req *mcp.CallToolRequest, args UpdateGroupSettingsArgs) (*mcp.CallToolResult, any, error) {
+	return handleUpdateCommitteeSettings(ctx, req, UpdateCommitteeSettingsArgs{
+		UID:                   args.UID,
+		BusinessEmailRequired: args.BusinessEmailRequired,
+		MemberVisibility:      args.MemberVisibility,
+		ShowMeetingAttendees:  args.ShowMeetingAttendees,
+	})
+}
+
+// handleDeleteGroupMode adapts group-mode args to the committee delete handler.
+func handleDeleteGroupMode(ctx context.Context, req *mcp.CallToolRequest, args DeleteGroupArgs) (*mcp.CallToolResult, any, error) {
+	return handleDeleteCommittee(ctx, req, DeleteCommitteeArgs{UID: args.UID})
+}
+
+// handleCreateGroupMemberMode adapts group-mode args to the committee member create handler.
+func handleCreateGroupMemberMode(ctx context.Context, req *mcp.CallToolRequest, args CreateGroupMemberArgs) (*mcp.CallToolResult, any, error) {
+	return handleCreateCommitteeMember(ctx, req, CreateCommitteeMemberArgs{
+		CommitteeUID:    args.GroupUID,
+		Email:           args.Email,
+		AppointedBy:     args.AppointedBy,
+		Status:          args.Status,
+		FirstName:       args.FirstName,
+		LastName:        args.LastName,
+		JobTitle:        args.JobTitle,
+		LinkedinProfile: args.LinkedinProfile,
+		Role:            args.Role,
+		Voting:          args.Voting,
+		Organization:    args.Organization,
+	})
+}
+
+// handleUpdateGroupMemberMode adapts group-mode args to the committee member update handler.
+func handleUpdateGroupMemberMode(ctx context.Context, req *mcp.CallToolRequest, args UpdateGroupMemberArgs) (*mcp.CallToolResult, any, error) {
+	return handleUpdateCommitteeMember(ctx, req, UpdateCommitteeMemberArgs{
+		CommitteeUID:    args.GroupUID,
+		MemberUID:       args.MemberUID,
+		Email:           args.Email,
+		AppointedBy:     args.AppointedBy,
+		Status:          args.Status,
+		FirstName:       args.FirstName,
+		LastName:        args.LastName,
+		JobTitle:        args.JobTitle,
+		LinkedinProfile: args.LinkedinProfile,
+		Role:            args.Role,
+		Voting:          args.Voting,
+		Organization:    args.Organization,
+	})
+}
+
+// handleDeleteGroupMemberMode adapts group-mode args to the committee member delete handler.
+func handleDeleteGroupMemberMode(ctx context.Context, req *mcp.CallToolRequest, args DeleteGroupMemberArgs) (*mcp.CallToolResult, any, error) {
+	return handleDeleteCommitteeMember(ctx, req, DeleteCommitteeMemberArgs{
+		CommitteeUID: args.GroupUID,
+		MemberUID:    args.MemberUID,
+	})
+}
+
+// --- Registration functions ---
+
+// RegisterCreateCommittee registers the create_committee (or create_group) tool with the MCP server.
+// When asGroups is true, the tool is registered under the "create_group" name with group-oriented
+// descriptions; otherwise the standard committee terminology is used.
+func RegisterCreateCommittee(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "create_group",
+			Description: "Create a new group (also called committee) under a project.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:           "Create Group",
+				DestructiveHint: boolPtr(false),
+			},
+		}, handleCreateGroupMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_committee",
 		Description: "Create a new committee under a project.",
@@ -145,8 +354,22 @@ func RegisterCreateCommittee(server *mcp.Server) {
 	}, handleCreateCommittee)
 }
 
-// RegisterUpdateCommittee registers the update_committee tool with the MCP server.
-func RegisterUpdateCommittee(server *mcp.Server) {
+// RegisterUpdateCommittee registers the update_committee (or update_group) tool with the MCP server.
+// When asGroups is true, the tool is registered under the "update_group" name with group-oriented
+// descriptions; otherwise the standard committee terminology is used.
+func RegisterUpdateCommittee(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "update_group",
+			Description: "Update a group's (also called committee) base information (name, category, visibility, etc.). Only provided fields are changed; omitted fields keep their current values.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:           "Update Group",
+				DestructiveHint: boolPtr(true),
+				IdempotentHint:  true,
+			},
+		}, handleUpdateGroupMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_committee",
 		Description: "Update a committee's base information (name, category, visibility, etc.). Only provided fields are changed; omitted fields keep their current values.",
@@ -158,8 +381,22 @@ func RegisterUpdateCommittee(server *mcp.Server) {
 	}, handleUpdateCommittee)
 }
 
-// RegisterUpdateCommitteeSettings registers the update_committee_settings tool with the MCP server.
-func RegisterUpdateCommitteeSettings(server *mcp.Server) {
+// RegisterUpdateCommitteeSettings registers the update_committee_settings (or update_group_settings) tool with the MCP server.
+// When asGroups is true, the tool is registered under the "update_group_settings" name with group-oriented
+// descriptions; otherwise the standard committee terminology is used.
+func RegisterUpdateCommitteeSettings(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "update_group_settings",
+			Description: "Update a group's (also called committee) settings (member visibility, email requirements, meeting attendee defaults). Only provided fields are changed; omitted fields keep their current values.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:           "Update Group Settings",
+				DestructiveHint: boolPtr(true),
+				IdempotentHint:  true,
+			},
+		}, handleUpdateGroupSettingsMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_committee_settings",
 		Description: "Update a committee's settings (member visibility, email requirements, meeting attendee defaults). Only provided fields are changed; omitted fields keep their current values.",
@@ -171,8 +408,21 @@ func RegisterUpdateCommitteeSettings(server *mcp.Server) {
 	}, handleUpdateCommitteeSettings)
 }
 
-// RegisterDeleteCommittee registers the delete_committee tool with the MCP server.
-func RegisterDeleteCommittee(server *mcp.Server) {
+// RegisterDeleteCommittee registers the delete_committee (or delete_group) tool with the MCP server.
+// When asGroups is true, the tool is registered under the "delete_group" name with group-oriented
+// descriptions; otherwise the standard committee terminology is used.
+func RegisterDeleteCommittee(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "delete_group",
+			Description: "Delete a group (also called committee) by its UID.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:           "Delete Group",
+				DestructiveHint: boolPtr(true),
+			},
+		}, handleDeleteGroupMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "delete_committee",
 		Description: "Delete a committee by its UID.",
@@ -183,8 +433,21 @@ func RegisterDeleteCommittee(server *mcp.Server) {
 	}, handleDeleteCommittee)
 }
 
-// RegisterCreateCommitteeMember registers the create_committee_member tool with the MCP server.
-func RegisterCreateCommitteeMember(server *mcp.Server) {
+// RegisterCreateCommitteeMember registers the create_committee_member (or create_group_member) tool with the MCP server.
+// When asGroups is true, the tool is registered under the "create_group_member" name with group-oriented
+// descriptions; otherwise the standard committee terminology is used.
+func RegisterCreateCommitteeMember(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "create_group_member",
+			Description: "Add a new member to a group (also called committee).",
+			Annotations: &mcp.ToolAnnotations{
+				Title:           "Create Group Member",
+				DestructiveHint: boolPtr(false),
+			},
+		}, handleCreateGroupMemberMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_committee_member",
 		Description: "Add a new member to a committee.",
@@ -195,8 +458,22 @@ func RegisterCreateCommitteeMember(server *mcp.Server) {
 	}, handleCreateCommitteeMember)
 }
 
-// RegisterUpdateCommitteeMember registers the update_committee_member tool with the MCP server.
-func RegisterUpdateCommitteeMember(server *mcp.Server) {
+// RegisterUpdateCommitteeMember registers the update_committee_member (or update_group_member) tool with the MCP server.
+// When asGroups is true, the tool is registered under the "update_group_member" name with group-oriented
+// descriptions; otherwise the standard committee terminology is used.
+func RegisterUpdateCommitteeMember(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "update_group_member",
+			Description: "Update an existing group (also called committee) member's information. Only provided fields are changed; omitted fields keep their current values.",
+			Annotations: &mcp.ToolAnnotations{
+				Title:           "Update Group Member",
+				DestructiveHint: boolPtr(true),
+				IdempotentHint:  true,
+			},
+		}, handleUpdateGroupMemberMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_committee_member",
 		Description: "Update an existing committee member's information. Only provided fields are changed; omitted fields keep their current values.",
@@ -208,8 +485,21 @@ func RegisterUpdateCommitteeMember(server *mcp.Server) {
 	}, handleUpdateCommitteeMember)
 }
 
-// RegisterDeleteCommitteeMember registers the delete_committee_member tool with the MCP server.
-func RegisterDeleteCommitteeMember(server *mcp.Server) {
+// RegisterDeleteCommitteeMember registers the delete_committee_member (or delete_group_member) tool with the MCP server.
+// When asGroups is true, the tool is registered under the "delete_group_member" name with group-oriented
+// descriptions; otherwise the standard committee terminology is used.
+func RegisterDeleteCommitteeMember(server *mcp.Server, asGroups bool) {
+	if asGroups {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "delete_group_member",
+			Description: "Remove a member from a group (also called committee).",
+			Annotations: &mcp.ToolAnnotations{
+				Title:           "Delete Group Member",
+				DestructiveHint: boolPtr(true),
+			},
+		}, handleDeleteGroupMemberMode)
+		return
+	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "delete_committee_member",
 		Description: "Remove a member from a committee.",

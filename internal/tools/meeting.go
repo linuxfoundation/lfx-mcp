@@ -207,28 +207,28 @@ func RegisterGetPastMeeting(server *mcp.Server) {
 
 // SearchMeetingsArgs defines the input parameters for the search_meetings tool.
 type SearchMeetingsArgs struct {
-	Name         string   `json:"name,omitempty" jsonschema:"Name or partial name of the meeting to search for"`
-	ProjectUID   string   `json:"project_uid,omitempty" jsonschema:"Filter meetings by project UID (ignored when committee_uid is set)"`
-	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter meetings by committee UID"`
-	DateField    string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set)"`
-	DateFrom     string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
-	DateTo       string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
-	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
-	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	Name         string `json:"name,omitempty" jsonschema:"Name or partial name of the meeting to search for"`
+	ProjectUID   string `json:"project_uid,omitempty" jsonschema:"Filter meetings by project UID (ignored when committee_uid is set)"`
+	CommitteeUID string `json:"committee_uid,omitempty" jsonschema:"Filter meetings by committee UID"`
+	DateField    string `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set)"`
+	DateFrom     string `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
+	DateTo       string `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
+	Sort         string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
+	PageSize     int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken    string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // SearchMeetingsGroupArgs is the groups-mode variant of SearchMeetingsArgs.
 type SearchMeetingsGroupArgs struct {
-	Name       string   `json:"name,omitempty" jsonschema:"Name or partial name of the meeting to search for"`
-	ProjectUID string   `json:"project_uid,omitempty" jsonschema:"Filter meetings by project UID (ignored when group_uid is set)"`
-	GroupUID   string   `json:"group_uid,omitempty" jsonschema:"Filter meetings by group UID (also known as committee UID)"`
-	DateField  string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set)"`
-	DateFrom   string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
-	DateTo     string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
-	Sort       string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
-	PageSize   int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken  string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	Name       string `json:"name,omitempty" jsonschema:"Name or partial name of the meeting to search for"`
+	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Filter meetings by project UID (ignored when group_uid is set)"`
+	GroupUID   string `json:"group_uid,omitempty" jsonschema:"Filter meetings by group UID (also known as committee UID)"`
+	DateField  string `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set)"`
+	DateFrom   string `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
+	DateTo     string `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
+	Sort       string `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // GetMeetingArgs defines the input parameters for the get_meeting tool.
@@ -238,22 +238,22 @@ type GetMeetingArgs struct {
 
 // SearchMeetingRegistrantsArgs defines the input parameters for the search_meeting_registrants tool.
 type SearchMeetingRegistrantsArgs struct {
-	MeetingID    string   `json:"meeting_id,omitempty" jsonschema:"Filter registrants by meeting ID"`
-	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter registrants by committee UID (ignored when meeting_id is set)"`
-	Name         string   `json:"name,omitempty" jsonschema:"Name or partial name of the registrant to search for"`
-	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
-	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	MeetingID    string `json:"meeting_id,omitempty" jsonschema:"Filter registrants by meeting ID"`
+	CommitteeUID string `json:"committee_uid,omitempty" jsonschema:"Filter registrants by committee UID (ignored when meeting_id is set)"`
+	Name         string `json:"name,omitempty" jsonschema:"Name or partial name of the registrant to search for"`
+	Sort         string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
+	PageSize     int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken    string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // SearchMeetingRegistrantsGroupArgs is the groups-mode variant of SearchMeetingRegistrantsArgs.
 type SearchMeetingRegistrantsGroupArgs struct {
-	MeetingID string   `json:"meeting_id,omitempty" jsonschema:"Filter registrants by meeting ID"`
-	GroupUID  string   `json:"group_uid,omitempty" jsonschema:"Filter registrants by group UID (also known as committee UID; ignored when meeting_id is set)"`
-	Name      string   `json:"name,omitempty" jsonschema:"Name or partial name of the registrant to search for"`
-	Sort      string   `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
-	PageSize  int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	MeetingID string `json:"meeting_id,omitempty" jsonschema:"Filter registrants by meeting ID"`
+	GroupUID  string `json:"group_uid,omitempty" jsonschema:"Filter registrants by group UID (also known as committee UID; ignored when meeting_id is set)"`
+	Name      string `json:"name,omitempty" jsonschema:"Name or partial name of the registrant to search for"`
+	Sort      string `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	PageSize  int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // GetMeetingRegistrantArgs defines the input parameters for the get_meeting_registrant tool.
@@ -263,12 +263,12 @@ type GetMeetingRegistrantArgs struct {
 
 // SearchPastMeetingParticipantsArgs defines the input parameters for the search_past_meeting_participants tool.
 type SearchPastMeetingParticipantsArgs struct {
-	PastMeetingID string   `json:"past_meeting_id,omitempty" jsonschema:"Filter participants by past meeting ID (the meeting_and_occurrence_id value, e.g. 91461158520-1771596000000)"`
-	ProjectUID    string   `json:"project_uid,omitempty" jsonschema:"Filter participants by project UID (ignored when past_meeting_id is set)"`
-	Name          string   `json:"name,omitempty" jsonschema:"Name or partial name of the participant to search for"`
-	Sort          string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
-	PageSize      int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken     string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	PastMeetingID string `json:"past_meeting_id,omitempty" jsonschema:"Filter participants by past meeting ID (the meeting_and_occurrence_id value, e.g. 91461158520-1771596000000)"`
+	ProjectUID    string `json:"project_uid,omitempty" jsonschema:"Filter participants by project UID (ignored when past_meeting_id is set)"`
+	Name          string `json:"name,omitempty" jsonschema:"Name or partial name of the participant to search for"`
+	Sort          string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
+	PageSize      int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken     string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // GetPastMeetingParticipantArgs defines the input parameters for the get_past_meeting_participant tool.
@@ -278,12 +278,12 @@ type GetPastMeetingParticipantArgs struct {
 
 // SearchPastMeetingSummariesArgs defines the input parameters for the search_past_meeting_summaries tool.
 type SearchPastMeetingSummariesArgs struct {
-	PastMeetingID string   `json:"past_meeting_id,omitempty" jsonschema:"Filter summaries by past meeting ID (the meeting_and_occurrence_id value, e.g. 91461158520-1771596000000)"`
-	ProjectUID    string   `json:"project_uid,omitempty" jsonschema:"Filter summaries by project UID (ignored when past_meeting_id is set)"`
-	Name          string   `json:"name,omitempty" jsonschema:"Name or partial name of the summary to search for"`
-	Sort          string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
-	PageSize      int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken     string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	PastMeetingID string `json:"past_meeting_id,omitempty" jsonschema:"Filter summaries by past meeting ID (the meeting_and_occurrence_id value, e.g. 91461158520-1771596000000)"`
+	ProjectUID    string `json:"project_uid,omitempty" jsonschema:"Filter summaries by project UID (ignored when past_meeting_id is set)"`
+	Name          string `json:"name,omitempty" jsonschema:"Name or partial name of the summary to search for"`
+	Sort          string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
+	PageSize      int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken     string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // GetPastMeetingSummaryArgs defines the input parameters for the get_past_meeting_summary tool.
@@ -1040,16 +1040,16 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 
 // SearchPastMeetingsArgs defines the input parameters for the search_past_meetings tool.
 type SearchPastMeetingsArgs struct {
-	Name         string   `json:"name,omitempty" jsonschema:"Name or partial name of the past meeting to search for"`
-	ProjectUID   string   `json:"project_uid,omitempty" jsonschema:"Filter past meetings by project UID"`
-	CommitteeUID string   `json:"committee_uid,omitempty" jsonschema:"Filter past meetings by committee UID"`
-	MeetingID    string   `json:"meeting_id,omitempty" jsonschema:"Filter past meetings by meeting ID"`
-	DateField    string   `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set); also accepts end_time"`
-	DateFrom     string   `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
-	DateTo       string   `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
-	Sort         string   `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
-	PageSize     int      `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken    string   `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	Name         string `json:"name,omitempty" jsonschema:"Name or partial name of the past meeting to search for"`
+	ProjectUID   string `json:"project_uid,omitempty" jsonschema:"Filter past meetings by project UID"`
+	CommitteeUID string `json:"committee_uid,omitempty" jsonschema:"Filter past meetings by committee UID"`
+	MeetingID    string `json:"meeting_id,omitempty" jsonschema:"Filter past meetings by meeting ID"`
+	DateField    string `json:"date_field,omitempty" jsonschema:"Date field to filter on (default start_time when date_from or date_to is set); also accepts end_time"`
+	DateFrom     string `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
+	DateTo       string `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
+	Sort         string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
+	PageSize     int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken    string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // GetPastMeetingArgs defines the input parameters for the get_past_meeting tool.

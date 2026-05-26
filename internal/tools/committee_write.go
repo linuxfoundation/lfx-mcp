@@ -231,57 +231,22 @@ type DeleteGroupMemberArgs struct {
 
 // handleCreateGroupMode adapts group-mode args to the committee create handler.
 func handleCreateGroupMode(ctx context.Context, req *mcp.CallToolRequest, args CreateGroupArgs) (*mcp.CallToolResult, any, error) {
-	return handleCreateCommittee(ctx, req, CreateCommitteeArgs{
-		ProjectUID:            args.ProjectUID,
-		Name:                  args.Name,
-		Category:              args.Category,
-		Description:           args.Description,
-		Website:               args.Website,
-		EnableVoting:          args.EnableVoting,
-		SSOGroupEnabled:       args.SSOGroupEnabled,
-		RequiresReview:        args.RequiresReview,
-		Public:                args.Public,
-		CalendarPublic:        args.CalendarPublic,
-		DisplayName:           args.DisplayName,
-		ParentUID:             args.ParentUID,
-		BusinessEmailRequired: args.BusinessEmailRequired,
-		MemberVisibility:      args.MemberVisibility,
-		ShowMeetingAttendees:  args.ShowMeetingAttendees,
-	})
+	return handleCreateCommittee(ctx, req, CreateCommitteeArgs(args))
 }
 
 // handleUpdateGroupMode adapts group-mode args to the committee update handler.
 func handleUpdateGroupMode(ctx context.Context, req *mcp.CallToolRequest, args UpdateGroupArgs) (*mcp.CallToolResult, any, error) {
-	return handleUpdateCommittee(ctx, req, UpdateCommitteeArgs{
-		UID:             args.UID,
-		ProjectUID:      args.ProjectUID,
-		Name:            args.Name,
-		Category:        args.Category,
-		Description:     args.Description,
-		Website:         args.Website,
-		EnableVoting:    args.EnableVoting,
-		SSOGroupEnabled: args.SSOGroupEnabled,
-		RequiresReview:  args.RequiresReview,
-		Public:          args.Public,
-		CalendarPublic:  args.CalendarPublic,
-		DisplayName:     args.DisplayName,
-		ParentUID:       args.ParentUID,
-	})
+	return handleUpdateCommittee(ctx, req, UpdateCommitteeArgs(args))
 }
 
 // handleUpdateGroupSettingsMode adapts group-mode args to the committee settings update handler.
 func handleUpdateGroupSettingsMode(ctx context.Context, req *mcp.CallToolRequest, args UpdateGroupSettingsArgs) (*mcp.CallToolResult, any, error) {
-	return handleUpdateCommitteeSettings(ctx, req, UpdateCommitteeSettingsArgs{
-		UID:                   args.UID,
-		BusinessEmailRequired: args.BusinessEmailRequired,
-		MemberVisibility:      args.MemberVisibility,
-		ShowMeetingAttendees:  args.ShowMeetingAttendees,
-	})
+	return handleUpdateCommitteeSettings(ctx, req, UpdateCommitteeSettingsArgs(args))
 }
 
 // handleDeleteGroupMode adapts group-mode args to the committee delete handler.
 func handleDeleteGroupMode(ctx context.Context, req *mcp.CallToolRequest, args DeleteGroupArgs) (*mcp.CallToolResult, any, error) {
-	return handleDeleteCommittee(ctx, req, DeleteCommitteeArgs{UID: args.UID})
+	return handleDeleteCommittee(ctx, req, DeleteCommitteeArgs(args))
 }
 
 // handleCreateGroupMemberMode adapts group-mode args to the committee member create handler.

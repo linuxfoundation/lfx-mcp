@@ -193,17 +193,12 @@ type SearchGroupMembersArgs struct {
 
 // handleSearchCommitteesGroupMode adapts group-mode args to the committee handler.
 func handleSearchCommitteesGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupsArgs) (*mcp.CallToolResult, any, error) {
-	return handleSearchCommittees(ctx, req, SearchCommitteesArgs{
-		Name:       args.Name,
-		ProjectUID: args.ProjectUID,
-		PageSize:   args.PageSize,
-		PageToken:  args.PageToken,
-	})
+	return handleSearchCommittees(ctx, req, SearchCommitteesArgs(args))
 }
 
 // handleGetCommitteeGroupMode adapts group-mode args to the committee handler.
 func handleGetCommitteeGroupMode(ctx context.Context, req *mcp.CallToolRequest, args GetGroupArgs) (*mcp.CallToolResult, any, error) {
-	return handleGetCommittee(ctx, req, GetCommitteeArgs{UID: args.UID})
+	return handleGetCommittee(ctx, req, GetCommitteeArgs(args))
 }
 
 // handleGetCommitteeMemberGroupMode adapts group-mode args to the committee member handler.

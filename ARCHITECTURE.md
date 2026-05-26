@@ -199,7 +199,6 @@ sequenceDiagram
     participant Client as MCP Client
     participant MCP as MCP Server
     participant Auth0
-    participant LFX as LFX Self Service API<br />(Query Svc + Access Check)
     participant Lens as LFX Lens API
 
     User->>Client: open MCP tool
@@ -208,23 +207,19 @@ sequenceDiagram
     MCP-->>Client: auth server URL (Auth0)
 
     Client->>Auth0: authorization code flow
-    Auth0-->>Client: MCP JWT (aud: mcp.lfx.dev, lf_staff=true)
+    Auth0-->>Client: MCP JWT (aud: {mcp_public_url}, lf_staff=true)
 
     Client->>MCP: tools/list<br />Authorization: Bearer {mcp_jwt}
     MCP->>Auth0: fetch JWKS (cached)
     Auth0-->>MCP: public keys
     MCP->>MCP: verify signature, expiry, audience<br />extract scopes + lf_staff claim
-    Note over MCP: query_lfx_lens registered<br />only when lf_staff=true
+    Note over MCP: query_lfx_lens registered only when<br />read scope (read:all or manage:all) AND lf_staff=true
     MCP-->>Client: tools/list (includes query_lfx_lens)
 
     User->>Client: invoke query_lfx_lens (slug="tlf")
     Client->>MCP: tools/call {query_lfx_lens}<br />Authorization: Bearer {mcp_jwt}
 
-    MCP->>Auth0: token exchange (RFC 8693)<br />M2M client assertion + {mcp_jwt}
-    Auth0-->>MCP: CTE token (carries user identity, cached)
-
-    Note over MCP: lf_staff=true already verified<br />at tool registration; no access-check needed
-
+    Note over MCP: lf_staff=true already verified at registration
     MCP->>Auth0: client_credentials grant<br />audience = Lens API resource server
     Auth0-->>MCP: Lens M2M token (no user identity, cached)
 
@@ -305,7 +300,7 @@ sequenceDiagram
     MCP->>Auth0: client_credentials grant<br />audience = Onboarding API resource server
     Auth0-->>MCP: Onboarding M2M token (cached)
 
-    MCP->>ONB: POST /member-onboarding/{slug}/send-email<br />Authorization: Bearer {onboarding_m2m_token}
+    MCP->>ONB: POST /member-onboarding/tools/email/{slug}/send<br />Authorization: Bearer {onboarding_m2m_token}
     ONB->>ONB: verify JWT via JWKS
     ONB-->>MCP: response
     MCP-->>Client: tool result

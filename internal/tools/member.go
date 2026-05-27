@@ -133,6 +133,12 @@ type keyContactView struct {
 	UpdatedAt      *string `json:"updated_at,omitempty"`
 }
 
+// memberSearchResult is the output type for the search_members tool.
+type memberSearchResult struct {
+	Memberships []membershipView            `json:"memberships"`
+	Metadata    *memberservice.ListMetadata `json:"metadata,omitempty"`
+}
+
 // toMembershipTierView converts a MembershipTierResponse to the filtered MCP
 // view, dropping redundant fields.
 func toMembershipTierView(t *memberservice.MembershipTierResponse) membershipTierView {
@@ -268,7 +274,7 @@ func RegisterGetMembershipKeyContact(server *mcp.Server) {
 }
 
 // handleSearchMembers implements the search_members tool logic.
-func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchMembersArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchMembersArgs) (*mcp.CallToolResult, memberSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
@@ -278,7 +284,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 				&mcp.TextContent{Text: "Error: member tools not configured"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, memberSearchResult{}, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
@@ -289,7 +295,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, memberSearchResult{}, nil
 	}
 
 	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -301,7 +307,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 				&mcp.TextContent{Text: "Error: project_uid is required"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, memberSearchResult{}, nil
 	}
 
 	pageSize := args.PageSize
@@ -346,7 +352,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 				&mcp.TextContent{Text: friendlyAPIError("failed to search members", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, memberSearchResult{}, nil
 	}
 
 	views := make([]membershipView, 0, len(result.Memberships))
@@ -354,11 +360,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		views = append(views, toMembershipView(m))
 	}
 
-	type searchResult struct {
-		Memberships []membershipView            `json:"memberships"`
-		Metadata    *memberservice.ListMetadata `json:"metadata,omitempty"`
-	}
-	filtered := searchResult{
+	filtered := memberSearchResult{
 		Memberships: views,
 		Metadata:    result.Metadata,
 	}
@@ -371,7 +373,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, memberSearchResult{}, nil
 	}
 
 	logger.InfoContext(ctx, "search_members succeeded", "count", len(result.Memberships))
@@ -380,11 +382,11 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(prettyJSON)},
 		},
-	}, nil, nil
+	}, filtered, nil
 }
 
 // handleGetMemberMembership implements the get_member_membership tool logic.
-func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, args GetMemberMembershipArgs) (*mcp.CallToolResult, any, error) {
+func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, args GetMemberMembershipArgs) (*mcp.CallToolResult, *memberservice.ProjectMembershipResponse, error) {
 	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
@@ -464,11 +466,11 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(prettyJSON)},
 		},
-	}, nil, nil
+	}, result.Membership, nil
 }
 
 // handleListProjectTiers implements the list_project_tiers tool logic.
-func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args ListProjectTiersArgs) (*mcp.CallToolResult, any, error) {
+func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args ListProjectTiersArgs) (*mcp.CallToolResult, []membershipTierView, error) {
 	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
@@ -543,11 +545,11 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(prettyJSON)},
 		},
-	}, nil, nil
+	}, tierViews, nil
 }
 
 // handleGetProjectTier implements the get_project_tier tool logic.
-func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args GetProjectTierArgs) (*mcp.CallToolResult, any, error) {
+func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args GetProjectTierArgs) (*mcp.CallToolResult, membershipTierView, error) {
 	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
@@ -557,7 +559,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 				&mcp.TextContent{Text: "Error: member tools not configured"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, membershipTierView{}, nil
 	}
 
 	if args.ProjectUID == "" {
@@ -566,7 +568,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 				&mcp.TextContent{Text: "Error: project_uid is required"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, membershipTierView{}, nil
 	}
 
 	if args.TierUID == "" {
@@ -575,7 +577,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 				&mcp.TextContent{Text: "Error: tier_uid is required"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, membershipTierView{}, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
@@ -586,7 +588,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, membershipTierView{}, nil
 	}
 
 	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -607,10 +609,12 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 				&mcp.TextContent{Text: friendlyAPIError("failed to get project tier", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, membershipTierView{}, nil
 	}
 
-	prettyJSON, err := json.MarshalIndent(result.Tier, "", "  ")
+	tierView := toMembershipTierView(result.Tier)
+
+	prettyJSON, err := json.MarshalIndent(tierView, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal tier result", "error", err)
 		return &mcp.CallToolResult{
@@ -618,7 +622,7 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, membershipTierView{}, nil
 	}
 
 	logger.InfoContext(ctx, "get_project_tier succeeded", "project_uid", args.ProjectUID, "tier_uid", args.TierUID)
@@ -627,11 +631,11 @@ func handleGetProjectTier(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(prettyJSON)},
 		},
-	}, nil, nil
+	}, tierView, nil
 }
 
 // handleGetMembershipKeyContacts implements the get_membership_key_contacts tool logic.
-func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolRequest, args GetMembershipKeyContactsArgs) (*mcp.CallToolResult, any, error) {
+func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolRequest, args GetMembershipKeyContactsArgs) (*mcp.CallToolResult, []keyContactView, error) {
 	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
@@ -716,11 +720,11 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(prettyJSON)},
 		},
-	}, nil, nil
+	}, contactViews, nil
 }
 
 // handleGetMembershipKeyContact implements the get_membership_key_contact tool logic.
-func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest, args GetMembershipKeyContactArgs) (*mcp.CallToolResult, any, error) {
+func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest, args GetMembershipKeyContactArgs) (*mcp.CallToolResult, keyContactView, error) {
 	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
@@ -730,7 +734,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 				&mcp.TextContent{Text: "Error: member tools not configured"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, keyContactView{}, nil
 	}
 
 	if args.ProjectUID == "" {
@@ -739,7 +743,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 				&mcp.TextContent{Text: "Error: project_uid is required"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, keyContactView{}, nil
 	}
 
 	if args.MembershipUID == "" {
@@ -748,7 +752,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 				&mcp.TextContent{Text: "Error: membership_uid is required"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, keyContactView{}, nil
 	}
 
 	if args.ContactUID == "" {
@@ -757,7 +761,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 				&mcp.TextContent{Text: "Error: contact_uid is required"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, keyContactView{}, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
@@ -768,7 +772,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, keyContactView{}, nil
 	}
 
 	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -790,10 +794,12 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 				&mcp.TextContent{Text: friendlyAPIError("failed to get membership key contact", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, keyContactView{}, nil
 	}
 
-	prettyJSON, err := json.MarshalIndent(toKeyContactView(result.Contact), "", "  ")
+	contactView := toKeyContactView(result.Contact)
+
+	prettyJSON, err := json.MarshalIndent(contactView, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal key contact result", "error", err)
 		return &mcp.CallToolResult{
@@ -801,7 +807,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, keyContactView{}, nil
 	}
 
 	logger.InfoContext(ctx, "get_membership_key_contact succeeded", "project_uid", args.ProjectUID, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
@@ -810,5 +816,5 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(prettyJSON)},
 		},
-	}, nil, nil
+	}, contactView, nil
 }

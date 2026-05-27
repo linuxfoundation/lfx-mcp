@@ -480,7 +480,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 				&mcp.TextContent{Text: "Error: member tools not configured"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, []membershipTierView{}, nil
 	}
 
 	if args.ProjectUID == "" {
@@ -489,7 +489,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 				&mcp.TextContent{Text: "Error: project_uid is required"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, []membershipTierView{}, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
@@ -500,7 +500,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, []membershipTierView{}, nil
 	}
 
 	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -520,7 +520,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 				&mcp.TextContent{Text: friendlyAPIError("failed to list project tiers", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, []membershipTierView{}, nil
 	}
 
 	tierViews := make([]membershipTierView, 0, len(result.Tiers))
@@ -536,7 +536,7 @@ func handleListProjectTiers(ctx context.Context, req *mcp.CallToolRequest, args 
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, []membershipTierView{}, nil
 	}
 
 	logger.InfoContext(ctx, "list_project_tiers succeeded", "project_uid", args.ProjectUID, "count", len(result.Tiers))

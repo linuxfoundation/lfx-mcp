@@ -2,17 +2,15 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that connects AI assistants to the Linux Foundation's LFX platform.
 
-## What You Can Do
+## Features
 
-- **Explore projects** — Search and retrieve details for any LFX project
-- **Manage committees** — Search, create, update, and delete committees and their members across projects
-- **Work with mailing lists** — Search mailing lists and their subscribers
-- **Query members** — Search memberships by tier, status, organization, and more; get and manage key contacts
-- **Track meetings** — Find upcoming meetings, registrants, past participants, and AI-generated summaries
-- **Manage Discord roles** — List roles, find users, check and assign roles in a project's Discord guild
-- **Send emails** — Browse email templates and send templated emails via LFX mail servers
-- **Query with LFX Lens** — Ask natural-language questions about project data (events, contributors, health, and more)
-- **Search B2B organizations** — Find organizations and list their project memberships
+- **Explore projects** — Search and retrieve details for Linux Foundation projects
+- **Manage committees** — Search, create, update, and delete project committees and their members
+- **Work with mailing lists** — Search project mailing lists and their subscribers
+- **Track project meetings** — Find upcoming meetings, registrants, past participants, and AI-generated summaries
+- **Query membership** — Search project memberships by tier, status, organization, and more; get and manage key contacts
+- **Analyze data with LFX Lens** — Compare and report on project activities and contributions over time
+- ... and more!
 
 ## Connecting to the LFX MCP Server
 
@@ -22,13 +20,33 @@ The LFX MCP Server is available as a hosted, production service at:
 https://mcp.lfx.dev/mcp
 ```
 
-This endpoint uses the [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) transport with OAuth 2.0 authentication. You will be prompted to log in with your Linux Foundation account the first time you connect.
+You will be prompted to log in with your Linux Foundation account (LFID) the first time you connect. *All MCP permissions correspond to LFX platform permissions granted to your LFID.*
 
-> **Note:** Running the LFX MCP Server locally (e.g. in stdio mode) is not a supported end-user configuration. The full tool set requires OAuth authentication flows that are only available through the hosted service.
+**The following clients are set up to work with the LFX MCP Server.** Please file an issue to request additional client support. Running the LFX MCP Server as a local (stdio) MCP server is not supported at this time.
 
-**Linux Foundation SSO does not support Dynamic Client Registration (DCR) or Client ID Metadata Documents (CIMD) at this time.** Please file an issue to request additional client support.
+### Goose
+
+#### GUI (one-click install)
+
+<goose://extension?url=https%3A%2F%2Fmcp.lfx.dev%2Fmcp&type=streamable_http&id=lfx&name=LFX&description=LFX%20MCP%20Server>
+
+Start a new chat and Goose will open a browser window for LFID login.
+
+#### CLI
+
+1. Run `goose configure`.
+2. Select **Add Extension** → **Remote Extension (Streamable HTTP)**.
+3. Enter `LFX` as the name.
+4. Enter `https://mcp.lfx.dev/mcp` as the URI.
+5. Enter `300` for the timeout.
+6. Enter `LFX MCP Server` as the description.
+7. Select **No** for adding custom headers.
+
+After it acknowledges that your configuration was saved, running `goose` will open a browser window for LFID login.
 
 ### OpenCode
+
+*OpenCode requires a client ID. The following client ID only works with OpenCode.*
 
 Add the following to your `~/.config/opencode/opencode.json`:
 
@@ -52,24 +70,53 @@ See the [OpenCode MCP documentation](https://opencode.ai/docs/mcp-servers) for m
 
 ### Claude (LF enterprise)
 
-If you use the Linux Foundation's enterprise Claude.ai organization, the LFX MCP Server is already provisioned as a connector — you do not need to add it manually.
+If you use the Linux Foundation's enterprise Claude.ai organization, the LFX MCP Server is already provisioned as a connector in both Claude Desktop or Claude Code.
 
-1. In Claude.ai, open **Settings → Connectors**.
-2. Find **LFX MCP Server** in the list of available connectors.
-3. Click **Connect**.
-4. Sign in with your **LFID** when prompted.
-5. Click **Authorize** to grant access; you will be redirected back to Claude.
+#### Claude Desktop
 
-The connector is now active for your account.
+1. From the sidebar, select **Customize** → **Connectors**.
+2. Find **LFX** in the list.
+3. Click **Connect** and sign in with your LFID.
 
-### Claude (personal account)
+#### Claude Code
 
-Add the LFX MCP Server in **Settings → Connectors → Add Custom Connector **:
+Run `/mcp` inside Claude Code and select **claude.ai LFX** → **Authenticate**. Claude Code will open a browser window for LFID login.
 
-- **URL:** `https://mcp.lfx.dev/mcp`
-- **Client ID:** `Ef9tuU5wcJJIXmNGvZyGUkZFfD8CZWar`
+### Claude Desktop (personal account)
+
+1. From the sidebar, select **Customize** → **Connectors**.
+2. Use the **+** button and select **Add Custom Connector**.
+3. Enter **LFX** and the URL `https://mcp.lfx.dev/mcp`.
+4. Press **Add**, then **Connect** and sign in with your LFID.
+
+### Claude Code (personal account)
+
+```bash
+claude mcp add --transport http lfx https://mcp.lfx.dev/mcp
+```
+
+Run `/mcp` inside Claude Code and select **lfx** → **Authenticate**. Claude Code will open a browser for LFID login.
+
+### Visual Studio Code
+
+Run **MCP: Open User Configuration** to open the `mcp.json` file to add the LFX MCP server in your user-level config:
+
+```json
+{
+  "servers": {
+    "lfx": {
+      "type": "http",
+      "url": "https://mcp.lfx.dev/mcp"
+    }
+  }
+}
+```
+
+VS Code will prompt you to trust the server, then open a browser window for Linux Foundation SSO.
 
 ### Cursor
+
+*Cursor requires a client ID. The following client ID only works with Cursor.*
 
 Add the following to your `~/.cursor/mcp.json`:
 
@@ -88,7 +135,9 @@ Add the following to your `~/.cursor/mcp.json`:
 
 ### Additional clients (via mcp-remote)
 
-If your MCP client does not support OAuth 2.0 with Streamable HTTP, you can use [mcp-remote](https://github.com/geelen/mcp-remote) as a local proxy. It handles the OAuth flow in your browser and serves a `stdio` transport to your MCP client.
+If your MCP client is not listed here, you may try using [mcp-remote](https://github.com/geelen/mcp-remote) as a local proxy.
+
+*The client ID shown here is only for embedding mcp-remote as a proxy and does not support direct MCP client use.*
 
 The port `3334` is required so that the OAuth callback URL matches the registered client. Please refer to your client's documentation for the exact configuration syntax. For example, in **Zed** (`~/.config/zed/settings.json`):
 
@@ -109,7 +158,7 @@ The port `3334` is required so that the OAuth callback URL matches the registere
 }
 ```
 
-A browser window will open for authentication on first use. To clear cached credentials (e.g. to re-authenticate):
+A browser window will open for authentication on first use. To re-authenticate, clear cached credentials with:
 
 ```bash
 rm -rf ~/.mcp-auth
@@ -117,19 +166,17 @@ rm -rf ~/.mcp-auth
 
 ### MCP Inspector (developer testing)
 
+*MCP Inspector requires a client ID. The following client ID only works with MCP Inspector.*
+
 [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a browser-based tool for exploring and testing MCP servers. To connect it to the LFX MCP Server:
 
 ```bash
-npx @modelcontextprotocol/inspector
+npx @modelcontextprotocol/inspector --server-url https://mcp.lfx.dev/mcp
 ```
 
-Then in the Inspector UI:
+From the MCP Inspector sidebar, find **Authentication** → **OAuth 2.0 Flow** → **Client ID** and enter `4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O`.
 
-- **Transport:** Streamable HTTP
-- **URL:** `https://mcp.lfx.dev/mcp`
-- **Authentication → OAuth 2.0 Flow → Client ID:** `4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O`
-
-Before hitting **Connect**, follow the **Open Auth Settings** button, then select **Quick OAuth Flow**.
+Hitting **Connect** will open a browser window for LFID login.
 
 ## Available Tools
 

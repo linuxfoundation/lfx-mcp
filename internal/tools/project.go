@@ -32,6 +32,18 @@ func SetProjectConfig(cfg *ProjectConfig) {
 	projectConfig = cfg
 }
 
+// projectSearchResult is the output type for the search_projects tool.
+type projectSearchResult struct {
+	Resources []*querysvc.Resource `json:"resources"`
+	PageToken *string              `json:"page_token,omitempty"`
+}
+
+// projectGetResult is the output type for the get_project tool.
+type projectGetResult struct {
+	Base     *projectservice.ProjectBase     `json:"base"`
+	Settings *projectservice.ProjectSettings `json:"settings,omitempty"`
+}
+
 // RegisterSearchProjects registers the search_projects tool with the MCP server.
 func RegisterSearchProjects(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
@@ -70,7 +82,7 @@ type GetProjectArgs struct {
 }
 
 // handleSearchProjects implements the search_projects tool logic.
-func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args SearchProjectsArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args SearchProjectsArgs) (*mcp.CallToolResult, projectSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if projectConfig == nil {
@@ -80,7 +92,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 				&mcp.TextContent{Text: "Error: project tools not configured"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, projectSearchResult{}, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
@@ -91,7 +103,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, projectSearchResult{}, nil
 	}
 
 	ctx = projectConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -134,15 +146,10 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 				&mcp.TextContent{Text: friendlyAPIError("failed to search projects", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, projectSearchResult{}, nil
 	}
 
-	type searchResult struct {
-		Resources []*querysvc.Resource `json:"resources"`
-		PageToken *string              `json:"page_token,omitempty"`
-	}
-
-	out := searchResult{
+	out := projectSearchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
@@ -155,7 +162,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, projectSearchResult{}, nil
 	}
 
 	logger.InfoContext(ctx, "search_projects succeeded", "count", len(result.Resources))
@@ -164,12 +171,12 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(prettyJSON)},
 		},
-	}, nil, nil
+	}, out, nil
 }
 
 // handleGetProject implements the get_project tool logic, fetching both base
 // info and settings for the given project UID.
-func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetProjectArgs) (*mcp.CallToolResult, any, error) {
+func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetProjectArgs) (*mcp.CallToolResult, projectGetResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if projectConfig == nil {
@@ -179,7 +186,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 				&mcp.TextContent{Text: "Error: project tools not configured"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, projectGetResult{}, nil
 	}
 
 	if args.UID == "" {
@@ -188,7 +195,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 				&mcp.TextContent{Text: "Error: uid is required"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, projectGetResult{}, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
@@ -199,7 +206,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, projectGetResult{}, nil
 	}
 
 	ctx = projectConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -217,7 +224,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 				&mcp.TextContent{Text: friendlyAPIError("failed to get project", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, projectGetResult{}, nil
 	}
 
 	// Settings may be unavailable (e.g. insufficient permissions, or a response
@@ -235,12 +242,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 		projectSettings = settingsResult.ProjectSettings
 	}
 
-	type projectResult struct {
-		Base     *projectservice.ProjectBase     `json:"base"`
-		Settings *projectservice.ProjectSettings `json:"settings,omitempty"`
-	}
-
-	out := projectResult{
+	out := projectGetResult{
 		Base:     baseResult.Project,
 		Settings: projectSettings,
 	}
@@ -253,7 +255,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, projectGetResult{}, nil
 	}
 
 	logger.InfoContext(ctx, "get_project succeeded", "uid", args.UID)
@@ -266,5 +268,5 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 
 	return &mcp.CallToolResult{
 		Content: content,
-	}, nil, nil
+	}, out, nil
 }

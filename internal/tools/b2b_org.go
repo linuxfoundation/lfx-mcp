@@ -101,6 +101,18 @@ func toB2bOrgMembershipView(m *memberservice.ProjectMembershipResponse) b2bOrgMe
 	}
 }
 
+// b2bOrgSearchResult is the output type for the search_b2b_orgs tool.
+type b2bOrgSearchResult struct {
+	Orgs     []b2bOrgView                `json:"orgs"`
+	Metadata *memberservice.ListMetadata `json:"metadata,omitempty"`
+}
+
+// b2bOrgMembershipListResult is the output type for the list_b2b_org_memberships tool.
+type b2bOrgMembershipListResult struct {
+	Memberships []b2bOrgMembershipView      `json:"memberships"`
+	Metadata    *memberservice.ListMetadata `json:"metadata,omitempty"`
+}
+
 // toB2bOrgView converts a B2bOrgResponse to the MCP view.
 func toB2bOrgView(o *memberservice.B2bOrgResponse) b2bOrgView {
 	return b2bOrgView{
@@ -140,7 +152,7 @@ func RegisterListB2bOrgMemberships(server *mcp.Server) {
 }
 
 // handleSearchB2bOrgs implements the search_b2b_orgs tool logic.
-func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args SearchB2bOrgsArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args SearchB2bOrgsArgs) (*mcp.CallToolResult, b2bOrgSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
@@ -150,7 +162,7 @@ func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args Sea
 				&mcp.TextContent{Text: "Error: member tools not configured"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, b2bOrgSearchResult{}, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
@@ -161,7 +173,7 @@ func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args Sea
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, b2bOrgSearchResult{}, nil
 	}
 
 	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -198,7 +210,7 @@ func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args Sea
 				&mcp.TextContent{Text: friendlyAPIError("failed to search B2B orgs", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, b2bOrgSearchResult{}, nil
 	}
 
 	views := make([]b2bOrgView, 0, len(result.Orgs))
@@ -206,11 +218,7 @@ func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		views = append(views, toB2bOrgView(o))
 	}
 
-	type searchResult struct {
-		Orgs     []b2bOrgView                `json:"orgs"`
-		Metadata *memberservice.ListMetadata `json:"metadata,omitempty"`
-	}
-	output := searchResult{
+	output := b2bOrgSearchResult{
 		Orgs:     views,
 		Metadata: result.Metadata,
 	}
@@ -223,7 +231,7 @@ func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args Sea
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, b2bOrgSearchResult{}, nil
 	}
 
 	logger.InfoContext(ctx, "search_b2b_orgs succeeded", "count", len(result.Orgs))
@@ -232,11 +240,11 @@ func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(prettyJSON)},
 		},
-	}, nil, nil
+	}, output, nil
 }
 
 // handleListB2bOrgMemberships implements the list_b2b_org_memberships tool logic.
-func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, args ListB2bOrgMembershipsArgs) (*mcp.CallToolResult, any, error) {
+func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, args ListB2bOrgMembershipsArgs) (*mcp.CallToolResult, b2bOrgMembershipListResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
@@ -246,7 +254,7 @@ func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, 
 				&mcp.TextContent{Text: "Error: member tools not configured"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, b2bOrgMembershipListResult{}, nil
 	}
 
 	if args.B2bOrgUID == "" {
@@ -255,7 +263,7 @@ func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, 
 				&mcp.TextContent{Text: "Error: b2b_org_uid is required"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, b2bOrgMembershipListResult{}, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
@@ -266,7 +274,7 @@ func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, 
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, b2bOrgMembershipListResult{}, nil
 	}
 
 	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -299,7 +307,7 @@ func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, 
 				&mcp.TextContent{Text: friendlyAPIError("failed to list B2B org memberships", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, b2bOrgMembershipListResult{}, nil
 	}
 
 	views := make([]b2bOrgMembershipView, 0, len(result.Memberships))
@@ -319,11 +327,7 @@ func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, 
 		}
 	}
 
-	type listResult struct {
-		Memberships []b2bOrgMembershipView      `json:"memberships"`
-		Metadata    *memberservice.ListMetadata `json:"metadata,omitempty"`
-	}
-	output := listResult{
+	output := b2bOrgMembershipListResult{
 		Memberships: views,
 		Metadata:    result.Metadata,
 	}
@@ -336,7 +340,7 @@ func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, 
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, b2bOrgMembershipListResult{}, nil
 	}
 
 	logger.InfoContext(ctx, "list_b2b_org_memberships succeeded", "b2b_org_uid", args.B2bOrgUID, "count", len(result.Memberships))
@@ -346,5 +350,5 @@ func handleListB2bOrgMemberships(ctx context.Context, req *mcp.CallToolRequest, 
 		content = append(content, &mcp.TextContent{Text: onboardingWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, output, nil
 }

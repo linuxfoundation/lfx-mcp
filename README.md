@@ -28,7 +28,11 @@ You will be prompted to log in with your Linux Foundation account (LFID) the fir
 
 #### GUI (one-click install)
 
-<goose://extension?url=https%3A%2F%2Fmcp.lfx.dev%2Fmcp&type=streamable_http&id=lfx&name=LFX&description=LFX%20MCP%20Server>
+Copy-paste into your browser location bar:
+
+```text
+goose://extension?url=https%3A%2F%2Fmcp.lfx.dev%2Fmcp&type=streamable_http&id=lfx&name=LFX&description=LFX%20MCP%20Server
+```
 
 Start a new chat and Goose will open a browser window for LFID login.
 

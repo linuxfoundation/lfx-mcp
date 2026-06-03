@@ -74,7 +74,7 @@ See the [OpenCode MCP documentation](https://opencode.ai/docs/mcp-servers) for m
 
 ### Claude (LF enterprise)
 
-If you use the Linux Foundation's enterprise Claude.ai organization, the LFX MCP Server is already provisioned as a connector in both Claude Desktop or Claude Code.
+If you use the Linux Foundation's enterprise Claude.ai organization, the LFX MCP Server is already provisioned as a connector in both Claude Desktop and Claude Code.
 
 #### Claude Desktop
 
@@ -175,7 +175,7 @@ rm -rf ~/.mcp-auth
 [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a browser-based tool for exploring and testing MCP servers. To connect it to the LFX MCP Server:
 
 ```bash
-npx @modelcontextprotocol/inspector --server-url https://mcp.lfx.dev/mcp
+npx @modelcontextprotocol/inspector --transport http --server-url https://mcp.lfx.dev/mcp
 ```
 
 From the MCP Inspector sidebar, find **Authentication** → **OAuth 2.0 Flow** → **Client ID** and enter `4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O`.

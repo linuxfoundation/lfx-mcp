@@ -72,6 +72,20 @@ Add the following to your `~/.config/opencode/opencode.json`:
 
 See the [OpenCode MCP documentation](https://opencode.ai/docs/mcp-servers) for more details.
 
+### Zed
+
+In Zed, open the Agent panel settings (ellipsis button) → **Add Custom Server** → **Remote**. Enter the following:
+
+```json
+{
+  "lfx": {
+    "url": "https://mcp.lfx.dev/mcp"
+  }
+}
+```
+
+Click **Add Server** → **Authenticate** to open a browser window for LFID login.
+
 ### Claude (LF enterprise)
 
 If you use the Linux Foundation's enterprise Claude.ai organization, the LFX MCP Server is already provisioned as a connector in both Claude Desktop and Claude Code.
@@ -143,11 +157,11 @@ If your MCP client is not listed here, you may try using [mcp-remote](https://gi
 
 *The client ID shown here is only for embedding mcp-remote as a proxy and does not support direct MCP client use.*
 
-The port `3334` is required so that the OAuth callback URL matches the registered client. Please refer to your client's documentation for the exact configuration syntax. For example, in **Zed** (`~/.config/zed/settings.json`):
+The port `3334` is required so that the OAuth callback URL matches the registered client. Please refer to your client's documentation for the exact configuration syntax.
 
 ```json
 {
-  "context_servers": {
+  "mcpServers": {
     "lfx": {
       "command": "npx",
       "args": [

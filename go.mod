@@ -11,7 +11,7 @@ require (
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/linuxfoundation/lfx-v2-committee-service v0.2.35
 	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.4.13
-	github.com/linuxfoundation/lfx-v2-member-service v0.5.3
+	github.com/linuxfoundation/lfx-v2-member-service v0.8.0
 	github.com/linuxfoundation/lfx-v2-project-service v0.6.11
 	github.com/linuxfoundation/lfx-v2-query-service v0.4.21
 	github.com/modelcontextprotocol/go-sdk v1.6.1

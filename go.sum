@@ -60,6 +60,8 @@ github.com/linuxfoundation/lfx-v2-mailing-list-service v0.4.13 h1:5nNZI5mr1NquOt
 github.com/linuxfoundation/lfx-v2-mailing-list-service v0.4.13/go.mod h1:gz5bGYepAar5l7y61j5QV07z8n/jxhZKQBINF3oRFTQ=
 github.com/linuxfoundation/lfx-v2-member-service v0.5.3 h1:xotDUAs2oVpioTo6gosEdngGpgCSzncjWul0lFj7a6E=
 github.com/linuxfoundation/lfx-v2-member-service v0.5.3/go.mod h1:qMzCkX1KayvzmxZQhVL2+dX1jXHqU3CcRGZ/t41vbgs=
+github.com/linuxfoundation/lfx-v2-member-service v0.8.0 h1:b7JSXeRcgC7v5sjZ+n098arG5652tfufLqxcvodEhos=
+github.com/linuxfoundation/lfx-v2-member-service v0.8.0/go.mod h1:CTnF8JHXN/1+bFEbxcBMcFOdZj+CXxnKT/kJXbEX94E=
 github.com/linuxfoundation/lfx-v2-project-service v0.6.11 h1:ACr/XI/Io3PEWX4vJaHHTvEOhN+na4jp1kx3p4PYLsA=
 github.com/linuxfoundation/lfx-v2-project-service v0.6.11/go.mod h1:3ULEcvKwHWcBcMxSW3yeMPGqk5+tnu2X+FjcaAw9Fy4=
 github.com/linuxfoundation/lfx-v2-query-service v0.4.21 h1:FDoqt8oeC0Egbl3Z7BeqZ2XKcfm4BujFQ4mBSQd3KEs=

@@ -407,7 +407,11 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.InfoContext(ctx, "fetching membership key contacts", "membership_uid", args.MembershipUID)
+	logger.With(
+		"membership_uid", args.MembershipUID,
+		"page_size", pageSize,
+		"page_token", args.PageToken,
+	).InfoContext(ctx, "fetching membership key contacts")
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {

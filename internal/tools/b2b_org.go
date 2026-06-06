@@ -14,6 +14,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// b2bOrgResourceType is the resource type filter for B2B org queries.
+const b2bOrgResourceType = "b2b_org"
+
 // SearchB2bOrgsArgs defines the input parameters for the search_b2b_orgs tool.
 type SearchB2bOrgsArgs struct {
 	SearchName string `json:"search_name,omitempty" jsonschema:"Search B2B organizations by name or domain (typeahead)."`

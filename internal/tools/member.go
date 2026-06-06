@@ -21,9 +21,6 @@ const memberResourceType = "project_membership"
 // keyContactResourceType is the resource type filter for key contact queries.
 const keyContactResourceType = "key_contact"
 
-// b2bOrgResourceType is the resource type filter for B2B org queries.
-const b2bOrgResourceType = "b2b_org"
-
 // MemberConfig holds configuration shared by member tools.
 type MemberConfig struct {
 	// Clients is the shared LFX v2 API client instance. It must be created once

@@ -236,7 +236,7 @@ Hitting **Connect** will open a browser window for LFID login.
 | Tool                              | Description                                                                     |
 |-----------------------------------|---------------------------------------------------------------------------------|
 | `search_members`                  | Search and filter members (memberships) by project, tier, status, or B2B organization        |
-| `get_member_membership`           | Get a single member's membership details by member and membership ID                         |
+| `get_member_membership`           | Get a single membership by membership UID                                                    |
 | `get_membership_key_contacts`     | Get key contacts (primary contacts, board members) for a membership             |
 | `get_membership_key_contact`      | Get a single key contact by project, membership, and contact UID                |
 | `create_membership_key_contact`   | Add a key contact to a membership                                               |
@@ -290,7 +290,7 @@ Hitting **Connect** will open a browser window for LFID login.
 
 | Tool                       | Description                                                   |
 |----------------------------|---------------------------------------------------------------|
-| `search_b2b_orgs`          | Search and list B2B organizations by name                     |
+| `search_b2b_orgs`          | Search B2B organizations by name or domain                    |
 
 ### Utility
 

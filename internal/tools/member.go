@@ -41,10 +41,11 @@ func SetMemberConfig(cfg *MemberConfig) {
 // SearchMembersArgs defines the input parameters for the search_members tool.
 type SearchMembersArgs struct {
 	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Filter by project UUID. At least one of project_uid or b2b_org_uid is strongly recommended."`
-	B2bOrgUID  string `json:"b2b_org_uid,omitempty" jsonschema:"Filter by B2B organization UID. At least one of project_uid or b2b_org_uid is strongly recommended. Also replaces the removed list_b2b_org_memberships tool."`
+	B2bOrgUID  string `json:"b2b_org_uid,omitempty" jsonschema:"Filter by B2B organization UID. At least one of project_uid or b2b_org_uid is strongly recommended."`
 	SearchName string `json:"search_name,omitempty" jsonschema:"Search memberships by member company name (typeahead)."`
-	TierUID    string `json:"tier_uid,omitempty" jsonschema:"Filter by membership tier UID."`
-	TierName   string `json:"tier_name,omitempty" jsonschema:"Filter by tier label, e.g. 'Gold'."`
+	TierUID    string `json:"tier_uid,omitempty" jsonschema:"Filter by exact tier+range UID (each employee-count range has a distinct UID)."`
+	TierName   string `json:"tier_name,omitempty" jsonschema:"Filter by exact tier product name, e.g. 'Silver ISV Member'. Must match the full name as stored."`
+	ActiveOnly *bool  `json:"active_only,omitempty" jsonschema:"When true (default), only return memberships with status Active. Set to false to include all statuses."`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)."`
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response."`
 }
@@ -69,8 +70,52 @@ type GetMembershipKeyContactArgs struct {
 
 // memberSearchResult is the output type for the search_members tool.
 type memberSearchResult struct {
-	Resources []*querysvc.Resource `json:"resources"`
-	PageToken *string              `json:"page_token,omitempty"`
+	Resources []membershipView `json:"resources"`
+	PageToken *string          `json:"page_token,omitempty"`
+}
+
+// membershipView is a shaped view of a project_membership resource returned by
+// the query service. It renames the upstream "tier" field (an employee-count
+// range string used for variable-priced tiers) to "tier_range" within the data
+// map to avoid confusion with the human-readable "tier_name" field. The field
+// is omitted entirely when absent or null in the upstream payload.
+type membershipView struct {
+	Type *string        `json:"type,omitempty"`
+	ID   *string        `json:"id,omitempty"`
+	Data map[string]any `json:"data,omitempty"`
+}
+
+// toMembershipView converts a querysvc.Resource into a membershipView,
+// renaming "tier" to "tier_range" inside the data map and removing fields
+// that should not be surfaced in MCP output.
+func toMembershipView(r *querysvc.Resource) membershipView {
+	v := membershipView{
+		Type: r.Type,
+		ID:   r.ID,
+	}
+	if r.Data != nil {
+		if m, ok := r.Data.(map[string]any); ok {
+			// Copy the map so we don't mutate the original.
+			data := make(map[string]any, len(m))
+			for k, val := range m {
+				data[k] = val
+			}
+			// Rename "tier" to "tier_range" within data; omit when null or absent.
+			if tierVal, exists := data["tier"]; exists {
+				delete(data, "tier")
+				if tierVal != nil {
+					data["tier_range"] = tierVal
+				}
+			}
+			// Hide internal Salesforce project SFID from MCP output.
+			delete(data, "project_sfid")
+			v.Data = data
+		} else {
+			// Unexpected type — preserve the raw value so no data is silently lost.
+			v.Data = map[string]any{"_raw": r.Data}
+		}
+	}
+	return v
 }
 
 // keyContactListResult is the output type for get_membership_key_contacts.
@@ -123,7 +168,7 @@ func toKeyContactView(c *memberservice.ProjectKeyContactResponse) keyContactView
 func RegisterSearchMembers(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_members",
-		Description: "List and search project memberships. At least one of project_uid or b2b_org_uid is strongly recommended — an unfiltered search across all memberships is unlikely to be useful. Supports search_name for company name typeahead, tier_uid or tier_name filter, and cursor-based pagination via page_token. Also accepts b2b_org_uid to list all memberships for a given org across all projects (replaces the removed list_b2b_org_memberships tool).",
+		Description: "List and search project memberships. At least one of project_uid or b2b_org_uid is strongly recommended — an unfiltered search across all memberships is unlikely to be useful. Defaults to active memberships only (active_only=true); set active_only=false to include all statuses. Supports search_name for company name typeahead, tier_name for exact tier product name filtering, tier_uid for exact tier+range filtering, and cursor-based pagination via page_token. Also accepts b2b_org_uid to list all memberships for a given org across all projects.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Members",
 			ReadOnlyHint: true,
@@ -223,8 +268,11 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		filtersAll = append(filtersAll, "tier_uid:"+args.TierUID)
 	}
 	if args.TierName != "" {
-		// The indexed field is "tier" (the short label such as "Gold"), not "tier_name".
-		filtersAll = append(filtersAll, "tier:"+args.TierName)
+		filtersAll = append(filtersAll, "tier_name:"+args.TierName)
+	}
+	// Default to active-only unless the caller explicitly sets active_only=false.
+	if args.ActiveOnly == nil || *args.ActiveOnly {
+		filtersAll = append(filtersAll, "status:Active")
 	}
 	if len(filtersAll) > 0 {
 		payload.FiltersAll = filtersAll
@@ -253,8 +301,12 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		}, memberSearchResult{}, nil
 	}
 
+	views := make([]membershipView, len(result.Resources))
+	for i, r := range result.Resources {
+		views[i] = toMembershipView(r)
+	}
 	out := memberSearchResult{
-		Resources: result.Resources,
+		Resources: views,
 		PageToken: result.PageToken,
 	}
 

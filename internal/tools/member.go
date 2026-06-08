@@ -41,9 +41,9 @@ type SearchMembersArgs struct {
 	B2bOrgUID  string `json:"b2b_org_uid,omitempty" jsonschema:"Filter by B2B organization UID. At least one of project_uid or b2b_org_uid is strongly recommended."`
 	SearchName string `json:"search_name,omitempty" jsonschema:"Search memberships by member company name (typeahead)."`
 	TierUID    string `json:"tier_uid,omitempty" jsonschema:"Filter by exact tier+range UID (each employee-count range has a distinct UID)."`
-	TierName   string `json:"tier_name,omitempty" jsonschema:"Filter by exact tier product name, e.g. 'Silver ISV Member'. Must match the full name as stored."`
-	ActiveOnly *bool  `json:"active_only,omitempty" jsonschema:"When true (default), only return memberships with status Active. Set to false to include all statuses."`
-	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)."`
+	TierName        string `json:"tier_name,omitempty" jsonschema:"Filter by exact tier product name, e.g. 'Silver ISV Member'. Must match the full name as stored."`
+	IncludeInactive bool   `json:"include_inactive,omitempty" jsonschema:"When true, include memberships with non-Active statuses (e.g. Purchased, Expired, Completed). Defaults to false (Active memberships only)."`
+	PageSize        int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)."`
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response."`
 }
 
@@ -191,7 +191,7 @@ func toKeyContactView(c *memberservice.ProjectKeyContactResponse) keyContactView
 func RegisterSearchMembers(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_members",
-		Description: "List and search project memberships. At least one of project_uid or b2b_org_uid is strongly recommended — an unfiltered search across all memberships is unlikely to be useful. Defaults to active memberships only (active_only=true); set active_only=false to include all statuses. Supports search_name for company name typeahead, tier_name for exact tier product name filtering, tier_uid for exact tier+range filtering, and cursor-based pagination via page_token. Also accepts b2b_org_uid to list all memberships for a given org across all projects.",
+		Description: "List and search project memberships. At least one of project_uid or b2b_org_uid is strongly recommended — an unfiltered search across all memberships is unlikely to be useful. Returns Active memberships by default; set include_inactive=true to also include memberships with other statuses (e.g. Purchased, Expired, Completed). Supports search_name for company name typeahead, tier_name for exact tier product name filtering, tier_uid for exact tier+range filtering, and cursor-based pagination via page_token. Also accepts b2b_org_uid to list all memberships for a given org across all projects.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Members",
 			ReadOnlyHint: true,
@@ -293,8 +293,8 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 	if args.TierName != "" {
 		filtersAll = append(filtersAll, "tier_name:"+args.TierName)
 	}
-	// Default to active-only unless the caller explicitly sets active_only=false.
-	if args.ActiveOnly == nil || *args.ActiveOnly {
+	// Default to Active-only; include all statuses only when the caller opts in.
+	if !args.IncludeInactive {
 		filtersAll = append(filtersAll, "status:Active")
 	}
 	if len(filtersAll) > 0 {

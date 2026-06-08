@@ -115,10 +115,36 @@ func toMembershipView(r *querysvc.Resource) membershipView {
 	return v
 }
 
+// toKeyContactResourceView converts a raw query-service key_contact resource
+// into a membershipView, removing internal fields that should not be surfaced
+// in MCP output (e.g. project_sfid).
+func toKeyContactResourceView(r *querysvc.Resource) membershipView {
+	v := membershipView{
+		Type: r.Type,
+		ID:   r.ID,
+	}
+	if r.Data != nil {
+		if m, ok := r.Data.(map[string]any); ok {
+			// Copy the map so we don't mutate the original.
+			data := make(map[string]any, len(m))
+			for k, val := range m {
+				data[k] = val
+			}
+			// Hide internal Salesforce project SFID from MCP output.
+			delete(data, "project_sfid")
+			v.Data = data
+		} else {
+			// Unexpected type — preserve the raw value so no data is silently lost.
+			v.Data = map[string]any{"_raw": r.Data}
+		}
+	}
+	return v
+}
+
 // keyContactListResult is the output type for get_membership_key_contacts.
 type keyContactListResult struct {
-	Resources []*querysvc.Resource `json:"resources"`
-	PageToken *string              `json:"page_token,omitempty"`
+	Resources []membershipView `json:"resources"`
+	PageToken *string          `json:"page_token,omitempty"`
 }
 
 // keyContactView is a filtered view of ProjectKeyContactResponse for MCP
@@ -473,8 +499,13 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, keyContactListResult{}, nil
 	}
 
+	views := make([]membershipView, len(result.Resources))
+	for i, r := range result.Resources {
+		views[i] = toKeyContactResourceView(r)
+	}
+
 	out := keyContactListResult{
-		Resources: result.Resources,
+		Resources: views,
 		PageToken: result.PageToken,
 	}
 

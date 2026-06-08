@@ -238,7 +238,7 @@ Hitting **Connect** will open a browser window for LFID login.
 | `search_members`                  | Search and filter members (memberships) by project, tier, status, or B2B organization        |
 | `get_member_membership`           | Get a single membership by membership UID                                                    |
 | `get_membership_key_contacts`     | Get key contacts (primary contacts, board members) for a membership             |
-| `get_membership_key_contact`      | Get a single key contact by project, membership, and contact UID                |
+| `get_membership_key_contact`      | Get a single key contact by membership UID and contact UID                      |
 | `create_membership_key_contact`   | Add a key contact to a membership                                               |
 | `update_membership_key_contact`   | Update an existing key contact on a membership                                  |
 | `delete_membership_key_contact`   | Remove a key contact from a membership                                          |

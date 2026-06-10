@@ -1,0 +1,98 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+#
+# Shadow mode for the agentic PR review: runs the pr-reviewer and
+# escalation-reviewer agents and reports the verdict they WOULD produce,
+# including the gate's would-approve decision, without posting comments,
+# labels, or approvals (permissions are read-only by design). Also replays
+# any historical PR via workflow_dispatch, comparing the agents' output with
+# the review that actually happened (humans + Copilot) and the PR's outcome.
+---
+name: Agentic Review (shadow)
+
+"on":
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to replay"
+        required: true
+      at:
+        description: "PR state to review (open = the head when the PR was opened)"
+        type: choice
+        options: [open, current]
+        default: open
+      judge:
+        description: "Run the Codex judge to semantically match simulated vs actual comments"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: agentic-review-shadow-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check model key
+        id: key
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY is not configured; shadow review skipped." >> "$GITHUB_STEP_SUMMARY"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Codex CLI
+        if: steps.key.outputs.present == 'true'
+        run: npm install -g @openai/codex
+
+      # Cross-repo clone of the private lfx-skills repo needs a PAT or App
+      # token (a DevOps prerequisite); until then the agents run without the
+      # central skills and the review degrades gracefully.
+      - name: Install central LFX skills (best effort)
+        if: steps.key.outputs.present == 'true'
+        continue-on-error: true
+        run: |
+          git clone --depth=1 https://github.com/linuxfoundation/lfx-skills "$RUNNER_TEMP/lfx-skills"
+          "$RUNNER_TEMP/lfx-skills/install.sh"
+
+      - name: Simulate the review
+        if: steps.key.outputs.present == 'true'
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR="${{ inputs.pr_number }}"
+            AT="${{ inputs.at }}"
+            JUDGE="${{ inputs.judge && '--judge' || '' }}"
+          else
+            PR="${{ github.event.pull_request.number }}"
+            AT="current"
+            JUDGE=""
+          fi
+          ./agents/simulate/simulate.sh --pr "$PR" --at "$AT" $JUDGE \
+            --out "$RUNNER_TEMP/simulation"
+
+      - name: Publish report
+        if: steps.key.outputs.present == 'true'
+        run: cat "$RUNNER_TEMP"/simulation/*/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload simulation artifact
+        if: steps.key.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentic-review-shadow
+          path: ${{ runner.temp }}/simulation

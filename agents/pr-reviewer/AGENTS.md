@@ -74,9 +74,7 @@ Three sources, each authoritative for its own domain:
    `mcp-security-review` whenever the diff touches auth, tool registration
    or gating, token handling, a tool handler, an upstream client, config, or
    the chart.
-4. **Reconcile and emit.** On a re-review, reconcile your own prior threads:
-   resolve the ones whose finding is gone, keep the ones that stand. Then
-   assign severities and emit `findings.json`.
+4. **Emit the verdict.** Assign severities and emit `findings.json`.
 
 ## Severities
 

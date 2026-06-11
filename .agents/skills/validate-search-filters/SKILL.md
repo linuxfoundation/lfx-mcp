@@ -31,8 +31,12 @@ and optionally apply fixes.
   accepts both `project_uid` and `committee_uid` can only send one at a time.
 - `handleSearchPastMeetingParticipants` and `handleSearchPastMeetingSummaries`
   are dedicated handlers — each owns its own filter logic independently.
-- When sampling documents, use `"size": 3` to keep output small. Use
-  `_source` filtering to request only `tags` and `parent_refs` fields.
+- **Prefer count-only queries over random sampling.** A handful of random
+  documents proves nothing — you can get lucky and see the right fields while
+  90% of the corpus has them missing. Always run `"size": 0` prefix count
+  queries first. Only pull sample documents (`"size": 3`) as a secondary
+  debugging aid when a count is zero or surprising (e.g. to understand what
+  fields are actually present on that resource type).
 
 ## Step 1 — Discover infrastructure
 
@@ -64,7 +68,15 @@ Substitute the kubectl context as needed to target dev vs. prod.
 
 ## Step 2 — Enumerate search tools and their filter mappings
 
-Read every `*Args` struct in `internal/tools/` and record how each filter
+**Do not rely solely on the reference table below — always grep the codebase
+first** to find every file that calls `QueryResources`. The table may be out of
+date if new tools have been added since it was last updated.
+
+```bash
+grep -rEn "QueryResources|QueryResourcesPayload" internal/tools/ | grep -v "_test.go"
+```
+
+For each file that appears, read the handler and record how each filter
 parameter is sent to the query service. The mechanisms are:
 
 | Mechanism | Query service field | Index field |
@@ -72,11 +84,16 @@ parameter is sent to the query service. The mechanisms are:
 | `payload.Parent = "<type>:<uid>"` | `Parent` | `parent_refs` |
 | `payload.Tags = ["<key>:<value>"]` | `Tags` | `tags` |
 | `payload.Filters = ["<field>:<value>"]` | `Filters` | top-level doc fields |
+| `payload.FiltersAll = ["<field>:<value>"]` | `FiltersAll` | top-level doc fields (AND semantics) |
 | `payload.Name = "<value>"` | `Name` | `name` (text search) |
 | `payload.DateField` / `DateFrom` / `DateTo` | date range | date fields |
 
-Current tools using the query service SDK and their structured filter parameters
-(update this list if new tools are added):
+Only `Parent`, `Tags`, `Filters`, and `FiltersAll` are structural filters that
+map to indexed fields — these are the ones to validate. `Name` and date fields
+are query-time text/range operations and do not need index field verification.
+
+Reference table of known tools and their structured filter parameters (verify
+against the grep output above before trusting this):
 
 | Tool | Resource type | Parameter | Mechanism | Sent as |
 |---|---|---|---|---|
@@ -98,8 +115,13 @@ Current tools using the query service SDK and their structured filter parameters
 | `search_past_meeting_participants` | `v1_past_meeting_participant` | `project_uid` | Parent (fallback) | `project:<uid>` |
 | `search_past_meeting_summaries` | `v1_past_meeting_summary` | `past_meeting_id` | Parent (preferred) | `past_meeting:<meeting_and_occurrence_id>` |
 | `search_past_meeting_summaries` | `v1_past_meeting_summary` | `project_uid` | Parent (fallback) | `project:<uid>` |
-
-Re-read the handler code to verify this table is current before proceeding.
+| `search_members` | `project_membership` | `project_uid` | FiltersAll | `project_uid:<uid>` |
+| `search_members` | `project_membership` | `b2b_org_uid` | FiltersAll | `b2b_org_uid:<uid>` |
+| `search_members` | `project_membership` | `tier_uid` | FiltersAll | `tier_uid:<uid>` |
+| `search_members` | `project_membership` | `tier_name` | FiltersAll | `tier_name:<name>` |
+| `search_members` | `project_membership` | `status` | FiltersAll | `status:Active` (hardcoded default) |
+| `get_membership_key_contacts` | `key_contact` | `membership_uid` | FiltersAll | `membership_uid:<uid>` |
+| `search_b2b_orgs` | `b2b_org` | *(none — Name only)* | — | — |
 
 ## Step 3 — Fetch indexer contracts
 
@@ -126,12 +148,68 @@ for each resource type. Record which tag keys and parent_ref prefixes the
 contract defines. If a URL 404s or has no contract doc, note it and continue —
 treat those filters as "no contract definition" in the report.
 
-## Step 4 — Sample the live index
+## Step 4 — Count hits in the live index
 
-For each resource type, run the following queries via the NATS box. Use the
-`$NATS_POD` and `$OPENSEARCH_BASEURL` variables set in Step 1.
+For each filter parameter, run a **count-only query** (`"size": 0`) via the
+NATS box. This is the primary evidence step. Use the `$NATS_POD` and
+`$OPENSEARCH_BASEURL` variables set in Step 1.
 
-**Sample tags and parent_refs from 3 recently indexed documents (last 45 days):**
+> **Note:** These queries omit `track_total_hits: true`, so `hits.total.value`
+> may be capped on very large indices. This is intentional — an approximate
+> count is sufficient to confirm a field is populated. Check `hits.total.relation`
+> in the response: `"eq"` means the count is exact; `"gte"` means it is a lower
+> bound and the true total is higher.
+
+**Count documents where a specific tag key has non-empty values (last 45 days):**
+
+```bash
+kubectl exec -n lfx "$NATS_POD" -- \
+  curl -s --max-time 15 -X GET "$OPENSEARCH_BASEURL/_search" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "size": 0,
+    "query": {
+      "bool": {
+        "must": [
+          { "term": { "object_type": "<RESOURCE_TYPE>" } },
+          { "prefix": { "tags": "<TAG_KEY>:" } },
+          { "range": { "updated_at": { "gte": "now-45d" } } }
+        ],
+        "must_not": [
+          { "term": { "tags": "<TAG_KEY>:" } }
+        ]
+      }
+    }
+  }'
+```
+
+**Count documents where a specific parent_ref prefix exists (last 45 days):**
+
+```bash
+kubectl exec -n lfx "$NATS_POD" -- \
+  curl -s --max-time 15 -X GET "$OPENSEARCH_BASEURL/_search" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "size": 0,
+    "query": {
+      "bool": {
+        "must": [
+          { "term": { "object_type": "<RESOURCE_TYPE>" } },
+          { "prefix": { "parent_refs": "<PREFIX>:" } },
+          { "range": { "updated_at": { "gte": "now-45d" } } }
+        ]
+      }
+    }
+  }'
+```
+
+Record the `hits.total.value` from each response. A non-zero count confirms the
+key/prefix is present in recently indexed data. If the count is zero but the
+resource type has older data, note it as "not seen in last 45 days" rather
+than immediately marking it broken.
+
+**Only when a count is zero or surprising**, pull a small sample to understand
+what fields are actually present on that resource type:
 
 ```bash
 kubectl exec -n lfx "$NATS_POD" -- \
@@ -150,57 +228,6 @@ kubectl exec -n lfx "$NATS_POD" -- \
     }
   }'
 ```
-
-**Check whether a specific tag key has any non-empty values (last 45 days):**
-
-```bash
-kubectl exec -n lfx "$NATS_POD" -- \
-  curl -s --max-time 15 -X GET "$OPENSEARCH_BASEURL/_search" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "size": 1,
-    "_source": ["tags"],
-    "query": {
-      "bool": {
-        "must": [
-          { "term": { "object_type": "<RESOURCE_TYPE>" } },
-          { "prefix": { "tags": "<TAG_KEY>:" } },
-          { "range": { "updated_at": { "gte": "now-45d" } } }
-        ],
-        "must_not": [
-          { "term": { "tags": "<TAG_KEY>:" } }
-        ]
-      }
-    }
-  }'
-```
-
-**Check whether a specific parent_ref prefix exists (last 45 days):**
-
-```bash
-kubectl exec -n lfx "$NATS_POD" -- \
-  curl -s --max-time 15 -X GET "$OPENSEARCH_BASEURL/_search" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "size": 1,
-    "_source": ["parent_refs"],
-    "query": {
-      "bool": {
-        "must": [
-          { "term": { "object_type": "<RESOURCE_TYPE>" } },
-          { "prefix": { "parent_refs": "<PREFIX>:" } },
-          { "range": { "updated_at": { "gte": "now-45d" } } }
-        ]
-      }
-    }
-  }'
-```
-
-Record the `total.value` from each response. A non-zero value confirms the
-key/prefix is present in recently indexed data. If the count is zero but the
-resource type has older data, note it as "not seen in last 45 days" rather
-than immediately marking it broken — check the sample query to understand
-overall coverage before rendering a verdict.
 
 ## Step 5 — Build the truth table
 
@@ -256,6 +283,6 @@ After applying fixes, run `make build` to confirm compilation succeeds.
 
 ## Step 8 — Verify fixes
 
-Re-run the targeted `curl` queries from Step 4 against the corrected
+Re-run the count-only queries from Step 4 against the corrected
 mechanism to confirm non-zero results. Report before/after hit counts for
 each fixed filter.

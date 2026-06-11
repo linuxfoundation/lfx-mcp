@@ -143,7 +143,7 @@ func (c *AccessCheckClient) CheckProjectAccess(ctx context.Context, token string
 //
 //	<request>@<user>\t<true|false>
 //
-// For example: "project:uuid#writer@user:auth0|alice\ttrue"
+// For example: "project:uuid#writer@user:alice\ttrue"
 func parseAccessResult(result string) (request string, allowed bool, err error) {
 	parts := strings.SplitN(result, "\t", 2)
 	if len(parts) != 2 {

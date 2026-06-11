@@ -37,14 +37,14 @@ func SetMemberConfig(cfg *MemberConfig) {
 
 // SearchMembersArgs defines the input parameters for the search_members tool.
 type SearchMembersArgs struct {
-	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Filter by project UUID. At least one of project_uid or b2b_org_uid is strongly recommended."`
-	B2bOrgUID  string `json:"b2b_org_uid,omitempty" jsonschema:"Filter by B2B organization UID. At least one of project_uid or b2b_org_uid is strongly recommended."`
-	SearchName string `json:"search_name,omitempty" jsonschema:"Search memberships by member company name (typeahead)."`
-	TierUID    string `json:"tier_uid,omitempty" jsonschema:"Filter by exact tier+range UID (each employee-count range has a distinct UID)."`
+	ProjectUID      string `json:"project_uid,omitempty" jsonschema:"Filter by project UUID. At least one of project_uid or b2b_org_uid is strongly recommended."`
+	B2bOrgUID       string `json:"b2b_org_uid,omitempty" jsonschema:"Filter by B2B organization UID. At least one of project_uid or b2b_org_uid is strongly recommended."`
+	SearchName      string `json:"search_name,omitempty" jsonschema:"Search memberships by member company name (typeahead)."`
+	TierUID         string `json:"tier_uid,omitempty" jsonschema:"Filter by exact tier+range UID (each employee-count range has a distinct UID)."`
 	TierName        string `json:"tier_name,omitempty" jsonschema:"Filter by exact tier product name, e.g. 'Silver ISV Member'. Must match the full name as stored."`
 	IncludeInactive bool   `json:"include_inactive,omitempty" jsonschema:"When true, include memberships with non-Active statuses (e.g. Purchased, Expired, Completed). Defaults to false (Active memberships only)."`
 	PageSize        int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)."`
-	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response."`
+	PageToken       string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response."`
 }
 
 // GetMemberMembershipArgs defines the input parameters for the get_member_membership tool.

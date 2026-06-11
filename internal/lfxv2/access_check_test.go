@@ -41,7 +41,7 @@ func TestCheckAccess_Allow(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
-			Results: []string{"project:abc-123#writer@user:auth0|testuser\ttrue"},
+			Results: []string{"project:abc-123#writer@user:testuser\ttrue"},
 		})
 	}))
 	defer server.Close()
@@ -64,7 +64,7 @@ func TestCheckAccess_Deny(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
-			Results: []string{"project:abc-123#writer@user:auth0|testuser\tfalse"},
+			Results: []string{"project:abc-123#writer@user:testuser\tfalse"},
 		})
 	}))
 	defer server.Close()
@@ -97,9 +97,9 @@ func TestCheckAccess_Batch(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
 			Results: []string{
-				"project:bbb#auditor@user:auth0|testuser\tfalse",
-				"project:aaa#writer@user:auth0|testuser\ttrue",
-				"project:ccc#writer@user:auth0|testuser\ttrue",
+				"project:bbb#auditor@user:testuser\tfalse",
+				"project:aaa#writer@user:testuser\ttrue",
+				"project:ccc#writer@user:testuser\ttrue",
 			},
 		})
 	}))
@@ -140,7 +140,7 @@ func TestCheckAccess_HashSeparator(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
-			Results: []string{"project:my-uuid#writer@user:auth0|testuser\ttrue"},
+			Results: []string{"project:my-uuid#writer@user:testuser\ttrue"},
 		})
 	}))
 	defer server.Close()
@@ -190,7 +190,7 @@ func TestCheckAccess_ResultCountMismatch(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		// Return 1 result for 2 requests.
 		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
-			Results: []string{"project:a#writer@user:auth0|testuser\ttrue"},
+			Results: []string{"project:a#writer@user:testuser\ttrue"},
 		})
 	}))
 	defer server.Close()
@@ -206,7 +206,7 @@ func TestCheckProjectAccess_Allow(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
-			Results: []string{"project:uuid-123#writer@user:auth0|testuser\ttrue"},
+			Results: []string{"project:uuid-123#writer@user:testuser\ttrue"},
 		})
 	}))
 	defer server.Close()
@@ -222,7 +222,7 @@ func TestCheckProjectAccess_Deny(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(accessCheckResponse{ //nolint:errcheck // Test handler write errors are not actionable.
-			Results: []string{"project:uuid-123#writer@user:auth0|testuser\tfalse"},
+			Results: []string{"project:uuid-123#writer@user:testuser\tfalse"},
 		})
 	}))
 	defer server.Close()
@@ -244,19 +244,19 @@ func TestParseAccessResult(t *testing.T) {
 	}{
 		{
 			name:    "allowed",
-			input:   "project:abc-123#writer@user:auth0|alice\ttrue",
+			input:   "project:abc-123#writer@user:alice\ttrue",
 			wantReq: "project:abc-123#writer",
 			wantOK:  true,
 		},
 		{
 			name:    "denied",
-			input:   "project:abc-123#owner@user:auth0|alice\tfalse",
+			input:   "project:abc-123#owner@user:alice\tfalse",
 			wantReq: "project:abc-123#owner",
 			wantOK:  false,
 		},
 		{
 			name:    "no tab",
-			input:   "project:abc-123#writer@user:auth0|alice",
+			input:   "project:abc-123#writer@user:alice",
 			wantErr: true,
 		},
 		{

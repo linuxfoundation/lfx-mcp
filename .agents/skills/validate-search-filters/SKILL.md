@@ -31,7 +31,7 @@ and optionally apply fixes.
   accepts both `project_uid` and `committee_uid` can only send one at a time.
 - `handleSearchPastMeetingParticipants` and `handleSearchPastMeetingSummaries`
   are dedicated handlers — each owns its own filter logic independently.
-- **Prefer aggregation counts over random sampling.** A handful of random
+- **Prefer count-only queries over random sampling.** A handful of random
   documents proves nothing — you can get lucky and see the right fields while
   90% of the corpus has them missing. Always run `"size": 0` prefix count
   queries first. Only pull sample documents (`"size": 3`) as a secondary
@@ -73,7 +73,7 @@ first** to find every file that calls `QueryResources`. The table may be out of
 date if new tools have been added since it was last updated.
 
 ```bash
-grep -rn "QueryResources\|QueryResourcesPayload" internal/tools/ | grep -v "_test.go"
+grep -rEn "QueryResources|QueryResourcesPayload" internal/tools/ | grep -v "_test.go"
 ```
 
 For each file that appears, read the handler and record how each filter
@@ -150,9 +150,15 @@ treat those filters as "no contract definition" in the report.
 
 ## Step 4 — Count hits in the live index
 
-For each filter parameter, run an **aggregation count query** (`"size": 0`)
-via the NATS box. This is the primary evidence step. Use the `$NATS_POD` and
+For each filter parameter, run a **count-only query** (`"size": 0`) via the
+NATS box. This is the primary evidence step. Use the `$NATS_POD` and
 `$OPENSEARCH_BASEURL` variables set in Step 1.
+
+> **Note:** These queries omit `track_total_hits: true`, so `hits.total.value`
+> may be capped at 10,000 on very large indices. This is intentional — an
+> approximate count is sufficient to confirm a field is populated. If a count
+> comes back at exactly 10,000, treat it as "≥10,000 hits" rather than a
+> precise figure.
 
 **Count documents where a specific tag key has non-empty values (last 45 days):**
 

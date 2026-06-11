@@ -155,10 +155,10 @@ NATS box. This is the primary evidence step. Use the `$NATS_POD` and
 `$OPENSEARCH_BASEURL` variables set in Step 1.
 
 > **Note:** These queries omit `track_total_hits: true`, so `hits.total.value`
-> may be capped at 10,000 on very large indices. This is intentional — an
-> approximate count is sufficient to confirm a field is populated. If a count
-> comes back at exactly 10,000, treat it as "≥10,000 hits" rather than a
-> precise figure.
+> may be capped on very large indices. This is intentional — an approximate
+> count is sufficient to confirm a field is populated. Check `hits.total.relation`
+> in the response: `"eq"` means the count is exact; `"gte"` means it is a lower
+> bound and the true total is higher.
 
 **Count documents where a specific tag key has non-empty values (last 45 days):**
 
@@ -203,7 +203,7 @@ kubectl exec -n lfx "$NATS_POD" -- \
   }'
 ```
 
-Record the `total.value` from each response. A non-zero count confirms the
+Record the `hits.total.value` from each response. A non-zero count confirms the
 key/prefix is present in recently indexed data. If the count is zero but the
 resource type has older data, note it as "not seen in last 45 days" rather
 than immediately marking it broken.
@@ -283,6 +283,6 @@ After applying fixes, run `make build` to confirm compilation succeeds.
 
 ## Step 8 — Verify fixes
 
-Re-run the aggregation count queries from Step 4 against the corrected
+Re-run the count-only queries from Step 4 against the corrected
 mechanism to confirm non-zero results. Report before/after hit counts for
 each fixed filter.

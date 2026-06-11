@@ -118,6 +118,7 @@ var groupToCommitteeToolNames = func() map[string]string {
 var defaultTools = []string{
 	"search_projects",
 	"get_project",
+	"get_project_summary",
 	"search_committees",
 	"get_committee",
 	"get_committee_member",
@@ -626,6 +627,9 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	if enabledTools["get_project"] && canRead {
 		tools.RegisterGetProject(server)
+	}
+	if enabledTools["get_project_summary"] && canRead {
+		tools.RegisterGetProjectSummary(server)
 	}
 	if enabledTools["search_committees"] && canRead {
 		tools.RegisterSearchCommittees(server, cfg.CommitteesAsGroups)

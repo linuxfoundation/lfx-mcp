@@ -84,6 +84,53 @@ Two categories of service are present, with different upgrade patterns:
   minor/patch bumps expected. A major bump could change `mcp.AddTool`
   signatures, annotation fields, or content types.
 
+### Step 1.2.1 — Update the OTel semconv import version
+
+`go.opentelemetry.io/otel/semconv` is **not** a separate Go module. The version
+in the import path (e.g. `semconv/v1.40.0`) is an OTel semantic-convention spec
+version that is a subdirectory **inside** the `go.opentelemetry.io/otel` module.
+
+**Why this matters**: instrumentation packages (e.g. `otelhttp`) always import
+the semconv sub-package they were written against. When that version differs from
+the one imported in our own code, the OTel SDK emits a startup error:
+
+```
+conflicting Schema URL: https://opentelemetry.io/schemas/1.41.0 and
+https://opentelemetry.io/schemas/1.40.0
+```
+
+**Rule**: after upgrading `go.opentelemetry.io/otel`, always update our semconv
+import paths to the **highest-numbered sub-package present** inside the new otel
+version. That is deterministically the latest spec version shipped with the
+module, and it is the version the upgraded instrumentation packages will register.
+
+Find it with:
+
+```bash
+OTEL_VER=$(grep 'go.opentelemetry.io/otel v' go.mod | grep -v '//' | awk '{print $2}' | head -1)
+ls $(go env GOMODCACHE)/go.opentelemetry.io/otel@${OTEL_VER}/semconv/ \
+  | grep '^v[0-9]' | sort -V | tail -1
+# e.g. "v1.41.0"
+```
+
+Then update every `semconv/v*` import in the codebase to use that version:
+
+```bash
+# Find all semconv imports.
+grep -rn 'semconv/v' internal/ cmd/ --include='*.go'
+```
+
+Update each import path in-place (e.g. `semconv/v1.40.0` → `semconv/v1.41.0`).
+The attributes and helper functions are additive across minor spec versions, so
+the rename is always safe for a minor/patch upgrade.
+
+After updating, verify the build and confirm the schema-URL conflict is gone:
+
+```bash
+make build && ./scripts/test_server.sh 2>&1 | grep -i 'conflicting\|schema'
+# Should produce no output.
+```
+
 ### Step 1.3 — Verify the build compiles
 
 ```bash

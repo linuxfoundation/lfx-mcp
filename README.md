@@ -235,12 +235,10 @@ Hitting **Connect** will open a browser window for LFID login.
 
 | Tool                              | Description                                                                     |
 |-----------------------------------|---------------------------------------------------------------------------------|
-| `search_members`                  | Search and filter members (memberships) by status, tier, organization, and more |
-| `get_member_membership`           | Get a single member's membership details by member and membership ID            |
-| `list_project_tiers`              | List all membership tiers (e.g. Gold, Silver, Bronze) defined for a project     |
-| `get_project_tier`                | Get a single membership tier by project and tier UID                            |
+| `search_members`                  | Search and filter members (memberships) by project, tier, status, or B2B organization        |
+| `get_member_membership`           | Get a single membership by membership UID                                                    |
 | `get_membership_key_contacts`     | Get key contacts (primary contacts, board members) for a membership             |
-| `get_membership_key_contact`      | Get a single key contact by project, membership, and contact UID                |
+| `get_membership_key_contact`      | Get a single key contact by membership UID and contact UID                      |
 | `create_membership_key_contact`   | Add a key contact to a membership                                               |
 | `update_membership_key_contact`   | Update an existing key contact on a membership                                  |
 | `delete_membership_key_contact`   | Remove a key contact from a membership                                          |
@@ -292,8 +290,7 @@ Hitting **Connect** will open a browser window for LFID login.
 
 | Tool                       | Description                                                   |
 |----------------------------|---------------------------------------------------------------|
-| `search_b2b_orgs`          | Search and list B2B organizations                             |
-| `list_b2b_org_memberships` | List all project memberships for a B2B organization           |
+| `search_b2b_orgs`          | Search B2B organizations by name or domain                    |
 
 ### Utility
 

@@ -134,8 +134,6 @@ var defaultTools = []string{
 	"get_mailing_list_member",
 	"search_mailing_lists",
 	"search_mailing_list_members",
-	"list_project_tiers",
-	"get_project_tier",
 	"search_members",
 	"get_member_membership",
 	"get_membership_key_contacts",
@@ -164,7 +162,6 @@ var defaultTools = []string{
 	"query_lfx_lens",
 	"query_lfx_semantic_layer",
 	"search_b2b_orgs",
-	"list_b2b_org_memberships",
 }
 
 var logger *slog.Logger
@@ -678,12 +675,6 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["search_mailing_list_members"] && canRead {
 		tools.RegisterSearchMailingListMembers(server)
 	}
-	if enabledTools["list_project_tiers"] && canRead {
-		tools.RegisterListProjectTiers(server)
-	}
-	if enabledTools["get_project_tier"] && canRead {
-		tools.RegisterGetProjectTier(server)
-	}
 	if enabledTools["search_members"] && canRead {
 		tools.RegisterSearchMembers(server)
 	}
@@ -737,9 +728,6 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	if enabledTools["search_b2b_orgs"] && canRead {
 		tools.RegisterSearchB2bOrgs(server)
-	}
-	if enabledTools["list_b2b_org_memberships"] && canRead {
-		tools.RegisterListB2bOrgMemberships(server)
 	}
 
 	// Service API tools.

@@ -25,7 +25,7 @@ lfx-mcp/
 ├── cmd/
 │   └── lfx-mcp-server/     # Main application entry point
 ├── internal/
-│   ├── auth/               # OAuth token exchange and JWT validation
+│   ├── auth/               # JWT and API-key verification
 │   ├── lfxv2/              # LFX V2 API client
 │   ├── otel/               # OpenTelemetry instrumentation
 │   ├── serviceapi/         # Shared service API helpers
@@ -76,7 +76,7 @@ The HTTP server is designed to run across multiple pods without coordination:
 go version
 ```
 
-> **Note:** The stdio transport only exposes the `hello_world` tool. All LFX data tools require OAuth authentication, which is only supported via the HTTP transport. There is currently no personal access token (PAT) capability in LFX, so running the full server locally for end-to-end use is not practical without a complete OAuth setup.
+> **Note:** Stdio mode has no per-request OAuth context, so LFX data tools typically fail auth there. Use HTTP mode with OAuth configured, or enable only `hello_world` via `-tools`/`LFXMCP_TOOLS` for smoke tests. There is currently no personal access token (PAT) capability in LFX, so running the full server locally for end-to-end use is not practical without a complete OAuth setup.
 
 ### Common Development Tasks
 

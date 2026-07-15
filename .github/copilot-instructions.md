@@ -88,7 +88,7 @@ Tool annotations: always set `ReadOnlyHint: true` for read tools. Write tools mu
 
 - Forgetting the license header on new files is the #1 cause of CI failure.
 - New `.go` files without a package doc comment will fail the revive `package-comments` rule.
-- The `defaultTools` list in `main.go` controls which tools are enabled; adding a Register call without adding the name to `defaultTools` means the tool is never active.
+- The `defaultTools` list in `main.go` controls which tools are enabled by default; adding a Register call without adding the name to `defaultTools` means the tool won't run unless explicitly enabled via `-tools`/`LFXMCP_TOOLS`.
 - Helm chart templates (`charts/lfx-mcp/templates/`) are excluded from YAML linting via regex in `.mega-linter.yml`.
 
 ---

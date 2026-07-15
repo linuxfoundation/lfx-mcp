@@ -409,7 +409,7 @@ Test the server by sending JSON-RPC messages. `hello_world` is not in `defaultTo
 # Initialize and call tool
 (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}';
  echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"Test"}}}';
- sleep 0.5) | LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server stdio
+ sleep 0.5) | LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server -mode=stdio
 ```
 
 ### Manual Testing via HTTP

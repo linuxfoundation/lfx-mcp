@@ -403,14 +403,28 @@ Focus annotation effort on `ReadOnlyHint` and `DestructiveHint` — those have t
 
 ### Manual Testing via stdio
 
-Test the server by sending JSON-RPC messages:
+Test the server by sending JSON-RPC messages. `hello_world` is not in `defaultTools`, so enable it explicitly:
 
 ```bash
 # Initialize and call tool
 (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}';
  echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"Test"}}}';
- sleep 0.5) | ./bin/lfx-mcp-server stdio
+ sleep 0.5) | LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server stdio
 ```
+
+### Manual Testing via HTTP
+
+```bash
+# Start the server, enabling only hello_world.
+LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server -mode=http &
+
+# Call the tool.
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"Test"}}}'
+```
+
+Responses are returned as Server-Sent Events (SSE) with `event: message` and `data:` fields.
 
 ### Integration Test Script
 
@@ -460,10 +474,10 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 | `-mode`                         | `LFXMCP_MODE`                         | `stdio`     | Transport mode: `stdio` or `http`                           |
 | `-http.host`                    | `LFXMCP_HTTP_HOST`                    | `127.0.0.1` | HTTP server bind address                                    |
 | `-http.port`                    | `LFXMCP_HTTP_PORT`                    | `8080`      | HTTP server port                                            |
-| `-http.public_url`              | `LFXMCP_HTTP_PUBLIC_URL`              | —           | Public URL for HTTP transport (reverse proxies)             |
 | `-debug`                        | `LFXMCP_DEBUG`                        | `false`     | Enable debug logging with source locations                  |
 | `-debug_traffic`                | `LFXMCP_DEBUG_TRAFFIC`                | `false`     | Log outbound LFX API request/response bodies                |
-| `-tools`                        | `LFXMCP_TOOLS`                        | —           | Comma-separated list of tools to enable                     |
+| `-tools`                        | `LFXMCP_TOOLS`                        | `defaultTools` | Comma-separated list of tools to enable                  |
+| `-committees_as_groups`         | `LFXMCP_COMMITTEES_AS_GROUPS`         | `false`     | Rebrand committee tools to use "group" terminology (feature flag) |
 | `-mcp_api.auth_servers`         | `LFXMCP_MCP_API_AUTH_SERVERS`         | —           | OAuth authorization server URLs (comma-separated)           |
 | `-mcp_api.public_url`           | `LFXMCP_MCP_API_PUBLIC_URL`           | —           | Public URL for MCP API (OAuth PRM)                          |
 | `-mcp_api.scopes`               | `LFXMCP_MCP_API_SCOPES`               | —           | OAuth scopes (comma-separated)                              |

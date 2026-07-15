@@ -4,7 +4,7 @@
 
 This is the **LFX MCP Server** — a Model Context Protocol (MCP) implementation in Go that exposes the Linux Foundation's LFX platform as MCP tools for AI agents. It uses the official MCP Go SDK and supports JSON-RPC 2.0 over stdio (dev) and Streamable HTTP (production) transports.
 
-**Key facts**: ~25 Go source files, single binary, no database, stateless HTTP mode. Go module version in `go.mod`, MCP SDK v1.6+, built with `ko` for container images. Deployed to Kubernetes via Helm.
+**Key facts**: ~25 Go source files, single binary, no database, stateless HTTP mode. Go and MCP SDK versions are pinned in `go.mod`. Built with `ko` for container images. Deployed to Kubernetes via Helm.
 
 ---
 

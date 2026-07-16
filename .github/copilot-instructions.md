@@ -26,7 +26,7 @@ Two workflows run on every PR (`.github/workflows/`):
 
 For YAML, shell, and Makefile use `#` comment syntax. Missing headers are the #1 cause of CI failure.
 
-**Package doc comment** — every `.go` file must have `// Package <name> ...` immediately above the `package` declaration. The `GO_REVIVE` linter enforces the `package-comments` rule.
+**Package doc comment** — every non-test `.go` file must have `// Package <name> ...` immediately above the `package` declaration. The `GO_REVIVE` linter enforces the `package-comments` rule. `_test.go` files are exempt.
 
 **YAML formatting** — keep lines ≤120 characters (config: `.yamllint`); this is a warning, not a build failure. Helm templates in `charts/lfx-mcp/templates/` are excluded from YAML linting.
 
@@ -75,7 +75,7 @@ Tool annotations: always set `ReadOnlyHint: true` for read tools. Write tools mu
 
 ## Key Conventions
 
-- **Package comments**: Every `.go` file needs a `// Package <name> ...` comment (revive enforces this).
+- **Package comments**: Every non-test `.go` file needs a `// Package <name> ...` comment (revive enforces this; `_test.go` files are exempt).
 - **Error constant**: Use `const errKey = "error"` for structured logging error keys.
 - **Logging**: Use `slog` (Go stdlib). Debug-only logs use `slog.Debug(...)`.
 - **No wrapper functions for scope enforcement** — tool gating is done inline in `newServer()`.
@@ -87,7 +87,7 @@ Tool annotations: always set `ReadOnlyHint: true` for read tools. Write tools mu
 ## Common Pitfalls
 
 - Forgetting the license header on new files is the #1 cause of CI failure.
-- New `.go` files without a package doc comment will fail the revive `package-comments` rule.
+- New non-test `.go` files without a package doc comment will fail the revive `package-comments` rule.
 - The `defaultTools` list in `main.go` controls which tools are enabled by default; adding a Register call without adding the name to `defaultTools` means the tool won't run unless explicitly enabled via `-tools`/`LFXMCP_TOOLS`.
 - Helm chart templates (`charts/lfx-mcp/templates/`) are excluded from YAML linting via regex in `.mega-linter.yml`.
 

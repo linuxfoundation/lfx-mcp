@@ -10,18 +10,14 @@ import (
 
 func TestSplitTrimmed(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
-		want  []string
+		name    string
+		input   string
+		want    []string
+		wantErr bool
 	}{
 		{
-			name:  "empty string",
+			name:  "empty string is unset",
 			input: "",
-			want:  []string{},
-		},
-		{
-			name:  "whitespace only",
-			input: "   ",
 			want:  []string{},
 		},
 		{
@@ -40,25 +36,44 @@ func TestSplitTrimmed(t *testing.T) {
 			want:  []string{"a", "b", "c"},
 		},
 		{
-			name:  "leading and trailing commas",
-			input: ",a,b,",
-			want:  []string{"a", "b"},
+			name:    "lone comma is malformed",
+			input:   ",",
+			wantErr: true,
 		},
 		{
-			name:  "embedded empty entries",
-			input: "a,,b",
-			want:  []string{"a", "b"},
+			name:    "leading comma is malformed",
+			input:   ",a,b",
+			wantErr: true,
 		},
 		{
-			name:  "all empty entries",
-			input: ", , ,",
-			want:  []string{},
+			name:    "trailing comma is malformed",
+			input:   "a,b,",
+			wantErr: true,
+		},
+		{
+			name:    "embedded empty entry is malformed",
+			input:   "a,,b",
+			wantErr: true,
+		},
+		{
+			name:    "whitespace-only entry is malformed",
+			input:   "a, ,b",
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := splitTrimmed(tt.input)
+			got, err := splitTrimmed(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("splitTrimmed(%q) = %#v, nil, want an error", tt.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("splitTrimmed(%q) returned unexpected error: %v", tt.input, err)
+			}
 			if got == nil {
 				t.Fatal("splitTrimmed returned nil, want non-nil slice")
 			}

@@ -12,7 +12,7 @@ This is the **LFX MCP Server** — a Model Context Protocol (MCP) implementation
 
 Two workflows run on every PR (`.github/workflows/`):
 
-1. **`license-header-check.yml`** — every tracked source file must begin with the license header.
+1. **`license-header-check.yml`** — every tracked "code type" file (not Markdown) must begin with the license header.
 2. **`mega-linter.yml`** — MegaLinter Go flavor v9 (config: `.mega-linter.yml`).
 
 ### Requirements for new/modified files

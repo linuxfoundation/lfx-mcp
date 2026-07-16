@@ -263,7 +263,7 @@ func main() {
 			if key == "tools" || key == "mcp_api.auth_servers" || key == "mcp_api.scopes" {
 				result, err := splitTrimmed(v)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Invalid value for LFXMCP_%s: %v\n", strings.ToUpper(k), err)
+					fmt.Fprintf(os.Stderr, "Invalid value for %s: %v\n", k, err)
 					os.Exit(1)
 				}
 				return key, result

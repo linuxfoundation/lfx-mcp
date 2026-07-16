@@ -173,7 +173,7 @@ var schemaCache = mcp.NewSchemaCache()
 
 // splitTrimmed splits a comma-separated string into a slice, trimming
 // whitespace from each entry and dropping empty entries. An empty input
-// yields an empty (non-nil-length) slice rather than a slice containing a
+// yields a non-nil, zero-length slice rather than a slice containing a
 // single empty string.
 func splitTrimmed(value string) []string {
 	if strings.TrimSpace(value) == "" {

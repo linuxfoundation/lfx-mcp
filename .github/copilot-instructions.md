@@ -28,7 +28,7 @@ For YAML, shell, and Makefile use `#` comment syntax. Missing headers are the #1
 
 **Package doc comment** — every `.go` file must have `// Package <name> ...` immediately above the `package` declaration. The `GO_REVIVE` linter enforces the `package-comments` rule.
 
-**YAML formatting** — lines must be ≤120 characters (config: `.yamllint`). Helm templates in `charts/lfx-mcp/templates/` are excluded from YAML linting.
+**YAML formatting** — keep lines ≤120 characters (config: `.yamllint`); this is a warning, not a build failure. Helm templates in `charts/lfx-mcp/templates/` are excluded from YAML linting.
 
 **Other active MegaLinter checks:** `BASH_SHELLCHECK`, `DOCKERFILE_HADOLINT`, `ACTION_ACTIONLINT`, `REPOSITORY_GITLEAKS`, `MARKDOWN_MARKDOWNLINT`.
 

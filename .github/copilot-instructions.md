@@ -38,7 +38,7 @@ For YAML, shell, and Makefile use `#` comment syntax. Missing headers are the #1
 
 ## Project Layout
 
-```
+```text
 cmd/lfx-mcp-server/main.go    — Entry point, config, flag parsing, tool registration
 internal/tools/                — All MCP tool implementations (one file per tool/domain)
 internal/tools/scopes.go       — Scope constants (ScopeRead, ScopeManage)

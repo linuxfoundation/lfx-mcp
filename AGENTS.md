@@ -469,27 +469,27 @@ The Makefile uses optimized build flags:
 
 The server supports configuration via environment variables with the `LFXMCP_` prefix. **Environment variables override command-line flags.**
 
-| Flag                            | Env Var                               | Default     | Description                                                 |
-|---------------------------------|---------------------------------------|-------------|-------------------------------------------------------------|
-| `-mode`                         | `LFXMCP_MODE`                         | `stdio`     | Transport mode: `stdio` or `http`                           |
-| `-http.host`                    | `LFXMCP_HTTP_HOST`                    | `127.0.0.1` | HTTP server bind address                                    |
-| `-http.port`                    | `LFXMCP_HTTP_PORT`                    | `8080`      | HTTP server port                                            |
-| `-debug`                        | `LFXMCP_DEBUG`                        | `false`     | Enable debug logging with source locations                  |
-| `-debug_traffic`                | `LFXMCP_DEBUG_TRAFFIC`                | `false`     | Log outbound LFX API request/response bodies                |
-| `-tools`                        | `LFXMCP_TOOLS`                        | `defaultTools` | Comma-separated list of tools to enable                  |
-| `-committees_as_groups`         | `LFXMCP_COMMITTEES_AS_GROUPS`         | `false`     | Rebrand committee tools to use "group" terminology (feature flag) |
-| `-mcp_api.auth_servers`         | `LFXMCP_MCP_API_AUTH_SERVERS`         | —           | OAuth authorization server URLs (comma-separated)           |
-| `-mcp_api.public_url`           | `LFXMCP_MCP_API_PUBLIC_URL`           | —           | Public URL for MCP API (OAuth PRM)                          |
-| `-mcp_api.scopes`               | `LFXMCP_MCP_API_SCOPES`               | —           | OAuth scopes (comma-separated)                              |
-| `-client_id`                    | `LFXMCP_CLIENT_ID`                    | —           | OAuth client ID for token exchange                          |
-| `-client_secret`                | `LFXMCP_CLIENT_SECRET`                | —           | OAuth client secret                                         |
-| `-client_assertion_signing_key` | `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | —           | PEM-encoded RSA private key for client assertion (RFC 7523) |
-| `-token_endpoint`               | `LFXMCP_TOKEN_ENDPOINT`               | —           | OAuth2 token endpoint URL (RFC 8693)                        |
-| `-lfx_api_url`                  | `LFXMCP_LFX_API_URL`                  | —           | LFX API base URL (token exchange audience)                  |
-| `-onboarding_api_url`           | `LFXMCP_ONBOARDING_API_URL`           | —           | Base URL of the member onboarding service                   |
-| `-onboarding_api_audience`      | `LFXMCP_ONBOARDING_API_AUDIENCE`      | —           | Auth0 resource server audience for the member onboarding API |
-| `-lens_api_url`                 | `LFXMCP_LENS_API_URL`                 | —           | Base URL of the LFX Lens service                            |
-| `-lens_api_audience`            | `LFXMCP_LENS_API_AUDIENCE`            | —           | Auth0 resource server audience for the LFX Lens API         |
+| Flag                            | Env Var                               | Default        | Description                                                       |
+|---------------------------------|---------------------------------------|----------------|-------------------------------------------------------------------|
+| `-mode`                         | `LFXMCP_MODE`                         | `stdio`        | Transport mode: `stdio` or `http`                                 |
+| `-http.host`                    | `LFXMCP_HTTP_HOST`                    | `127.0.0.1`    | HTTP server bind address                                          |
+| `-http.port`                    | `LFXMCP_HTTP_PORT`                    | `8080`         | HTTP server port                                                  |
+| `-debug`                        | `LFXMCP_DEBUG`                        | `false`        | Enable debug logging with source locations                        |
+| `-debug_traffic`                | `LFXMCP_DEBUG_TRAFFIC`                | `false`        | Log outbound LFX API request/response bodies                      |
+| `-tools`                        | `LFXMCP_TOOLS`                        | `defaultTools` | Comma-separated list of tools to enable                           |
+| `-committees_as_groups`         | `LFXMCP_COMMITTEES_AS_GROUPS`         | `false`        | Rebrand committee tools to use "group" terminology (feature flag) |
+| `-mcp_api.auth_servers`         | `LFXMCP_MCP_API_AUTH_SERVERS`         | —              | OAuth authorization server URLs (comma-separated)                 |
+| `-mcp_api.public_url`           | `LFXMCP_MCP_API_PUBLIC_URL`           | —              | Public URL for MCP API (OAuth PRM)                                |
+| `-mcp_api.scopes`               | `LFXMCP_MCP_API_SCOPES`               | —              | OAuth scopes (comma-separated)                                    |
+| `-client_id`                    | `LFXMCP_CLIENT_ID`                    | —              | OAuth client ID for token exchange                                |
+| `-client_secret`                | `LFXMCP_CLIENT_SECRET`                | —              | OAuth client secret                                               |
+| `-client_assertion_signing_key` | `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | —              | PEM-encoded RSA private key for client assertion (RFC 7523)       |
+| `-token_endpoint`               | `LFXMCP_TOKEN_ENDPOINT`               | —              | OAuth2 token endpoint URL (RFC 8693)                              |
+| `-lfx_api_url`                  | `LFXMCP_LFX_API_URL`                  | —              | LFX API base URL (token exchange audience)                        |
+| `-onboarding_api_url`           | `LFXMCP_ONBOARDING_API_URL`           | —              | Base URL of the member onboarding service                         |
+| `-onboarding_api_audience`      | `LFXMCP_ONBOARDING_API_AUDIENCE`      | —              | Auth0 resource server audience for the member onboarding API      |
+| `-lens_api_url`                 | `LFXMCP_LENS_API_URL`                 | —              | Base URL of the LFX Lens service                                  |
+| `-lens_api_audience`            | `LFXMCP_LENS_API_AUDIENCE`            | —              | Auth0 resource server audience for the LFX Lens API               |
 
 ## Error Handling Patterns
 
@@ -541,11 +541,11 @@ Releases follow [semantic versioning](https://semver.org/) (`vMAJOR.MINOR.PATCH`
 
 ### Version bump guidelines
 
-| Change type | Version component |
-|---|---|
-| Bug fixes, tool description/schema wording tweaks, operational changes (Helm, CI) | **patch** |
-| New tools or substantial updates to existing tools | **minor** |
-| Breaking changes or explicit instruction | **major** (only when told) |
+| Change type                                                                       | Version component          |
+|-----------------------------------------------------------------------------------|----------------------------|
+| Bug fixes, tool description/schema wording tweaks, operational changes (Helm, CI) | **patch**                  |
+| New tools or substantial updates to existing tools                                | **minor**                  |
+| Breaking changes or explicit instruction                                          | **major** (only when told) |
 
 ### Cutting a release
 

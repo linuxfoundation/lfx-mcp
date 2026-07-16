@@ -4,6 +4,8 @@ description: Upgrade all Go dependencies, fix payload/contract changes introduce
 license: MIT
 ---
 
+# Upgrade Maintenance
+
 Perform a full upgrade maintenance pass on the lfx-mcp codebase. This covers
 three sequential phases: dependency upgrades, upstream contract fixes, and a
 query service argument review.
@@ -94,7 +96,7 @@ version that is a subdirectory **inside** the `go.opentelemetry.io/otel` module.
 the semconv sub-package they were written against. When that version differs from
 the one imported in our own code, the OTel SDK emits a startup error:
 
-```
+```text
 conflicting Schema URL: https://opentelemetry.io/schemas/1.41.0 and
 https://opentelemetry.io/schemas/1.40.0
 ```
@@ -285,11 +287,11 @@ value. Contracts live at:
 
 The filter-to-mechanism mapping for query service payloads:
 
-| Mechanism | Query service field | Index field |
-|---|---|---|
-| `payload.Parent = "<type>:<uid>"` | `Parent` | `parent_refs` |
-| `payload.Tags = ["<key>:<value>"]` | `Tags` | `tags` |
-| `payload.Filters = ["<field>:<value>"]` | `Filters` | top-level doc fields |
+| Mechanism                               | Query service field | Index field          |
+|-----------------------------------------|---------------------|----------------------|
+| `payload.Parent = "<type>:<uid>"`       | `Parent`            | `parent_refs`        |
+| `payload.Tags = ["<key>:<value>"]`      | `Tags`              | `tags`               |
+| `payload.Filters = ["<field>:<value>"]` | `Filters`           | top-level doc fields |
 
 ### Step 2.3 — Verify
 

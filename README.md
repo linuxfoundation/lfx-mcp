@@ -233,15 +233,15 @@ Hitting **Connect** will open a browser window for LFID login.
 
 ### Members
 
-| Tool                              | Description                                                                     |
-|-----------------------------------|---------------------------------------------------------------------------------|
-| `search_members`                  | Search and filter members (memberships) by project, tier, status, or B2B organization        |
-| `get_member_membership`           | Get a single membership by membership UID                                                    |
-| `get_membership_key_contacts`     | Get key contacts (primary contacts, board members) for a membership             |
-| `get_membership_key_contact`      | Get a single key contact by membership UID and contact UID                      |
-| `create_membership_key_contact`   | Add a key contact to a membership                                               |
-| `update_membership_key_contact`   | Update an existing key contact on a membership                                  |
-| `delete_membership_key_contact`   | Remove a key contact from a membership                                          |
+| Tool                            | Description                                                                           |
+|---------------------------------|---------------------------------------------------------------------------------------|
+| `search_members`                | Search and filter members (memberships) by project, tier, status, or B2B organization |
+| `get_member_membership`         | Get a single membership by membership UID                                             |
+| `get_membership_key_contacts`   | Get key contacts (primary contacts, board members) for a membership                   |
+| `get_membership_key_contact`    | Get a single key contact by membership UID and contact UID                            |
+| `create_membership_key_contact` | Add a key contact to a membership                                                     |
+| `update_membership_key_contact` | Update an existing key contact on a membership                                        |
+| `delete_membership_key_contact` | Remove a key contact from a membership                                                |
 
 ### Meetings
 
@@ -265,32 +265,32 @@ Hitting **Connect** will open a browser window for LFID login.
 
 ### Discord
 
-| Tool                    | Description                                                  |
-|-------------------------|--------------------------------------------------------------|
-| `list_discord_roles`    | List all roles in a project's Discord guild                  |
-| `find_discord_role`     | Find a Discord role by name                                  |
-| `find_discord_user`     | Find a Discord guild member by name and optional email       |
-| `check_discord_user_role` | Check whether a Discord user already has a specific role   |
-| `assign_discord_role`   | Assign a Discord role to a user                              |
+| Tool                      | Description                                              |
+|---------------------------|----------------------------------------------------------|
+| `list_discord_roles`      | List all roles in a project's Discord guild              |
+| `find_discord_role`       | Find a Discord role by name                              |
+| `find_discord_user`       | Find a Discord guild member by name and optional email   |
+| `check_discord_user_role` | Check whether a Discord user already has a specific role |
+| `assign_discord_role`     | Assign a Discord role to a user                          |
 
 ### Email
 
-| Tool                    | Description                                                  |
-|-------------------------|--------------------------------------------------------------|
-| `list_email_templates`  | List all available email templates for a project             |
-| `send_email`            | Send a templated email via LFX mail servers                  |
+| Tool                   | Description                                      |
+|------------------------|--------------------------------------------------|
+| `list_email_templates` | List all available email templates for a project |
+| `send_email`           | Send a templated email via LFX mail servers      |
 
 ### LFX Lens
 
-| Tool              | Description                                                                                         |
-|-------------------|-----------------------------------------------------------------------------------------------------|
-| `query_lfx_lens`  | Ask natural-language questions about a project's data (events, contributors, health, value, and more) |
+| Tool             | Description                                                                                           |
+|------------------|-------------------------------------------------------------------------------------------------------|
+| `query_lfx_lens` | Ask natural-language questions about a project's data (events, contributors, health, value, and more) |
 
 ### B2B Organizations
 
-| Tool                       | Description                                                   |
-|----------------------------|---------------------------------------------------------------|
-| `search_b2b_orgs`          | Search B2B organizations by name or domain                    |
+| Tool              | Description                                |
+|-------------------|--------------------------------------------|
+| `search_b2b_orgs` | Search B2B organizations by name or domain |
 
 ### Utility
 

@@ -10,9 +10,9 @@ The LFX MCP Server is a Model Context Protocol (MCP) implementation that provide
 
 ### Key Technologies
 
-- **Language**: Go 1.26.0+
+- **Language**: Go (see `go.mod` for the minimum required version)
 - **Protocol**: Model Context Protocol (MCP) 2024-11-05
-- **SDK**: Official MCP Go SDK v1.5.0+
+- **SDK**: Official MCP Go SDK (see `go.mod` for version)
 - **Transport**: JSON-RPC 2.0 over stdio and Streamable HTTP
 - **Schema**: Automatic JSON schema generation via struct tags
 
@@ -25,13 +25,18 @@ lfx-mcp/
 ├── cmd/
 │   └── lfx-mcp-server/     # Main application entry point
 ├── internal/
+│   ├── auth/               # JWT and API-key verification
+│   ├── lfxv2/              # LFX V2 API client
+│   ├── otel/               # OpenTelemetry instrumentation
+│   ├── serviceapi/         # Shared service API helpers
 │   └── tools/              # MCP tool implementations
+├── charts/                 # Helm chart for Kubernetes deployment
 ├── scripts/                # Test and utility scripts
 ├── bin/                    # Built binaries (gitignored)
 ├── go.mod                  # Go module definition
-├── Makefile               # Build automation
-├── README.md              # User documentation
-└── AGENTS.md              # This file (AI agent guidelines)
+├── Makefile                # Build automation
+├── README.md               # User documentation
+└── AGENTS.md               # This file (AI agent guidelines)
 ```
 
 ### Data Flow
@@ -60,16 +65,18 @@ The HTTP server is designed to run across multiple pods without coordination:
 
 **Stateless mode limitation**: The server cannot make client callbacks (e.g., `ListRoots`, `CreateMessage`, `Elicit`) in stateless mode. We do not use any of these currently. If sampling or elicitation features are ever needed, stateless mode would need to be reconsidered.
 
-**Reference**: [SDK distributed example](https://github.com/modelcontextprotocol/go-sdk/blob/v1.5.0/examples/server/distributed/main.go) — uses the same `Stateless: true` + per-request factory + round-robin pattern.
+**Reference**: [SDK distributed example](https://github.com/modelcontextprotocol/go-sdk/tree/main/examples/server/distributed) — uses the same `Stateless: true` + per-request factory + round-robin pattern.
 
 ## Development Workflow
 
 ### Prerequisites
 
 ```bash
-# Ensure Go 1.26.0+ is installed
-go version  # Should show go version go1.26.0 or later
+# Verify Go is installed at or above the version in go.mod.
+go version
 ```
+
+> **Note:** Stdio mode has no per-request OAuth context, so LFX data tools typically fail auth there. Use HTTP mode with OAuth configured, or enable only `hello_world` via `-tools`/`LFXMCP_TOOLS` for smoke tests. There is currently no personal access token (PAT) capability in LFX, so running the full server locally for end-to-end use is not practical without a complete OAuth setup.
 
 ### Common Development Tasks
 
@@ -396,14 +403,28 @@ Focus annotation effort on `ReadOnlyHint` and `DestructiveHint` — those have t
 
 ### Manual Testing via stdio
 
-Test the server by sending JSON-RPC messages:
+Test the server by sending JSON-RPC messages. `hello_world` is not in `defaultTools`, so enable it explicitly:
 
 ```bash
 # Initialize and call tool
 (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}';
  echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"Test"}}}';
- sleep 0.5) | ./bin/lfx-mcp-server stdio
+ sleep 0.5) | LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server -mode=stdio
 ```
+
+### Manual Testing via HTTP
+
+```bash
+# Start the server, enabling only hello_world.
+LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server -mode=http &
+
+# Call the tool.
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"Test"}}}'
+```
+
+Responses are returned as Server-Sent Events (SSE) with `event: message` and `data:` fields.
 
 ### Integration Test Script
 
@@ -418,49 +439,6 @@ This tests:
 - Tool discovery (`tools/list`)
 - Tool execution with various parameters
 - Error handling
-
-### Expected JSON-RPC Messages
-
-#### Tool List Request/Response
-```json
-// Request
-{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
-
-// Response
-{
-  "jsonrpc":"2.0",
-  "id":2,
-  "result":{
-    "tools":[
-      {
-        "name":"hello_world",
-        "description":"A simple hello world tool...",
-        "inputSchema":{
-          "type":"object",
-          "properties":{...}
-        }
-      }
-    ]
-  }
-}
-```
-
-#### Tool Call Request/Response
-```json
-// Request
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"LFX"}}}
-
-// Response
-{
-  "jsonrpc":"2.0",
-  "id":3,
-  "result":{
-    "content":[
-      {"type":"text","text":"Hello, LFX!"}
-    ]
-  }
-}
-```
 
 ## Build System (Makefile)
 
@@ -489,46 +467,29 @@ The Makefile uses optimized build flags:
 
 ## Environment Variables
 
-The server supports configuration via environment variables with the `LFXMCP_` prefix. Environment variable names use underscores, which are automatically transformed to dots for nested configuration keys (e.g., `LFXMCP_HTTP_PORT` becomes `http.port`).
+The server supports configuration via environment variables with the `LFXMCP_` prefix. **Environment variables override command-line flags.**
 
-**Configuration Precedence:** Environment variables **override** command-line flags. This allows command-line flags to provide defaults while environment variables can override them in containerized deployments.
-
-| Variable                              | Description                                                          | Default   | Required |
-|---------------------------------------|----------------------------------------------------------------------|-----------|----------|
-| `LFXMCP_MODE`                         | Transport mode (`stdio` or `http`)                                   | stdio     | No       |
-| `LFXMCP_HTTP_HOST`                    | HTTP server host                                                     | 127.0.0.1 | No       |
-| `LFXMCP_HTTP_PORT`                    | HTTP server port                                                     | 8080      | No       |
-| `LFXMCP_HTTP_PUBLIC_URL`              | Public URL for HTTP transport                                        | -         | No       |
-| `LFXMCP_DEBUG`                        | Enable debug logging                                                 | false     | No       |
-| `LFXMCP_DEBUG_TRAFFIC`                | Enable HTTP request/response wire logging for outbound LFX API calls | false     | No       |
-| `LFXMCP_TOOLS`                        | Comma-separated list of tools to enable                              | -         | No       |
-| `LFXMCP_MCP_API_AUTH_SERVERS`         | Comma-separated list of authorization server URLs                    | -         | No       |
-| `LFXMCP_MCP_API_PUBLIC_URL`           | Public URL for MCP API (for OAuth PRM)                               | -         | No       |
-| `LFXMCP_MCP_API_SCOPES`               | OAuth scopes as comma-separated list                                 | -         | No       |
-| `LFXMCP_CLIENT_ID`                    | OAuth client ID for authentication                                   | -         | No       |
-| `LFXMCP_CLIENT_SECRET`                | OAuth client secret                                                  | -         | No       |
-| `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | PEM-encoded RSA private key for client assertion                     | -         | No       |
-| `LFXMCP_TOKEN_ENDPOINT`               | OAuth2 token endpoint URL for token exchange                         | -         | No       |
-| `LFXMCP_LFX_API_URL`                  | LFX API URL (used as token exchange audience)                        | -         | No       |
-| `LFXMCP_ONBOARDING_API_URL`           | Base URL of the member onboarding service                            | -         | No       |
-| `LFXMCP_ONBOARDING_API_AUDIENCE`      | Auth0 resource server audience for the member onboarding API         | -         | No       |
-| `LFXMCP_LENS_API_URL`                 | Base URL of the LFX Lens service                                     | -         | No       |
-| `LFXMCP_LENS_API_AUDIENCE`            | Auth0 resource server audience for the LFX Lens API                  | -         | No       |
-
-**Example:**
-
-```bash
-export LFXMCP_MODE=http
-export LFXMCP_HTTP_PORT=8080
-export LFXMCP_DEBUG=true
-export LFXMCP_TOOLS=hello_world,user_info
-export LFXMCP_MCP_API_AUTH_SERVERS=https://linuxfoundation-dev.auth0.com
-export LFXMCP_CLIENT_ID=your_client_id
-export LFXMCP_TOKEN_ENDPOINT=https://linuxfoundation-dev.auth0.com/oauth/token
-export LFXMCP_LFX_API_URL=https://lfx-api.dev.v2.cluster.linuxfound.info/
-
-./bin/lfx-mcp-server
-```
+| Flag                            | Env Var                               | Default        | Description                                                       |
+|---------------------------------|---------------------------------------|----------------|-------------------------------------------------------------------|
+| `-mode`                         | `LFXMCP_MODE`                         | `stdio`        | Transport mode: `stdio` or `http`                                 |
+| `-http.host`                    | `LFXMCP_HTTP_HOST`                    | `127.0.0.1`    | HTTP server bind address                                          |
+| `-http.port`                    | `LFXMCP_HTTP_PORT`                    | `8080`         | HTTP server port                                                  |
+| `-debug`                        | `LFXMCP_DEBUG`                        | `false`        | Enable debug logging with source locations                        |
+| `-debug_traffic`                | `LFXMCP_DEBUG_TRAFFIC`                | `false`        | Log outbound LFX API request/response bodies                      |
+| `-tools`                        | `LFXMCP_TOOLS`                        | `defaultTools` | Comma-separated list of tools to enable                           |
+| `-committees_as_groups`         | `LFXMCP_COMMITTEES_AS_GROUPS`         | `false`        | Rebrand committee tools to use "group" terminology (feature flag) |
+| `-mcp_api.auth_servers`         | `LFXMCP_MCP_API_AUTH_SERVERS`         | —              | OAuth authorization server URLs (comma-separated)                 |
+| `-mcp_api.public_url`           | `LFXMCP_MCP_API_PUBLIC_URL`           | —              | Public URL for MCP API (OAuth PRM)                                |
+| `-mcp_api.scopes`               | `LFXMCP_MCP_API_SCOPES`               | —              | OAuth scopes (comma-separated)                                    |
+| `-client_id`                    | `LFXMCP_CLIENT_ID`                    | —              | OAuth client ID for token exchange                                |
+| `-client_secret`                | `LFXMCP_CLIENT_SECRET`                | —              | OAuth client secret                                               |
+| `-client_assertion_signing_key` | `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | —              | PEM-encoded RSA private key for client assertion (RFC 7523)       |
+| `-token_endpoint`               | `LFXMCP_TOKEN_ENDPOINT`               | —              | OAuth2 token endpoint URL (RFC 8693)                              |
+| `-lfx_api_url`                  | `LFXMCP_LFX_API_URL`                  | —              | LFX API base URL (token exchange audience)                        |
+| `-onboarding_api_url`           | `LFXMCP_ONBOARDING_API_URL`           | —              | Base URL of the member onboarding service                         |
+| `-onboarding_api_audience`      | `LFXMCP_ONBOARDING_API_AUDIENCE`      | —              | Auth0 resource server audience for the member onboarding API      |
+| `-lens_api_url`                 | `LFXMCP_LENS_API_URL`                 | —              | Base URL of the LFX Lens service                                  |
+| `-lens_api_audience`            | `LFXMCP_LENS_API_AUDIENCE`            | —              | Auth0 resource server audience for the LFX Lens API               |
 
 ## Error Handling Patterns
 
@@ -550,24 +511,6 @@ return nil, nil, fmt.Errorf("invalid parameter: %s", param)
 ### MCP Protocol Errors
 
 The SDK handles most protocol-level errors automatically. Tool implementation should focus on business logic errors.
-
-## Debugging Tips
-
-1. **Server Logs**: Use log statements in tool handlers
-2. **JSON Validation**: Ensure JSON-RPC messages are properly formatted
-3. **Schema Validation**: Check that input matches generated schema
-4. **Manual Testing**: Use the test script for quick validation
-
-### Debug Mode
-
-Add debug logging to tools:
-
-```go
-func(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallToolResult, any, error) {
-    log.Printf("Tool called with args: %+v", args)
-    // Tool implementation
-}
-```
 
 ## Dependencies
 
@@ -598,11 +541,11 @@ Releases follow [semantic versioning](https://semver.org/) (`vMAJOR.MINOR.PATCH`
 
 ### Version bump guidelines
 
-| Change type | Version component |
-|---|---|
-| Bug fixes, tool description/schema wording tweaks, operational changes (Helm, CI) | **patch** |
-| New tools or substantial updates to existing tools | **minor** |
-| Breaking changes or explicit instruction | **major** (only when told) |
+| Change type                                                                       | Version component          |
+|-----------------------------------------------------------------------------------|----------------------------|
+| Bug fixes, tool description/schema wording tweaks, operational changes (Helm, CI) | **patch**                  |
+| New tools or substantial updates to existing tools                                | **minor**                  |
+| Breaking changes or explicit instruction                                          | **major** (only when told) |
 
 ### Cutting a release
 
@@ -627,15 +570,3 @@ gh release create "$NEXT" \
 
 No additional manual steps (e.g. building binaries, updating a changelog file) are required before creating the release.
 After creating the release, verify that the GitHub Actions **Publish Tagged Release** workflow triggered by the new tag completes successfully; otherwise release artifacts such as published images/charts may be missing even though the GitHub Release exists.
-
-## Future Extensions
-
-The skeleton is designed for easy extension with LFX-specific tools:
-
-- **Project Management**: Create/search/update projects
-- **Committee Management**: Committee and committee member management
-- **Meeting Management**: Meetings scheduling and participant management
-- **Mailing List Management**: Meetings creation and management
-- **Membership operations**: Get project members and key contacts
-
-Each new tool should follow the established patterns and maintain the clean, simple architecture.

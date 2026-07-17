@@ -5,6 +5,8 @@ license: MIT
 compatibility: Requires kubectl configured against the LFX v2 Kubernetes cluster (dev or prod). The OpenSearch cluster is an AWS-managed OpenSearch Service domain reachable only from within the cluster network — queries are tunnelled through the NATS box pod using kubectl exec.
 ---
 
+# Validate Search Filters
+
 Validate every filter parameter across all tools that use the query service SDK
 in `internal/tools/` against the live OpenSearch `resources` index and the
 upstream indexer-contract documentation. Produce a per-filter verdict table
@@ -79,14 +81,14 @@ grep -rEn "QueryResources|QueryResourcesPayload" internal/tools/ | grep -v "_tes
 For each file that appears, read the handler and record how each filter
 parameter is sent to the query service. The mechanisms are:
 
-| Mechanism | Query service field | Index field |
-|---|---|---|
-| `payload.Parent = "<type>:<uid>"` | `Parent` | `parent_refs` |
-| `payload.Tags = ["<key>:<value>"]` | `Tags` | `tags` |
-| `payload.Filters = ["<field>:<value>"]` | `Filters` | top-level doc fields |
-| `payload.FiltersAll = ["<field>:<value>"]` | `FiltersAll` | top-level doc fields (AND semantics) |
-| `payload.Name = "<value>"` | `Name` | `name` (text search) |
-| `payload.DateField` / `DateFrom` / `DateTo` | date range | date fields |
+| Mechanism                                   | Query service field | Index field                          |
+|---------------------------------------------|---------------------|--------------------------------------|
+| `payload.Parent = "<type>:<uid>"`           | `Parent`            | `parent_refs`                        |
+| `payload.Tags = ["<key>:<value>"]`          | `Tags`              | `tags`                               |
+| `payload.Filters = ["<field>:<value>"]`     | `Filters`           | top-level doc fields                 |
+| `payload.FiltersAll = ["<field>:<value>"]`  | `FiltersAll`        | top-level doc fields (AND semantics) |
+| `payload.Name = "<value>"`                  | `Name`              | `name` (text search)                 |
+| `payload.DateField` / `DateFrom` / `DateTo` | date range          | date fields                          |
 
 Only `Parent`, `Tags`, `Filters`, and `FiltersAll` are structural filters that
 map to indexed fields — these are the ones to validate. `Name` and date fields
@@ -95,33 +97,33 @@ are query-time text/range operations and do not need index field verification.
 Reference table of known tools and their structured filter parameters (verify
 against the grep output above before trusting this):
 
-| Tool | Resource type | Parameter | Mechanism | Sent as |
-|---|---|---|---|---|
-| `search_projects` | `project` | `parent_uid` | Parent | `project:<uid>` |
-| `search_committees` | `committee` | `project_uid` | Parent | `project:<uid>` |
-| `search_committee_members` | `committee_member` | `committee_uid` | Tag | `committee_uid:<uid>` |
-| `search_committee_members` | `committee_member` | `project_uid` | Tag | `project_uid:<uid>` |
-| `search_mailing_lists` | `groupsio_mailing_list` | `project_uid` | Parent | `project:<uid>` |
-| `search_mailing_list_members` | `groupsio_member` | `mailing_list_id` | Tag | `mailing_list_uid:<id>` |
-| `search_mailing_list_members` | `groupsio_member` | `project_uid` | Tag | `project_uid:<uid>` |
-| `search_meetings` | `v1_meeting` | `committee_uid` | Parent (preferred) | `committee:<uid>` |
-| `search_meetings` | `v1_meeting` | `project_uid` | Parent (fallback) | `project:<uid>` |
-| `search_meeting_registrants` | `v1_meeting_registrant` | `meeting_id` | Parent (preferred) | `meeting:<id>` |
-| `search_meeting_registrants` | `v1_meeting_registrant` | `committee_uid` | Parent (fallback) | `committee:<uid>` |
-| `search_past_meetings` | `v1_past_meeting` | `project_uid` | Parent | `project:<uid>` |
-| `search_past_meetings` | `v1_past_meeting` | `committee_uid` | Tag | `committee_uid:<uid>` |
-| `search_past_meetings` | `v1_past_meeting` | `meeting_id` | Tag | `meeting_id:<id>` |
-| `search_past_meeting_participants` | `v1_past_meeting_participant` | `past_meeting_id` | Parent (preferred) | `past_meeting:<meeting_and_occurrence_id>` |
-| `search_past_meeting_participants` | `v1_past_meeting_participant` | `project_uid` | Parent (fallback) | `project:<uid>` |
-| `search_past_meeting_summaries` | `v1_past_meeting_summary` | `past_meeting_id` | Parent (preferred) | `past_meeting:<meeting_and_occurrence_id>` |
-| `search_past_meeting_summaries` | `v1_past_meeting_summary` | `project_uid` | Parent (fallback) | `project:<uid>` |
-| `search_members` | `project_membership` | `project_uid` | FiltersAll | `project_uid:<uid>` |
-| `search_members` | `project_membership` | `b2b_org_uid` | FiltersAll | `b2b_org_uid:<uid>` |
-| `search_members` | `project_membership` | `tier_uid` | FiltersAll | `tier_uid:<uid>` |
-| `search_members` | `project_membership` | `tier_name` | FiltersAll | `tier_name:<name>` |
-| `search_members` | `project_membership` | `status` | FiltersAll | `status:Active` (hardcoded default) |
-| `get_membership_key_contacts` | `key_contact` | `membership_uid` | FiltersAll | `membership_uid:<uid>` |
-| `search_b2b_orgs` | `b2b_org` | *(none — Name only)* | — | — |
+| Tool                               | Resource type                 | Parameter            | Mechanism          | Sent as                                    |
+|------------------------------------|-------------------------------|----------------------|--------------------|--------------------------------------------|
+| `search_projects`                  | `project`                     | `parent_uid`         | Parent             | `project:<uid>`                            |
+| `search_committees`                | `committee`                   | `project_uid`        | Parent             | `project:<uid>`                            |
+| `search_committee_members`         | `committee_member`            | `committee_uid`      | Tag                | `committee_uid:<uid>`                      |
+| `search_committee_members`         | `committee_member`            | `project_uid`        | Tag                | `project_uid:<uid>`                        |
+| `search_mailing_lists`             | `groupsio_mailing_list`       | `project_uid`        | Parent             | `project:<uid>`                            |
+| `search_mailing_list_members`      | `groupsio_member`             | `mailing_list_id`    | Tag                | `mailing_list_uid:<id>`                    |
+| `search_mailing_list_members`      | `groupsio_member`             | `project_uid`        | Tag                | `project_uid:<uid>`                        |
+| `search_meetings`                  | `v1_meeting`                  | `committee_uid`      | Parent (preferred) | `committee:<uid>`                          |
+| `search_meetings`                  | `v1_meeting`                  | `project_uid`        | Parent (fallback)  | `project:<uid>`                            |
+| `search_meeting_registrants`       | `v1_meeting_registrant`       | `meeting_id`         | Parent (preferred) | `meeting:<id>`                             |
+| `search_meeting_registrants`       | `v1_meeting_registrant`       | `committee_uid`      | Parent (fallback)  | `committee:<uid>`                          |
+| `search_past_meetings`             | `v1_past_meeting`             | `project_uid`        | Parent             | `project:<uid>`                            |
+| `search_past_meetings`             | `v1_past_meeting`             | `committee_uid`      | Tag                | `committee_uid:<uid>`                      |
+| `search_past_meetings`             | `v1_past_meeting`             | `meeting_id`         | Tag                | `meeting_id:<id>`                          |
+| `search_past_meeting_participants` | `v1_past_meeting_participant` | `past_meeting_id`    | Parent (preferred) | `past_meeting:<meeting_and_occurrence_id>` |
+| `search_past_meeting_participants` | `v1_past_meeting_participant` | `project_uid`        | Parent (fallback)  | `project:<uid>`                            |
+| `search_past_meeting_summaries`    | `v1_past_meeting_summary`     | `past_meeting_id`    | Parent (preferred) | `past_meeting:<meeting_and_occurrence_id>` |
+| `search_past_meeting_summaries`    | `v1_past_meeting_summary`     | `project_uid`        | Parent (fallback)  | `project:<uid>`                            |
+| `search_members`                   | `project_membership`          | `project_uid`        | FiltersAll         | `project_uid:<uid>`                        |
+| `search_members`                   | `project_membership`          | `b2b_org_uid`        | FiltersAll         | `b2b_org_uid:<uid>`                        |
+| `search_members`                   | `project_membership`          | `tier_uid`           | FiltersAll         | `tier_uid:<uid>`                           |
+| `search_members`                   | `project_membership`          | `tier_name`          | FiltersAll         | `tier_name:<name>`                         |
+| `search_members`                   | `project_membership`          | `status`             | FiltersAll         | `status:Active` (hardcoded default)        |
+| `get_membership_key_contacts`      | `key_contact`                 | `membership_uid`     | FiltersAll         | `membership_uid:<uid>`                     |
+| `search_b2b_orgs`                  | `b2b_org`                     | *(none — Name only)* | —                  | —                                          |
 
 ## Step 3 — Fetch indexer contracts
 
@@ -135,13 +137,13 @@ Known contract URLs:
 - `v1_meeting`, `v1_meeting_registrant`, `v1_past_meeting`,
   `v1_past_meeting_participant`, `v1_past_meeting_transcript`,
   `v1_past_meeting_summary`:
-  https://github.com/linuxfoundation/lfx-v2-meeting-service/blob/main/docs/indexer-contract.md
+  <https://github.com/linuxfoundation/lfx-v2-meeting-service/blob/main/docs/indexer-contract.md>
 - `project`:
-  https://github.com/linuxfoundation/lfx-v2-project-service/blob/main/docs/indexer-contract.md
+  <https://github.com/linuxfoundation/lfx-v2-project-service/blob/main/docs/indexer-contract.md>
 - `committee`, `committee_member`:
-  https://github.com/linuxfoundation/lfx-v2-committee-service/blob/main/docs/indexer-contract.md
+  <https://github.com/linuxfoundation/lfx-v2-committee-service/blob/main/docs/indexer-contract.md>
 - `groupsio_mailing_list`, `groupsio_member`:
-  https://github.com/linuxfoundation/lfx-v2-mailing-list-service/blob/main/docs/indexer-contract.md
+  <https://github.com/linuxfoundation/lfx-v2-mailing-list-service/blob/main/docs/indexer-contract.md>
 
 Fetch each URL and extract the **Tags** table and **Parent References** table
 for each resource type. Record which tag keys and parent_ref prefixes the
@@ -254,11 +256,11 @@ matches what the contract specifies.
 ```markdown
 ## <tool_name> (resource type: <type>)
 
-| Parameter | Mechanism | Sent as | Contract | Index evidence | Verdict |
-|---|---|---|---|---|---|
-| committee_uid | Parent | committee:<uid> | ✅ parent_ref `committee:` | parent_refs prefix "committee:" — N hits | ✅ Works |
-| project_uid | Parent | project:<uid> | ✅ parent_ref `project:` | parent_refs prefix "project:" — 0 hits | ⚠️ Broken |
-| meeting_id | Tag | meeting_id:<id> | ⚠️ not in contract | tag key "meeting_id:" — N hits | ⚠️ Review |
+| Parameter     | Mechanism | Sent as         | Contract                  | Index evidence                           | Verdict   |
+|---------------|-----------|-----------------|---------------------------|------------------------------------------|-----------|
+| committee_uid | Parent    | committee:<uid> | ✅ parent_ref `committee:` | parent_refs prefix "committee:" — N hits | ✅ Works   |
+| project_uid   | Parent    | project:<uid>   | ✅ parent_ref `project:`   | parent_refs prefix "project:" — 0 hits   | ⚠️ Broken |
+| meeting_id    | Tag       | meeting_id:<id> | ⚠️ not in contract        | tag key "meeting_id:" — N hits           | ⚠️ Review |
 ```
 
 After the table, state explicitly:

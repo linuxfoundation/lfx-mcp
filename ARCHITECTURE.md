@@ -52,10 +52,10 @@ Kubernetes session affinity.
 
 Tool registration is gated on two access levels derived from the caller's token:
 
-| Level | Condition | Grants access to |
-|---|---|---|
-| Read | token holds `read:all` **or** `manage:all` | All read-only tools |
-| Manage | token holds `manage:all` | Read + write/delete tools |
+| Level  | Condition                                  | Grants access to          |
+|--------|--------------------------------------------|---------------------------|
+| Read   | token holds `read:all` **or** `manage:all` | All read-only tools       |
+| Manage | token holds `manage:all`                   | Read + write/delete tools |
 
 An additional requirement of the `lf_staff` claim (from the `http://lfx.dev/claims/lf_staff`
 custom claim) gates the `query_lfx_lens` tool on top of the read scope requirement.

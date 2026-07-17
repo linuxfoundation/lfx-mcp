@@ -171,6 +171,30 @@ var logger *slog.Logger
 // schemas are computed only once rather than on every incoming request.
 var schemaCache = mcp.NewSchemaCache()
 
+// splitTrimmed splits a comma-separated string into a slice, trimming
+// whitespace from each entry. An empty input yields a non-nil, zero-length
+// slice (rather than a slice containing a single empty string) so that
+// unset values are distinguishable from a single-element list. Any other
+// input that produces an empty entry after trimming (e.g. "," or a
+// trailing comma) is rejected as malformed, rather than silently dropped,
+// so that security-sensitive list fields such as mcp_api.auth_servers fail
+// loudly rather than fail open when misconfigured.
+func splitTrimmed(value string) ([]string, error) {
+	if value == "" {
+		return []string{}, nil
+	}
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			return nil, fmt.Errorf("value %q contains an empty entry; expected a comma-separated list with no blank entries", value)
+		}
+		result = append(result, p)
+	}
+	return result, nil
+}
+
 func main() {
 	k := koanf.New(".")
 
@@ -208,9 +232,17 @@ func main() {
 
 	// Load flags first (provides defaults).
 	if err := k.Load(basicflag.ProviderWithValue(f, ".", func(key string, value string) (string, interface{}) {
-		// Handle comma-separated lists.
-		if (key == "tools" || key == "mcp_api.auth_servers" || key == "mcp_api.scopes") && value != "" {
-			return key, strings.Split(value, ",")
+		// Handle comma-separated lists. An empty value must yield an empty slice
+		// rather than falling through as a bare string: mapstructure's
+		// StringToSliceHookFunc splits "" into []string{""} (length 1), which would
+		// make len(cfg.MCPAPI.AuthServers) > 0 true even when unset.
+		if key == "tools" || key == "mcp_api.auth_servers" || key == "mcp_api.scopes" {
+			result, err := splitTrimmed(value)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Invalid value for -%s flag: %v\n", key, err)
+				os.Exit(1)
+			}
+			return key, result
 		}
 		return key, value
 	}, k), nil); err != nil {
@@ -226,9 +258,15 @@ func main() {
 			// Replace underscores with dots for nested config (e.g., MCP_API_AUTH_SERVERS -> mcp_api.auth_servers).
 			key = strings.ReplaceAll(key, "mcp_api_", "mcp_api.")
 			key = strings.ReplaceAll(key, "http_", "http.")
-			// Handle comma-separated lists.
-			if (key == "tools" || key == "mcp_api.auth_servers" || key == "mcp_api.scopes") && v != "" {
-				return key, strings.Split(v, ",")
+			// Handle comma-separated lists. An empty value must yield an empty
+			// slice rather than a bare string (see the flag provider above for why).
+			if key == "tools" || key == "mcp_api.auth_servers" || key == "mcp_api.scopes" {
+				result, err := splitTrimmed(v)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Invalid value for %s: %v\n", k, err)
+					os.Exit(1)
+				}
+				return key, result
 			}
 			// TEMPORARY: map LFXMCP_API_CREDENTIALS_<KEY>=<secret> env vars into the
 			// api_credentials koanf map. Each env var contributes one entry.

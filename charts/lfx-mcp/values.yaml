@@ -117,7 +117,9 @@ app:
     # tracesSampler selects the trace sampler (e.g. "parentbased_traceidratio").
     # See https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#general-sdk-configuration
     tracesSampler: ""
-    # tracesSamplerArg is the argument for the sampler (e.g. "0.2" for 20% ratio).
+    # tracesSamplerArg specifies the OTEL_TRACES_SAMPLER_ARG (sampler ratio or parent_sampler_arg).
+    # Used by "traceidratio" and "parentbased_traceidratio" samplers (defaults to 1.0 if empty).
+    # (default: "")
     tracesSamplerArg: ""
   # extraEnv is a list of additional environment variables to inject into the container.
   # Used to supply HOST_IP (from the pod's status.hostIP) and the derived OTEL endpoint.

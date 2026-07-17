@@ -30,6 +30,24 @@ type CommitteeConfig struct {
 
 var committeeConfig *CommitteeConfig
 
+// committeeSearchResult is the output type for search_committees / search_groups.
+type committeeSearchResult struct {
+	Resources []*querysvc.Resource `json:"resources"`
+	PageToken *string              `json:"page_token,omitempty"`
+}
+
+// committeeGetResult is the output type for get_committee / get_group.
+type committeeGetResult struct {
+	Base     *committeeservice.CommitteeBaseWithReadonlyAttributes     `json:"base"`
+	Settings *committeeservice.CommitteeSettingsWithReadonlyAttributes `json:"settings,omitempty"`
+}
+
+// committeeMemberSearchResult is the output type for search_committee_members / search_group_members.
+type committeeMemberSearchResult struct {
+	Resources []*querysvc.Resource `json:"resources"`
+	PageToken *string              `json:"page_token,omitempty"`
+}
+
 // SetCommitteeConfig sets the configuration for committee tools.
 func SetCommitteeConfig(cfg *CommitteeConfig) {
 	committeeConfig = cfg
@@ -192,22 +210,17 @@ type SearchGroupMembersArgs struct {
 }
 
 // handleSearchCommitteesGroupMode adapts group-mode args to the committee handler.
-func handleSearchCommitteesGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupsArgs) (*mcp.CallToolResult, any, error) {
-	return handleSearchCommittees(ctx, req, SearchCommitteesArgs{
-		Name:       args.Name,
-		ProjectUID: args.ProjectUID,
-		PageSize:   args.PageSize,
-		PageToken:  args.PageToken,
-	})
+func handleSearchCommitteesGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupsArgs) (*mcp.CallToolResult, committeeSearchResult, error) {
+	return handleSearchCommittees(ctx, req, SearchCommitteesArgs(args))
 }
 
 // handleGetCommitteeGroupMode adapts group-mode args to the committee handler.
-func handleGetCommitteeGroupMode(ctx context.Context, req *mcp.CallToolRequest, args GetGroupArgs) (*mcp.CallToolResult, any, error) {
-	return handleGetCommittee(ctx, req, GetCommitteeArgs{UID: args.UID})
+func handleGetCommitteeGroupMode(ctx context.Context, req *mcp.CallToolRequest, args GetGroupArgs) (*mcp.CallToolResult, committeeGetResult, error) {
+	return handleGetCommittee(ctx, req, GetCommitteeArgs(args))
 }
 
 // handleGetCommitteeMemberGroupMode adapts group-mode args to the committee member handler.
-func handleGetCommitteeMemberGroupMode(ctx context.Context, req *mcp.CallToolRequest, args GetGroupMemberArgs) (*mcp.CallToolResult, any, error) {
+func handleGetCommitteeMemberGroupMode(ctx context.Context, req *mcp.CallToolRequest, args GetGroupMemberArgs) (*mcp.CallToolResult, *committeeservice.CommitteeMemberFullWithReadonlyAttributes, error) {
 	return handleGetCommitteeMember(ctx, req, GetCommitteeMemberArgs{
 		CommitteeUID: args.GroupUID,
 		MemberUID:    args.MemberUID,
@@ -215,7 +228,7 @@ func handleGetCommitteeMemberGroupMode(ctx context.Context, req *mcp.CallToolReq
 }
 
 // handleSearchCommitteeMembersGroupMode adapts group-mode args to the committee members handler.
-func handleSearchCommitteeMembersGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupMembersArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchCommitteeMembersGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupMembersArgs) (*mcp.CallToolResult, committeeMemberSearchResult, error) {
 	return handleSearchCommitteeMembers(ctx, req, SearchCommitteeMembersArgs{
 		CommitteeUID: args.GroupUID,
 		ProjectUID:   args.ProjectUID,
@@ -226,7 +239,7 @@ func handleSearchCommitteeMembersGroupMode(ctx context.Context, req *mcp.CallToo
 }
 
 // handleSearchCommittees implements the search_committees tool logic.
-func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteesArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteesArgs) (*mcp.CallToolResult, committeeSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
@@ -236,7 +249,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 				&mcp.TextContent{Text: "Error: committee tools not configured"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeSearchResult{}, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
@@ -247,7 +260,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeSearchResult{}, nil
 	}
 
 	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -290,12 +303,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 				&mcp.TextContent{Text: friendlyAPIError("failed to search committees", err)},
 			},
 			IsError: true,
-		}, nil, nil
-	}
-
-	type searchResult struct {
-		Resources []*querysvc.Resource `json:"resources"`
-		PageToken *string              `json:"page_token,omitempty"`
+		}, committeeSearchResult{}, nil
 	}
 
 	// Strip the unreliable total_members field from indexed committee data. The
@@ -308,7 +316,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		}
 	}
 
-	out := searchResult{
+	out := committeeSearchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
@@ -328,7 +336,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeSearchResult{}, nil
 	}
 
 	logger.InfoContext(ctx, "search_committees succeeded", "count", len(result.Resources))
@@ -338,12 +346,12 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // handleGetCommittee implements the get_committee tool logic, fetching both base
 // info and settings for the given committee UID.
-func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetCommitteeArgs) (*mcp.CallToolResult, any, error) {
+func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetCommitteeArgs) (*mcp.CallToolResult, committeeGetResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
@@ -353,7 +361,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 				&mcp.TextContent{Text: "Error: committee tools not configured"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeGetResult{}, nil
 	}
 
 	if args.UID == "" {
@@ -362,7 +370,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 				&mcp.TextContent{Text: "Error: uid is required"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeGetResult{}, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
@@ -373,7 +381,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeGetResult{}, nil
 	}
 
 	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -391,7 +399,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 				&mcp.TextContent{Text: friendlyAPIError("failed to get committee", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeGetResult{}, nil
 	}
 
 	// Settings may be unavailable due to insufficient permissions; treat that
@@ -417,12 +425,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		baseResult.CommitteeBase.TotalMembers = nil
 	}
 
-	type committeeResult struct {
-		Base     *committeeservice.CommitteeBaseWithReadonlyAttributes     `json:"base"`
-		Settings *committeeservice.CommitteeSettingsWithReadonlyAttributes `json:"settings,omitempty"`
-	}
-
-	out := committeeResult{
+	out := committeeGetResult{
 		Base:     baseResult.CommitteeBase,
 		Settings: committeeSettings,
 	}
@@ -435,7 +438,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeGetResult{}, nil
 	}
 
 	logger.InfoContext(ctx, "get_committee succeeded", "uid", args.UID)
@@ -448,11 +451,11 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 
 	return &mcp.CallToolResult{
 		Content: content,
-	}, nil, nil
+	}, out, nil
 }
 
 // handleGetCommitteeMember implements the get_committee_member tool logic.
-func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, args GetCommitteeMemberArgs) (*mcp.CallToolResult, any, error) {
+func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, args GetCommitteeMemberArgs) (*mcp.CallToolResult, *committeeservice.CommitteeMemberFullWithReadonlyAttributes, error) {
 	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
@@ -531,11 +534,11 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(prettyJSON)},
 		},
-	}, nil, nil
+	}, result.Member, nil
 }
 
 // handleSearchCommitteeMembers implements the search_committee_members tool logic.
-func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteeMembersArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteeMembersArgs) (*mcp.CallToolResult, committeeMemberSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
@@ -545,7 +548,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 				&mcp.TextContent{Text: "Error: committee tools not configured"},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeMemberSearchResult{}, nil
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
@@ -556,7 +559,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeMemberSearchResult{}, nil
 	}
 
 	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -605,15 +608,10 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 				&mcp.TextContent{Text: friendlyAPIError("failed to search committee members", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeMemberSearchResult{}, nil
 	}
 
-	type searchResult struct {
-		Resources []*querysvc.Resource `json:"resources"`
-		PageToken *string              `json:"page_token,omitempty"`
-	}
-
-	out := searchResult{
+	out := committeeMemberSearchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
@@ -633,7 +631,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
 			},
 			IsError: true,
-		}, nil, nil
+		}, committeeMemberSearchResult{}, nil
 	}
 
 	logger.InfoContext(ctx, "search_committee_members succeeded", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
@@ -643,5 +641,5 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }

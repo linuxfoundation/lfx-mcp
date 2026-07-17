@@ -2,17 +2,15 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that connects AI assistants to the Linux Foundation's LFX platform.
 
-## What You Can Do
+## Features
 
-- **Explore projects** — Search and retrieve details for any LFX project
-- **Manage committees** — Search, create, update, and delete committees and their members across projects
-- **Work with mailing lists** — Search mailing lists and their subscribers
-- **Query members** — Search memberships by tier, status, organization, and more; get and manage key contacts
-- **Track meetings** — Find upcoming meetings, registrants, past participants, and AI-generated summaries
-- **Manage Discord roles** — List roles, find users, check and assign roles in a project's Discord guild
-- **Send emails** — Browse email templates and send templated emails via LFX mail servers
-- **Query with LFX Lens** — Ask natural-language questions about project data (events, contributors, health, and more)
-- **Search B2B organizations** — Find organizations and list their project memberships
+- **Explore projects** — Search and retrieve details for Linux Foundation projects
+- **Manage committees** — Search, create, update, and delete project committees and their members
+- **Work with mailing lists** — Search project mailing lists and their subscribers
+- **Track project meetings** — Find upcoming meetings, registrants, past participants, and AI-generated summaries
+- **Query membership** — Search project memberships by tier, status, organization, and more; get and manage key contacts
+- **Analyze data with LFX Lens** — Compare and report on project activities and contributions over time
+- ... and more!
 
 ## Connecting to the LFX MCP Server
 
@@ -22,13 +20,37 @@ The LFX MCP Server is available as a hosted, production service at:
 https://mcp.lfx.dev/mcp
 ```
 
-This endpoint uses the [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) transport with OAuth 2.0 authentication. You will be prompted to log in with your Linux Foundation account the first time you connect.
+You will be prompted to log in with your Linux Foundation account (LFID) the first time you connect. *All MCP permissions correspond to LFX platform permissions granted to your LFID.*
 
-> **Note:** Running the LFX MCP Server locally (e.g. in stdio mode) is not a supported end-user configuration. The full tool set requires OAuth authentication flows that are only available through the hosted service.
+**The following clients are set up to work with the LFX MCP Server.** Please file an issue to request additional client support. Running the LFX MCP Server as a local (stdio) MCP server is not supported at this time.
 
-**Linux Foundation SSO does not support Dynamic Client Registration (DCR) or Client ID Metadata Documents (CIMD) at this time.** Please file an issue to request additional client support.
+### Goose
+
+#### GUI (one-click install)
+
+Copy-paste into your browser location bar:
+
+```text
+goose://extension?url=https%3A%2F%2Fmcp.lfx.dev%2Fmcp&type=streamable_http&id=lfx&name=LFX&description=LFX%20MCP%20Server
+```
+
+Start a new chat and Goose will open a browser window for LFID login.
+
+#### CLI
+
+1. Run `goose configure`.
+2. Select **Add Extension** → **Remote Extension (Streamable HTTP)**.
+3. Enter `LFX` as the name.
+4. Enter `https://mcp.lfx.dev/mcp` as the URI.
+5. Enter `300` for the timeout.
+6. Enter `LFX MCP Server` as the description.
+7. Select **No** for adding custom headers.
+
+After it acknowledges that your configuration was saved, running `goose` will open a browser window for LFID login.
 
 ### OpenCode
+
+*OpenCode requires a client ID. The following client ID only works with OpenCode.*
 
 Add the following to your `~/.config/opencode/opencode.json`:
 
@@ -50,14 +72,69 @@ Add the following to your `~/.config/opencode/opencode.json`:
 
 See the [OpenCode MCP documentation](https://opencode.ai/docs/mcp-servers) for more details.
 
-### Claude
+### Zed
 
-Add the LFX MCP Server in **Settings → Integrations → Add Integration**:
+In Zed, open the Agent panel settings (ellipsis button) → **Add Custom Server** → **Remote**. Enter the following:
 
-- **URL:** `https://mcp.lfx.dev/mcp`
-- **Client ID:** `Ef9tuU5wcJJIXmNGvZyGUkZFfD8CZWar`
+```json
+{
+  "lfx": {
+    "url": "https://mcp.lfx.dev/mcp"
+  }
+}
+```
+
+Click **Add Server** → **Authenticate** to open a browser window for LFID login.
+
+### Claude (LF enterprise)
+
+If you use the Linux Foundation's enterprise Claude.ai organization, the LFX MCP Server is already provisioned as a connector in both Claude Desktop and Claude Code.
+
+#### Claude Desktop
+
+1. From the sidebar, select **Customize** → **Connectors**.
+2. Find **LFX** in the list.
+3. Click **Connect** and sign in with your LFID.
+
+#### Claude Code
+
+Run `/mcp` inside Claude Code and select **claude.ai LFX** → **Authenticate**. Claude Code will open a browser window for LFID login.
+
+### Claude Desktop (personal account)
+
+1. From the sidebar, select **Customize** → **Connectors**.
+2. Use the **+** button and select **Add Custom Connector**.
+3. Enter **LFX** and the URL `https://mcp.lfx.dev/mcp`.
+4. Press **Add**, then **Connect** and sign in with your LFID.
+
+### Claude Code (personal account)
+
+```bash
+claude mcp add --transport http lfx https://mcp.lfx.dev/mcp
+```
+
+Run `/mcp` inside Claude Code and select **lfx** → **Authenticate**. Claude Code will open a browser for LFID login.
+
+### Visual Studio Code
+
+Run **MCP: Open User Configuration** to open the `mcp.json` file to add the LFX MCP server in your user-level config:
+
+```json
+{
+  "servers": {
+    "lfx": {
+      "type": "http",
+      "url": "https://mcp.lfx.dev/mcp"
+    }
+  }
+}
+```
+
+VS Code will prompt you to trust the server, then open a browser window for Linux Foundation SSO.
 
 ### Cursor
+
+*Cursor requires a client ID. The following client ID only works with Cursor.*
 
 Add the following to your `~/.cursor/mcp.json`:
 
@@ -76,13 +153,15 @@ Add the following to your `~/.cursor/mcp.json`:
 
 ### Additional clients (via mcp-remote)
 
-If your MCP client does not support OAuth 2.0 with Streamable HTTP, you can use [mcp-remote](https://github.com/geelen/mcp-remote) as a local proxy. It handles the OAuth flow in your browser and serves a `stdio` transport to your MCP client.
+If your MCP client is not listed here, you may try using [mcp-remote](https://github.com/geelen/mcp-remote) as a local proxy.
 
-The port `3334` is required so that the OAuth callback URL matches the registered client. Please refer to your client's documentation for the exact configuration syntax. For example, in **Zed** (`~/.config/zed/settings.json`):
+*The client ID shown here is only for embedding mcp-remote as a proxy and does not support direct MCP client use.*
+
+The port `3334` is required so that the OAuth callback URL matches the registered client. Please refer to your client's documentation for the exact configuration syntax.
 
 ```json
 {
-  "context_servers": {
+  "mcpServers": {
     "lfx": {
       "command": "npx",
       "args": [
@@ -97,7 +176,7 @@ The port `3334` is required so that the OAuth callback URL matches the registere
 }
 ```
 
-A browser window will open for authentication on first use. To clear cached credentials (e.g. to re-authenticate):
+A browser window will open for authentication on first use. To re-authenticate, clear cached credentials with:
 
 ```bash
 rm -rf ~/.mcp-auth
@@ -105,19 +184,17 @@ rm -rf ~/.mcp-auth
 
 ### MCP Inspector (developer testing)
 
+*MCP Inspector requires a client ID. The following client ID only works with MCP Inspector.*
+
 [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a browser-based tool for exploring and testing MCP servers. To connect it to the LFX MCP Server:
 
 ```bash
-npx @modelcontextprotocol/inspector
+npx @modelcontextprotocol/inspector --transport http --server-url https://mcp.lfx.dev/mcp
 ```
 
-Then in the Inspector UI:
+From the MCP Inspector sidebar, find **Authentication** → **OAuth 2.0 Flow** → **Client ID** and enter `4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O`.
 
-- **Transport:** Streamable HTTP
-- **URL:** `https://mcp.lfx.dev/mcp`
-- **Authentication → OAuth 2.0 Flow → Client ID:** `4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O`
-
-Before hitting **Connect**, follow the **Open Auth Settings** button, then select **Quick OAuth Flow**.
+Hitting **Connect** will open a browser window for LFID login.
 
 ## Available Tools
 
@@ -157,17 +234,15 @@ Before hitting **Connect**, follow the **Open Auth Settings** button, then selec
 
 ### Members
 
-| Tool                              | Description                                                                     |
-|-----------------------------------|---------------------------------------------------------------------------------|
-| `search_members`                  | Search and filter members (memberships) by status, tier, organization, and more |
-| `get_member_membership`           | Get a single member's membership details by member and membership ID            |
-| `list_project_tiers`              | List all membership tiers (e.g. Gold, Silver, Bronze) defined for a project     |
-| `get_project_tier`                | Get a single membership tier by project and tier UID                            |
-| `get_membership_key_contacts`     | Get key contacts (primary contacts, board members) for a membership             |
-| `get_membership_key_contact`      | Get a single key contact by project, membership, and contact UID                |
-| `create_membership_key_contact`   | Add a key contact to a membership                                               |
-| `update_membership_key_contact`   | Update an existing key contact on a membership                                  |
-| `delete_membership_key_contact`   | Remove a key contact from a membership                                          |
+| Tool                            | Description                                                                           |
+|---------------------------------|---------------------------------------------------------------------------------------|
+| `search_members`                | Search and filter members (memberships) by project, tier, status, or B2B organization |
+| `get_member_membership`         | Get a single membership by membership UID                                             |
+| `get_membership_key_contacts`   | Get key contacts (primary contacts, board members) for a membership                   |
+| `get_membership_key_contact`    | Get a single key contact by membership UID and contact UID                            |
+| `create_membership_key_contact` | Add a key contact to a membership                                                     |
+| `update_membership_key_contact` | Update an existing key contact on a membership                                        |
+| `delete_membership_key_contact` | Remove a key contact from a membership                                                |
 
 ### Meetings
 
@@ -191,33 +266,32 @@ Before hitting **Connect**, follow the **Open Auth Settings** button, then selec
 
 ### Discord
 
-| Tool                    | Description                                                  |
-|-------------------------|--------------------------------------------------------------|
-| `list_discord_roles`    | List all roles in a project's Discord guild                  |
-| `find_discord_role`     | Find a Discord role by name                                  |
-| `find_discord_user`     | Find a Discord guild member by name and optional email       |
-| `check_discord_user_role` | Check whether a Discord user already has a specific role   |
-| `assign_discord_role`   | Assign a Discord role to a user                              |
+| Tool                      | Description                                              |
+|---------------------------|----------------------------------------------------------|
+| `list_discord_roles`      | List all roles in a project's Discord guild              |
+| `find_discord_role`       | Find a Discord role by name                              |
+| `find_discord_user`       | Find a Discord guild member by name and optional email   |
+| `check_discord_user_role` | Check whether a Discord user already has a specific role |
+| `assign_discord_role`     | Assign a Discord role to a user                          |
 
 ### Email
 
-| Tool                    | Description                                                  |
-|-------------------------|--------------------------------------------------------------|
-| `list_email_templates`  | List all available email templates for a project             |
-| `send_email`            | Send a templated email via LFX mail servers                  |
+| Tool                   | Description                                      |
+|------------------------|--------------------------------------------------|
+| `list_email_templates` | List all available email templates for a project |
+| `send_email`           | Send a templated email via LFX mail servers      |
 
 ### LFX Lens
 
-| Tool              | Description                                                                                         |
-|-------------------|-----------------------------------------------------------------------------------------------------|
-| `query_lfx_lens`  | Ask natural-language questions about a project's data (events, contributors, health, value, and more) |
+| Tool             | Description                                                                                           |
+|------------------|-------------------------------------------------------------------------------------------------------|
+| `query_lfx_lens` | Ask natural-language questions about a project's data (events, contributors, health, value, and more) |
 
 ### B2B Organizations
 
-| Tool                       | Description                                                   |
-|----------------------------|---------------------------------------------------------------|
-| `search_b2b_orgs`          | Search and list B2B organizations                             |
-| `list_b2b_org_memberships` | List all project memberships for a B2B organization           |
+| Tool              | Description                                |
+|-------------------|--------------------------------------------|
+| `search_b2b_orgs` | Search B2B organizations by name or domain |
 
 ### Utility
 

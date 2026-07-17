@@ -202,6 +202,8 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		committeeHTTPClient.Livez(),
 		committeeHTTPClient.CreateCommitteeMember(),
 		committeeHTTPClient.GetCommitteeMember(),
+		committeeHTTPClient.GetOrgCommitteeSeats(),
+		committeeHTTPClient.ReassignOrgCommitteeSeat(),
 		committeeHTTPClient.UpdateCommitteeMember(),
 		committeeHTTPClient.DeleteCommitteeMember(),
 		committeeHTTPClient.GetInvite(),
@@ -227,6 +229,8 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		committeeHTTPClient.GetCommitteeDocument(),
 		committeeHTTPClient.DownloadCommitteeDocument(),
 		committeeHTTPClient.DeleteCommitteeDocument(),
+		committeeHTTPClient.GetCurrentWeeklyBrief(),
+		committeeHTTPClient.GenerateWeeklyBrief(),
 	)
 
 	// Initialize mailing list service client.
@@ -273,7 +277,10 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 	)
 
 	// Initialize member service client.
-	memberURL, err := url.Parse(cfg.APIDomain + "/members")
+	// The member service exposes root-level paths (/b2b_orgs/, /project_memberships/,
+	// /key_contacts/) with no path prefix, so use cfg.APIDomain directly — identical
+	// to how the project and committee clients are wired.
+	memberURL, err := url.Parse(cfg.APIDomain)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse member service URL: %w", err)
 	}
@@ -288,17 +295,20 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 	)
 
 	clients.Member = memberservice.NewClient(
-		memberHTTPClient.ListProjectTiers(),
-		memberHTTPClient.GetProjectTier(),
-		memberHTTPClient.ListProjectMemberships(),
+		memberHTTPClient.GetB2bOrg(),
+		memberHTTPClient.CreateB2bOrg(),
+		memberHTTPClient.UpdateB2bOrg(),
+		memberHTTPClient.GetB2bOrgSettings(),
+		memberHTTPClient.UpdateB2bOrgSettings(),
+		memberHTTPClient.AddB2bOrgSettingsUser(),
+		memberHTTPClient.UpdateB2bOrgSettingsUserRole(),
+		memberHTTPClient.DeleteB2bOrgSettingsUser(),
 		memberHTTPClient.GetProjectMembership(),
-		memberHTTPClient.ListMembershipKeyContacts(),
-		memberHTTPClient.CreateMembershipKeyContact(),
-		memberHTTPClient.UpdateMembershipKeyContact(),
-		memberHTTPClient.DeleteMembershipKeyContact(),
-		memberHTTPClient.GetMembershipKeyContact(),
-		memberHTTPClient.ListB2bOrgs(),
-		memberHTTPClient.ListB2bOrgMemberships(),
+		memberHTTPClient.GetKeyContact(),
+		memberHTTPClient.CreateKeyContact(),
+		memberHTTPClient.UpdateKeyContact(),
+		memberHTTPClient.DeleteKeyContact(),
+		memberHTTPClient.AdminReindex(),
 		memberHTTPClient.Readyz(),
 		memberHTTPClient.Livez(),
 		memberHTTPClient.DebugVars(),
@@ -329,6 +339,16 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		projectHTTPClient.DeleteProject(),
 		projectHTTPClient.Readyz(),
 		projectHTTPClient.Livez(),
+		projectHTTPClient.CreateProjectLink(),
+		projectHTTPClient.GetProjectLink(),
+		projectHTTPClient.DeleteProjectLink(),
+		projectHTTPClient.CreateProjectFolder(),
+		projectHTTPClient.GetProjectFolder(),
+		projectHTTPClient.DeleteProjectFolder(),
+		projectHTTPClient.UploadProjectDocument(nil),
+		projectHTTPClient.GetProjectDocument(),
+		projectHTTPClient.DownloadProjectDocument(),
+		projectHTTPClient.DeleteProjectDocument(),
 	)
 
 	// Initialize query service client.

@@ -30,7 +30,7 @@ For YAML, shell, and Makefile use `#` comment syntax. Missing headers are the #1
 
 **YAML formatting** — keep lines ≤120 characters (config: `.yamllint`); this is a warning, not a build failure. Helm templates in `charts/lfx-mcp/templates/` are excluded from YAML linting.
 
-**Other active MegaLinter checks:** `BASH_SHELLCHECK`, `DOCKERFILE_HADOLINT`, `ACTION_ACTIONLINT`, `REPOSITORY_GITLEAKS`, `MARKDOWN_MARKDOWNLINT`.
+**Other active MegaLinter checks:** the Go flavor enables its full bundled linter set by default (beyond what's disabled below), including `BASH_SHELLCHECK`, `BASH_EXEC`, `BASH_SHFMT`, `DOCKERFILE_HADOLINT`, `ACTION_ACTIONLINT`, `REPOSITORY_GITLEAKS`, `MARKDOWN_MARKDOWNLINT`, `MARKDOWN_MARKDOWN_TABLE_FORMATTER`, `KUBERNETES_HELM`, and more — this is a non-exhaustive sample, not the full list. See `.mega-linter.yml` for what's explicitly disabled.
 
 **Disabled/error-only (will NOT fail CI):** `GO_GOLANGCI_LINT`, `YAML_PRETTIER`, `REPOSITORY_TRIVY`, `REPOSITORY_CHECKOV`, `REPOSITORY_DEVSKIM`, `SPELL_CSPELL`, `SPELL_LYCHEE`, `COPYPASTE_JSCPD`.
 

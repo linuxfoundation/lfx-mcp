@@ -128,7 +128,7 @@ jobs:
       # Humans whose needs-human unlabel this gate honors — the single source
       # for both the Evaluate step and the pre-approval recheck. Space-
       # separated logins; extending it takes a reviewed PR to this file.
-      NEEDS_HUMAN_UNLABELERS: "josep-reyero niravpatel27"
+      NEEDS_HUMAN_UNLABELERS: "josep-reyero niravpatel27 emsearcy"
     steps:
       - uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450  # v2.19.1
         with:

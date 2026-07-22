@@ -1,0 +1,233 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+#
+# Reactive write layer. The escalation and reconcile agent tasks produce only
+# comments; every GitHub write is done here, keyed to a comment authored by the
+# trusted agent identity so a developer cannot forge a verdict:
+#   - a `needs-human: yes` comment  -> set the sticky needs-human label
+#   - an `<!-- agentic:check v1 -->` block -> validate the rows and set the
+#     agentic-review/clean commit status on the head.
+#
+# TRUST IDENTITY: the agents post via the writable GitHub MCP, which authenticates
+# with the COPILOT_MCP_GITHUB_PERSONAL_ACCESS_TOKEN, so their comments are authored
+# by that PAT's OWNER (not copilot-swe-agent). That PAT belongs to the dedicated
+# lfx-reviewer machine account, which no developer controls, so a developer cannot
+# post a verdict comment directly.
+#
+# KNOWN TRUST BOUNDARY: the MCP credential is configured repo-wide for the Copilot
+# coding agent, so ANY agent session on this repo (including one a write-access
+# user starts by assigning @copilot) posts through the same identity. A write-access
+# insider could therefore have an agent emit verdict-shaped comments, drive the
+# gate to a CODEOWNERS approval of their own PR, and merge it without independent
+# human review. GitHub offers no per-task MCP credentials today, so this is
+# documented rather than closed, and accepted for the pilot: it is an insider-level
+# act, fully auditable (the forged comments, the status, and the approval all name
+# the machine identity and stay on the PR), reversible, and repos where that trade
+# is unacceptable can require an additional human approval via branch protection
+# independently of this system. Per-task credential isolation is the platform ask.
+#
+# This runs on the agent's verdict comment. Because the agents post via the MCP
+# PAT, the comment — and therefore this run — is attributed to the PAT owner
+# (lfx-reviewer), NOT to a Copilot actor, so Copilot workflow gating never applies
+# and we can react instead of polling. It runs from the default branch (trusted
+# code, not anything the agent wrote).
+#
+# Writes use the lfx-reviewer PAT (needs Issues, Pull requests, and Commit statuses
+# read/write), fetched at runtime from AWS Secrets Manager via OIDC — the same
+# pattern lfx-v2-argocd uses for the lfx-one PAT — so no GitHub secret is
+# provisioned per repo. The comment body is passed via env, never interpolated
+# into the run script, to avoid script injection.
+#
+# NO THREAD MUTATIONS: this step used to resolve cleared threads and re-open
+# prematurely-resolved blocking ones, but no automation token available to this
+# pipeline can run resolveReviewThread/unresolveReviewThread — the fine-grained
+# PAT gets "Resource not accessible by personal access token" (observed live on
+# PR #35) and GITHUB_TOKEN gets "Resource not accessible by integration" with
+# pull-requests:write, with or without contents:read (probed empirically on a
+# scratch repo); only classic-scoped user tokens can run them. Nothing is lost:
+# thread state was never authority — the gate reads the verdict block for clean
+# and requires every thread to carry a reply (the reconcile replies to threads
+# it clears; engineers answer the rest), and the carry-forward ledger keeps a
+# blocking issue alive however its thread is toggled. Resolving threads in the
+# UI remains optional human hygiene.
+---
+name: Agentic Apply
+
+"on":
+  issue_comment:
+    types: [created]
+
+# id-token is what lets the job assume the AWS role via OIDC; everything the job
+# writes on GitHub goes through the fetched PAT, not the workflow token.
+permissions:
+  id-token: write
+
+# Deliberately NO concurrency group: GitHub keeps at most ONE pending run per
+# group and a newer queued run replaces it, so a burst of trusted comments
+# (escalation verdict + announce + check verdict land close together) could
+# silently discard a verdict's run and leave the PR gated. Every comment gets
+# its own run instead; all writes are idempotent (sticky label, per-SHA status)
+# and each run acts only on its own triggering comment.
+
+jobs:
+  apply:
+    # Only PR comments authored by the trusted agent identity (the MCP PAT owner,
+    # the lfx-reviewer machine account) are acted on, so a verdict is unforgeable.
+    if: >-
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.login == 'lfx-reviewer'
+    runs-on: ubuntu-latest
+    env:
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.issue.number }}
+      BODY: ${{ github.event.comment.body }}
+    steps:
+      - uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450  # v2.19.1
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      # Fail soft: until the OIDC role trust covers this repo, these steps error
+      # and the guard below skips the job green, so the setup can merge before
+      # the wiring exists.
+      - name: Configure AWS credentials
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
+        with:
+          role-to-assume: arn:aws:iam::788942260905:role/github-actions-deploy
+          aws-region: us-east-2
+
+      - name: Get lfx-reviewer token from AWS Secrets Manager
+        continue-on-error: true
+        uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa # v3
+        with:
+          secret-ids: |
+            GH, /cloudops/managed-secrets/cloud/github/linuxfoundation/lfx-reviewer-pat
+          parse-json-secrets: true
+
+      - name: Check reviewer PAT
+        id: cfg
+        run: |
+          # The Secrets Manager step exports the secret's `PAT` key as GH_PAT.
+          # Map it to GH_TOKEN (what gh reads) for the remaining steps, and skip
+          # (green) when it is not available, so a missing role grant shows up
+          # as a clear skip instead of an opaque auth failure.
+          if [ -z "${GH_PAT:-}" ]; then
+            echo "lfx-reviewer PAT unavailable (OIDC role or secret not wired); agentic apply skipped." >> "$GITHUB_STEP_SUMMARY"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "GH_TOKEN=$GH_PAT" >> "$GITHUB_ENV"
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set sticky needs-human label
+        if: steps.cfg.outputs.present == 'true'
+        run: |
+          # Match the exact hidden markers from /agentic-comment-format, not any
+          # prose that happens to contain "needs-human: yes". Require BOTH the
+          # format marker and the signal line, so an unrelated trusted comment
+          # that quotes the signal string can never set the sticky label.
+          if printf '%s' "$BODY" | grep -qiE '<!--[[:space:]]*agentic:needs-human[[:space:]]+v1[[:space:]]*-->' && \
+             printf '%s' "$BODY" | grep -qiE '<!--[[:space:]]*needs-human:[[:space:]]*yes[[:space:]]*-->'; then
+            present=$(gh api "repos/$REPO/issues/$PR/labels" --jq '[.[].name] | index("needs-human")')
+            if [ "$present" = "null" ] || [ -z "$present" ]; then
+              # Bootstrap the repo label idempotently: a fresh repo has no
+              # needs-human label and the add-to-issue call does not create it.
+              gh api "repos/$REPO/labels/needs-human" >/dev/null 2>&1 || \
+                gh api --method POST "repos/$REPO/labels" \
+                  -f name=needs-human -f color=b60205 \
+                  -f description="A human must sign off before merge (agentic escalation)" \
+                  >/dev/null 2>&1 || true
+              gh api --method POST "repos/$REPO/issues/$PR/labels" -f "labels[]=needs-human"
+              echo "needs-human label set"
+            else
+              echo "needs-human already present (sticky) — no-op"
+            fi
+          fi
+      - name: Apply agentic-check (validate rows + set status)
+        if: steps.cfg.outputs.present == 'true'
+        run: |
+          printf '%s' "$BODY" | grep -q '<!-- agentic:check v1 -->' || { echo "no agentic-check block; skip"; exit 0; }
+
+          # Parse ONLY the machine block (from its marker to the end of the
+          # comment, where /agentic-comment-format puts it), so prose in the
+          # human summary that happens to start a line with "head:", "clean:",
+          # or "- id:" can never steer the verdict or the status write.
+          BLOCK=$(printf '%s\n' "$BODY" | sed -n '/<!-- agentic:check v1 -->/,$p')
+
+          # Set the status on the SHA the verdict was produced for (carried in the
+          # block as `head:`), NOT the PR's current head. Otherwise a commit that
+          # races in between the verdict and this run could mark a newer, unreviewed
+          # head clean. If the SHA differs from the current head, the gate re-derives
+          # from the current head (still pending) and fails closed — which is correct.
+          # Exactly 40 hex chars: /agentic-comment-format requires the full SHA,
+          # so the parser rejects abbreviated (ambiguous) ones.
+          TARGET_SHA=$(printf '%s' "$BLOCK" | grep -iE '^[[:space:]]*head:[[:space:]]*[0-9a-f]{40}[[:space:]]*$' | head -1 | grep -oiE '[0-9a-f]{40}' | head -1)
+          if [ -z "$TARGET_SHA" ]; then
+            # No fallback to the current head: a verdict without a valid head: is
+            # malformed, and stamping the current (possibly newer, unreviewed) head
+            # with it would defeat the SHA binding below. Reject it outright.
+            echo "::error::agentic-check block carries no valid head:; refusing to act on this verdict"
+            exit 1
+          fi
+          # Bind the SHA to THIS pull request: the agent-produced head: is untrusted
+          # content, and a SHA from some other PR would receive this PR's status (and
+          # the gate would then evaluate that other PR). Any commit of this PR is
+          # allowed — a stale head is fine, the gate re-derives from the current head —
+          # anything else is malformed: fail closed and touch nothing.
+          if ! gh api "repos/$REPO/pulls/$PR/commits" --paginate --jq '.[].sha' | grep -qxF "$TARGET_SHA"; then
+            echo "::error::head: $TARGET_SHA is not a commit of PR #$PR; refusing to act on this verdict"
+            exit 1
+          fi
+          # Anchored to the whole line, like head:, so prose mentioning "clean:"
+          # outside the machine block can never set the verdict.
+          CLEAN=$(printf '%s' "$BLOCK" | grep -iE '^[[:space:]]*clean:[[:space:]]*(true|false)[[:space:]]*$' | head -1 | grep -oiE 'true|false' | tr '[:upper:]' '[:lower:]')
+          # Cross-check the flag against the thread rows (the parser enforces the
+          # writer contract): if any listed thread is still blocking, a
+          # `clean: true` flag is malformed — fail closed and publish failure,
+          # never success. Reasons are stripped first so free text cannot match.
+          ROWS_FULL=$(printf '%s\n' "$BLOCK" | grep -E '^[[:space:]]*-[[:space:]]*id:' || true)
+          ROWS=$(printf '%s\n' "$ROWS_FULL" | sed -E 's/reason:.*//' || true)
+          BLOCKING_N=0; INVALID_N=0; UNKNOWN_N=0
+          if [ -n "$ROWS_FULL" ]; then
+            BLOCKING_N=$(printf '%s\n' "$ROWS" | grep -ciE 'status:[[:space:]]*(outstanding|rebutted-invalid)([[:space:],]|$)' || true)
+            # Schema check: every row must match the FULL documented shape from
+            # /agentic-comment-format — nonempty id, allowed status, allowed
+            # severity, nonempty reason, in that order. Anything else (a
+            # misspelled status, an empty id that would silently skip the
+            # membership loop) is malformed and forces the failure state.
+            INVALID_N=$(printf '%s\n' "$ROWS_FULL" | grep -vciE '^[[:space:]]*-[[:space:]]*id:[[:space:]]*[^[:space:],]+,[[:space:]]*status:[[:space:]]*(fixed|obsolete|rebutted-valid|outstanding|rebutted-invalid),[[:space:]]*severity:[[:space:]]*(critical|high|should-fix|nit),[[:space:]]*reason:[[:space:]]*[^[:space:]]' || true)
+            # Membership check: the agent's thread ids are untrusted too. Restrict
+            # mutations to AI-AUTHORED threads of THIS PR (first comment author is
+            # one of the AI reviewers), so a wrong or injected id can never touch
+            # a human's thread or another PR's. Paginated, so a PR with more than
+            # one page of threads never misclassifies later-page ids as foreign.
+            # shellcheck disable=SC2016  # $o/$r/$n/$endCursor are GraphQL variables, not shell expansions
+            PR_TIDS=$(gh api graphql --paginate -f query='query($o:String!,$r:String!,$n:Int!,$endCursor:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor}nodes{id comments(first:1){nodes{author{login}}}}}}}}' \
+              -f o="${REPO%%/*}" -f r="${REPO##*/}" -F n="$PR" \
+              --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select((.comments.nodes[0].author.login // "") | test("^(copilot(-pull-request-reviewer)?|github-actions)(\\[bot\\])?$"; "i")) | .id')
+            for tid in $(printf '%s\n' "$ROWS" | sed -nE 's/.*id:[[:space:]]*([^[:space:],]+).*/\1/p'); do
+              printf '%s\n' "$PR_TIDS" | grep -qxF "$tid" || { echo "::warning::thread $tid does not belong to PR #$PR"; UNKNOWN_N=$((UNKNOWN_N+1)); }
+            done
+          fi
+          if [ "$CLEAN" = "true" ] && [ $((BLOCKING_N + INVALID_N + UNKNOWN_N)) -gt 0 ]; then
+            echo "::warning::agentic-check block inconsistent (blocking=$BLOCKING_N invalid=$INVALID_N foreign=$UNKNOWN_N rows); failing closed"
+            CLEAN=false
+          fi
+          echo "target=$TARGET_SHA clean=$CLEAN blocking=$BLOCKING_N invalid=$INVALID_N foreign=$UNKNOWN_N"
+
+          # No per-thread mutations happen here — see the header: no available
+          # automation token can resolve or re-open review threads, and none is
+          # needed. Thread state is never authority (the gate reads this block
+          # and the reply requirement); the rows above were validated for shape
+          # and PR membership, and the status write below is the entire effect.
+
+          STATE=failure
+          [ "$CLEAN" = "true" ] && STATE=success
+          # The description carries the PR number: statuses are SHA-scoped, and
+          # one head SHA can back multiple open PRs, so the gate only honors a
+          # clean status stamped for the PR it is evaluating.
+          gh api --method POST "repos/$REPO/statuses/$TARGET_SHA" \
+            -f state="$STATE" -f context=agentic-review/clean \
+            -f description="conductor pr=#$PR: clean=$CLEAN"
+          echo "agentic-review/clean = $STATE on $TARGET_SHA (pr=#$PR)"

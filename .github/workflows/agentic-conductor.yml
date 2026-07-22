@@ -1,0 +1,311 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+#
+# Runs the pr-conductor after each review round: it re-requests the native review for
+# the new head, waits (polling, read-only) until every AI reviewer has posted for the
+# CURRENT commit, then produces the agentic-check verdict. The FIRST round of a PR is
+# derived deterministically right here: every finding is brand-new against the head it
+# was raised on, so nothing can be fixed or rebutted yet — the rows are mechanical
+# (each non-nit AI thread is outstanding; clean means zero of them) and no model is
+# needed. From the second round on, adjudication requires judgment (were findings
+# fixed? are rebuttals substantive?), so an Agent Tasks API task reconciles the
+# threads; the repo copilot-instructions route it to the /pr-conductor skill. Either
+# way the verdict is one lfx-reviewer agentic-check comment, and agentic-apply.yml
+# reacts to it identically.
+#
+# Why a task and not an @copilot mention: a mention resumes the PR's existing agent
+# task only while the PR head still matches the last session's workspace. Every
+# conductor round after the baseline follows a push, so a mention would mint a fresh
+# task on the DEFAULT agent model anyway — losing the gpt-5.5 pin. Firing the task
+# ourselves keeps the model pinned per round, and a plain informational comment tells
+# the engineer what is happening without invoking the bot in the thread.
+#
+# Why trigger on the developer events (opened, synchronize) and POLL for the reviews,
+# instead of triggering on pull_request_review: every event from the Copilot review
+# bot (copilot-pull-request-reviewer) is gated action_required — the "require approval
+# for Copilot workflow runs" toggle covers the coding agent (copilot-swe-agent), not
+# the review bot. Developer events are un-gated, so we start freely and observe the
+# review rather than being triggered by it.
+#
+# Runs as the lfx-reviewer machine account (write + a Copilot seat, to request
+# reviewers and start agent tasks). The PAT is fetched at runtime from AWS Secrets
+# Manager via OIDC — the same pattern lfx-v2-argocd uses for the lfx-one PAT — so
+# no GitHub secret is provisioned per repo.
+---
+name: Agentic Conductor (reconcile)
+
+# pull_request_target, not pull_request: this job holds id-token: write and
+# fetches the lfx-reviewer PAT, so its definition must come from the DEFAULT
+# branch — a pull_request trigger would run the PR's modified copy of this file
+# with those privileges, letting a same-repo PR exfiltrate the credential.
+# pull_request_target is safe here because the job never checks out or executes
+# PR code; it only reads the GitHub API and starts an agent task.
+# Developer events only, deliberately: human comments and replies never drive
+# the agentic flow. A rebuttal posted without a push is adjudicated at the next
+# push round — the trade is accepted to keep model runs bound to code changes.
+"on":
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+# id-token is what lets the job assume the AWS role via OIDC; everything the job
+# writes on GitHub goes through the fetched PAT, not the workflow token.
+permissions:
+  id-token: write
+
+concurrency:
+  # Per PR, cancel in progress: if a newer commit lands mid-poll, abandon this run and
+  # let the new head's run take over, so we never fire a conductor for a stale head.
+  group: agentic-conductor-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    # Same-repo PRs only: pull_request_target CAN mint an id-token for fork PRs
+    # (it runs in the base-repo context), and a fork's branch name is not a valid
+    # head_ref in this repository — so forks are skipped explicitly, not assumed
+    # to fail soft.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450  # v2.19.1
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      # Fail soft: until the OIDC role trust covers this repo, these steps error
+      # and the guard below skips the job green, so the setup can merge before
+      # the wiring exists.
+      - name: Configure AWS credentials
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
+        with:
+          role-to-assume: arn:aws:iam::788942260905:role/github-actions-deploy
+          aws-region: us-east-2
+
+      - name: Get lfx-reviewer token from AWS Secrets Manager
+        continue-on-error: true
+        uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa # v3
+        with:
+          secret-ids: |
+            GH, /cloudops/managed-secrets/cloud/github/linuxfoundation/lfx-reviewer-pat
+          parse-json-secrets: true
+
+      - name: Check reviewer PAT
+        id: cfg
+        run: |
+          # The Secrets Manager step exports the secret's `PAT` key as GH_PAT.
+          # Map it to GH_TOKEN (what gh reads) for the remaining steps, and skip
+          # (green) when it is not available.
+          if [ -z "${GH_PAT:-}" ]; then
+            echo "lfx-reviewer PAT unavailable (OIDC role or secret not wired); agentic conductor skipped." >> "$GITHUB_STEP_SUMMARY"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "GH_TOKEN=$GH_PAT" >> "$GITHUB_ENV"
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mark the head not-yet-clean (block the gate until the conductor judges)
+        if: steps.cfg.outputs.present == 'true'
+        run: |
+          # Every new head starts blocked, from the first seconds of this run, so there
+          # is never a window where the PR looks mergeable before the baseline lands.
+          # apply.yml overwrites this with the real failure/success once the conductor
+          # posts its agentic-check. pending (not failure) because it is not yet judged.
+          gh api --method POST "repos/$REPO/statuses/$HEAD_SHA" \
+            -f state=pending -f context=agentic-review/clean \
+            -f description="conductor pr=#$PR: awaiting review round" >/dev/null
+          echo "agentic-review/clean = pending (awaiting conductor)"
+
+      - name: Request the native review for the current head
+        if: steps.cfg.outputs.present == 'true'
+        run: |
+          # On a new commit the diff changed, so this triggers a fresh pass; on open it
+          # is the first request. Best-effort: it may already be requested.
+          gh api --method POST "repos/$REPO/pulls/$PR/requested_reviewers" \
+            -f "reviewers[]=copilot-pull-request-reviewer[bot]" >/dev/null 2>&1 \
+            && echo "requested native review" \
+            || echo "::notice::native review not (re-)requested (already pending, or unchanged diff)"
+
+      - name: Wait for all AI reviewers to finish for the current head
+        if: steps.cfg.outputs.present == 'true'
+        run: |
+          # AI reviewers to wait for, as login regexes. Add 'github-actions' when pi is
+          # enabled on the repo. We wait only for AI reviewers; humans review on their
+          # own clock and the conductor never touches human threads.
+          REVIEWERS='copilot-pull-request-reviewer'
+          echo "waiting for [$REVIEWERS] to review head $HEAD_SHA"
+          missing="$REVIEWERS"
+          for _ in $(seq 1 48); do   # ~12 min at 15s
+            missing=""
+            for rv in $REVIEWERS; do
+              # Emit one line per matching review across ALL pages, then count lines.
+              # (gh --paginate applies --jq per page, so `[...] | length` would print
+              # one count per page and break the numeric test once reviews span pages.)
+              done_n=$(gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
+                --jq ".[] | select((.user.login|test(\"$rv\";\"i\")) and .commit_id==\"$HEAD_SHA\") | .id" \
+                2>/dev/null | grep -c . || true)
+              [ "${done_n:-0}" -gt 0 ] || missing="$missing $rv"
+            done
+            if [ -z "$missing" ]; then echo "all AI reviewers done for head"; break; fi
+            echo "  still waiting on:$missing"
+            sleep 15
+          done
+          if [ -n "$missing" ]; then
+            # Fail closed: reviewer events cannot trigger another conductor run, so
+            # a reconcile fired now would judge an incomplete round and a late
+            # review would never be reconciled for this head. Leave the head
+            # pending (set above) and fail visibly; the next push retries.
+            echo "::error::timed out waiting for reviewers:$missing — failing closed, head stays pending"
+            exit 1
+          fi
+
+      - name: Detect first round
+        id: round
+        if: steps.cfg.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          # The baseline (first) round is deterministic; later rounds need the
+          # agent. "No prior agentic-check comment" alone is NOT equivalent to
+          # "first round": a prior run can fail after polling but before posting,
+          # and a developer can reply to a finding before this step runs. The
+          # deterministic path is therefore reserved for a strictly fresh state —
+          # no prior check, no AI review for any EARLIER head, and no replies on
+          # any AI thread. Anything else goes to the reconcile agent, which can
+          # actually adjudicate. Every lookup fails LOUD (no suppression): a
+          # transient listing error must fail this run — defaulting to baseline
+          # would mechanically mark adjudicable threads outstanding.
+          COMMENTS="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.user.login=="lfx-reviewer" and (.body | contains("<!-- agentic:check v1 -->"))) | .id')"
+          PRIOR_N="$(printf '%s\n' "$COMMENTS" | grep -c . || true)"
+          EARLIER="$(gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
+            --jq ".[] | select((.user.login | test(\"^(copilot(-pull-request-reviewer)?(\\\\[bot\\\\])?|github-actions(\\\\[bot\\\\])?)$\"; \"i\")) and .commit_id != \"$HEAD_SHA\") | .id")"
+          EARLIER_N="$(printf '%s\n' "$EARLIER" | grep -c . || true)"
+          # shellcheck disable=SC2016  # $o/$r/$n/$endCursor are GraphQL variables, not shell expansions
+          REPLIED="$(gh api graphql --paginate \
+            -f query='query($o:String!,$r:String!,$n:Int!,$endCursor:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor}nodes{comments(first:1){totalCount nodes{author{login}}}}}}}}' \
+            -f o="${REPO%%/*}" -f r="${REPO##*/}" -F n="$PR" \
+            --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(((.comments.nodes[0].author.login // "") | test("^(copilot(-pull-request-reviewer)?|github-actions)(\\[bot\\])?$"; "i")) and .comments.totalCount > 1) | 1')"
+          REPLIED_N="$(printf '%s\n' "$REPLIED" | grep -c . || true)"
+          if [ "${PRIOR_N:-0}" -eq 0 ] && [ "${EARLIER_N:-0}" -eq 0 ] && [ "${REPLIED_N:-0}" -eq 0 ]; then
+            echo "first=true" >> "$GITHUB_OUTPUT"
+            echo "baseline round: no prior check, no earlier-head AI review, no thread replies"
+          else
+            echo "first=false" >> "$GITHUB_OUTPUT"
+            echo "not a fresh baseline (prior-checks=$PRIOR_N earlier-head-reviews=$EARLIER_N replied-threads=$REPLIED_N); the reconcile agent adjudicates"
+          fi
+
+      - name: Post the baseline agentic-check deterministically (first round)
+        if: steps.cfg.outputs.present == 'true' && steps.round.outputs.first == 'true'
+        run: |
+          set -euo pipefail
+          # The branch may have moved between the poll and this step; a baseline
+          # posted now would carry a head whose reviews were never awaited. Abort
+          # quietly: the synchronize run for the new head owns the next round.
+          NOW_HEAD="$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha')"
+          if [ "$NOW_HEAD" != "$HEAD_SHA" ]; then
+            echo "::notice::head moved ($HEAD_SHA -> $NOW_HEAD) after the poll; aborting this round"
+            exit 0
+          fi
+          # EVERY thread, AI and human, with its comment count: machine rows are
+          # built from the AI threads only, but the Remaining tidiness prose must
+          # mirror the gate's actual predicate — any thread (human included) with
+          # no reply beyond the finding withholds the approval, and only those
+          # threads. Resolution state is irrelevant to the gate (no automation
+          # token can toggle it — see agentic-gate.yml). Severity comes from the
+          # [severity] prefix the review skills mandate on every finding; an
+          # unprefixed finding defaults to should-fix (blocking, fail closed)
+          # and gets adjudicated by the agent in the next round.
+          # shellcheck disable=SC2016  # $o/$r/$n/$endCursor are GraphQL variables, not shell expansions
+          TH="$(gh api graphql --paginate \
+            -f query='query($o:String!,$r:String!,$n:Int!,$endCursor:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor}nodes{id comments(first:1){totalCount nodes{author{login} path body}}}}}}}' \
+            -f o="${REPO%%/*}" -f r="${REPO##*/}" -F n="$PR" \
+            --jq '.data.repository.pullRequest.reviewThreads.nodes[] | {id: .id, count: .comments.totalCount, ai: ((.comments.nodes[0].author.login // "") | test("^(copilot(-pull-request-reviewer)?|github-actions)(\\[bot\\])?$"; "i")), path: (.comments.nodes[0].path // ""), body: (.comments.nodes[0].body // "")}')"
+          # Paths are PR-author-controlled (a hostile filename could smuggle a
+          # machine marker or break the table), so they get the same reduction
+          # as finding text before any prose insertion — done inside the jq
+          # below via the sanitized `spath` field.
+          BODY_FILE="$RUNNER_TEMP/agentic-check.md"
+          # The whole comment is assembled in jq: finding text is untrusted, so it
+          # is reduced to a sanitized one-line excerpt (HTML-comment delimiters
+          # stripped so quoted text can never open or close a machine marker) and
+          # only ever lands inside table cells, which the apply parser's anchored
+          # ^head:/^clean:/^- id: patterns never match.
+          printf '%s\n' "$TH" | jq -s -r --arg head "$HEAD_SHA" '
+            map(. + {sev: (
+              if .ai | not then "human"
+              elif (.body | test("^\\s*\\[nit\\]"; "i"))       then "nit"
+              elif (.body | test("^\\s*\\[critical\\]"; "i"))  then "critical"
+              elif (.body | test("^\\s*\\[high\\]"; "i"))      then "high"
+              else "should-fix" end)})
+            | map(. + {excerpt: (.body
+                | gsub("<!--"; "") | gsub("-->"; "") | gsub("\\|"; "/")
+                | split("\n") | (first // "")
+                | sub("^\\s*\\[(critical|high|should-fix|nit)\\]\\s*"; ""; "i")
+                | .[0:120])})
+            | map(. + {spath: (.path
+                | gsub("<!--"; "") | gsub("-->"; "") | gsub("\\|"; "/") | gsub("`"; "")
+                | split("\n") | (first // "") | .[0:120])})
+            | (map(select(.ai and .sev != "nit"))) as $blocking
+            | (map(select(.ai))) as $aithreads
+            # The gate withholds for any thread with no reply beyond the
+            # finding; this prose mirrors exactly that predicate.
+            | (map(select(.count < 2))) as $untidy
+            | [
+              "### Agentic review check — " + (if ($blocking | length) == 0 then "✅ clean" else "❌ \($blocking | length) blocking" end),
+              "",
+              (if ($aithreads | length) == 0
+               then "Baseline for the initial review round on `\($head[0:7])`: the AI reviewers reported no findings."
+               else "Baseline for the initial review round on `\($head[0:7])`: \($aithreads | length) AI-reviewer finding(s) — \($blocking | length) blocking, \(($aithreads | length) - ($blocking | length)) nit(s). Non-nit findings block until fixed or adjudicated; nits never block and only need an answer on their thread. This baseline is derived directly from the review threads." end),
+              (if ($blocking | length) > 0 then
+                "\n**Blocking**\n\n| Severity | Finding | Next step |\n| --- | --- | --- |\n" +
+                ($blocking | map("| " + .sev + " | `" + .spath + "` — " + .excerpt + " | Fix it, or reply with a substantive rebuttal — both are adjudicated at the next push |") | join("\n"))
+               else empty end),
+              (if ($blocking | length) == 0 and ($untidy | length) > 0 then
+                "\n**Remaining tidiness:** " + ($untidy | length | tostring) + " thread(s) have no reply yet — the gate approves once each is answered (fix it and say so, or reply with the reason it stands as is):\n" +
+                ($untidy | map("- " + (if .spath == "" then "discussion" else "`" + .spath + "`" end) + " (thread " + .id + ")") | join("\n"))
+               else empty end),
+              "",
+              "<details>",
+              "<summary>Machine ledger (conductor state)</summary>",
+              "",
+              "<!-- agentic:check v1 -->",
+              "head: " + $head,
+              "clean: " + (if ($blocking | length) == 0 then "true" else "false" end),
+              "threads:",
+              ($blocking | map("- id: " + .id + ", status: outstanding, severity: " + .sev + ", reason: New finding from the initial review round; blocks until fixed or adjudicated.") | join("\n")),
+              "",
+              "</details>"
+            ] | map(select(. != null)) | join("\n")
+          ' > "$BODY_FILE"
+          gh api "repos/$REPO/issues/$PR/comments" -F "body=@$BODY_FILE" --jq '.html_url'
+          echo "baseline agentic-check posted deterministically (agentic-apply reacts to it)"
+
+      - name: Announce the round and fire the reconcile task (gpt-5.5)
+        if: steps.cfg.outputs.present == 'true' && steps.round.outputs.first != 'true'
+        run: |
+          # The branch may have moved between the poll and this step, and a task
+          # fired now would judge a head whose reviews were never awaited (the
+          # task survives this workflow's cancellation). Abort quietly: the
+          # synchronize run for the new head owns the next round.
+          NOW_HEAD="$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha')"
+          if [ "$NOW_HEAD" != "$HEAD_SHA" ]; then
+            echo "::notice::head moved ($HEAD_SHA -> $NOW_HEAD) after the poll; aborting this round"
+            exit 0
+          fi
+          # Informational comment only — no bot mention. The task below does the work.
+          gh api "repos/$REPO/issues/$PR/comments" \
+            -f body="The LFX reviewer cloud agent is reconciling the AI-reviewer threads on this pull request against the latest commit and any developer replies." \
+            --jq '.html_url'
+          TID=$(gh api "/agents/repos/$REPO/tasks" \
+            -H "X-GitHub-Api-Version: 2026-03-10" --method POST \
+            -f model=gpt-5.5 -F create_pull_request=false \
+            -f base_ref="$BASE_REF" -f head_ref="$HEAD_REF" \
+            -f prompt="Reconcile the AI-reviewer threads on pull request #$PR in $REPO against head $HEAD_SHA and any developer replies, following the repository instructions exactly. Immediately before posting, re-read the PR head: if it no longer equals $HEAD_SHA, post nothing — a newer round owns the verdict. Post your agentic-check verdict comment (head: $HEAD_SHA) using the add_issue_comment tool." \
+            --jq '.id')
+          echo "reconcile task: $TID (agentic-apply reacts to its agentic-check comment)"

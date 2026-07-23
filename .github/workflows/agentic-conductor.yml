@@ -147,6 +147,18 @@ jobs:
           # enabled on the repo. We wait only for AI reviewers; humans review on their
           # own clock and the conductor never touches human threads.
           REVIEWERS='copilot-pull-request-reviewer'
+          # A base retarget keeps the head SHA, so a review produced for the
+          # OLD base still matches commit_id — accepting it would let this
+          # poll finish before the re-requested review for the new diff
+          # posts, and the reconcile would adjudicate threads nobody raised
+          # against the current base. Only reviews submitted AFTER the newest
+          # retarget count; a failed timeline read fails the round (closed),
+          # never falls back to "no retarget ever".
+          RETARGET_TS="$(gh api "repos/$REPO/issues/$PR/timeline" --paginate \
+            --jq '.[] | select(.event=="base_ref_changed") | .created_at' \
+            )" || { echo "::error::timeline read failed; cannot rule out a base retarget"; exit 1; }
+          RETARGET_TS="$(printf '%s\n' "$RETARGET_TS" | grep -v '^$' | sort | tail -1 || true)"
+          [ -n "$RETARGET_TS" ] && echo "base retargeted at $RETARGET_TS; only newer reviews count"
           echo "waiting for [$REVIEWERS] to review head $HEAD_SHA"
           missing="$REVIEWERS"
           for _ in $(seq 1 48); do   # ~12 min at 15s
@@ -156,7 +168,7 @@ jobs:
               # (gh --paginate applies --jq per page, so `[...] | length` would print
               # one count per page and break the numeric test once reviews span pages.)
               done_n=$(gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
-                --jq ".[] | select((.user.login|test(\"^$rv(\\\\[bot\\\\])?$\";\"i\")) and .commit_id==\"$HEAD_SHA\") | .id" \
+                --jq ".[] | select((.user.login|test(\"^$rv(\\\\[bot\\\\])?$\";\"i\")) and .commit_id==\"$HEAD_SHA\" and ((.submitted_at // \"\") > \"$RETARGET_TS\")) | .id" \
                 2>/dev/null | grep -c . || true)
               [ "${done_n:-0}" -gt 0 ] || missing="$missing $rv"
             done

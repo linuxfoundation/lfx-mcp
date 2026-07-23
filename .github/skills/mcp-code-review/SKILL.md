@@ -44,10 +44,13 @@ docs and this list drift, the docs (and the code) win, and the drift is a
 finding against this skill.
 
 - **License header**: every tracked source/config file (Go, YAML, shell,
-  Makefile, etc.) begins with the two-line LF/MIT header
-  (`// Copyright The Linux Foundation and contributors.` /
-  `// SPDX-License-Identifier: MIT`; `#` syntax for YAML/shell/Makefile).
-  Missing headers are the #1 cause of CI failure
+  Makefile, etc.) begins with the two-line LF/MIT header. The wording
+  varies by file type in this repo — Go files use
+  `// Copyright The Linux Foundation and contributors.` while YAML, shell,
+  and Makefile use `# Copyright The Linux Foundation and each contributor
+  to LFX.` — both followed by `SPDX-License-Identifier: MIT` in the same
+  comment syntax. Match the surrounding convention for the file type;
+  missing headers are the #1 cause of CI failure
   (`license-header-check.yml`).
 - **Package doc comments**: every non-test `.go` file needs
   `// Package <name> ...` immediately above `package` (revive

@@ -40,7 +40,12 @@ name: Agentic Escalation
 # PR code; it only reads the GitHub API and starts an agent task.
 "on":
   pull_request_target:
-    types: [opened, reopened, synchronize]
+    # "edited" covers base retargeting: changing a PR's base can change the
+    # reviewed diff materially while keeping the same head SHA, so no
+    # synchronize fires; without a fresh round the head's stale verdicts and
+    # clean status would keep vouching for a diff nobody reviewed. The job
+    # condition below narrows edited events to actual base changes.
+    types: [opened, reopened, synchronize, edited]
 
 # id-token is what lets the job assume the AWS role via OIDC; everything the job
 # writes on GitHub goes through the fetched PAT, not the workflow token.
@@ -57,7 +62,10 @@ jobs:
     # (it runs in the base-repo context), and a fork's branch name is not a valid
     # head_ref in this repository — so forks are skipped explicitly, not assumed
     # to fail soft.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Skip title/body edits: an edited event matters only when the base moved.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'edited' || github.event.changes.base)
     runs-on: ubuntu-latest
     env:
       REPO: ${{ github.repository }}
@@ -176,11 +184,13 @@ jobs:
 
       - name: Fire escalation task (gpt-5.5) — posts the needs-human verdict
         if: steps.cfg.outputs.present == 'true' && steps.label.outputs.skip != 'true'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           TID=$(gh api "/agents/repos/$REPO/tasks" \
             -H "X-GitHub-Api-Version: 2026-03-10" --method POST \
             -f model=gpt-5.5 -F create_pull_request=false \
             -f base_ref="$BASE_REF" -f head_ref="$HEAD_REF" \
-            -f prompt="Run the needs-human escalation for pull request #$PR in $REPO, following the repository instructions exactly. Post your machine-readable needs-human verdict comment using the add_issue_comment tool." \
+            -f prompt="Run the needs-human escalation for pull request #$PR in $REPO against head $HEAD_SHA, following the repository instructions exactly. Immediately before posting, re-read the PR head: if it no longer equals $HEAD_SHA, post nothing — a newer push owns the next verdict. Post your machine-readable needs-human verdict comment (head: $HEAD_SHA) using the add_issue_comment tool." \
             --jq '.id')
           echo "escalation task: $TID (seeds the gpt-5.5 session; agentic-apply reacts to its comment)"

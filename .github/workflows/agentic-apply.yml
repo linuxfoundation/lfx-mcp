@@ -175,7 +175,12 @@ jobs:
           # the gate would then evaluate that other PR). Any commit of this PR is
           # allowed — a stale head is fine, the gate re-derives from the current head —
           # anything else is malformed: fail closed and touch nothing.
-          if ! gh api "repos/$REPO/pulls/$PR/commits" --paginate --jq '.[].sha' | grep -qxF "$TARGET_SHA"; then
+          # Capture the COMPLETE paginated list before matching: piping
+          # --paginate into an early-exiting grep -q under pipefail can kill
+          # gh with SIGPIPE once grep matches on an early page, falsely
+          # rejecting a commit that belongs to the PR.
+          PR_SHAS="$(gh api "repos/$REPO/pulls/$PR/commits" --paginate --jq '.[].sha')"
+          if ! printf '%s\n' "$PR_SHAS" | grep -qxF "$TARGET_SHA"; then
             echo "::error::head: $TARGET_SHA is not a commit of PR #$PR; refusing to act on this verdict"
             exit 1
           fi

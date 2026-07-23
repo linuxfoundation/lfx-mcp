@@ -265,10 +265,13 @@ jobs:
           # complete lookup that returns nothing takes that branch.
           V_OK=false; V=""
           if VRAW="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq ".[] | select(.user.login==\"lfx-reviewer\" and (.body | contains(\"<!-- agentic:needs-human v1 -->\")) and (.body | contains(\"<!-- head: $HEAD -->\"))) | [.created_at, (if ((.body | contains(\"<!-- needs-human: yes -->\")) and (.body | contains(\"<!-- needs-human: no -->\"))) then \"malformed\" elif (.body | contains(\"<!-- needs-human: yes -->\")) then \"yes\" elif (.body | contains(\"<!-- needs-human: no -->\")) then \"no\" else \"malformed\" end)] | @tsv" \
+            --jq ".[] | select(.user.login==\"lfx-reviewer\" and (.body | contains(\"<!-- agentic:needs-human v1 -->\")) and (.body | contains(\"<!-- head: $HEAD -->\"))) | [(.id|tostring), .created_at, (if ((.body | contains(\"<!-- needs-human: yes -->\")) and (.body | contains(\"<!-- needs-human: no -->\"))) then \"malformed\" elif (.body | contains(\"<!-- needs-human: yes -->\")) then \"yes\" elif (.body | contains(\"<!-- needs-human: no -->\")) then \"no\" else \"malformed\" end)] | @tsv" \
             2>/dev/null)"; then
             V_OK=true
-            V="$(printf '%s\n' "$VRAW" | grep -v '^$' | sort | tail -1 || true)"
+            # Newest verdict by NUMERIC comment id — created_at has only
+            # second precision, so a same-second pair would tie and sort by
+            # verdict value instead; the id is monotonic and unique.
+            V="$(printf '%s\n' "$VRAW" | grep -v '^$' | sort -n | tail -1 | cut -f2- || true)"
           fi
           ESC_OK=false
           if [ -n "$V" ]; then
@@ -464,9 +467,10 @@ jobs:
               # error as "no verdict exists" (that would fail open into the
               # unlabel-fallback branch).
               VRAW="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-                --jq ".[] | select(.user.login==\"lfx-reviewer\" and (.body | contains(\"<!-- agentic:needs-human v1 -->\")) and (.body | contains(\"<!-- head: $HEAD -->\"))) | [.created_at, (if ((.body | contains(\"<!-- needs-human: yes -->\")) and (.body | contains(\"<!-- needs-human: no -->\"))) then \"malformed\" elif (.body | contains(\"<!-- needs-human: yes -->\")) then \"yes\" elif (.body | contains(\"<!-- needs-human: no -->\")) then \"no\" else \"malformed\" end)] | @tsv" \
+                --jq ".[] | select(.user.login==\"lfx-reviewer\" and (.body | contains(\"<!-- agentic:needs-human v1 -->\")) and (.body | contains(\"<!-- head: $HEAD -->\"))) | [(.id|tostring), .created_at, (if ((.body | contains(\"<!-- needs-human: yes -->\")) and (.body | contains(\"<!-- needs-human: no -->\"))) then \"malformed\" elif (.body | contains(\"<!-- needs-human: yes -->\")) then \"yes\" elif (.body | contains(\"<!-- needs-human: no -->\")) then \"no\" else \"malformed\" end)] | @tsv" \
                 2>/dev/null)" || return 1
-              V="$(printf '%s\n' "$VRAW" | grep -v '^$' | sort | tail -1 || true)"
+              # Newest by numeric comment id (see Evaluate gate).
+              V="$(printf '%s\n' "$VRAW" | grep -v '^$' | sort -n | tail -1 | cut -f2- || true)"
               if [ -z "$V" ]; then
                 # No verdict: only a head escalation SKIPPED — proven by its
                 # skip marker status — may take the unlabel fallback; an empty

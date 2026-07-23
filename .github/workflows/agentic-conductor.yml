@@ -148,7 +148,7 @@ jobs:
               # (gh --paginate applies --jq per page, so `[...] | length` would print
               # one count per page and break the numeric test once reviews span pages.)
               done_n=$(gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
-                --jq ".[] | select((.user.login|test(\"$rv\";\"i\")) and .commit_id==\"$HEAD_SHA\") | .id" \
+                --jq ".[] | select((.user.login|test(\"^$rv(\\\\[bot\\\\])?$\";\"i\")) and .commit_id==\"$HEAD_SHA\") | .id" \
                 2>/dev/null | grep -c . || true)
               [ "${done_n:-0}" -gt 0 ] || missing="$missing $rv"
             done

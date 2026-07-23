@@ -281,13 +281,16 @@ jobs:
               # label is also a MANUAL override surface (anyone with triage
               # can raise it), and the allowlist invariant — the most recent
               # unlabel overall must be authorized — applies to that flag no
-              # matter what the per-head judge said. The verdict prevails
-              # only over unlabels OLDER than itself (the judge's later "no"
-              # is fresher evidence, and that round already adjudicated the
-              # earlier removal); an unlabel AFTER the verdict must be
-              # authorized. Requires a complete timeline read (TL_OK).
+              # matter what the per-head judge said, and regardless of
+              # ordering: the judge adjudicates the DIFF, never label actors,
+              # so a later "no" cannot vouch for an earlier unauthorized
+              # removal of a manual hold (the hold's reason may not be in the
+              # diff at all). Only "no unlabel ever" or "newest unlabel
+              # authorized" stands; recovery from an unauthorized removal is
+              # an allowlisted human re-adding and removing the label.
+              # Requires a complete timeline read (TL_OK).
               if [ "$TL_OK" = "true" ]; then
-                if [ -z "$LAST_TS" ] || [ -n "$AUTH_UNLABEL" ] || [ "$V_TS" \> "$LAST_TS" ]; then
+                if [ -z "$LAST_TS" ] || [ -n "$AUTH_UNLABEL" ]; then
                   ESC_OK=true
                 fi
               fi
@@ -493,9 +496,10 @@ jobs:
               fi
               if [ "${V##*	}" = "no" ]; then
                 # The "no" stands only over an unlabel history it can vouch
-                # for: latest unlabel absent, authorized, or older than the
-                # verdict (same rule as Evaluate gate).
-                [ -z "$LAST_TS" ] || [ -n "$AUTH_UNLABEL" ] || [ "${V%%	*}" \> "$LAST_TS" ]
+                # for: latest unlabel absent or authorized (same rule as
+                # Evaluate gate; verdict recency never launders an
+                # unauthorized removal).
+                [ -z "$LAST_TS" ] || [ -n "$AUTH_UNLABEL" ]
                 return
               fi
               [ "${V##*	}" = "yes" ] || return 1

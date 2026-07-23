@@ -484,6 +484,10 @@ func handleLensQueryMetrics(ctx context.Context, args SemanticLayerLFXLensArgs, 
 
 	reqBody := map[string]any{
 		"metrics": metrics,
+		// is_staff is the verified lf_staff signal plumbed from tool
+		// registration; lfx-lens keeps full project-scope enforcement
+		// unless this is explicitly true (absent defaults to false).
+		"is_staff": isStaff,
 	}
 	if args.ProjectSlug != "" {
 		// Omit project_slug entirely when empty: the lens API treats absence

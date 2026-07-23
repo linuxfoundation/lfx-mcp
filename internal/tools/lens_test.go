@@ -146,6 +146,9 @@ func TestSemanticLayerNonStaff_QuerySendsProjectSlugAndWhere(t *testing.T) {
 	if _, ok := body["where"]; !ok {
 		t.Error("expected where key in request body")
 	}
+	if v, ok := body["is_staff"].(bool); !ok || v {
+		t.Errorf("expected is_staff false in request body, got: %v", body["is_staff"])
+	}
 }
 
 func TestSemanticLayerNonStaff_ListMetricsRequiresProjectSlug(t *testing.T) {
@@ -213,6 +216,9 @@ func TestSemanticLayerStaff_GlobalQueryOmitsProjectSlugAndWhere(t *testing.T) {
 	if _, ok := body["where"]; ok {
 		t.Errorf("expected where key to be absent from request body, got: %v", body["where"])
 	}
+	if v, ok := body["is_staff"].(bool); !ok || !v {
+		t.Errorf("expected is_staff true in request body, got: %v", body["is_staff"])
+	}
 }
 
 func TestSemanticLayerStaff_ScopedQuerySendsProjectSlugAndWhere(t *testing.T) {
@@ -240,6 +246,9 @@ func TestSemanticLayerStaff_ScopedQuerySendsProjectSlugAndWhere(t *testing.T) {
 	}
 	if _, ok := body["where"]; !ok {
 		t.Error("expected where key in request body")
+	}
+	if v, ok := body["is_staff"].(bool); !ok || !v {
+		t.Errorf("expected is_staff true in request body, got: %v", body["is_staff"])
 	}
 }
 

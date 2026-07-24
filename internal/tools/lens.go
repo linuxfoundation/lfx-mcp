@@ -152,11 +152,11 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 // query_lfx_semantic_layer — structured metric queries
 // ---------------------------------------------------------------------------
 
-// RegisterSemanticLayer registers the query_lfx_semantic_layer tool.
-func RegisterSemanticLayer(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name: "query_lfx_semantic_layer",
-		Description: `LFX Insights Semantic Layer — pre-aggregated metrics for code activities & contributions, maintainer counts, project health scores, projects, events & event registrations, and education & certifications. Returns deterministic results in seconds.
+// Description fragments for query_lfx_semantic_layer, assembled below to keep
+// the long prose readable.
+const (
+	// semanticLayerDescHead is everything before the "Use search_projects ..." guidance line.
+	semanticLayerDescHead = `LFX Insights Semantic Layer — pre-aggregated metrics for code activities & contributions, maintainer counts, project health scores, projects, events & event registrations, and education & certifications. Returns deterministic results in seconds.
 
 Best for direct, well-scoped questions: totals, counts, averages, breakdowns by a single dimension, and time series (e.g. "total activities for CNCF", "active maintainers by organization", "health score trend by month", "total enrollments by course"). This is also the right tool for contributor/activity questions — it has full contributor data including names, organizations, and activity breakdowns.
 
@@ -169,7 +169,11 @@ Use query_lfx_lens INSTEAD for:
 - Any question where this tool is struggling or returning errors
 - Event sponsorships. All other event and event registration data is fine here
 
-Use search_projects first to find the project slug. Then call list_metrics to discover available metrics.
+`
+
+	// semanticLayerDescMid sits between the search_projects guidance and the
+	// query CRITICAL rule 1 text.
+	semanticLayerDescMid = `
 
 Actions:
 
@@ -178,7 +182,11 @@ Actions:
 - get_dimensions: Get group_by/filter fields for specific metrics. Use when list_metrics returned too many results to include dimensions.
 
 - query: Execute a metric query. CRITICAL rules:
-  1. The where clause MUST include a project scope filter — the project_slug parameter alone does not filter the data. Check the dimensions list for the correct one (e.g. registration_id__project_slug). Some models don't have project_slug — they use project_name instead. In that case, use the full project name from search_projects (e.g. "Cloud Native Computing Foundation (CNCF)").
+  1. `
+
+	// semanticLayerDescTail sits between the query CRITICAL rule 1 text and
+	// the final tip line.
+	semanticLayerDescTail = `
   2. Different metrics use different entity prefixes — always check the dimensions list from list_metrics to find the correct qualified_names. Do not guess prefixes.
   3. Set a reasonable limit (10-50) to avoid huge results.
   4. If you have loaded in metrics and dimensions, and you still can't get the data you are looking for in 5 query turns or less, use query_lfx_lens.
@@ -189,7 +197,31 @@ Tips:
 - Contributors and code-related data (commits, PRs, insertions, deletions) are in the activities model — search for "activities" in list_metrics.
   IMPORTANT: Questions about contributors and code-related topics that do not involve maintainers should prefer this tool.
 - Events metrics use project_name rather than project_slug for filtering.
-- Questions about The Linux Foundation (slug is tlf) still need to be scoped with the correct where clause.`,
+- `
+
+	// semanticLayerSlotSearchProjects: search_projects guidance.
+	semanticLayerSlotSearchProjects = `Use search_projects to find a project slug when scoping to a foundation. Then call list_metrics to discover available metrics.`
+
+	// semanticLayerSlotScopeRule: query CRITICAL rule 1.
+	semanticLayerSlotScopeRule = `project_slug is optional. When provided, where-clause project filters are validated against that foundation's subtree. It may be omitted for global or cross-foundation questions. To scope to a project, add a where filter — check the dimensions list for the correct one (e.g. registration_id__project_slug). Some models don't have project_slug — they use project_name instead. In that case, use the full project name from search_projects (e.g. "Cloud Native Computing Foundation (CNCF)").`
+
+	// semanticLayerSlotFinalTip: final tip.
+	semanticLayerSlotFinalTip = `For membership metrics, a Linux Foundation ('tlf') filter only captures direct LF memberships — for global membership aggregates, omit the project filter. Activity metrics are fanned out to foundations, so either a 'tlf' foundation filter or no filter works for global questions.`
+)
+
+// semanticLayerDescription is the assembled query_lfx_semantic_layer description.
+const semanticLayerDescription = semanticLayerDescHead + semanticLayerSlotSearchProjects +
+	semanticLayerDescMid + semanticLayerSlotScopeRule +
+	semanticLayerDescTail + semanticLayerSlotFinalTip
+
+// RegisterSemanticLayer registers the query_lfx_semantic_layer tool. The
+// registration gate in cmd/lfx-mcp-server limits this tool to staff callers,
+// so project scoping is optional here; lfx-lens validates any project filters
+// that are provided against the requested foundation's subtree.
+func RegisterSemanticLayer(server *mcp.Server) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "query_lfx_semantic_layer",
+		Description: semanticLayerDescription,
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Query LFX Semantic Layer",
 			ReadOnlyHint: true,
@@ -199,13 +231,13 @@ Tips:
 
 // SemanticLayerLFXLensArgs defines the input for the unified semantic layer tool.
 type SemanticLayerLFXLensArgs struct {
-	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf') (required)"`
+	ProjectSlug string `json:"project_slug,omitempty" jsonschema:"Optional project slug from search_projects (e.g. 'cncf'). When provided, where-clause project filters are validated against that foundation's subtree. May be omitted for global or cross-foundation queries."`
 	Action      string `json:"action" jsonschema:"Required. Start with list_metrics — often enough to go straight to query. Best for activities, maintainer counts, health scores, projects, events, education. For memberships, maintainer names/trends, open-ended, subproject, or exploratory questions use query_lfx_lens instead. Values: list_metrics, get_dimensions, query, describe"`
 	Target      string `json:"target,omitempty" jsonschema:"For action=describe only: which action to get help for (e.g. 'query')"`
 	Metrics     string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names from list_metrics (for get_dimensions and query)"`
 	Search      string `json:"search,omitempty" jsonschema:"Search term to filter results (for list_metrics and get_dimensions)"`
 	GroupBy     string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names to group by (for query)"`
-	Where       string `json:"where,omitempty" jsonschema:"Required for query action. MUST include a project scope filter using {{ Dimension('qualified_name') }} = 'value' syntax. Find the correct project_slug or project_name dimension from list_metrics dimensions. Example: {{ Dimension('registration_id__project_slug') }} = 'cncf'"`
+	Where       string `json:"where,omitempty" jsonschema:"Optional for query action. MetricFlow filter using {{ Dimension('qualified_name') }} = 'value' syntax. Include a project scope filter to scope results (find the correct project_slug or project_name dimension from list_metrics); may be omitted for global or cross-foundation queries. Example: {{ Dimension('registration_id__project_slug') }} = 'cncf'"`
 	OrderBy     string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields, prefix with - for descending (for query)"`
 	Limit       int    `json:"limit,omitempty" jsonschema:"Max rows to return, max 500 (for query)"`
 }
@@ -239,7 +271,12 @@ Examples:
   action: "get_dimensions", metrics: "current_membership_revenue"
   → finds: asset_id__membership_tier, asset_id__project_slug, asset_id__account_name, ...`,
 
-	"query": `query — Execute a metric query against the Semantic Layer.
+	"query": lensQueryDescribeShared + lensQueryDescribeImportant,
+}
+
+// lensQueryDescribeShared is the bulk of the "query" describe text; the final
+// Important paragraph is kept separate for readability.
+const lensQueryDescribeShared = `query — Execute a metric query against the Semantic Layer.
 
 Parameters:
   metrics (required): comma-separated metric names to query.
@@ -278,19 +315,13 @@ Examples:
   order_by: "-avg_project_health_score"
   limit: 10
 
-Important: project_slug is always required. The where clause MUST include a project_slug filter — the project_slug parameter is used for authorization only, it does not auto-filter the data.`,
-}
+`
+
+const lensQueryDescribeImportant = `Important: project_slug is optional. When provided, where-clause project filters are validated against that foundation's subtree — the where clause does the actual data filtering. Omit project_slug and the project filter for global or cross-foundation queries.`
 
 func handleSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args SemanticLayerLFXLensArgs) (*mcp.CallToolResult, any, error) {
 	if lensConfig == nil {
 		return nil, nil, fmt.Errorf("LFX Lens tools not configured")
-	}
-
-	if args.ProjectSlug == "" && args.Action != "describe" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "Error: project_slug is required"}},
-			IsError: true,
-		}, nil, nil
 	}
 
 	switch args.Action {
@@ -370,13 +401,6 @@ func handleLensQueryMetrics(ctx context.Context, args SemanticLayerLFXLensArgs) 
 		}, nil, nil
 	}
 
-	if args.Where == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "Error: where is required for query — must include a project scope filter (e.g. {{ Dimension('entity__project_slug') }} = 'slug')"}},
-			IsError: true,
-		}, nil, nil
-	}
-
 	if args.Limit > 500 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: "Error: limit must be 500 or less"}},
@@ -385,8 +409,12 @@ func handleLensQueryMetrics(ctx context.Context, args SemanticLayerLFXLensArgs) 
 	}
 
 	reqBody := map[string]any{
-		"metrics":      metrics,
-		"project_slug": args.ProjectSlug,
+		"metrics": metrics,
+	}
+	if args.ProjectSlug != "" {
+		// Omit project_slug entirely when empty: the lens API treats absence
+		// (not empty string) as "run without project scope validation".
+		reqBody["project_slug"] = args.ProjectSlug
 	}
 	if groupBy := parseCSV(args.GroupBy); len(groupBy) > 0 {
 		reqBody["group_by"] = groupBy

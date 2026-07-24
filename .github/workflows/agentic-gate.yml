@@ -569,8 +569,14 @@ jobs:
               NOW_CLEAN="$(gh api "repos/$REPO/commits/$HEAD/statuses" --paginate \
                 --jq ".[] | select(.context==\"agentic-review/clean\" and ((.description // \"\") | contains(\"pr=#$PR:\"))) | [(.id|tostring), .state] | @tsv" \
                 2>/dev/null | sort -n | tail -1 | cut -f2 || true)"
+              # The label lookup must fail CLOSED: recheck runs under `if !`,
+              # which suppresses errexit inside the function, and an empty
+              # NOW_LABEL would pass the != "true" test below — the one
+              # fail-open lookup in this function (head and clean fail closed
+              # by comparison; esc_ok/threads_ok return explicitly).
               NOW_LABEL="$(gh pr view "$PR" --repo "$REPO" --json labels \
-                --jq 'any(.labels[].name; . == "needs-human")')"
+                --jq 'any(.labels[].name; . == "needs-human")')" || return 1
+              [ "$NOW_LABEL" = "true" ] || [ "$NOW_LABEL" = "false" ] || return 1
               [ "$NOW_HEAD" = "$HEAD" ] && [ "$NOW_CLEAN" = "success" ] && [ "$NOW_LABEL" != "true" ] && esc_ok && threads_ok
             }
             if ! recheck; then

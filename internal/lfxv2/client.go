@@ -54,6 +54,8 @@ import (
 	committeehttpclient "github.com/linuxfoundation/lfx-v2-committee-service/gen/http/committee_service/client"
 	mailinglisthttpclient "github.com/linuxfoundation/lfx-v2-mailing-list-service/gen/http/mailing_list/client"
 	mailinglist "github.com/linuxfoundation/lfx-v2-mailing-list-service/gen/mailing_list"
+	meetinghttpclient "github.com/linuxfoundation/lfx-v2-meeting-service/gen/http/meeting_service/client"
+	meetingservice "github.com/linuxfoundation/lfx-v2-meeting-service/gen/meeting_service"
 	memberhttpclient "github.com/linuxfoundation/lfx-v2-member-service/gen/http/membership_service/client"
 	memberservice "github.com/linuxfoundation/lfx-v2-member-service/gen/membership_service"
 	projecthttpclient "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/http/project_service/client"
@@ -137,6 +139,7 @@ type ClientConfig struct {
 type Clients struct {
 	Committee   *committeeservice.Client
 	MailingList *mailinglist.Client
+	Meeting     *meetingservice.Client
 	Member      *memberservice.Client
 	Project     *projectservice.Client
 	QuerySvc    *querysvc.Client
@@ -274,6 +277,68 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		mlHTTPClient.CheckGroupsioSubscriber(),
 		mlHTTPClient.GetGroupsioArtifact(),
 		mlHTTPClient.GetGroupsioArtifactDownload(),
+	)
+
+	// Initialize meeting service client.
+	// The meeting service exposes root-level paths (/itx/past_meetings/, etc.) with no
+	// path prefix, so use cfg.APIDomain directly — identical to the member client.
+	meetingURL, err := url.Parse(cfg.APIDomain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse meeting service URL: %w", err)
+	}
+
+	meetingHTTPClient := meetinghttpclient.NewClient(
+		meetingURL.Scheme,
+		meetingURL.Host,
+		httpClient,
+		goahttp.RequestEncoder,
+		goahttp.ResponseDecoder,
+		false,
+	)
+
+	// The generated meeting-service constructor requires every endpoint. We only
+	// call GetItxPastMeeting today; the rest are passed to satisfy the signature.
+	clients.Meeting = meetingservice.NewClient(
+		meetingHTTPClient.Readyz(),
+		meetingHTTPClient.Livez(),
+		meetingHTTPClient.CreateItxMeeting(),
+		meetingHTTPClient.GetItxMeeting(),
+		meetingHTTPClient.DeleteItxMeeting(),
+		meetingHTTPClient.UpdateItxMeeting(),
+		meetingHTTPClient.GetItxMeetingCount(),
+		meetingHTTPClient.CreateItxRegistrant(),
+		meetingHTTPClient.GetItxRegistrant(),
+		meetingHTTPClient.UpdateItxRegistrant(),
+		meetingHTTPClient.DeleteItxRegistrant(),
+		meetingHTTPClient.GetItxJoinLink(),
+		meetingHTTPClient.GetItxRegistrantIcs(),
+		meetingHTTPClient.ResendItxRegistrantInvitation(),
+		meetingHTTPClient.ResendItxMeetingInvitations(),
+		meetingHTTPClient.RegisterItxCommitteeMembers(),
+		meetingHTTPClient.UpdateItxOccurrence(),
+		meetingHTTPClient.DeleteItxOccurrence(),
+		meetingHTTPClient.SubmitItxMeetingResponse(),
+		meetingHTTPClient.CreateItxPastMeeting(),
+		meetingHTTPClient.GetItxPastMeeting(),
+		meetingHTTPClient.DeleteItxPastMeeting(),
+		meetingHTTPClient.UpdateItxPastMeeting(),
+		meetingHTTPClient.GetItxPastMeetingSummary(),
+		meetingHTTPClient.UpdateItxPastMeetingSummary(),
+		meetingHTTPClient.CreateItxPastMeetingParticipant(),
+		meetingHTTPClient.UpdateItxPastMeetingParticipant(),
+		meetingHTTPClient.DeleteItxPastMeetingParticipant(),
+		meetingHTTPClient.CreateItxMeetingAttachment(),
+		meetingHTTPClient.GetItxMeetingAttachment(),
+		meetingHTTPClient.UpdateItxMeetingAttachment(),
+		meetingHTTPClient.DeleteItxMeetingAttachment(),
+		meetingHTTPClient.CreateItxMeetingAttachmentPresign(),
+		meetingHTTPClient.GetItxMeetingAttachmentDownload(),
+		meetingHTTPClient.CreateItxPastMeetingAttachment(),
+		meetingHTTPClient.GetItxPastMeetingAttachment(),
+		meetingHTTPClient.UpdateItxPastMeetingAttachment(),
+		meetingHTTPClient.DeleteItxPastMeetingAttachment(),
+		meetingHTTPClient.CreateItxPastMeetingAttachmentPresign(),
+		meetingHTTPClient.GetItxPastMeetingAttachmentDownload(),
 	)
 
 	// Initialize member service client.

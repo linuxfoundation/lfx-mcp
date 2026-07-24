@@ -119,16 +119,24 @@ jobs:
           fi
 
       - name: Mark the head not-yet-clean (block the gate until the conductor judges)
+        id: stamp
         if: steps.cfg.outputs.present == 'true'
         run: |
           # Every new head starts blocked, from the first seconds of this run, so there
           # is never a window where the PR looks mergeable before the baseline lands.
           # apply.yml overwrites this with the real failure/success once the conductor
           # posts its agentic-check. pending (not failure) because it is not yet judged.
-          gh api --method POST "repos/$REPO/statuses/$HEAD_SHA" \
+          # The created status's numeric id doubles as this round's ROUND ID: it is
+          # repo-global, monotonic, and minted by this deterministic step (agents
+          # cannot forge one). The verdict must echo it, and apply accepts a verdict
+          # only for the NEWEST pending stamp of its head+PR — so a verdict from a
+          # superseded round (older stamp; e.g. a task surviving cancellation across
+          # a push or base retarget) is rejected mechanically whenever it posts.
+          RID="$(gh api --method POST "repos/$REPO/statuses/$HEAD_SHA" \
             -f state=pending -f context=agentic-review/clean \
-            -f description="conductor pr=#$PR: awaiting review round" >/dev/null
-          echo "agentic-review/clean = pending (awaiting conductor)"
+            -f description="conductor pr=#$PR: awaiting review round" --jq '.id')"
+          echo "id=$RID" >> "$GITHUB_OUTPUT"
+          echo "agentic-review/clean = pending (awaiting conductor; round $RID)"
 
       - name: Request the native review for the current head
         if: steps.cfg.outputs.present == 'true'
@@ -222,14 +230,20 @@ jobs:
 
       - name: Post the baseline agentic-check deterministically (first round)
         if: steps.cfg.outputs.present == 'true' && steps.round.outputs.first == 'true'
+        env:
+          ROUND_ID: ${{ steps.stamp.outputs.id }}
         run: |
           set -euo pipefail
           # The branch may have moved between the poll and this step; a baseline
-          # posted now would carry a head whose reviews were never awaited. Abort
-          # quietly: the synchronize run for the new head owns the next round.
-          NOW_HEAD="$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha')"
-          if [ "$NOW_HEAD" != "$HEAD_SHA" ]; then
-            echo "::notice::head moved ($HEAD_SHA -> $NOW_HEAD) after the poll; aborting this round"
+          # posted now would carry a head whose reviews were never awaited. The
+          # BASE matters equally: a retarget keeps the head SHA but changes the
+          # reviewed diff, and this run's poll accepted the old base's reviews.
+          # Abort quietly: the synchronize/edited run for the new head or base
+          # owns the next round.
+          NOW="$(gh api "repos/$REPO/pulls/$PR" --jq '[.head.sha, .base.ref] | @tsv')"
+          NOW_HEAD="${NOW%%	*}"; NOW_BASE="${NOW##*	}"
+          if [ "$NOW_HEAD" != "$HEAD_SHA" ] || [ "$NOW_BASE" != "$BASE_REF" ]; then
+            echo "::notice::head or base moved ($HEAD_SHA@$BASE_REF -> $NOW_HEAD@$NOW_BASE) after the poll; aborting this round"
             exit 0
           fi
           # EVERY thread, AI and human, with its comment count: machine rows are
@@ -256,7 +270,7 @@ jobs:
           # stripped so quoted text can never open or close a machine marker) and
           # only ever lands inside table cells, which the apply parser's anchored
           # ^head:/^clean:/^- id: patterns never match.
-          printf '%s\n' "$TH" | jq -s -r --arg head "$HEAD_SHA" '
+          printf '%s\n' "$TH" | jq -s -r --arg head "$HEAD_SHA" --arg round "$ROUND_ID" '
             map(. + {sev: (
               if .ai | not then "human"
               elif (.body | test("^\\s*\\[nit\\]"; "i"))       then "nit"
@@ -296,6 +310,7 @@ jobs:
               "",
               "<!-- agentic:check v1 -->",
               "head: " + $head,
+              "round: " + $round,
               "clean: " + (if ($blocking | length) == 0 then "true" else "false" end),
               "threads:",
               ($blocking | map("- id: " + .id + ", status: outstanding, severity: " + .sev + ", reason: New finding from the initial review round; blocks until fixed or adjudicated.") | join("\n")),
@@ -308,14 +323,17 @@ jobs:
 
       - name: Announce the round and fire the reconcile task (gpt-5.5)
         if: steps.cfg.outputs.present == 'true' && steps.round.outputs.first != 'true'
+        env:
+          ROUND_ID: ${{ steps.stamp.outputs.id }}
         run: |
           # The branch may have moved between the poll and this step, and a task
           # fired now would judge a head whose reviews were never awaited (the
           # task survives this workflow's cancellation). Abort quietly: the
           # synchronize run for the new head owns the next round.
-          NOW_HEAD="$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha')"
-          if [ "$NOW_HEAD" != "$HEAD_SHA" ]; then
-            echo "::notice::head moved ($HEAD_SHA -> $NOW_HEAD) after the poll; aborting this round"
+          NOW="$(gh api "repos/$REPO/pulls/$PR" --jq '[.head.sha, .base.ref] | @tsv')"
+          NOW_HEAD="${NOW%%	*}"; NOW_BASE="${NOW##*	}"
+          if [ "$NOW_HEAD" != "$HEAD_SHA" ] || [ "$NOW_BASE" != "$BASE_REF" ]; then
+            echo "::notice::head or base moved ($HEAD_SHA@$BASE_REF -> $NOW_HEAD@$NOW_BASE) after the poll; aborting this round"
             exit 0
           fi
           # Informational comment only — no bot mention. The task below does the work.
@@ -326,6 +344,6 @@ jobs:
             -H "X-GitHub-Api-Version: 2026-03-10" --method POST \
             -f model=gpt-5.5 -F create_pull_request=false \
             -f base_ref="$BASE_REF" -f head_ref="$HEAD_REF" \
-            -f prompt="Reconcile the AI-reviewer threads on pull request #$PR in $REPO against head $HEAD_SHA and any developer replies, following the repository instructions exactly. Immediately before posting, re-read the PR head: if it no longer equals $HEAD_SHA, post nothing — a newer round owns the verdict. Post your agentic-check verdict comment (head: $HEAD_SHA) using the add_issue_comment tool." \
+            -f prompt="Reconcile the AI-reviewer threads on pull request #$PR in $REPO against head $HEAD_SHA (base branch $BASE_REF, review round $ROUND_ID) and any developer replies, following the repository instructions exactly. Immediately before posting, re-read the pull request: if its head no longer equals $HEAD_SHA or its base branch no longer equals $BASE_REF, post nothing — a newer round owns the verdict. Post your agentic-check verdict comment using the add_issue_comment tool, carrying head: $HEAD_SHA and round: $ROUND_ID in the machine block exactly." \
             --jq '.id')
           echo "reconcile task: $TID (agentic-apply reacts to its agentic-check comment)"

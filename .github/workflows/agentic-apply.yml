@@ -184,6 +184,26 @@ jobs:
             echo "::error::head: $TARGET_SHA is not a commit of PR #$PR; refusing to act on this verdict"
             exit 1
           fi
+          # Round binding: the verdict must echo the round id the conductor
+          # minted for this head (the numeric id of the round's pending
+          # agentic-review/clean stamp), and that id must be the NEWEST pending
+          # stamp for this head+PR. A verdict from a superseded round — a task
+          # surviving cancellation across a push, base retarget, or re-run —
+          # carries an older round id and is rejected here mechanically, no
+          # matter when it posts. Missing or non-numeric round: is malformed
+          # (fail closed); a failed status lookup also rejects (fail closed).
+          ROUND_ID=$(printf '%s' "$BLOCK" | grep -iE '^[[:space:]]*round:[[:space:]]*[0-9]+[[:space:]]*$' | head -1 | grep -oE '[0-9]+' | head -1)
+          if [ -z "$ROUND_ID" ]; then
+            echo "::error::agentic-check block carries no valid round:; refusing to act on this verdict"
+            exit 1
+          fi
+          NEWEST_PENDING=$(gh api "repos/$REPO/commits/$TARGET_SHA/statuses" --paginate \
+            --jq ".[] | select(.state==\"pending\" and .context==\"agentic-review/clean\" and ((.description // \"\") | contains(\"pr=#$PR:\"))) | .id" \
+            | sort -n | tail -1) || { echo "::error::pending-stamp lookup failed; refusing to act"; exit 1; }
+          if [ -z "$NEWEST_PENDING" ] || [ "$ROUND_ID" != "$NEWEST_PENDING" ]; then
+            echo "::error::verdict round $ROUND_ID is not the newest pending round (${NEWEST_PENDING:-none}) for $TARGET_SHA pr=#$PR; superseded verdict, refusing to act"
+            exit 1
+          fi
           # Anchored to the whole line, like head:, so prose mentioning "clean:"
           # outside the machine block can never set the verdict.
           CLEAN=$(printf '%s' "$BLOCK" | grep -iE '^[[:space:]]*clean:[[:space:]]*(true|false)[[:space:]]*$' | head -1 | grep -oiE 'true|false' | tr '[:upper:]' '[:lower:]')

@@ -200,6 +200,12 @@ jobs:
                     2>/dev/null | sort -n | tail -1 | cut -f2 || true)"
           NEEDS_HUMAN="$(gh pr view "$PR" --repo "$REPO" --json labels \
                           --jq 'any(.labels[].name; . == "needs-human")')"
+          # The verdict must be for the CURRENT base too: a retarget keeps the
+          # head, so head-binding alone lets a pre-retarget verdict vouch for a
+          # different diff. Verdicts carry a base: marker; only one matching
+          # the PR's current base counts (fail closed for verdicts predating
+          # the marker — the retarget-triggered escalation re-posts).
+          CUR_BASE="$(gh pr view "$PR" --repo "$REPO" --json baseRefName --jq .baseRefName)"
           # The escalation condition. A verdict for THIS head decides when one
           # exists: label absence is not a completed "no", because the apply run
           # that sets the label may not have fired yet when the clean status
@@ -277,7 +283,7 @@ jobs:
           # complete lookup that returns nothing takes that branch.
           V_OK=false; V=""
           if VRAW="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq ".[] | select(.user.login==\"lfx-reviewer\" and (.body | contains(\"<!-- agentic:needs-human v1 -->\")) and (.body | contains(\"<!-- head: $HEAD -->\"))) | [(.id|tostring), .created_at, (if ((.body | contains(\"<!-- needs-human: yes -->\")) and (.body | contains(\"<!-- needs-human: no -->\"))) then \"malformed\" elif (.body | contains(\"<!-- needs-human: yes -->\")) then \"yes\" elif (.body | contains(\"<!-- needs-human: no -->\")) then \"no\" else \"malformed\" end)] | @tsv" \
+            --jq ".[] | select(.user.login==\"lfx-reviewer\" and (.body | contains(\"<!-- agentic:needs-human v1 -->\")) and (.body | contains(\"<!-- head: $HEAD -->\")) and (.body | contains(\"<!-- base: $CUR_BASE -->\"))) | [(.id|tostring), .created_at, (if ((.body | contains(\"<!-- needs-human: yes -->\")) and (.body | contains(\"<!-- needs-human: no -->\"))) then \"malformed\" elif (.body | contains(\"<!-- needs-human: yes -->\")) then \"yes\" elif (.body | contains(\"<!-- needs-human: no -->\")) then \"no\" else \"malformed\" end)] | @tsv" \
             2>/dev/null)"; then
             V_OK=true
             # Newest verdict by NUMERIC comment id — created_at has only
@@ -489,11 +495,14 @@ jobs:
                   *" $LAST_ACTOR "*) [ -n "$LAST_ACTOR" ] && AUTH_UNLABEL="$LAST_TS" ;;
                 esac
               fi
+              # Current base for the base-marker binding (see Evaluate gate);
+              # a failed read withholds.
+              CUR_BASE="$(gh pr view "$PR" --repo "$REPO" --json baseRefName --jq .baseRefName)" || return 1
               # A failed verdict lookup withholds outright — never read an API
               # error as "no verdict exists" (that would fail open into the
               # unlabel-fallback branch).
               VRAW="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-                --jq ".[] | select(.user.login==\"lfx-reviewer\" and (.body | contains(\"<!-- agentic:needs-human v1 -->\")) and (.body | contains(\"<!-- head: $HEAD -->\"))) | [(.id|tostring), .created_at, (if ((.body | contains(\"<!-- needs-human: yes -->\")) and (.body | contains(\"<!-- needs-human: no -->\"))) then \"malformed\" elif (.body | contains(\"<!-- needs-human: yes -->\")) then \"yes\" elif (.body | contains(\"<!-- needs-human: no -->\")) then \"no\" else \"malformed\" end)] | @tsv" \
+                --jq ".[] | select(.user.login==\"lfx-reviewer\" and (.body | contains(\"<!-- agentic:needs-human v1 -->\")) and (.body | contains(\"<!-- head: $HEAD -->\")) and (.body | contains(\"<!-- base: $CUR_BASE -->\"))) | [(.id|tostring), .created_at, (if ((.body | contains(\"<!-- needs-human: yes -->\")) and (.body | contains(\"<!-- needs-human: no -->\"))) then \"malformed\" elif (.body | contains(\"<!-- needs-human: yes -->\")) then \"yes\" elif (.body | contains(\"<!-- needs-human: no -->\")) then \"no\" else \"malformed\" end)] | @tsv" \
                 2>/dev/null)" || return 1
               # Newest by numeric comment id (see Evaluate gate); a verdict
               # from before the newest base retarget is stale for the current

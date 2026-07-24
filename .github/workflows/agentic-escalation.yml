@@ -191,6 +191,6 @@ jobs:
             -H "X-GitHub-Api-Version: 2026-03-10" --method POST \
             -f model=gpt-5.5 -F create_pull_request=false \
             -f base_ref="$BASE_REF" -f head_ref="$HEAD_REF" \
-            -f prompt="Run the needs-human escalation for pull request #$PR in $REPO against head $HEAD_SHA, following the repository instructions exactly. Immediately before posting, re-read the PR head: if it no longer equals $HEAD_SHA, post nothing — a newer push owns the next verdict. Post your machine-readable needs-human verdict comment (head: $HEAD_SHA) using the add_issue_comment tool." \
+            -f prompt="Run the needs-human escalation for pull request #$PR in $REPO against head $HEAD_SHA (base branch $BASE_REF), following the repository instructions exactly. Immediately before posting, re-read the pull request: if its head no longer equals $HEAD_SHA or its base branch no longer equals $BASE_REF, post nothing — a newer push or retarget owns the next verdict. Post your machine-readable needs-human verdict comment using the add_issue_comment tool, carrying head: $HEAD_SHA and base: $BASE_REF in the hidden markers exactly." \
             --jq '.id')
           echo "escalation task: $TID (seeds the gpt-5.5 session; agentic-apply reacts to its comment)"

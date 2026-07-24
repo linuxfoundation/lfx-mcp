@@ -97,9 +97,11 @@ exact format defined in `/agentic-comment-format` for the needs-human verdict:
 a hidden `<!-- needs-human: yes|no -->` marker (the machine signal a
 deterministic step reads to set the sticky `needs-human` label) plus a hidden
 `<!-- head: <sha> -->` marker binding the verdict to the head you judged (read
-the PR's current head SHA right before posting and write all 40 characters),
-followed by a short, human-readable reason. The reason is always one specific
-sentence, never empty.
+the PR's current head SHA right before posting and write all 40 characters), and
+a hidden `<!-- base: <ref> -->` marker naming the base branch of the diff you
+judged (your task names it; the gate only honors a verdict for the PR's current
+base), followed by a short, human-readable reason. The reason is always one
+specific sentence, never empty.
 
 Post one comment and nothing else: **do not set the label yourself**, do not
 modify code, push commits, or open a PR.

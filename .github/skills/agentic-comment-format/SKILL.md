@@ -40,6 +40,7 @@ before merge:
 <!-- agentic:needs-human v1 -->
 <!-- needs-human: yes -->
 <!-- head: <full 40-char SHA of the head you judged> -->
+<!-- base: <the PR's base branch name, as given in your task> -->
 ### Needs a human before merge
 
 **Why:** <one specific sentence: what a lead needs to know about and why>
@@ -51,6 +52,7 @@ When no human sign-off is required:
 <!-- agentic:needs-human v1 -->
 <!-- needs-human: no -->
 <!-- head: <full 40-char SHA of the head you judged> -->
+<!-- base: <the PR's base branch name, as given in your task> -->
 ### No human sign-off required
 
 <one specific sentence: what you checked and why this change is routine>
@@ -65,6 +67,12 @@ The `<!-- head: ... -->` line binds your verdict to the exact head you judged: r
 the PR's current head SHA immediately before posting and write all 40 characters.
 The gate only honors a verdict whose `head:` equals the head it is about to
 approve, so a stale verdict from an earlier push can never vouch for newer commits.
+
+The `<!-- base: ... -->` line binds the verdict to the base branch of the diff you
+judged (your task names it): a base retarget changes the reviewed diff while
+keeping the head SHA, and the gate only honors a verdict whose `base:` equals the
+PR's current base — so a verdict for the old base can never vouch for the
+retargeted diff. Write the base branch name exactly as your task gave it.
 
 ## Agentic-check verdict (conductor)
 
@@ -98,6 +106,7 @@ the reason it stands>
 
 <!-- agentic:check v1 -->
 head: <full 40-char commit SHA of the head you judged>
+round: <the numeric review-round id from your task>
 clean: true|false
 threads:
 - id: <thread_node_id>, status: fixed|obsolete|outstanding|rebutted-valid|rebutted-invalid, severity: critical|high|should-fix|nit, reason: <one short sentence>
@@ -118,6 +127,12 @@ Rules the deterministic step depends on, so be exact:
 - `head:` is the full commit SHA of the PR head you actually judged. The deterministic
   step sets the clean status on **that** commit, so a commit that lands after you post
   cannot inherit this verdict (it re-derives as not-yet-clean and the gate stays shut).
+- `round:` is the numeric review-round id your task names (the id of the round's
+  pending status stamp, minted by the conductor workflow). The deterministic step
+  acts only on a verdict whose `round:` is the newest round for that head and PR,
+  so a verdict from a superseded round — a task that survived a cancellation
+  across a push or base retarget — is rejected mechanically. Copy the id exactly;
+  a missing or wrong `round:` makes the whole verdict inert.
 - `clean:` is `true` only when no thread blocks (none is `outstanding` or
   `rebutted-invalid`); otherwise `false`.
 - One `- id:` line per thread you adjudicated, its four fields comma-separated —

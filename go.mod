@@ -11,6 +11,7 @@ require (
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/linuxfoundation/lfx-v2-committee-service v0.4.0
 	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.5.0
+	github.com/linuxfoundation/lfx-v2-meeting-service v0.11.8
 	github.com/linuxfoundation/lfx-v2-member-service v0.9.0
 	github.com/linuxfoundation/lfx-v2-project-service v0.8.0
 	github.com/linuxfoundation/lfx-v2-query-service v0.4.22
@@ -67,9 +68,9 @@ require (
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260610212136-7ab31c22f7ad // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260610212136-7ab31c22f7ad // indirect
-	google.golang.org/grpc v1.81.1 // indirect
+	google.golang.org/grpc v1.82.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

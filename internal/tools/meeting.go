@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
+	meetingservice "github.com/linuxfoundation/lfx-v2-meeting-service/gen/meeting_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -28,6 +29,12 @@ const pastMeetingSummaryResourceType = "v1_past_meeting_summary"
 
 // pastMeetingResourceType is the resource type filter for past meeting queries.
 const pastMeetingResourceType = "v1_past_meeting"
+
+// pastMeetingRecordingResourceType is the resource type filter for past meeting recording queries.
+const pastMeetingRecordingResourceType = "v1_past_meeting_recording"
+
+// pastMeetingTranscriptResourceType is the resource type filter for past meeting transcript queries.
+const pastMeetingTranscriptResourceType = "v1_past_meeting_transcript"
 
 // MeetingConfig holds configuration shared by meeting tools.
 type MeetingConfig struct {
@@ -197,7 +204,7 @@ func RegisterSearchPastMeetings(server *mcp.Server, asGroups bool) {
 func RegisterGetPastMeeting(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_past_meeting",
-		Description: "Get an LFX past meeting by its UID using the query service.",
+		Description: "Get an LFX past meeting by its UID, including nested recording and transcript sub-objects (with links) when available. The recording or transcript is omitted if absent or inaccessible to the caller.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Past Meeting",
 			ReadOnlyHint: true,
@@ -1254,7 +1261,148 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
-// handleGetPastMeeting implements the get_past_meeting tool logic.
-func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetPastMeetingArgs) (*mcp.CallToolResult, any, error) {
-	return handleGetPastMeetingResource(ctx, req, pastMeetingResourceType, "past meeting", args.UID)
+// pastMeetingGetResult is the output type for the get_past_meeting tool. It nests
+// the base past meeting alongside its recording and transcript, mirroring the
+// shape of get_project's { base, settings }. The recording and transcript are
+// omitted when absent or inaccessible.
+type pastMeetingGetResult struct {
+	Meeting    *meetingservice.ITXPastZoomMeeting `json:"meeting"`
+	Recording  *querysvc.Resource                 `json:"recording,omitempty"`
+	Transcript *querysvc.Resource                 `json:"transcript,omitempty"`
+}
+
+// fetchPastMeetingChildResource fetches a single child resource (recording or
+// transcript) of a past meeting from the query service, scoped by the parent
+// reference "past_meeting:<meeting_and_occurrence_id>".
+//
+// NOTE: This is a non-idiomatic stand-in for a real "get by ID" call. Unlike the
+// base past-meeting object — fetched via the meeting-service GetItxPastMeeting Goa
+// endpoint — v1_past_meeting_recording and v1_past_meeting_transcript have no
+// dedicated meeting-service get endpoint today, so we filter the query-service
+// index by parent ref instead. A direct meeting-service Itx get endpoint for these
+// two resource types would be preferable and should be a follow-up.
+//
+// Returns the resource when present, or (nil, nil) when absent.
+func fetchPastMeetingChildResource(ctx context.Context, clients *lfxv2.Clients, resourceType, parentRef string) (*querysvc.Resource, error) {
+	payload := &querysvc.QueryResourcesPayload{
+		Version:  "1",
+		Type:     &resourceType,
+		Parent:   &parentRef,
+		PageSize: 1,
+		Sort:     "name_asc",
+	}
+
+	result, err := clients.QuerySvc.QueryResources(ctx, payload)
+	if err != nil {
+		return nil, err
+	}
+	if len(result.Resources) == 0 {
+		return nil, nil
+	}
+
+	return result.Resources[0], nil
+}
+
+// handleGetPastMeeting implements the get_past_meeting tool logic. It fetches the
+// base past meeting via the meeting-service GetItxPastMeeting Goa endpoint, then
+// nests the recording and transcript sub-objects (fetched from the query service,
+// parent-ref scoped). Missing or inaccessible recording/transcript data yields a
+// partial result plus a warning rather than a hard failure, matching get_project.
+func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetPastMeetingArgs) (*mcp.CallToolResult, pastMeetingGetResult, error) {
+	logger := newToolLogger(ctx, req)
+
+	if meetingConfig == nil {
+		logger.ErrorContext(ctx, "meeting tools not configured")
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: meeting tools not configured"}},
+			IsError: true,
+		}, pastMeetingGetResult{}, nil
+	}
+
+	if args.UID == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: uid is required"}},
+			IsError: true,
+		}, pastMeetingGetResult{}, nil
+	}
+
+	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)}},
+			IsError: true,
+		}, pastMeetingGetResult{}, nil
+	}
+
+	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
+	clients := meetingConfig.Clients
+
+	logger.InfoContext(ctx, "fetching past meeting", "uid", args.UID)
+
+	// Base object (hard failure). Fetched via the meeting-service Goa client rather
+	// than the query service. BearerToken is left nil: the shared auth interceptor
+	// injects the exchanged LFX token on every outbound request.
+	version := "1"
+	meeting, err := clients.Meeting.GetItxPastMeeting(ctx, &meetingservice.GetItxPastMeetingPayload{
+		Version:       &version,
+		PastMeetingID: args.UID,
+	})
+	if err != nil {
+		logger.ErrorContext(ctx, "GetItxPastMeeting failed", "error", err, "uid", args.UID)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: friendlyAPIError("failed to get past meeting", err)}},
+			IsError: true,
+		}, pastMeetingGetResult{}, nil
+	}
+
+	out := pastMeetingGetResult{Meeting: meeting}
+	var warnings []string
+
+	// The recording/transcript objects live in the query-service index, scoped to
+	// the past_meeting parent ref. The input uid is the meeting_and_occurrence_id.
+	parentRef := "past_meeting:" + args.UID
+
+	// Recording (soft failure): omit silently when absent; warn when inaccessible.
+	recording, err := fetchPastMeetingChildResource(ctx, clients, pastMeetingRecordingResourceType, parentRef)
+	if err != nil {
+		warnings = append(warnings, fmt.Sprintf("WARNING: past meeting recording unavailable - %s", err.Error()))
+		logger.ErrorContext(ctx, "getting past meeting recording failed, returning without it", "error", err, "uid", args.UID)
+	} else {
+		out.Recording = recording
+	}
+
+	// Transcript (soft failure): same handling as recording.
+	//
+	// GATE (LFXV2-2827): v1_past_meeting_transcript has a history of unreliable
+	// indexing (ARCH-393). This block is intentionally self-contained so it can be
+	// removed in one edit if pre-merge re-validation shows transcript indexing is
+	// still unreliable — in which case ship recording-only and track transcript as
+	// a follow-up.
+	transcript, err := fetchPastMeetingChildResource(ctx, clients, pastMeetingTranscriptResourceType, parentRef)
+	if err != nil {
+		warnings = append(warnings, fmt.Sprintf("WARNING: past meeting transcript unavailable - %s", err.Error()))
+		logger.ErrorContext(ctx, "getting past meeting transcript failed, returning without it", "error", err, "uid", args.UID)
+	} else {
+		out.Transcript = transcript
+	}
+
+	prettyJSON, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to marshal past meeting result", "error", err)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)}},
+			IsError: true,
+		}, pastMeetingGetResult{}, nil
+	}
+
+	logger.InfoContext(ctx, "get past meeting succeeded", "uid", args.UID)
+
+	content := []mcp.Content{}
+	for _, w := range warnings {
+		content = append(content, &mcp.TextContent{Text: w})
+	}
+	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
+
+	return &mcp.CallToolResult{Content: content}, out, nil
 }

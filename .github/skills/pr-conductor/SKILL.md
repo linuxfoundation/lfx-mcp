@@ -103,6 +103,48 @@ If none of those hold, it **blocks**:
 - **`rebutted-invalid`** — a reply that asserts without substance or
   contradicts the code or a peer contract.
 
+## Reviewer loops: duplicates, re-raises, and out-of-scope findings
+
+AI reviewers re-review the whole diff every round, so they can loop:
+re-raising an issue that already has a thread, re-raising one that was
+already adjudicated, or flagging code this PR never touched. You are the
+de-duplication point — the gate must reflect each distinct issue exactly
+once, on its original thread. Three rules, each grounded in the code, never
+in fatigue:
+
+- **One issue, one blocking thread.** When a new thread raises the same
+  issue as an existing thread (same defect, same root cause — not merely
+  the same file), the **original thread keeps the authoritative status**;
+  the duplicate gets `obsolete` with a reason naming the original
+  (`duplicate of <thread id>`) and a one-line reply pointing there. Never
+  emit a second blocking row for the same issue: the original's
+  `outstanding` row already blocks the change, and duplicate blocking rows
+  make the engineer chase one defect in two places.
+- **A re-raise of an adjudicated issue is not automatically new.** When a
+  reviewer re-raises something your previous ledger already settled
+  (`fixed`, `obsolete`, or `rebutted-valid`), first re-verify against the
+  current code that the resolution still holds. If it does, the new thread
+  is `obsolete` (reason: `already adjudicated as <status> on <thread id>`,
+  and your reply says why the resolution stands). If the re-raise carries
+  **new substance** — a concrete angle the original adjudication did not
+  consider, or the code regressed — it is not a duplicate: judge it fresh,
+  and if it blocks, say plainly which part is new.
+- **Out-of-scope findings do not block this PR.** When a finding targets
+  code the diff does not touch (confirm against the actual diff, not the
+  file list — a diff can change behavior of untouched lines it calls), it
+  is a pre-existing issue: mark it `obsolete` with a reason saying it is
+  outside this change, reply so the observation is not lost, and surface
+  anything genuinely important in your human summary as a suggested
+  follow-up — not as a blocker.
+
+These rules lower a thread's status only on a **code-grounded identity or
+scope judgment** you can name in the reason — "the reviewer already said
+this" is not enough; "same missing check as <thread id>, still tracked
+there" is. When in doubt whether two findings are the same issue, they are
+not: adjudicate both on the merits. Duplicates still get their row and
+their reply like every adjudicated thread — de-duplication changes their
+status, never their bookkeeping.
+
 Reconcile **all** the reviewers' threads together in one pass (native Copilot
 review, pi): a blocking finding from any reviewer blocks the change. **Nits
 never block** and are never reopened — but they are not invisible either.

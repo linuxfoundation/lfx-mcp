@@ -798,7 +798,7 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 		tools.RegisterQueryLFXLens(server)
 	}
 	if enabledTools["query_lfx_semantic_layer"] && canRead && isStaff {
-		tools.RegisterSemanticLayer(server, isStaff)
+		tools.RegisterSemanticLayer(server)
 	}
 
 	return server

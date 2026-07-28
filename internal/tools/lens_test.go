@@ -286,6 +286,30 @@ func schemaRequired(t *testing.T, tool *mcp.Tool) []string {
 	return schema.Required
 }
 
+// schemaPropertyDescription returns the description a client sees for one
+// input-schema property. These travel with tools/list alongside the tool
+// description, so guidance in them must not contradict it.
+func schemaPropertyDescription(t *testing.T, tool *mcp.Tool, property string) string {
+	t.Helper()
+	raw, err := json.Marshal(tool.InputSchema)
+	if err != nil {
+		t.Fatalf("failed to marshal input schema: %v", err)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Description string `json:"description"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatalf("failed to parse input schema: %v", err)
+	}
+	prop, ok := schema.Properties[property]
+	if !ok {
+		t.Fatalf("input schema has no %q property", property)
+	}
+	return prop.Description
+}
+
 func TestRegisterSemanticLayer_Schema(t *testing.T) {
 	tool := listSemanticLayerTool(t)
 
@@ -301,6 +325,14 @@ func TestRegisterSemanticLayer_Schema(t *testing.T) {
 	}
 	if !strings.Contains(tool.Description, "project_slug is optional") {
 		t.Error("description missing optional project_slug wording")
+	}
+
+	// The action property's own guidance ships with tools/list, so its
+	// membership routing must carry the same regional exception as the tool
+	// description — otherwise clients get contradictory instructions.
+	action := schemaPropertyDescription(t, tool, "action")
+	if !strings.Contains(action, "For memberships (except country/region breakdowns)") {
+		t.Errorf("action schema description missing the regional exception: %q", action)
 	}
 }
 

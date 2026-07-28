@@ -233,7 +233,7 @@ func RegisterSemanticLayer(server *mcp.Server) {
 // SemanticLayerLFXLensArgs defines the input for the unified semantic layer tool.
 type SemanticLayerLFXLensArgs struct {
 	ProjectSlug string `json:"project_slug,omitempty" jsonschema:"Optional project slug from search_projects (e.g. 'cncf'). When provided, where-clause project filters are validated against that foundation's subtree. May be omitted for global or cross-foundation queries."`
-	Action      string `json:"action" jsonschema:"Required. Start with list_metrics — often enough to go straight to query. Best for activities, maintainer counts, health scores, projects, events, education. For memberships, maintainer names/trends, open-ended, subproject, or exploratory questions use query_lfx_lens instead. Values: list_metrics, get_dimensions, query, describe"`
+	Action      string `json:"action" jsonschema:"Required. Start with list_metrics — often enough to go straight to query. Best for activities, maintainer counts, health scores, projects, events, education. For memberships (except country/region breakdowns), maintainer names/trends, open-ended, subproject, or exploratory questions use query_lfx_lens instead. Values: list_metrics, get_dimensions, query, describe"`
 	Target      string `json:"target,omitempty" jsonschema:"For action=describe only: which action to get help for (e.g. 'query')"`
 	Metrics     string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names from list_metrics (for get_dimensions and query)"`
 	Search      string `json:"search,omitempty" jsonschema:"Search term to filter results (for list_metrics and get_dimensions)"`

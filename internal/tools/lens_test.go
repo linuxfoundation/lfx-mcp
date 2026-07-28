@@ -236,12 +236,17 @@ func TestSemanticLayerDescription(t *testing.T) {
 
 func listSemanticLayerTool(t *testing.T) *mcp.Tool {
 	t.Helper()
+	return listRegisteredTool(t, "query_lfx_semantic_layer", RegisterSemanticLayer)
+}
+
+func listRegisteredTool(t *testing.T, name string, register func(*mcp.Server)) *mcp.Tool {
+	t.Helper()
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "test-server",
 		Version: "0.0.1",
 	}, nil)
-	RegisterSemanticLayer(server)
+	register(server)
 
 	ctx := context.Background()
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
@@ -263,11 +268,11 @@ func listSemanticLayerTool(t *testing.T) *mcp.Tool {
 		t.Fatalf("ListTools failed: %v", err)
 	}
 	for _, tool := range res.Tools {
-		if tool.Name == "query_lfx_semantic_layer" {
+		if tool.Name == name {
 			return tool
 		}
 	}
-	t.Fatal("query_lfx_semantic_layer not found in tool list")
+	t.Fatalf("%s not found in tool list", name)
 	return nil
 }
 
@@ -333,6 +338,24 @@ func TestRegisterSemanticLayer_Schema(t *testing.T) {
 	action := schemaPropertyDescription(t, tool, "action")
 	if !strings.Contains(action, "For memberships (except country/region breakdowns)") {
 		t.Errorf("action schema description missing the regional exception: %q", action)
+	}
+}
+
+// TestQueryLFXLensDescription_RegionalException guards the other half of the
+// routing contract: query_lfx_lens claims memberships, and both its
+// description and its input schema ship with tools/list. If they keep saying
+// "always use for memberships" unconditionally, clients get instructions that
+// contradict the semantic layer's regional carve-out.
+func TestQueryLFXLensDescription_RegionalException(t *testing.T) {
+	tool := listRegisteredTool(t, "query_lfx_lens", RegisterQueryLFXLens)
+
+	if !strings.Contains(tool.Description, "EXCEPT country/region") {
+		t.Errorf("query_lfx_lens description missing the regional exception: %q", tool.Description)
+	}
+
+	input := schemaPropertyDescription(t, tool, "input")
+	if !strings.Contains(input, "memberships (except country/region breakdowns)") {
+		t.Errorf("query_lfx_lens input schema missing the regional exception: %q", input)
 	}
 }
 

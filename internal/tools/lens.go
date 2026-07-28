@@ -41,7 +41,8 @@ func RegisterQueryLFXLens(server *mcp.Server) {
 		Description: `Ask natural language questions about a project's data using ad-hoc SQL generation.
 
 Always use this tool for:
-- All membership questions (e.g. "current members", "membership revenue by tier", "churn rate")
+- Membership questions (e.g. "current members", "membership revenue by tier", "churn rate"), EXCEPT country/region
+  breakdowns, which use query_lfx_semantic_layer
 - Maintainer names or maintainer+activities data joins, where activities data is the code activities model
   with code contributions, PRs, commits etc (e.g. "top maintainers by contributions", "who maintains Kubernetes?").
   IMPORTANT: activities data (contributors, PRs, code contributions etc) not involving maintainers should use query_lfx_semantic_layer.
@@ -71,7 +72,7 @@ Tips:
 // QueryLFXLensArgs defines the input for query_lfx_lens.
 type QueryLFXLensArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf') (required)"`
-	Input       string `json:"input" jsonschema:"Natural language question. Always use for memberships, maintainer names/trends, open-ended analysis, subproject questions, cross-domain joins, and exploratory questions. Takes 15-30s. (required)"`
+	Input       string `json:"input" jsonschema:"Natural language question. Always use for memberships (except country/region breakdowns), maintainer names/trends, open-ended analysis, subproject questions, cross-domain joins, and exploratory questions. Takes 15-30s. (required)"`
 }
 
 type lensWorkflowAdditional struct {

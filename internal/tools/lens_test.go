@@ -213,6 +213,13 @@ func TestSemanticLayerDescription(t *testing.T) {
 		"may be omitted for global or cross-foundation questions",
 		"For membership metrics, a Linux Foundation ('tlf') filter only captures direct LF memberships",
 		"Activity metrics are fanned out to foundations",
+		// Regional guidance: country/region questions must route here for every
+		// topic, including memberships, whose dimensions are not inlined.
+		"Country/region breakdowns belong here for ANY topic",
+		"country__lf_region",
+		"organization_lf_region",
+		"call get_dimensions with search \"country\" or \"region\"",
+		"Membership questions, EXCEPT country/region breakdowns",
 	} {
 		if !strings.Contains(semanticLayerDescription, want) {
 			t.Errorf("description missing %q", want)

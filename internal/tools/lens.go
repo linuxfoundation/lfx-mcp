@@ -161,7 +161,7 @@ const (
 Best for direct, well-scoped questions: totals, counts, averages, breakdowns by a single dimension, and time series (e.g. "total activities for CNCF", "active maintainers by organization", "health score trend by month", "total enrollments by course"). This is also the right tool for contributor/activity questions — it has full contributor data including names, organizations, and activity breakdowns.
 
 Use query_lfx_lens INSTEAD for:
-- All membership questions (memberships model works better with ad-hoc SQL)
+- Membership questions, EXCEPT country/region breakdowns (see the country/region tip)
 - Maintainer names, maintainer+contribution (activities data) joins, or maintainer trends
 - Open-ended or exploratory analysis (e.g. "which projects need attention?")
 - Questions involving subprojects (e.g. "health scores by project")
@@ -197,6 +197,7 @@ Tips:
 - Contributors and code-related data (commits, PRs, insertions, deletions) are in the activities model — search for "activities" in list_metrics.
   IMPORTANT: Questions about contributors and code-related topics that do not involve maintainers should prefer this tool.
 - Events metrics use project_name rather than project_slug for filtering.
+- Country/region breakdowns belong here for ANY topic — contributors, organizations, memberships, event registrations, enrollments. A person's country uses country__* (e.g. country__lf_region); an organization's HQ uses organization_lf_region. Membership metrics don't inline dimensions, so call get_dimensions with search "country" or "region".
 - `
 
 	// semanticLayerSlotSearchProjects: search_projects guidance.

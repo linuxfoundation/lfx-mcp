@@ -213,6 +213,14 @@ func TestSemanticLayerDescription(t *testing.T) {
 		"may be omitted for global or cross-foundation questions",
 		"For membership metrics, a Linux Foundation ('tlf') filter only captures direct LF memberships",
 		"Activity metrics are fanned out to foundations",
+		// Regional guidance: country/region questions must route here for every
+		// topic, including memberships, whose dimensions are not inlined.
+		"Country/region breakdowns belong here for contributors, organizations, memberships, event registrations and enrollments",
+		"even when the topic would otherwise route to query_lfx_lens",
+		"country__lf_region",
+		"organization_lf_region",
+		"call get_dimensions with search \"country\" or \"region\"",
+		"Membership questions, EXCEPT country/region breakdowns",
 	} {
 		if !strings.Contains(semanticLayerDescription, want) {
 			t.Errorf("description missing %q", want)
@@ -229,12 +237,17 @@ func TestSemanticLayerDescription(t *testing.T) {
 
 func listSemanticLayerTool(t *testing.T) *mcp.Tool {
 	t.Helper()
+	return listRegisteredTool(t, "query_lfx_semantic_layer", RegisterSemanticLayer)
+}
+
+func listRegisteredTool(t *testing.T, name string, register func(*mcp.Server)) *mcp.Tool {
+	t.Helper()
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "test-server",
 		Version: "0.0.1",
 	}, nil)
-	RegisterSemanticLayer(server)
+	register(server)
 
 	ctx := context.Background()
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
@@ -256,11 +269,11 @@ func listSemanticLayerTool(t *testing.T) *mcp.Tool {
 		t.Fatalf("ListTools failed: %v", err)
 	}
 	for _, tool := range res.Tools {
-		if tool.Name == "query_lfx_semantic_layer" {
+		if tool.Name == name {
 			return tool
 		}
 	}
-	t.Fatal("query_lfx_semantic_layer not found in tool list")
+	t.Fatalf("%s not found in tool list", name)
 	return nil
 }
 
@@ -279,6 +292,30 @@ func schemaRequired(t *testing.T, tool *mcp.Tool) []string {
 	return schema.Required
 }
 
+// schemaPropertyDescription returns the description a client sees for one
+// input-schema property. These travel with tools/list alongside the tool
+// description, so guidance in them must not contradict it.
+func schemaPropertyDescription(t *testing.T, tool *mcp.Tool, property string) string {
+	t.Helper()
+	raw, err := json.Marshal(tool.InputSchema)
+	if err != nil {
+		t.Fatalf("failed to marshal input schema: %v", err)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Description string `json:"description"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatalf("failed to parse input schema: %v", err)
+	}
+	prop, ok := schema.Properties[property]
+	if !ok {
+		t.Fatalf("input schema has no %q property", property)
+	}
+	return prop.Description
+}
+
 func TestRegisterSemanticLayer_Schema(t *testing.T) {
 	tool := listSemanticLayerTool(t)
 
@@ -294,6 +331,32 @@ func TestRegisterSemanticLayer_Schema(t *testing.T) {
 	}
 	if !strings.Contains(tool.Description, "project_slug is optional") {
 		t.Error("description missing optional project_slug wording")
+	}
+
+	// The action property's own guidance ships with tools/list, so its
+	// membership routing must carry the same regional exception as the tool
+	// description — otherwise clients get contradictory instructions.
+	action := schemaPropertyDescription(t, tool, "action")
+	if !strings.Contains(action, "For memberships (except country/region breakdowns)") {
+		t.Errorf("action schema description missing the regional exception: %q", action)
+	}
+}
+
+// TestQueryLFXLensDescription_RegionalException guards the other half of the
+// routing contract: query_lfx_lens claims memberships, and both its
+// description and its input schema ship with tools/list. If they keep saying
+// "always use for memberships" unconditionally, clients get instructions that
+// contradict the semantic layer's regional carve-out.
+func TestQueryLFXLensDescription_RegionalException(t *testing.T) {
+	tool := listRegisteredTool(t, "query_lfx_lens", RegisterQueryLFXLens)
+
+	if !strings.Contains(tool.Description, "EXCEPT country/region") {
+		t.Errorf("query_lfx_lens description missing the regional exception: %q", tool.Description)
+	}
+
+	input := schemaPropertyDescription(t, tool, "input")
+	if !strings.Contains(input, "memberships (except country/region breakdowns)") {
+		t.Errorf("query_lfx_lens input schema missing the regional exception: %q", input)
 	}
 }
 

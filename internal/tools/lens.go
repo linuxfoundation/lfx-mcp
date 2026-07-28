@@ -41,7 +41,8 @@ func RegisterQueryLFXLens(server *mcp.Server) {
 		Description: `Ask natural language questions about a project's data using ad-hoc SQL generation.
 
 Always use this tool for:
-- All membership questions (e.g. "current members", "membership revenue by tier", "churn rate")
+- Membership questions (e.g. "current members", "membership revenue by tier", "churn rate"), EXCEPT country/region
+  breakdowns, which use query_lfx_semantic_layer
 - Maintainer names or maintainer+activities data joins, where activities data is the code activities model
   with code contributions, PRs, commits etc (e.g. "top maintainers by contributions", "who maintains Kubernetes?").
   IMPORTANT: activities data (contributors, PRs, code contributions etc) not involving maintainers should use query_lfx_semantic_layer.
@@ -71,7 +72,7 @@ Tips:
 // QueryLFXLensArgs defines the input for query_lfx_lens.
 type QueryLFXLensArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf') (required)"`
-	Input       string `json:"input" jsonschema:"Natural language question. Always use for memberships, maintainer names/trends, open-ended analysis, subproject questions, cross-domain joins, and exploratory questions. Takes 15-30s. (required)"`
+	Input       string `json:"input" jsonschema:"Natural language question. Always use for memberships (except country/region breakdowns), maintainer names/trends, open-ended analysis, subproject questions, cross-domain joins, and exploratory questions. Takes 15-30s. (required)"`
 }
 
 type lensWorkflowAdditional struct {
@@ -161,7 +162,7 @@ const (
 Best for direct, well-scoped questions: totals, counts, averages, breakdowns by a single dimension, and time series (e.g. "total activities for CNCF", "active maintainers by organization", "health score trend by month", "total enrollments by course"). This is also the right tool for contributor/activity questions — it has full contributor data including names, organizations, and activity breakdowns.
 
 Use query_lfx_lens INSTEAD for:
-- All membership questions (memberships model works better with ad-hoc SQL)
+- Membership questions, EXCEPT country/region breakdowns (see the country/region tip)
 - Maintainer names, maintainer+contribution (activities data) joins, or maintainer trends
 - Open-ended or exploratory analysis (e.g. "which projects need attention?")
 - Questions involving subprojects (e.g. "health scores by project")
@@ -197,6 +198,7 @@ Tips:
 - Contributors and code-related data (commits, PRs, insertions, deletions) are in the activities model — search for "activities" in list_metrics.
   IMPORTANT: Questions about contributors and code-related topics that do not involve maintainers should prefer this tool.
 - Events metrics use project_name rather than project_slug for filtering.
+- Country/region breakdowns belong here for contributors, organizations, memberships, event registrations and enrollments — even when the topic would otherwise route to query_lfx_lens. A person's country uses country__* (e.g. country__lf_region); an organization's HQ uses organization_lf_region. Membership metrics don't inline dimensions, so call get_dimensions with search "country" or "region".
 - `
 
 	// semanticLayerSlotSearchProjects: search_projects guidance.
@@ -232,7 +234,7 @@ func RegisterSemanticLayer(server *mcp.Server) {
 // SemanticLayerLFXLensArgs defines the input for the unified semantic layer tool.
 type SemanticLayerLFXLensArgs struct {
 	ProjectSlug string `json:"project_slug,omitempty" jsonschema:"Optional project slug from search_projects (e.g. 'cncf'). When provided, where-clause project filters are validated against that foundation's subtree. May be omitted for global or cross-foundation queries."`
-	Action      string `json:"action" jsonschema:"Required. Start with list_metrics — often enough to go straight to query. Best for activities, maintainer counts, health scores, projects, events, education. For memberships, maintainer names/trends, open-ended, subproject, or exploratory questions use query_lfx_lens instead. Values: list_metrics, get_dimensions, query, describe"`
+	Action      string `json:"action" jsonschema:"Required. Start with list_metrics — often enough to go straight to query. Best for activities, maintainer counts, health scores, projects, events, education. For memberships (except country/region breakdowns), maintainer names/trends, open-ended, subproject, or exploratory questions use query_lfx_lens instead. Values: list_metrics, get_dimensions, query, describe"`
 	Target      string `json:"target,omitempty" jsonschema:"For action=describe only: which action to get help for (e.g. 'query')"`
 	Metrics     string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names from list_metrics (for get_dimensions and query)"`
 	Search      string `json:"search,omitempty" jsonschema:"Search term to filter results (for list_metrics and get_dimensions)"`

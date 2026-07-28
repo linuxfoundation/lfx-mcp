@@ -198,7 +198,7 @@ Tips:
 - Contributors and code-related data (commits, PRs, insertions, deletions) are in the activities model — search for "activities" in list_metrics.
   IMPORTANT: Questions about contributors and code-related topics that do not involve maintainers should prefer this tool.
 - Events metrics use project_name rather than project_slug for filtering.
-- Country/region breakdowns belong here for ANY topic — contributors, organizations, memberships, event registrations, enrollments. A person's country uses country__* (e.g. country__lf_region); an organization's HQ uses organization_lf_region. Membership metrics don't inline dimensions, so call get_dimensions with search "country" or "region".
+- Country/region breakdowns belong here for contributors, organizations, memberships, event registrations and enrollments — even when the topic would otherwise route to query_lfx_lens. A person's country uses country__* (e.g. country__lf_region); an organization's HQ uses organization_lf_region. Membership metrics don't inline dimensions, so call get_dimensions with search "country" or "region".
 - `
 
 	// semanticLayerSlotSearchProjects: search_projects guidance.

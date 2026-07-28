@@ -215,7 +215,8 @@ func TestSemanticLayerDescription(t *testing.T) {
 		"Activity metrics are fanned out to foundations",
 		// Regional guidance: country/region questions must route here for every
 		// topic, including memberships, whose dimensions are not inlined.
-		"Country/region breakdowns belong here for ANY topic",
+		"Country/region breakdowns belong here for contributors, organizations, memberships, event registrations and enrollments",
+		"even when the topic would otherwise route to query_lfx_lens",
 		"country__lf_region",
 		"organization_lf_region",
 		"call get_dimensions with search \"country\" or \"region\"",

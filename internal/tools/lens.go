@@ -178,9 +178,9 @@ Use query_lfx_lens INSTEAD for:
 
 Actions:
 
-- list_metrics: First step. Returns metrics with descriptions. When <=15 match, dimensions are included — often enough to go straight to query.
+- list_metrics: First step. Returns metrics — the values you count or aggregate — with descriptions. Its search matches metric names and descriptions ONLY, so search by topic; searching for a dimension concept returns nothing. When <=15 match, dimensions are included — often enough to go straight to query.
 
-- get_dimensions: Get group_by/filter fields for specific metrics. Use when list_metrics returned too many results to include dimensions.
+- get_dimensions: Get group_by/filter fields — the attributes you slice by, e.g. country, region, tier — for specific metrics. Use when list_metrics returned too many results to include dimensions, or to find a dimension you could not locate by searching metrics.
 
 - query: Execute a metric query. CRITICAL rules:
   1. `
@@ -198,7 +198,7 @@ Tips:
 - Contributors and code-related data (commits, PRs, insertions, deletions) are in the activities model — search for "activities" in list_metrics.
   IMPORTANT: Questions about contributors and code-related topics that do not involve maintainers should prefer this tool.
 - Events metrics use project_name rather than project_slug for filtering.
-- Country/region breakdowns belong here for contributors, organizations, memberships, event registrations and enrollments — even when the topic would otherwise route to query_lfx_lens. A person's country uses country__* (e.g. country__lf_region); an organization's HQ uses organization_lf_region. Membership metrics don't inline dimensions, so call get_dimensions with search "country" or "region".
+- Country/region breakdowns belong here for contributors, organizations, memberships, event registrations and enrollments — even when the topic would otherwise route to query_lfx_lens. Search list_metrics by topic ("contributors", "membership"): country and region are dimensions, not metrics, so searching list_metrics for them returns nothing. Get them from the metric's dimensions instead — country__lf_region for a person's country (contributor, attendee, learner), and the entity-prefixed organization_lf_region (e.g. activity_project_id__organization_lf_region) for an organization's HQ.
 - `
 
 	// semanticLayerSlotSearchProjects: search_projects guidance.

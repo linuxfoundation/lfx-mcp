@@ -218,8 +218,8 @@ func TestSemanticLayerDescription(t *testing.T) {
 		"Country/region breakdowns belong here for contributors, organizations, memberships, event registrations and enrollments",
 		"even when the topic would otherwise route to query_lfx_lens",
 		"country__lf_region",
-		"organization_lf_region",
-		"call get_dimensions with search \"country\" or \"region\"",
+		"activity_project_id__organization_lf_region",
+		"country and region are dimensions, not metrics",
 		"Membership questions, EXCEPT country/region breakdowns",
 	} {
 		if !strings.Contains(semanticLayerDescription, want) {

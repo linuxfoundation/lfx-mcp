@@ -282,9 +282,11 @@ Hitting **Connect** will open a browser window for LFID login.
 
 ### LFX Lens
 
-| Tool             | Description                                                                                           |
-|------------------|-------------------------------------------------------------------------------------------------------|
-| `query_lfx_lens` | Ask natural-language questions about a project's data (events, contributors, health, value, and more) |
+| Tool                         | Description                                                                                           |
+|------------------------------|-------------------------------------------------------------------------------------------------------|
+| `query_lfx_lens`             | Ask natural-language questions about a project's data (events, contributors, health, value, and more) |
+| `explore_lfx_semantic_layer` | Discover Insights metrics and the dimensions available to them                                        |
+| `query_lfx_semantic_layer`   | Run a metric query against the Insights Semantic Layer (filter, group, rank, trend)                   |
 
 ### B2B Organizations
 

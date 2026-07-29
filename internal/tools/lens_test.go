@@ -82,8 +82,7 @@ func resultText(t *testing.T, res *mcp.CallToolResult) string {
 func TestSemanticLayer_GlobalQueryOmitsProjectSlugAndWhere(t *testing.T) {
 	captured := setupLensTest(t)
 
-	res, _, err := handleSemanticLayer(context.Background(), &mcp.CallToolRequest{}, SemanticLayerLFXLensArgs{
-		Action:  "query",
+	res, _, err := handleQuerySemanticLayer(context.Background(), &mcp.CallToolRequest{}, QuerySemanticLayerArgs{
 		Metrics: "active_maintainers",
 	})
 	if err != nil {
@@ -111,9 +110,8 @@ func TestSemanticLayer_GlobalQueryOmitsProjectSlugAndWhere(t *testing.T) {
 func TestSemanticLayer_ScopedQuerySendsProjectSlugAndWhere(t *testing.T) {
 	captured := setupLensTest(t)
 
-	res, _, err := handleSemanticLayer(context.Background(), &mcp.CallToolRequest{}, SemanticLayerLFXLensArgs{
+	res, _, err := handleQuerySemanticLayer(context.Background(), &mcp.CallToolRequest{}, QuerySemanticLayerArgs{
 		ProjectSlug: "cncf",
-		Action:      "query",
 		Metrics:     "active_maintainers",
 		Where:       "{{ Dimension('maintainer_key__project_slug') }} = 'cncf'",
 	})
@@ -139,7 +137,7 @@ func TestSemanticLayer_ScopedQuerySendsProjectSlugAndWhere(t *testing.T) {
 func TestSemanticLayer_ListMetricsWithoutProjectSlug(t *testing.T) {
 	captured := setupLensTest(t)
 
-	res, _, err := handleSemanticLayer(context.Background(), &mcp.CallToolRequest{}, SemanticLayerLFXLensArgs{
+	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
 		Action: "list_metrics",
 	})
 	if err != nil {
@@ -156,7 +154,7 @@ func TestSemanticLayer_ListMetricsWithoutProjectSlug(t *testing.T) {
 func TestSemanticLayer_GetDimensionsWithoutProjectSlug(t *testing.T) {
 	captured := setupLensTest(t)
 
-	res, _, err := handleSemanticLayer(context.Background(), &mcp.CallToolRequest{}, SemanticLayerLFXLensArgs{
+	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
 		Action:  "get_dimensions",
 		Metrics: "active_maintainers",
 	})
@@ -174,8 +172,7 @@ func TestSemanticLayer_GetDimensionsWithoutProjectSlug(t *testing.T) {
 func TestSemanticLayer_LimitTooLarge(t *testing.T) {
 	setupLensTest(t)
 
-	res, _, err := handleSemanticLayer(context.Background(), &mcp.CallToolRequest{}, SemanticLayerLFXLensArgs{
-		Action:  "query",
+	res, _, err := handleQuerySemanticLayer(context.Background(), &mcp.CallToolRequest{}, QuerySemanticLayerArgs{
 		Metrics: "active_maintainers",
 		Limit:   501,
 	})
@@ -190,7 +187,7 @@ func TestSemanticLayer_LimitTooLarge(t *testing.T) {
 func TestSemanticLayer_DescribeQuery(t *testing.T) {
 	setupLensTest(t)
 
-	res, _, err := handleSemanticLayer(context.Background(), &mcp.CallToolRequest{}, SemanticLayerLFXLensArgs{
+	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
 		Action: "describe",
 		Target: "query",
 	})
@@ -220,21 +217,29 @@ func TestSemanticLayer_DescribeQuery(t *testing.T) {
 // budget is enforced against the larger number.
 const schemaDescriptionBudget = 2048
 
-// TestSemanticLayerDescription_FitsSchemaBudget guards that limit for the tool
-// description itself.
-func TestSemanticLayerDescription_FitsSchemaBudget(t *testing.T) {
-	if got := len(semanticLayerDescription); got > schemaDescriptionBudget {
-		t.Errorf("description is %d chars; everything past %d is invisible to the model — move detail onto a parameter or into help",
-			got, schemaDescriptionBudget)
+// TestSemanticLayerDescriptions_FitSchemaBudget guards that limit for both
+// semantic layer tools. Splitting discovery from querying gave each its own
+// budget, which is the point of the split.
+func TestSemanticLayerDescriptions_FitSchemaBudget(t *testing.T) {
+	for name, desc := range map[string]string{
+		"explore_lfx_semantic_layer": exploreSemanticLayerDescription,
+		"query_lfx_semantic_layer":   querySemanticLayerDescription,
+	} {
+		if got := len(desc); got > schemaDescriptionBudget {
+			t.Errorf("%s description is %d bytes; everything past %d is invisible to the model — move detail into help",
+				name, got, schemaDescriptionBudget)
+		}
 	}
 }
 
-func TestSemanticLayerDescription(t *testing.T) {
+// TestExploreSemanticLayerDescription checks the discovery tool carries the
+// routing contract: which domains are ours, and when to use query_lfx_lens.
+func TestExploreSemanticLayerDescription(t *testing.T) {
 	for _, want := range []string{
-		// The domains this tool owns are named explicitly. Without them the
-		// routing is one-sided — query_lfx_lens lists concrete triggers while
-		// this tool describes itself abstractly, so every specific question
-		// looks like a better match for the other tool.
+		// The domains are named explicitly. Without them the routing is
+		// one-sided — query_lfx_lens lists concrete triggers while this tool
+		// describes itself abstractly, so every specific question looks like a
+		// better match for the other tool.
 		"contributions —",
 		"memberships —",
 		"events —",
@@ -244,18 +249,39 @@ func TestSemanticLayerDescription(t *testing.T) {
 		// Regional questions route here for every topic, memberships included.
 		"any of the above sliced by country or region — always here, never query_lfx_lens",
 		"memberships not sliced by country or region",
-		// Capabilities that the earlier "pre-aggregated metrics" framing hid.
-		"ranked list",
-		"List several metrics in one query",
-		"metric_time__year",
-		// Regional dimensions: person's country vs organization HQ.
+		// Dimension naming, and the regional person-vs-organization split.
+		"entity__field",
 		"country__lf_region",
 		"activity_project_id__organization_lf_region",
-		// help is a fallback, not a prerequisite.
-		"Start with action=list_metrics",
+		// Discovery must hand off to the query tool by name.
+		"query_lfx_semantic_layer",
 	} {
-		if !strings.Contains(semanticLayerDescription, want) {
-			t.Errorf("description missing %q", want)
+		if !strings.Contains(exploreSemanticLayerDescription, want) {
+			t.Errorf("explore description missing %q", want)
+		}
+	}
+}
+
+// TestQuerySemanticLayerDescription checks the query tool is self-sufficient:
+// its own description carries the syntax, so a caller never has to call help
+// first.
+func TestQuerySemanticLayerDescription(t *testing.T) {
+	for _, want := range []string{
+		"metrics (required)",
+		"Dimension(",
+		"TimeDimension(",
+		"yyyy-mm-dd",
+		"ceiling 500",
+		"metric_time__year",
+		"outer-joined",
+		"ranked list",
+		"project_slug",
+		// Both neighbours are named so routing works from this tool too.
+		"explore_lfx_semantic_layer",
+		"query_lfx_lens",
+	} {
+		if !strings.Contains(querySemanticLayerDescription, want) {
+			t.Errorf("query description missing %q", want)
 		}
 	}
 	for _, unwanted := range []string{
@@ -267,25 +293,70 @@ func TestSemanticLayerDescription(t *testing.T) {
 		"pre-aggregated",
 		"returns numbers, not records",
 	} {
-		if strings.Contains(semanticLayerDescription, unwanted) {
-			t.Errorf("description must not contain %q", unwanted)
+		if strings.Contains(querySemanticLayerDescription, unwanted) {
+			t.Errorf("query description must not contain %q", unwanted)
 		}
 	}
 }
 
 // TestSemanticLayerArgs_FieldsFitSchemaBudget holds the other half of the
-// budget contract. Syntax was deliberately moved out of the tool description
-// and onto the parameters it governs; each property description is a separate
-// field, so each must independently stay under the limit.
+// budget contract: each property description is a separate field, so each must
+// independently stay under the limit.
 func TestSemanticLayerArgs_FieldsFitSchemaBudget(t *testing.T) {
-	tool := listSemanticLayerTool(t)
-	for _, property := range []string{
-		"project_slug", "action", "target", "metrics",
-		"search", "group_by", "where", "order_by", "limit",
+	for _, tc := range []struct {
+		tool  *mcp.Tool
+		props []string
+	}{
+		{listExploreTool(t), []string{"action", "search", "metrics", "target"}},
+		{listQueryTool(t), []string{"metrics", "group_by", "where", "order_by", "limit", "project_slug"}},
 	} {
-		if got := len(schemaPropertyDescription(t, tool, property)); got > schemaDescriptionBudget {
-			t.Errorf("%s description is %d chars; everything past %d is invisible to the model",
-				property, got, schemaDescriptionBudget)
+		for _, property := range tc.props {
+			if got := len(schemaPropertyDescription(t, tc.tool, property)); got > schemaDescriptionBudget {
+				t.Errorf("%s.%s description is %d bytes; everything past %d is invisible to the model",
+					tc.tool.Name, property, got, schemaDescriptionBudget)
+			}
+		}
+	}
+}
+
+// TestCriticalGuidanceSurvivesSchemaCompaction is the load-bearing test for
+// where guidance is allowed to live.
+//
+// Clients that defer tool schemas behind a search index re-serialise them and
+// replace OPTIONAL parameter descriptions with a short generated summary. This
+// was verified against a live client: the 459-byte where description arrived as
+// "Filter conditions.", order_by as "Sort order.", and limit as no description
+// at all — until limit was temporarily marked required, at which point its real
+// text appeared. Only the tool description and required parameters survive.
+//
+// So syntax the model cannot guess must not live solely on an optional
+// parameter. Keeping the full text there is fine and useful for clients that do
+// pass it through; it just may not be the only copy.
+func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
+	var surviving string
+	for _, tool := range []*mcp.Tool{listExploreTool(t), listQueryTool(t)} {
+		surviving += "\n" + tool.Description
+		for _, name := range schemaRequired(t, tool) {
+			surviving += "\n" + schemaPropertyDescription(t, tool, name)
+		}
+	}
+
+	for _, tc := range []struct {
+		token string
+		why   string
+	}{
+		{"Dimension(", "categorical filter syntax is unguessable"},
+		{"TimeDimension(", "time filter syntax is unguessable"},
+		{"yyyy-mm-dd", "date format silently returns wrong rows if guessed"},
+		{"ceiling 500", "over-limit requests are rejected outright"},
+		{"metric_time__year", "the only way to build a trend"},
+		{"entity__field", "dimension names cannot be assembled by hand"},
+		{"outer-joined", "explains NULLs in cross-domain results"},
+		{"raw IDs", "grouping by an entity silently returns unusable output"},
+	} {
+		if !strings.Contains(surviving, tc.token) {
+			t.Errorf("%q reaches the model only via an optional parameter, where it gets summarised away (%s). Move it into the tool description or onto a required parameter.",
+				tc.token, tc.why)
 		}
 	}
 }
@@ -298,6 +369,7 @@ func TestBothLensToolDescriptionsFitBudget(t *testing.T) {
 		name     string
 		register func(*mcp.Server)
 	}{
+		{"explore_lfx_semantic_layer", RegisterSemanticLayer},
 		{"query_lfx_semantic_layer", RegisterSemanticLayer},
 		{"query_lfx_lens", RegisterQueryLFXLens},
 	} {
@@ -313,7 +385,12 @@ func TestBothLensToolDescriptionsFitBudget(t *testing.T) {
 // Registration / schema
 // ---------------------------------------------------------------------------
 
-func listSemanticLayerTool(t *testing.T) *mcp.Tool {
+func listExploreTool(t *testing.T) *mcp.Tool {
+	t.Helper()
+	return listRegisteredTool(t, "explore_lfx_semantic_layer", RegisterSemanticLayer)
+}
+
+func listQueryTool(t *testing.T) *mcp.Tool {
 	t.Helper()
 	return listRegisteredTool(t, "query_lfx_semantic_layer", RegisterSemanticLayer)
 }
@@ -395,30 +472,21 @@ func schemaPropertyDescription(t *testing.T, tool *mcp.Tool, property string) st
 }
 
 func TestRegisterSemanticLayer_Schema(t *testing.T) {
-	tool := listSemanticLayerTool(t)
+	explore := listExploreTool(t)
+	query := listQueryTool(t)
 
-	required := schemaRequired(t, tool)
-	if contains(required, "project_slug") {
-		t.Errorf("schema required = %v; project_slug must be optional", required)
+	// Discovery: action is the only required field, and it must name exactly
+	// the actions the dispatcher accepts — a stale list sends the model to an
+	// action that errors. Querying lives on the other tool now.
+	exploreRequired := schemaRequired(t, explore)
+	if !contains(exploreRequired, "action") {
+		t.Errorf("explore required = %v; expected to contain action", exploreRequired)
 	}
-	if contains(required, "where") {
-		t.Errorf("schema required = %v; where must be optional", required)
+	if contains(exploreRequired, "metrics") {
+		t.Errorf("explore required = %v; metrics is only needed for get_dimensions", exploreRequired)
 	}
-	if !contains(required, "action") {
-		t.Errorf("schema required = %v; expected to contain action", required)
-	}
-	// The optional-scope rule moved onto the parameter it governs, where the
-	// model reads it while filling the field.
-	slug := schemaPropertyDescription(t, tool, "project_slug")
-	if !strings.Contains(slug, "Omit it for global or cross-foundation questions") {
-		t.Errorf("project_slug schema description missing the optional-scope rule: %q", slug)
-	}
-
-	// The action property's own guidance ships with tools/list, so it must name
-	// the same four actions the dispatcher accepts — a stale list here sends
-	// the model to an action that errors.
-	action := schemaPropertyDescription(t, tool, "action")
-	for _, want := range []string{"list_metrics", "get_dimensions", "query", "help"} {
+	action := schemaPropertyDescription(t, explore, "action")
+	for _, want := range []string{"list_metrics", "get_dimensions", "help"} {
 		if !strings.Contains(action, want) {
 			t.Errorf("action schema description missing %q: %q", want, action)
 		}
@@ -427,18 +495,71 @@ func TestRegisterSemanticLayer_Schema(t *testing.T) {
 		t.Errorf("action schema description still advertises the renamed describe action: %q", action)
 	}
 
-	// Syntax the description defers to the parameters must actually be there.
-	where := schemaPropertyDescription(t, tool, "where")
+	// Query: metrics is required, so its multi-metric join rules survive schema
+	// compaction. Everything else stays optional — above all project_slug,
+	// whose whole point is that global questions omit it.
+	queryRequired := schemaRequired(t, query)
+	if !contains(queryRequired, "metrics") {
+		t.Errorf("query required = %v; metrics must be required so its guidance survives compaction", queryRequired)
+	}
+	for _, optional := range []string{"project_slug", "where", "group_by", "order_by", "limit"} {
+		if contains(queryRequired, optional) {
+			t.Errorf("query required = %v; %s must stay optional", queryRequired, optional)
+		}
+	}
+
+	// The optional descriptions are still expected to be complete, for clients
+	// that pass them through unchanged.
+	where := schemaPropertyDescription(t, query, "where")
 	for _, want := range []string{"Dimension(", "TimeDimension(", "yyyy-mm-dd"} {
 		if !strings.Contains(where, want) {
 			t.Errorf("where schema description missing %q: %q", want, where)
 		}
 	}
-	groupBy := schemaPropertyDescription(t, tool, "group_by")
-	for _, want := range []string{"metric_time__year", "join keys, not group-by values"} {
-		if !strings.Contains(groupBy, want) {
-			t.Errorf("group_by schema description missing %q: %q", want, groupBy)
-		}
+	groupBy := schemaPropertyDescription(t, query, "group_by")
+	if !strings.Contains(groupBy, "metric_time__year") {
+		t.Errorf("group_by schema description missing the trend grain: %q", groupBy)
+	}
+	slug := schemaPropertyDescription(t, query, "project_slug")
+	if !strings.Contains(slug, "Omit it for global or cross-foundation questions") {
+		t.Errorf("project_slug schema description missing the optional-scope rule: %q", slug)
+	}
+}
+
+// TestQueryToolRejectsMissingMetricsWithAPointer keeps the recovery path alive
+// for a caller on a cached schema that still sends action=query here.
+func TestQueryToolRejectsMissingMetricsWithAPointer(t *testing.T) {
+	setupLensTest(t)
+
+	res, _, err := handleQuerySemanticLayer(context.Background(), &mcp.CallToolRequest{}, QuerySemanticLayerArgs{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected an error result when metrics is empty")
+	}
+	if text := resultText(t, res); !strings.Contains(text, "explore_lfx_semantic_layer") {
+		t.Errorf("missing-metrics error should point at the discovery tool: %q", text)
+	}
+}
+
+// TestExploreToolRedirectsQueryAction covers the other half of that migration:
+// a caller still passing action=query to the discovery tool gets told where
+// querying moved rather than a bare unknown-action error.
+func TestExploreToolRedirectsQueryAction(t *testing.T) {
+	setupLensTest(t)
+
+	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
+		Action: "query",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected an error result for action=query on the discovery tool")
+	}
+	if text := resultText(t, res); !strings.Contains(text, "query_lfx_semantic_layer") {
+		t.Errorf("redirect should name the query tool: %q", text)
 	}
 }
 
@@ -449,7 +570,7 @@ func TestHelpActionAndDescribeAlias(t *testing.T) {
 	setupLensTest(t)
 
 	for _, action := range []string{"help", "describe"} {
-		res, _, err := handleSemanticLayer(context.Background(), &mcp.CallToolRequest{}, SemanticLayerLFXLensArgs{
+		res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
 			Action: action,
 		})
 		if err != nil {
@@ -460,7 +581,7 @@ func TestHelpActionAndDescribeAlias(t *testing.T) {
 		}
 	}
 
-	res, _, err := handleSemanticLayer(context.Background(), &mcp.CallToolRequest{}, SemanticLayerLFXLensArgs{
+	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
 		Action: "help",
 		Target: "query",
 	})

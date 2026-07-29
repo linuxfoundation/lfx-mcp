@@ -153,68 +153,38 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 // query_lfx_semantic_layer — structured metric queries
 // ---------------------------------------------------------------------------
 
-// Description fragments for query_lfx_semantic_layer, assembled below to keep
-// the long prose readable.
-const (
-	// semanticLayerDescHead is everything before the "Use search_projects ..." guidance line.
-	semanticLayerDescHead = `LFX Insights Semantic Layer — pre-aggregated metrics for code activities & contributions, maintainer counts, project health scores, projects, events & event registrations, and education & certifications. Returns deterministic results in seconds.
+// semanticLayerDescription is the query_lfx_semantic_layer description.
+//
+// It is truncated at 2048 characters before the model ever sees it, so it must
+// stay under that: anything past the cut is silently invisible, which is how
+// earlier guidance (the tlf membership caveat, the project_name tip) went
+// unread for as long as it did. TestSemanticLayerDescription_FitsSchemaBudget
+// guards the limit.
+//
+// Detail that does not fit belongs in one of two places, neither of which
+// shares this budget: the per-parameter jsonschema descriptions on
+// SemanticLayerLFXLensArgs (read at the moment the model fills that field), or
+// the help action, whose output is a tool result. Syntax for a parameter goes
+// on that parameter; help is a fallback for when a query has already failed,
+// not a prerequisite.
+const semanticLayerDescription = `LFX Insights Semantic Layer — the query and data-exploration tool for the Linux Foundation data below.
 
-Best for direct, well-scoped questions: totals, counts, averages, breakdowns by a single dimension, and time series (e.g. "total activities for CNCF", "active maintainers by organization", "health score trend by month", "total enrollments by course"). This is also the right tool for contributor/activity questions — it has full contributor data including names, organizations, and activity breakdowns.
+COVERS (search list_metrics with these words):
+- contributions — activity, contributor and org counts, commits, PRs, code lines
+- memberships — revenue, counts, churn, discounts, invoices
+- events — event, registration, speaker, sponsorship counts and revenue
+- education — enrollment and certification counts
+- maintainers — total and active maintainer counts
+- project health — health scores, software value, cost
+- any of the above sliced by country or region — always here, never query_lfx_lens
 
-Use query_lfx_lens INSTEAD for:
-- Membership questions, EXCEPT country/region breakdowns (see the country/region tip)
-- Maintainer names, maintainer+contribution (activities data) joins, or maintainer trends
-- Open-ended or exploratory analysis (e.g. "which projects need attention?")
-- Questions involving subprojects (e.g. "health scores by project")
-- Cross-domain joins (maintainers and contributors are separate models)
-- Any question where this tool is struggling or returning errors
-- Event sponsorships. All other event and event registration data is fine here
+Pick metrics, then slice them by any dimension those metrics expose: filter, rank, trend over time, or break down by several dimensions at once. Grouping by a name dimension turns a metric into a ranked list of the things behind it — organizations, people, projects — so "who are the top N" questions belong here. List several metrics in one query, even from different domains — they are joined for you on the dimensions they share, such as country, project, event and organization. Queries run globally, across foundations, or scoped to one.
 
-`
+Dimension names are entity__field and differ per metric, so copy qualified_names from list_metrics or get_dimensions rather than guessing — e.g. country__lf_region is a person's country, while activity_project_id__organization_lf_region is an organization's HQ. Add metric_time__year (or __quarter, __month, __week, __day) to group_by for a trend. Many metrics are pre-filtered — current_* is active-only, total_contributors excludes bots — so do not re-filter those.
 
-	// semanticLayerDescMid sits between the search_projects guidance and the
-	// query CRITICAL rule 1 text.
-	semanticLayerDescMid = `
+USE query_lfx_lens INSTEAD for questions that do not reduce to a metric above: narrative or "why", subproject exploration, maintainer trends/names, and memberships not sliced by country or region.
 
-Actions:
-
-- list_metrics: First step. Returns metrics — the values you count or aggregate — with descriptions. Its search matches metric names and descriptions ONLY, so search by topic; searching for a dimension concept returns nothing. When <=15 match, dimensions are included — often enough to go straight to query.
-
-- get_dimensions: Get group_by/filter fields — the attributes you slice by, e.g. country, region, tier — for specific metrics. Use when list_metrics returned too many results to include dimensions, or to find a dimension you could not locate by searching metrics.
-
-- query: Execute a metric query. CRITICAL rules:
-  1. `
-
-	// semanticLayerDescTail sits between the query CRITICAL rule 1 text and
-	// the final tip line.
-	semanticLayerDescTail = `
-  2. Different metrics use different entity prefixes — always check the dimensions list from list_metrics to find the correct qualified_names. Do not guess prefixes.
-  3. Set a reasonable limit (10-50) to avoid huge results.
-  4. If you have loaded in metrics and dimensions, and you still can't get the data you are looking for in 5 query turns or less, use query_lfx_lens.
-
-- describe: Get detailed syntax reference and examples for any action.
-
-Tips:
-- Contributors and code-related data (commits, PRs, insertions, deletions) are in the activities model — search for "activities" in list_metrics.
-  IMPORTANT: Questions about contributors and code-related topics that do not involve maintainers should prefer this tool.
-- Events metrics use project_name rather than project_slug for filtering.
-- Country/region breakdowns belong here for contributors, organizations, memberships, event registrations and enrollments — even when the topic would otherwise route to query_lfx_lens. Search list_metrics by topic ("contributors", "membership"): country and region are dimensions, not metrics, so searching list_metrics for them returns nothing. Get them from the metric's dimensions instead — country__lf_region for a person's country (contributor, attendee, learner), and the entity-prefixed organization_lf_region (e.g. activity_project_id__organization_lf_region) for an organization's HQ.
-- `
-
-	// semanticLayerSlotSearchProjects: search_projects guidance.
-	semanticLayerSlotSearchProjects = `Use search_projects to find a project slug when scoping to a foundation. Then call list_metrics to discover available metrics.`
-
-	// semanticLayerSlotScopeRule: query CRITICAL rule 1.
-	semanticLayerSlotScopeRule = `project_slug is optional. When provided, where-clause project filters are validated against that foundation's subtree. It may be omitted for global or cross-foundation questions. To scope to a project, add a where filter — check the dimensions list for the correct one (e.g. registration_id__project_slug). Some models don't have project_slug — they use project_name instead. In that case, use the full project name from search_projects (e.g. "Cloud Native Computing Foundation (CNCF)").`
-
-	// semanticLayerSlotFinalTip: final tip.
-	semanticLayerSlotFinalTip = `For membership metrics, a Linux Foundation ('tlf') filter only captures direct LF memberships — for global membership aggregates, omit the project filter. Activity metrics are fanned out to foundations, so either a 'tlf' foundation filter or no filter works for global questions.`
-)
-
-// semanticLayerDescription is the assembled query_lfx_semantic_layer description.
-const semanticLayerDescription = semanticLayerDescHead + semanticLayerSlotSearchProjects +
-	semanticLayerDescMid + semanticLayerSlotScopeRule +
-	semanticLayerDescTail + semanticLayerSlotFinalTip
+Start with action=list_metrics — it returns dimensions inline when <=15 metrics match, often enough to query straight away. Each parameter's description carries its own syntax.`
 
 // RegisterSemanticLayer registers the query_lfx_semantic_layer tool. The
 // registration gate in cmd/lfx-mcp-server limits this tool to staff callers,
@@ -232,94 +202,146 @@ func RegisterSemanticLayer(server *mcp.Server) {
 }
 
 // SemanticLayerLFXLensArgs defines the input for the unified semantic layer tool.
+//
+// Each jsonschema description is a separate field from the tool description, so
+// syntax lives on the parameter it governs — the model reads it at the moment
+// it fills that field, and it costs nothing from semanticLayerDescription's
+// budget. TestSemanticLayerArgs_FieldsFitSchemaBudget keeps each one bounded.
 type SemanticLayerLFXLensArgs struct {
-	ProjectSlug string `json:"project_slug,omitempty" jsonschema:"Optional project slug from search_projects (e.g. 'cncf'). When provided, where-clause project filters are validated against that foundation's subtree. May be omitted for global or cross-foundation queries."`
-	Action      string `json:"action" jsonschema:"Required. Start with list_metrics — often enough to go straight to query. Best for activities, maintainer counts, health scores, projects, events, education. For memberships (except country/region breakdowns), maintainer names/trends, open-ended, subproject, or exploratory questions use query_lfx_lens instead. Values: list_metrics, get_dimensions, query, describe"`
-	Target      string `json:"target,omitempty" jsonschema:"For action=describe only: which action to get help for (e.g. 'query')"`
-	Metrics     string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names from list_metrics (for get_dimensions and query)"`
-	Search      string `json:"search,omitempty" jsonschema:"Search term to filter results (for list_metrics and get_dimensions)"`
-	GroupBy     string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names to group by (for query)"`
-	Where       string `json:"where,omitempty" jsonschema:"Optional for query action. MetricFlow filter using {{ Dimension('qualified_name') }} = 'value' syntax. Include a project scope filter to scope results (find the correct project_slug or project_name dimension from list_metrics); may be omitted for global or cross-foundation queries. Example: {{ Dimension('registration_id__project_slug') }} = 'cncf'"`
-	OrderBy     string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields, prefix with - for descending (for query)"`
-	Limit       int    `json:"limit,omitempty" jsonschema:"Max rows to return, max 500 (for query)"`
+	ProjectSlug string `json:"project_slug,omitempty" jsonschema:"Optional project slug from search_projects (e.g. 'cncf'). Omit it for global or cross-foundation questions — the normal case for country and region questions. When provided, the where clause must also carry a project filter and every project reference is validated against that foundation's subtree."`
+	Action      string `json:"action" jsonschema:"Required. One of: list_metrics, get_dimensions, query, help. list_metrics(search) — start here. Matches metric names and descriptions only, so search a COVERS topic word; a dimension word like 'country' matches no metrics. When 15 or fewer metrics match, each comes back with its dimension qualified_names, usually enough to query straight away. If nothing returns, broaden the term; an unknown metric name is rejected with ranked suggestions, so use those rather than guessing again. get_dimensions(metrics, search) — needs at least one metric; passing several returns only the dimensions they share, which is exactly the set a cross-domain query can group by. query(metrics, group_by, where, order_by, limit) — run the query; syntax is on each parameter. help(target) — worked examples; call it when a query fails or you want a template."`
+	Target      string `json:"target,omitempty" jsonschema:"For action=help only: which action to get examples for (e.g. 'query'). Omit for an overview."`
+	Metrics     string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names from list_metrics (required for get_dimensions and query). List several to combine them in one result: metrics from different domains are outer-joined on the dimensions they share, so a group present in only one domain still appears, with NULL for the other metric. You can only group such a query by dimensions the metrics have in common — get_dimensions with several metrics returns exactly that set. Many metrics are already filtered — current_* means active-only, total_contributors excludes bots — so do not repeat those conditions in where."`
+	Search      string `json:"search,omitempty" jsonschema:"Filters results by name and description. For list_metrics use a topic word from COVERS ('contributor', 'membership', 'event', 'enrollment', 'maintainer', 'health'). For get_dimensions use the slice you are after, e.g. 'region', 'country', 'tier', 'name'."`
+	GroupBy     string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names, copied verbatim from list_metrics or get_dimensions — they are entity__field and the entity prefix differs per metric, so never assemble one by hand. Group by a name dimension to turn a metric into a ranked list of organizations, people or projects. For a trend add metric_time__year, or __quarter, __month, __week, __day. The entities listed alongside a metric are join keys, not group-by values — grouping by one returns raw IDs, so use the matching name dimension instead."`
+	Where       string `json:"where,omitempty" jsonschema:"MetricFlow filter expression; this clause does the actual data filtering. Categorical: {{ Dimension('country__lf_region') }} = 'Europe'. Time: {{ TimeDimension('asset_id__install_date', 'DAY') }} >= '2024-01-01'. Dates are yyyy-mm-dd. Use the qualified_name exactly as returned by list_metrics or get_dimensions. If you passed project_slug, include a project filter here too — find the matching project_slug or project_name dimension in the dimensions list."`
+	OrderBy     string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields. Each must also appear in group_by or metrics. Prefix with - for descending, e.g. -current_membership_revenue. Pair with limit for top-N questions."`
+	Limit       int    `json:"limit,omitempty" jsonschema:"Maximum rows to return, ceiling 500. Use 10-20 for top-N questions and 50-100 for full breakdowns."`
 }
 
-var lensDescribeTexts = map[string]string{
-	"list_metrics": `list_metrics — Discover available LFX Insights metrics.
+// lensHelpTexts back the help action. These are tool results, so they carry no
+// character budget — but they are a fallback, not a prerequisite: everything
+// needed to compose a first query lives in semanticLayerDescription and the
+// per-parameter descriptions.
+var lensHelpTexts = map[string]string{
+	"list_metrics": `list_metrics — discover metrics. Always the first call.
 
-Returns metric names, descriptions, types, and labels. When <=15 metrics match, each metric also includes its available dimension qualified_names — so you can go straight to a query without calling get_dimensions.
+  search (optional): matches metric NAMES and DESCRIPTIONS only.
 
-Parameters:
-  search (optional): filter term matched against name and description
+Search by topic, not by the slice you want: "contributor", "membership",
+"event", "enrollment", "maintainer", "health". Words that name a dimension —
+"country", "region", "tier" — match no metrics at all.
 
-Example:
-  action: "list_metrics", search: "maintainer"
-  → returns active_maintainers, total_maintainers, etc. with their dimensions`,
+When 15 or fewer metrics match, each comes back with its dimension
+qualified_names, which is usually enough to go straight to query.
 
-	"get_dimensions": `get_dimensions — Get dimensions available for specified metrics.
+Each metric also lists its entities. Those are the keys that link domains, not
+things to group by: they are why two metrics can be combined (both
+total_contributors and current_membership_revenue carry country). To find what
+you can actually group a multi-metric query by, call get_dimensions with both
+metrics.
 
-Dimensions are attributes you can group by or filter on. The qualified_name in the response is the exact string to use in group_by and where clauses.
+Nothing returned? Broaden the topic or drop to a single word. An unknown metric
+name is rejected with ranked suggestions — use them rather than guessing again.`,
 
-Use this when list_metrics returned too many results to include dimensions inline, or when you need full dimension detail (descriptions, types, time granularities).
+	"get_dimensions": `get_dimensions — list the dimensions available to a set of metrics.
 
-Parameters:
-  metrics (required): comma-separated metric names to get dimensions for
-  search (optional): filter dimensions by name
+  metrics (required): comma-separated metric names. Dimensions cannot be
+    searched without a metric, so choose a metric first.
+  search (optional): filters by name and description, e.g. "region".
 
-Examples:
-  action: "get_dimensions", metrics: "active_maintainers"
-  → finds: maintainer_key__account_name, maintainer_key__project_slug, maintainer_key__platform, ...
+Use each returned qualified_name verbatim in group_by and where.
 
-  action: "get_dimensions", metrics: "current_membership_revenue"
-  → finds: asset_id__membership_tier, asset_id__project_slug, asset_id__account_name, ...`,
+Passing several metrics returns only the dimensions they SHARE, and that set is
+much smaller than either metric's own. Those shared dimensions are what a
+cross-domain query can group by.`,
 
-	"query": lensQueryDescribeShared + lensQueryDescribeImportant,
+	"query": lensQueryHelp,
 }
 
-// lensQueryDescribeShared is the bulk of the "query" describe text; the final
-// Important paragraph is kept separate for readability.
-const lensQueryDescribeShared = `query — Execute a metric query against the Semantic Layer.
+// lensHelpOverview is returned by help with no target.
+const lensHelpOverview = `LFX Insights Semantic Layer — how to use it
 
-Parameters:
-  metrics (required): comma-separated metric names to query.
-  group_by (optional): comma-separated dimension qualified_names from list_metrics or get_dimensions.
-  where (optional): MetricFlow filter expression. Use the qualified_name from dimensions:
-    - Categorical: {{ Dimension('qualified_name') }} = 'value'
-    - Time: {{ TimeDimension('qualified_name', 'GRAIN') }} >= '2024-01-01'
-    - Dates must be yyyy-mm-dd format.
-  order_by (optional): comma-separated sort fields. Must also appear in group_by or metrics. Prefix with - for descending.
-  limit (optional): max rows to return (max 500). Use 10-20 for "top N" queries, 50-100 for breakdowns.
+Workflow: list_metrics(search) → get_dimensions (only if you need more) → query.
 
-For lookback queries (e.g. "last 6 months"), prefer order_by descending on a time dimension + limit, rather than complex where filters.
+  metric     the number being measured
+  dimension  an attribute you group, filter or list by
+  entity     the key that links domains — country, project, event, organization
 
-Examples:
+Because domains share entities, one query can span them: contribution metrics
+and membership metrics both reach the country dimensions, so they can be
+compared side by side in a single result. You never write a join — list several
+metrics and group by a dimension they share, and the join path is derived from
+the shared entity.
 
-"How many active maintainers does CNCF have?"
-  project_slug: "cncf"
-  action: "query"
-  metrics: "active_maintainers"
-  where: "{{ Dimension('maintainer_key__project_slug') }} = 'cncf'"
+Dimension qualified_names are entity__field. The prefix is the primary key of
+the metric's own table, so it differs from metric to metric. Always copy the
+name from list_metrics or get_dimensions.
 
-"Membership revenue by tier for CNCF"
-  project_slug: "cncf"
-  action: "query"
-  metrics: "current_membership_revenue"
-  group_by: "asset_id__membership_tier"
-  where: "{{ Dimension('asset_id__project_slug') }} = 'cncf'"
-  order_by: "-current_membership_revenue"
+help targets: query, list_metrics, get_dimensions`
 
-"Top 10 projects by health score"
-  project_slug: "cncf"
-  action: "query"
-  metrics: "avg_project_health_score"
-  group_by: "health_metric_key__project_slug, health_metric_key__project_name"
-  where: "{{ Dimension('health_metric_key__foundation_slug') }} = 'cncf'"
-  order_by: "-avg_project_health_score"
-  limit: 10
+const lensQueryHelp = `query — run a metric query.
 
-`
+  metrics   (required) comma-separated metric names.
+  group_by  (optional) dimension qualified_names, comma-separated.
+  where     (optional) MetricFlow filter:
+              categorical  {{ Dimension('country__lf_region') }} = 'Europe'
+              time         {{ TimeDimension('asset_id__install_date', 'DAY') }} >= '2024-01-01'
+              dates yyyy-mm-dd.
+  order_by  (optional) must also appear in group_by or metrics; - for descending.
+  limit     (optional) ceiling 500. 10-20 for top-N, 50-100 for breakdowns.
 
-const lensQueryDescribeImportant = `Important: project_slug is optional. When provided, where-clause project filters are validated against that foundation's subtree — the where clause does the actual data filtering. Omit project_slug and the project filter for global or cross-foundation queries.`
+Trends: add metric_time__year (or __quarter, __month, __week, __day) to
+group_by rather than writing date ranges by hand.
+
+Ranked lists: group by a name dimension, order by the metric descending, and
+set a limit.
+
+Combining metrics from different domains outer-joins them, so a group with data
+in only one domain still appears, with NULL for the other metric.
+
+Pre-filtered metrics: current_* is already active-only and total_contributors
+already excludes bots. Do not add those conditions again.
+
+project_slug is optional. Supply it and the where clause must carry a project
+filter, validated against that foundation's subtree. Omit both for global or
+cross-foundation questions.
+
+Examples
+
+  Active maintainers in CNCF
+    project_slug  cncf
+    metrics       active_maintainers
+    where         {{ Dimension('maintainer_key__project_slug') }} = 'cncf'
+
+  Membership revenue by tier, CNCF
+    project_slug  cncf
+    metrics       current_membership_revenue
+    group_by      asset_id__membership_tier
+    where         {{ Dimension('asset_id__project_slug') }} = 'cncf'
+    order_by      -current_membership_revenue
+
+  Top 10 organizations by contribution in a region
+    metrics       total_contributors
+    group_by      activity_project_id__organization_name
+    where         {{ Dimension('activity_project_id__organization_lf_region') }} = 'Asia Pacific'
+    order_by      -total_contributors
+    limit         10
+
+  Region values are exact strings — group by the dimension with no filter first
+  to see them. lf_region is one of: North America, Europe, China, India, Japan,
+  Asia Pacific, Middle East & Africa, Latin America, Other.
+
+  Contribution against financial involvement, by region, globally
+    metrics       total_contributors, total_contributing_organizations, current_membership_revenue
+    group_by      country__lf_region
+    order_by      -current_membership_revenue
+
+  European membership revenue trend by year
+    metrics       current_membership_revenue
+    group_by      country__lf_region, metric_time__year
+    where         {{ Dimension('country__lf_region') }} = 'Europe'
+    limit         100`
 
 func handleSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args SemanticLayerLFXLensArgs) (*mcp.CallToolResult, any, error) {
 	if lensConfig == nil {
@@ -327,8 +349,10 @@ func handleSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args Seman
 	}
 
 	switch args.Action {
-	case "describe":
-		return handleLensDescribe(args.Target)
+	// "describe" is the pre-rename name for this action, kept so a caller
+	// working from a cached schema does not get an Unknown action error.
+	case "help", "describe":
+		return handleLensHelp(args.Target)
 	case "list_metrics":
 		return handleLensListMetrics(ctx, args)
 	case "get_dimensions":
@@ -337,26 +361,20 @@ func handleSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args Seman
 		return handleLensQueryMetrics(ctx, args)
 	default:
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Unknown action %q. Valid actions: describe, list_metrics, get_dimensions, query", args.Action)}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Unknown action %q. Valid actions: list_metrics, get_dimensions, query, help", args.Action)}},
 			IsError: true,
 		}, nil, nil
 	}
 }
 
-func handleLensDescribe(target string) (*mcp.CallToolResult, any, error) {
+func handleLensHelp(target string) (*mcp.CallToolResult, any, error) {
 	if target == "" {
-		var sb strings.Builder
-		sb.WriteString("Available actions (use target to get details):\n\n")
-		for _, action := range []string{"list_metrics", "get_dimensions", "query"} {
-			lines := strings.SplitN(lensDescribeTexts[action], "\n", 2)
-			sb.WriteString("  " + lines[0] + "\n")
-		}
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: sb.String()}},
+			Content: []mcp.Content{&mcp.TextContent{Text: lensHelpOverview}},
 		}, nil, nil
 	}
 
-	text, ok := lensDescribeTexts[target]
+	text, ok := lensHelpTexts[target]
 	if !ok {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Unknown action %q. Valid targets: list_metrics, get_dimensions, query", target)}},

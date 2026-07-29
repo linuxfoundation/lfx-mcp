@@ -250,7 +250,7 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		// query_lfx_lens. These singular forms are verified against the API.
 		"contributor, contribution —",
 		"membership, revenue, churn —",
-		"event, registration, sponsorship, speaker —",
+		"event, registration, speaker —",
 		"enrollment, certification —",
 		"maintainer —",
 		"health, project —",
@@ -279,6 +279,14 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		if !strings.Contains(exploreSemanticLayerDescription, want) {
 			t.Errorf("explore description missing %q", want)
 		}
+	}
+
+	// Event sponsorships stay with query_lfx_lens, which does them better, so
+	// this tool must not advertise them. Listing "sponsorship" as a topic here
+	// put two tools in charge of the same question and contradicted the
+	// carve-out query_lfx_lens still states.
+	if strings.Contains(exploreSemanticLayerDescription, "sponsorship,") {
+		t.Error("explore description claims sponsorships as a topic; query_lfx_lens owns them")
 	}
 
 	// The description used to warn that a plural search matches nothing. That
@@ -415,8 +423,8 @@ func TestBothLensToolDescriptionsFitBudget(t *testing.T) {
 		name     string
 		register func(*mcp.Server)
 	}{
-		{"explore_lfx_semantic_layer", RegisterSemanticLayer},
-		{"query_lfx_semantic_layer", RegisterSemanticLayer},
+		{"explore_lfx_semantic_layer", RegisterExploreSemanticLayer},
+		{"query_lfx_semantic_layer", RegisterQuerySemanticLayer},
 		{"query_lfx_lens", RegisterQueryLFXLens},
 	} {
 		tool := listRegisteredTool(t, tc.name, tc.register)
@@ -433,15 +441,26 @@ func TestBothLensToolDescriptionsFitBudget(t *testing.T) {
 
 func listExploreTool(t *testing.T) *mcp.Tool {
 	t.Helper()
-	return listRegisteredTool(t, "explore_lfx_semantic_layer", RegisterSemanticLayer)
+	return listRegisteredTool(t, "explore_lfx_semantic_layer", RegisterExploreSemanticLayer)
 }
 
 func listQueryTool(t *testing.T) *mcp.Tool {
 	t.Helper()
-	return listRegisteredTool(t, "query_lfx_semantic_layer", RegisterSemanticLayer)
+	return listRegisteredTool(t, "query_lfx_semantic_layer", RegisterQuerySemanticLayer)
 }
 
+// listRegisteredTool returns the named tool, failing the test if it is absent.
 func listRegisteredTool(t *testing.T, name string, register func(*mcp.Server)) *mcp.Tool {
+	t.Helper()
+	tool := findRegisteredTool(t, name, register)
+	if tool == nil {
+		t.Fatalf("%s not found in tool list", name)
+	}
+	return tool
+}
+
+// findRegisteredTool returns the named tool, or nil when it is not registered.
+func findRegisteredTool(t *testing.T, name string, register func(*mcp.Server)) *mcp.Tool {
 	t.Helper()
 
 	server := mcp.NewServer(&mcp.Implementation{
@@ -474,7 +493,6 @@ func listRegisteredTool(t *testing.T, name string, register func(*mcp.Server)) *
 			return tool
 		}
 	}
-	t.Fatalf("%s not found in tool list", name)
 	return nil
 }
 
@@ -610,8 +628,9 @@ func TestExploreToolRedirectsQueryAction(t *testing.T) {
 }
 
 // TestHelpActionAndDescribeAlias checks the renamed action works and that the
-// old name still dispatches, so a client working from a cached schema does not
-// hit an Unknown action error.
+// old action word still dispatches on this tool. It deliberately does NOT claim
+// to cover the pre-split schema: that caller addresses query_lfx_semantic_layer,
+// which no longer accepts an action, so no assertion here can exercise it.
 func TestHelpActionAndDescribeAlias(t *testing.T) {
 	setupLensTest(t)
 
@@ -842,5 +861,32 @@ func TestHelpCoversGetDimensionValues(t *testing.T) {
 	}
 	if text := resultText(t, overview); !strings.Contains(text, "get_dimension_values") {
 		t.Errorf("help overview does not mention get_dimension_values: %q", text)
+	}
+}
+
+// TestSemanticLayerToolsRegisterIndependently guards tool selection.
+//
+// Both tools used to be added by one function behind one gate keyed to
+// "query_lfx_semantic_layer", so LFXMCP_TOOLS=explore_lfx_semantic_layer
+// registered nothing at all, and selecting only the query tool silently
+// exposed both. Each name must control exactly its own tool.
+func TestSemanticLayerToolsRegisterIndependently(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		register func(*mcp.Server)
+		absent   string
+	}{
+		{"explore_lfx_semantic_layer", RegisterExploreSemanticLayer, "query_lfx_semantic_layer"},
+		{"query_lfx_semantic_layer", RegisterQuerySemanticLayer, "explore_lfx_semantic_layer"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tool := listRegisteredTool(t, tc.name, tc.register); tool == nil {
+				t.Fatalf("%s did not register itself", tc.name)
+			}
+			if found := findRegisteredTool(t, tc.absent, tc.register); found != nil {
+				t.Errorf("registering %s also exposed %s; each name must select only its own tool",
+					tc.name, tc.absent)
+			}
+		})
 	}
 }

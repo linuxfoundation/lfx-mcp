@@ -168,7 +168,7 @@ const exploreSemanticLayerDescription = `The LFX Insights Semantic Layer is the 
 COVERS — search one of these topic words:
 - contributor, contribution — activity and org counts, commits, PRs
 - membership, revenue, churn — counts, discounts, invoices
-- event, registration, sponsorship, speaker — counts and revenue
+- event, registration, speaker — counts and revenue
 - enrollment, certification — education
 - maintainer — total and active counts
 - health, project — health scores, software value, cost
@@ -182,7 +182,7 @@ ACTIONS
 - get_dimension_values(dimension, metrics, search): the literals a dimension holds. Call it before filtering on any value not already seen in output: an unknown literal returns zero rows, not an error, so a wrong guess reads as missing data. Spellings surprise — 'Asia Pacific' not 'APAC', 'Viet Nam' not 'Vietnam'.
 - help(target): worked query examples, for when a query fails.
 
-USE query_lfx_lens INSTEAD for questions that do not reduce to a metric above: narrative or "why", subproject exploration, maintainer trends/names.`
+USE query_lfx_lens INSTEAD for questions that do not reduce to a metric above: narrative or "why", subproject exploration, maintainer trends, event sponsorships.`
 
 const querySemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data; this half runs the query. Covers contributions, memberships, events, education, maintainers and project health — and anything sliced by country or region. ALWAYS call explore_lfx_semantic_layer first unless you already have the exact metric, dimension and entity names — never guess or assemble one: a wrong name errors, and a wrong filter value returns no rows rather than an error, so confirm literals with get_dimension_values. Use query_lfx_lens for narrative or "why" questions that do not reduce to a metric.
 
@@ -198,17 +198,24 @@ const querySemanticLayerDescription = `The LFX Insights Semantic Layer is the qu
 
 Many metrics are pre-filtered — current_* is active-only, total_contributors excludes bots — so do not re-filter those. Entities listed with a metric are join keys, not group-by values: grouping by one returns raw IDs, so use the name dimension.`
 
-// RegisterSemanticLayer registers the two semantic layer tools. The
-// registration gate in cmd/lfx-mcp-server limits both to staff callers, so
+// The two semantic layer tools register independently so that LFXMCP_TOOLS can
+// select either by name. They are meant to be enabled together — each
+// description points at the other — but a shared gate would mean the name
+// "explore_lfx_semantic_layer" registered nothing while
+// "query_lfx_semantic_layer" silently registered both.
+//
+// The registration gate in cmd/lfx-mcp-server limits both to staff callers, so
 // project scoping is optional here; lfx-lens validates any project filters that
 // are provided against the requested foundation's subtree.
 //
 // Discovery and querying are separate tools rather than actions on one tool
 // because a tool description and its required parameters are the only guidance
-// that reaches the model intact — see the note on SemanticLayerLFXLensArgs.
+// that reaches the model intact — see the note on QuerySemanticLayerArgs.
 // Splitting gives the query its own description to hold the MetricFlow syntax,
 // and makes metrics genuinely required there rather than optional.
-func RegisterSemanticLayer(server *mcp.Server) {
+
+// RegisterExploreSemanticLayer registers the explore_lfx_semantic_layer tool.
+func RegisterExploreSemanticLayer(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "explore_lfx_semantic_layer",
 		Description: exploreSemanticLayerDescription,
@@ -217,7 +224,10 @@ func RegisterSemanticLayer(server *mcp.Server) {
 			ReadOnlyHint: true,
 		},
 	}, handleExploreSemanticLayer)
+}
 
+// RegisterQuerySemanticLayer registers the query_lfx_semantic_layer tool.
+func RegisterQuerySemanticLayer(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "query_lfx_semantic_layer",
 		Description: querySemanticLayerDescription,
@@ -424,8 +434,13 @@ func handleExploreSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, arg
 	}
 
 	switch args.Action {
-	// "describe" is the pre-rename name for help, kept so a caller working
-	// from a cached schema does not get an Unknown action error.
+	// "describe" is the pre-rename name for help. It only helps a caller that
+	// has this tool but reuses the old action word — a caller still on the
+	// pre-split schema is addressing query_lfx_semantic_layer, which no longer
+	// takes an action at all and cannot reach here. Restoring that path would
+	// mean making metrics optional again on the query tool, which is exactly
+	// the compaction protection the split exists to get, so the stale-schema
+	// case is left to resolve itself when the client refreshes its tool list.
 	case "help", "describe":
 		return handleLensHelp(args.Target)
 	case "list_metrics":

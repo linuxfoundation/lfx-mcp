@@ -415,10 +415,10 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 	}
 }
 
-// TestBothLensToolDescriptionsFitBudget guards every description that ships in
+// TestAllLensToolDescriptionsFitBudget guards every description that ships in
 // tools/list, not just the semantic layer's. query_lfx_lens has far less
-// headroom and is the likelier of the two to drift past the cut unnoticed.
-func TestBothLensToolDescriptionsFitBudget(t *testing.T) {
+// headroom and is the likeliest to drift past the cut unnoticed.
+func TestAllLensToolDescriptionsFitBudget(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		register func(*mcp.Server)

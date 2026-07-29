@@ -178,11 +178,11 @@ A metric is the number measured (total_contributors); a dimension is how you sli
 
 ACTIONS
 - list_metrics(search): searches metric names and descriptions only, so search a topic word above, not a dimension word like "country". When 15 or fewer match, each returns its dimension qualified_names — usually enough to query.
-- get_dimensions(metrics, search): dimensions available to those metrics; needs at least one. Several returns only the ones they share — what a cross-domain query can group by.
+- get_dimensions(metrics, search): dimensions available to those metrics; needs at least one. Passing several returns only the ones they share — what a cross-domain query can group by.
 - get_dimension_values(dimension, metrics, search): the literals a dimension holds. Call it before filtering on any value not already seen in output: an unknown literal returns zero rows, not an error, so a wrong guess reads as missing data. Spellings surprise — 'Asia Pacific' not 'APAC', 'Viet Nam' not 'Vietnam'.
 - help(target): worked query examples, for when a query fails.
 
-USE query_lfx_lens INSTEAD for questions that do not reduce to a metric above: narrative or "why", subproject exploration, maintainer trends, event sponsorships.`
+USE query_lfx_lens INSTEAD for questions that do not reduce to a metric above: narrative or "why", subprojects, maintainer trends, event sponsorships.`
 
 const querySemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data; this half runs the query. Covers contributions, memberships, events, education, maintainers and project health — and anything sliced by country or region. ALWAYS call explore_lfx_semantic_layer first unless you already have the exact metric, dimension and entity names — never guess or assemble one: a wrong name errors, and a wrong filter value returns no rows rather than an error, so confirm literals with get_dimension_values. Use query_lfx_lens for narrative or "why" questions that do not reduce to a metric.
 
@@ -279,8 +279,8 @@ type QuerySemanticLayerArgs struct {
 
 // lensHelpTexts back the help action. These are tool results, so they carry no
 // character budget — but they are a fallback, not a prerequisite: everything
-// needed to compose a first query lives in semanticLayerDescription and the
-// per-parameter descriptions.
+// needed to compose a first query lives in exploreSemanticLayerDescription,
+// querySemanticLayerDescription and the per-parameter descriptions.
 var lensHelpTexts = map[string]string{
 	"list_metrics": `list_metrics — discover metrics. Always the first call.
 
@@ -450,8 +450,10 @@ func handleExploreSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, arg
 	case "get_dimension_values":
 		return handleLensGetDimensionValues(ctx, args.Dimension, args.Metrics, args.Search)
 	case "query":
-		// Querying moved to its own tool; a caller on a cached schema would
-		// otherwise get a bare "unknown action" with nowhere to go.
+		// Reachable only from a caller that already has this tool and reused
+		// the old action word; a caller still on the pre-split schema is
+		// addressing query_lfx_semantic_layer and never lands here. See the
+		// note on the describe alias above.
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: "Querying moved to the query_lfx_semantic_layer tool. Call it directly with metrics, group_by, where, order_by and limit."}},
 			IsError: true,
@@ -474,7 +476,7 @@ func handleLensHelp(target string) (*mcp.CallToolResult, any, error) {
 	text, ok := lensHelpTexts[target]
 	if !ok {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Unknown action %q. Valid targets: list_metrics, get_dimensions, get_dimension_values, query", target)}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Unknown help target %q. Valid targets: list_metrics, get_dimensions, get_dimension_values, query", target)}},
 			IsError: true,
 		}, nil, nil
 	}

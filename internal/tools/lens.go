@@ -41,8 +41,6 @@ func RegisterQueryLFXLens(server *mcp.Server) {
 		Description: `Ask natural language questions about a project's data using ad-hoc SQL generation.
 
 Always use this tool for:
-- Membership questions (e.g. "current members", "membership revenue by tier", "churn rate"), EXCEPT country/region
-  breakdowns, which use query_lfx_semantic_layer
 - Maintainer names or maintainer+activities data joins, where activities data is the code activities model
   with code contributions, PRs, commits etc (e.g. "top maintainers by contributions", "who maintains Kubernetes?").
   IMPORTANT: activities data (contributors, PRs, code contributions etc) not involving maintainers should use query_lfx_semantic_layer.
@@ -55,7 +53,7 @@ Also use this tool for:
 - Cross-domain joins that the semantic layer cannot do (e.g. maintainers + activities)
 - Any question where query_lfx_semantic_layer is struggling or returning errors
 
-Important: questions just about contributors/activities (without maintainer joins) should use query_lfx_semantic_layer — it has full contributor data including names, organizations, and activity breakdowns.
+Important: contributor, activity and membership questions belong to the semantic layer — explore_lfx_semantic_layer then query_lfx_semantic_layer.
 
 Use search_projects first to find the project slug.
 
@@ -72,7 +70,7 @@ Tips:
 // QueryLFXLensArgs defines the input for query_lfx_lens.
 type QueryLFXLensArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf') (required)"`
-	Input       string `json:"input" jsonschema:"Natural language question. Always use for memberships (except country/region breakdowns), maintainer names/trends, open-ended analysis, subproject questions, cross-domain joins, and exploratory questions. Takes 15-30s. (required)"`
+	Input       string `json:"input" jsonschema:"Natural language question. Use for maintainer names/trends, open-ended analysis, subproject questions, cross-domain joins, and exploratory questions. Contributor, activity and membership questions belong to the semantic layer. Takes 15-30s. (required)"`
 }
 
 type lensWorkflowAdditional struct {
@@ -165,39 +163,40 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 // QuerySemanticLayerArgs for why that distinction matters. Anything that still
 // does not fit belongs in the help action, whose output is a tool result and
 // carries no limit; help is a fallback for a failed query, not a prerequisite.
-const exploreSemanticLayerDescription = `Discover what the LFX Insights Semantic Layer can measure, then query it with query_lfx_semantic_layer. Start here whenever you do not already know the exact metric and dimension names.
+const exploreSemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data. This half discovers what can be measured; query_lfx_semantic_layer runs it. Start here whenever you do not already know the exact metric, dimension and value names.
 
-COVERS (search these words):
-- contributions — activity, contributor and org counts, commits, PRs, code lines
-- memberships — revenue, counts, churn, discounts, invoices
-- events — event, registration, speaker, sponsorship counts and revenue
-- education — enrollment and certification counts
-- maintainers — total and active maintainer counts
-- project health — health scores, software value, cost
+COVERS — search one of these topic words:
+- contributor, contribution — activity and org counts, commits, PRs
+- membership, revenue, churn — counts, discounts, invoices
+- event, registration, sponsorship, speaker — counts and revenue
+- enrollment, certification — education
+- maintainer — total and active counts
+- health, project — health scores, software value, cost
 - any of the above sliced by country or region — always here, never query_lfx_lens
 
-A metric is the number being measured (total_contributors); a dimension is how you slice, filter or list it (country__lf_region, asset_id__membership_tier). Dimension names are entity__field and the prefix differs per metric, so always copy qualified_names from this tool rather than assembling one by hand — e.g. country__lf_region is a person's country, while activity_project_id__organization_lf_region is an organization's HQ.
+A metric is the number measured (total_contributors); a dimension is how you slice, filter or list it (country__lf_region). Names are entity__field and the prefix differs per metric, so copy qualified_names from this tool rather than assembling one — country__lf_region is a person's country, activity_project_id__organization_lf_region an organization's HQ.
 
 ACTIONS
-- list_metrics(search): searches metric names and descriptions only, so search a topic word above; a dimension word like "country" matches no metrics. When 15 or fewer match, each comes back with its dimension qualified_names — usually enough to query straight away. If nothing returns, broaden the term.
-- get_dimensions(metrics, search): every dimension available to those metrics. Requires at least one metric, so pick a metric first. Passing several returns only the dimensions they share, which is exactly what a cross-domain query can group by.
-- help(target): worked query examples. Call it when a query fails or you want a template.
+- list_metrics(search): searches metric names and descriptions only, so search a topic word above, not a dimension word like "country". When 15 or fewer match, each returns its dimension qualified_names — usually enough to query.
+- get_dimensions(metrics, search): dimensions available to those metrics; needs at least one. Several returns only the ones they share — what a cross-domain query can group by.
+- get_dimension_values(dimension, metrics, search): the literals a dimension holds. Call it before filtering on any value not already seen in output: an unknown literal returns zero rows, not an error, so a wrong guess reads as missing data. Spellings surprise — 'Asia Pacific' not 'APAC', 'Viet Nam' not 'Vietnam'.
+- help(target): worked query examples, for when a query fails.
 
-USE query_lfx_lens INSTEAD for questions that do not reduce to a metric above: narrative or "why", subproject exploration, maintainer trends/names, and memberships not sliced by country or region.`
+USE query_lfx_lens INSTEAD for questions that do not reduce to a metric above: narrative or "why", subproject exploration, maintainer trends/names.`
 
-const querySemanticLayerDescription = `Run a query against the LFX Insights Semantic Layer. Covers contributions, memberships, events, education, maintainers and project health — and is always the right tool for anything sliced by country or region. Use explore_lfx_semantic_layer first if you do not know the metric and dimension names; use query_lfx_lens for narrative or "why" questions that do not reduce to a metric.
+const querySemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data; this half runs the query. Covers contributions, memberships, events, education, maintainers and project health — and anything sliced by country or region. ALWAYS call explore_lfx_semantic_layer first unless you already have the exact metric, dimension and entity names — never guess or assemble one: a wrong name errors, and a wrong filter value returns no rows rather than an error, so confirm literals with get_dimension_values. Use query_lfx_lens for narrative or "why" questions that do not reduce to a metric.
 
-  metrics (required): comma-separated names. List several to combine them in one result, even across domains — they are joined for you on the dimensions they share. Such a query can only group by dimensions the metrics have in common, and is outer-joined, so a group present in only one domain still appears with NULL for the other.
-  group_by: dimension qualified_names, comma-separated, copied verbatim from explore_lfx_semantic_layer. Group by a name dimension to turn a metric into a ranked list of organizations, people or projects. For a trend add metric_time__year, or __quarter, __month, __week, __day.
-  where: MetricFlow filter; this does the actual filtering.
+  metrics (required): comma-separated names. List several to combine them in one result, even across domains — they are joined on the dimensions they have in common, the only set such a query can group by. The join is outer, so a group in only one domain still appears with NULL for the other.
+  group_by: dimension qualified_names, comma-separated, copied verbatim. Group by a name dimension for a ranked list of organizations, people or projects. For a trend add metric_time__year, or __quarter, __month, __week, __day.
+  where: MetricFlow filter; this does the filtering.
     categorical  {{ Dimension('country__lf_region') }} = 'Europe'
     time         {{ TimeDimension('asset_id__install_date', 'DAY') }} >= '2024-01-01'
-    Dates are yyyy-mm-dd. Region values are exact strings; group by the dimension with no filter to see them.
-  order_by: comma-separated; each field must also appear in group_by or metrics. Prefix - for descending. Pair with limit for top-N.
+    Dates are yyyy-mm-dd.
+  order_by: comma-separated; each field must also appear in group_by or metrics. Prefix - for descending.
   limit: ceiling 500. Use 10-20 for top-N, 50-100 for full breakdowns.
-  project_slug: optional. Omit it for global or cross-foundation questions — the normal case for country and region questions. When given, the where clause must also carry a project filter, validated against that foundation's subtree.
+  project_slug: optional. Omit it for global or cross-foundation questions — the normal case for country and region ones. When given, the where clause must also carry a project filter, validated against that foundation's subtree.
 
-Many metrics are pre-filtered — current_* is active-only, total_contributors excludes bots — so do not re-filter those. The entities listed with a metric are join keys, not group-by values: grouping by one returns raw IDs, so use the matching name dimension.`
+Many metrics are pre-filtered — current_* is active-only, total_contributors excludes bots — so do not re-filter those. Entities listed with a metric are join keys, not group-by values: grouping by one returns raw IDs, so use the name dimension.`
 
 // RegisterSemanticLayer registers the two semantic layer tools. The
 // registration gate in cmd/lfx-mcp-server limits both to staff callers, so
@@ -230,11 +229,17 @@ func RegisterSemanticLayer(server *mcp.Server) {
 }
 
 // ExploreSemanticLayerArgs defines the input for explore_lfx_semantic_layer.
+//
+// Action is the only required field, so under the schema compaction described
+// on QuerySemanticLayerArgs it is the one parameter description that survives
+// intact — hence the full action list lives there rather than being split
+// across the optional fields.
 type ExploreSemanticLayerArgs struct {
-	Action  string `json:"action" jsonschema:"Required. One of: list_metrics, get_dimensions, help."`
-	Search  string `json:"search,omitempty" jsonschema:"For list_metrics, a topic word ('contributor', 'membership', 'event', 'enrollment', 'maintainer', 'health'). For get_dimensions, the slice you are after, e.g. 'region', 'tier', 'name'."`
-	Metrics string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names. Required for get_dimensions; pass several to see only the dimensions they share."`
-	Target  string `json:"target,omitempty" jsonschema:"For action=help only: which action to get examples for (e.g. 'query'). Omit for an overview."`
+	Action    string `json:"action" jsonschema:"Required. One of: list_metrics, get_dimensions, get_dimension_values, help. Use get_dimension_values before filtering on any value you have not seen in output: a where clause with a real dimension but an unknown literal returns zero rows instead of an error, so a wrong guess looks exactly like missing data."`
+	Search    string `json:"search,omitempty" jsonschema:"For list_metrics, a topic word ('contributor', 'membership', 'event', 'enrollment', 'maintainer', 'health'). For get_dimensions, the slice you are after, e.g. 'region', 'tier', 'name'. For get_dimension_values, a fragment of the value — keep it short, since the stored spelling often differs from the everyday one."`
+	Metrics   string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names. Required for get_dimensions and get_dimension_values; pass several to get_dimensions to see only the dimensions they share."`
+	Dimension string `json:"dimension,omitempty" jsonschema:"For action=get_dimension_values only: one dimension qualified_name, copied from get_dimensions (e.g. 'country__lf_region')."`
+	Target    string `json:"target,omitempty" jsonschema:"For action=help only: which action to get examples for (e.g. 'query'). Omit for an overview."`
 }
 
 // QuerySemanticLayerArgs defines the input for query_lfx_semantic_layer.
@@ -254,7 +259,7 @@ type ExploreSemanticLayerArgs struct {
 // through unchanged; they just are not the only copy.
 // TestCriticalGuidanceSurvivesSchemaCompaction guards that split.
 type QuerySemanticLayerArgs struct {
-	Metrics     string `json:"metrics" jsonschema:"Required. Comma-separated metric names from explore_lfx_semantic_layer. List several to combine them in one result, even across domains: they are outer-joined on the dimensions they share, so a group present in only one domain still appears with NULL for the other metric, and you can only group by dimensions they have in common. Many metrics are already filtered — current_* means active-only, total_contributors excludes bots — so do not repeat those conditions in where."`
+	Metrics     string `json:"metrics" jsonschema:"Required. Comma-separated metric names taken from explore_lfx_semantic_layer — never guessed. List several to combine them in one result, even across domains: they are outer-joined on the dimensions they share, so a group present in only one domain still appears with NULL for the other metric, and you can only group by dimensions they have in common. Many metrics are already filtered — current_* means active-only, total_contributors excludes bots — so do not repeat those conditions in where."`
 	GroupBy     string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names, copied verbatim from explore_lfx_semantic_layer — they are entity__field and the prefix differs per metric. Group by a name dimension for a ranked list of organizations, people or projects; add metric_time__year (or __quarter, __month, __week, __day) for a trend."`
 	Where       string `json:"where,omitempty" jsonschema:"MetricFlow filter; this clause does the actual data filtering. Categorical: {{ Dimension('country__lf_region') }} = 'Europe'. Time: {{ TimeDimension('asset_id__install_date', 'DAY') }} >= '2024-01-01'. Dates are yyyy-mm-dd."`
 	OrderBy     string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields. Each must also appear in group_by or metrics. Prefix with - for descending, e.g. -current_membership_revenue."`
@@ -299,13 +304,39 @@ Passing several metrics returns only the dimensions they SHARE, and that set is
 much smaller than either metric's own. Those shared dimensions are what a
 cross-domain query can group by.`,
 
+	"get_dimension_values": `get_dimension_values — list the literals a dimension can hold.
+
+  dimension (required): one qualified_name from get_dimensions.
+  metrics   (required): the metric you intend to query. The dimension is
+    checked against it, so the two must go together.
+  search    (optional): case-insensitive substring. Keep it short — a fragment
+    like "viet" finds a value however it is spelled.
+
+Call this before filtering on any value you have not already seen in output.
+An unknown literal is not an error: the query succeeds and returns zero rows,
+which is indistinguishable from the data genuinely being empty.
+
+Stored spellings are not the everyday ones:
+  lf_region     'Asia Pacific', never 'APAC'
+  country_name  'Viet Nam', 'Korea, Republic of', 'Türkiye' — ISO spellings
+
+Values come from the dimension's full domain, not just rows carrying the
+metric, so a value listed here can still return no rows once other filters are
+applied.
+
+Prefer the country__* dimensions over asset_id__billing_country, which is
+unnormalized free text and holds both 'Viet Nam' and 'Vietnam' alongside
+entries like 'na', 'US' and 'Untied States'. Filtering on it drops members
+filed under a different spelling.`,
+
 	"query": lensQueryHelp,
 }
 
 // lensHelpOverview is returned by help with no target.
 const lensHelpOverview = `LFX Insights Semantic Layer — how to use it
 
-Workflow: list_metrics(search) → get_dimensions (only if you need more) → query.
+Workflow: list_metrics(search) → get_dimensions (only if you need more) →
+get_dimension_values (before filtering on an unseen value) → query.
 
   metric     the number being measured
   dimension  an attribute you group, filter or list by
@@ -321,7 +352,7 @@ Dimension qualified_names are entity__field. The prefix is the primary key of
 the metric's own table, so it differs from metric to metric. Always copy the
 name from list_metrics or get_dimensions.
 
-help targets: query, list_metrics, get_dimensions`
+help targets: query, list_metrics, get_dimensions, get_dimension_values`
 
 const lensQueryHelp = `query — run a metric query.
 
@@ -371,9 +402,10 @@ Examples
     order_by      -total_contributors
     limit         10
 
-  Region values are exact strings — group by the dimension with no filter first
-  to see them. lf_region is one of: North America, Europe, China, India, Japan,
-  Asia Pacific, Middle East & Africa, Latin America, Other.
+  Filter values are exact strings. lf_region is one of: North America, Europe,
+  China, India, Japan, Asia Pacific, Middle East & Africa, Latin America, Other.
+  For any other dimension use explore_lfx_semantic_layer's get_dimension_values
+  rather than guessing — a wrong literal returns zero rows, not an error.
 
   Contribution against financial involvement, by region, globally
     metrics       total_contributors, total_contributing_organizations, current_membership_revenue
@@ -400,6 +432,8 @@ func handleExploreSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, arg
 		return handleLensListMetrics(ctx, args.Search)
 	case "get_dimensions":
 		return handleLensGetDimensions(ctx, args.Metrics, args.Search)
+	case "get_dimension_values":
+		return handleLensGetDimensionValues(ctx, args.Dimension, args.Metrics, args.Search)
 	case "query":
 		// Querying moved to its own tool; a caller on a cached schema would
 		// otherwise get a bare "unknown action" with nowhere to go.
@@ -409,7 +443,7 @@ func handleExploreSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, arg
 		}, nil, nil
 	default:
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Unknown action %q. Valid actions: list_metrics, get_dimensions, help. To run a query, use the query_lfx_semantic_layer tool.", args.Action)}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Unknown action %q. Valid actions: list_metrics, get_dimensions, get_dimension_values, help. To run a query, use the query_lfx_semantic_layer tool.", args.Action)}},
 			IsError: true,
 		}, nil, nil
 	}
@@ -425,7 +459,7 @@ func handleLensHelp(target string) (*mcp.CallToolResult, any, error) {
 	text, ok := lensHelpTexts[target]
 	if !ok {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Unknown action %q. Valid targets: list_metrics, get_dimensions, query", target)}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Unknown action %q. Valid targets: list_metrics, get_dimensions, get_dimension_values, query", target)}},
 			IsError: true,
 		}, nil, nil
 	}
@@ -458,6 +492,37 @@ func handleLensGetDimensions(ctx context.Context, metricsArg, search string) (*m
 		params.Set("search", search)
 	}
 	return lensDoGet(ctx, "/lfx-lens/semantic-layer/dimensions", params)
+}
+
+// handleLensGetDimensionValues lists the literals a dimension can hold.
+//
+// A where clause with a real dimension but an unknown value succeeds and
+// returns no rows, so a wrong guess is indistinguishable from an empty result
+// and gets read as "no such data". Seen live against 'APAC' (the value is
+// 'Asia Pacific') and 'Vietnam' (it is 'Viet Nam').
+func handleLensGetDimensionValues(ctx context.Context, dimension, metricsArg, search string) (*mcp.CallToolResult, any, error) {
+	if strings.TrimSpace(dimension) == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: dimension is required for get_dimension_values. Pass a qualified_name from get_dimensions, e.g. country__lf_region."}},
+			IsError: true,
+		}, nil, nil
+	}
+
+	metrics := parseCSV(metricsArg)
+	if len(metrics) == 0 {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "Error: metrics is required for get_dimension_values — it is what the dimension is checked against. Pass the metric you intend to query."}},
+			IsError: true,
+		}, nil, nil
+	}
+
+	params := url.Values{}
+	params.Set("dimension", strings.TrimSpace(dimension))
+	params.Set("metrics", strings.Join(metrics, ","))
+	if search != "" {
+		params.Set("search", search)
+	}
+	return lensDoGet(ctx, "/lfx-lens/semantic-layer/dimension-values", params)
 }
 
 func handleQuerySemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args QuerySemanticLayerArgs) (*mcp.CallToolResult, any, error) {

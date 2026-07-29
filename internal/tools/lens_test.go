@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -26,6 +27,7 @@ func (stubTokenSource) GetToken(_ context.Context) (string, error) {
 type capturedLensRequest struct {
 	Method string
 	Path   string
+	Query  url.Values
 	Body   []byte
 }
 
@@ -40,6 +42,7 @@ func setupLensTest(t *testing.T) *capturedLensRequest {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		captured.Method = r.Method
 		captured.Path = r.URL.Path
+		captured.Query = r.URL.Query()
 		body, _ := io.ReadAll(r.Body)
 		captured.Body = body
 		w.Header().Set("Content-Type", "application/json")
@@ -240,24 +243,54 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		// one-sided — query_lfx_lens lists concrete triggers while this tool
 		// describes itself abstractly, so every specific question looks like a
 		// better match for the other tool.
-		"contributions —",
-		"memberships —",
-		"events —",
-		"education —",
-		"maintainers —",
-		"project health —",
+		// Search terms must be words the Semantic Layer actually matches.
+		// The earlier headings were plurals — "contributions", "memberships",
+		// "education", "project health" all returned zero metrics, and a live
+		// client followed the instruction, got [], and fell back to
+		// query_lfx_lens. These singular forms are verified against the API.
+		"contributor, contribution —",
+		"membership, revenue, churn —",
+		"event, registration, sponsorship, speaker —",
+		"enrollment, certification —",
+		"maintainer —",
+		"health, project —",
 		// Regional questions route here for every topic, memberships included.
 		"any of the above sliced by country or region — always here, never query_lfx_lens",
-		"memberships not sliced by country or region",
 		// Dimension naming, and the regional person-vs-organization split.
 		"entity__field",
 		"country__lf_region",
 		"activity_project_id__organization_lf_region",
 		// Discovery must hand off to the query tool by name.
 		"query_lfx_semantic_layer",
+		// The value-discovery action, and the reason it exists. A filter naming
+		// a real dimension but an unknown literal returns zero rows instead of
+		// erroring, so a wrong guess is indistinguishable from missing data. A
+		// live client burned five query attempts on 'APAC' and 'Vietnam' before
+		// escaping via a country code.
+		"get_dimension_values(dimension, metrics, search)",
+		"returns zero rows, not an error",
+		"'Asia Pacific' not 'APAC'",
+		"'Viet Nam' not 'Vietnam'",
+		// Either tool can be loaded without the other, so each states what the
+		// semantic layer is. Here the regional rule sits in COVERS, asserted
+		// above, rather than in the opening line.
+		"query and data-exploration tool",
 	} {
 		if !strings.Contains(exploreSemanticLayerDescription, want) {
 			t.Errorf("explore description missing %q", want)
+		}
+	}
+
+	// The description used to warn that a plural search matches nothing. That
+	// stopped being true once lens learned to fall back to a singular stem:
+	// "memberships" now returns 18 metrics, "contributions" 2. Telling the model
+	// otherwise wastes the budget on a false constraint.
+	for _, unwanted := range []string{
+		"a plural like",
+		"matches nothing",
+	} {
+		if strings.Contains(exploreSemanticLayerDescription, unwanted) {
+			t.Errorf("explore description still warns about plurals, which lens now handles: %q", unwanted)
 		}
 	}
 }
@@ -273,12 +306,23 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 		"yyyy-mm-dd",
 		"ceiling 500",
 		"metric_time__year",
-		"outer-joined",
+		"The join is outer",
 		"ranked list",
 		"project_slug",
+		// Splitting discovery out made it possible to query without ever
+		// exploring, and a live client did exactly that — going straight to a
+		// query with guessed names. The rule has to be an instruction, not a
+		// conditional suggestion.
+		"ALWAYS call explore_lfx_semantic_layer first",
+		"never guess",
 		// Both neighbours are named so routing works from this tool too.
 		"explore_lfx_semantic_layer",
 		"query_lfx_lens",
+		"query and data-exploration tool",
+		"anything sliced by country or region",
+		// The silent-zero-rows warning is only actionable if it names the way
+		// out; without this the model retries the same wrong literal.
+		"get_dimension_values",
 	} {
 		if !strings.Contains(querySemanticLayerDescription, want) {
 			t.Errorf("query description missing %q", want)
@@ -307,7 +351,7 @@ func TestSemanticLayerArgs_FieldsFitSchemaBudget(t *testing.T) {
 		tool  *mcp.Tool
 		props []string
 	}{
-		{listExploreTool(t), []string{"action", "search", "metrics", "target"}},
+		{listExploreTool(t), []string{"action", "search", "metrics", "dimension", "target"}},
 		{listQueryTool(t), []string{"metrics", "group_by", "where", "order_by", "limit", "project_slug"}},
 	} {
 		for _, property := range tc.props {
@@ -353,6 +397,8 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 		{"entity__field", "dimension names cannot be assembled by hand"},
 		{"outer-joined", "explains NULLs in cross-domain results"},
 		{"raw IDs", "grouping by an entity silently returns unusable output"},
+		{"get_dimension_values", "the only recovery from a wrong filter literal"},
+		{"zero rows", "a wrong literal is silent, so the model must be told to check first"},
 	} {
 		if !strings.Contains(surviving, tc.token) {
 			t.Errorf("%q reaches the model only via an optional parameter, where it gets summarised away (%s). Move it into the tool description or onto a required parameter.",
@@ -486,7 +532,7 @@ func TestRegisterSemanticLayer_Schema(t *testing.T) {
 		t.Errorf("explore required = %v; metrics is only needed for get_dimensions", exploreRequired)
 	}
 	action := schemaPropertyDescription(t, explore, "action")
-	for _, want := range []string{"list_metrics", "get_dimensions", "help"} {
+	for _, want := range []string{"list_metrics", "get_dimensions", "get_dimension_values", "help"} {
 		if !strings.Contains(action, want) {
 			t.Errorf("action schema description missing %q: %q", want, action)
 		}
@@ -595,21 +641,34 @@ func TestHelpActionAndDescribeAlias(t *testing.T) {
 	}
 }
 
-// TestQueryLFXLensDescription_RegionalException guards the other half of the
-// routing contract: query_lfx_lens claims memberships, and both its
-// description and its input schema ship with tools/list. If they keep saying
-// "always use for memberships" unconditionally, clients get instructions that
-// contradict the semantic layer's regional carve-out.
-func TestQueryLFXLensDescription_RegionalException(t *testing.T) {
+// TestQueryLFXLensDoesNotClaimMemberships guards the other half of the routing
+// contract. query_lfx_lens used to open with "Always use this tool for:
+// Membership questions", carved out only for country/region. Memberships now
+// belong to the semantic layer in full — 18 metrics covering revenue, counts,
+// churn, discounts and invoices, sliceable and trendable like any other domain
+// — so a leftover claim here produces two tools asserting ownership of the same
+// question. Both the description and the input schema ship with tools/list.
+func TestQueryLFXLensDoesNotClaimMemberships(t *testing.T) {
 	tool := listRegisteredTool(t, "query_lfx_lens", RegisterQueryLFXLens)
 
-	if !strings.Contains(tool.Description, "EXCEPT country/region") {
-		t.Errorf("query_lfx_lens description missing the regional exception: %q", tool.Description)
+	for _, unwanted := range []string{
+		"Always use this tool for:\n- Membership questions",
+		"EXCEPT country/region",
+	} {
+		if strings.Contains(tool.Description, unwanted) {
+			t.Errorf("query_lfx_lens description still claims memberships: %q", unwanted)
+		}
+	}
+	if !strings.Contains(tool.Description, "contributor, activity and membership questions belong to the semantic layer") {
+		t.Error("query_lfx_lens description should hand memberships to the semantic layer explicitly")
 	}
 
 	input := schemaPropertyDescription(t, tool, "input")
-	if !strings.Contains(input, "memberships (except country/region breakdowns)") {
-		t.Errorf("query_lfx_lens input schema missing the regional exception: %q", input)
+	if strings.Contains(input, "Always use for memberships") {
+		t.Errorf("query_lfx_lens input schema still claims memberships: %q", input)
+	}
+	if !strings.Contains(input, "Contributor, activity and membership questions belong to the semantic layer") {
+		t.Errorf("query_lfx_lens input schema should redirect memberships: %q", input)
 	}
 }
 
@@ -620,4 +679,168 @@ func contains(list []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// ---------------------------------------------------------------------------
+// get_dimension_values
+//
+// The action exists because a filter naming a real dimension but an unknown
+// literal is not an error: the query succeeds and returns zero rows. Against a
+// live client that read as "no such data" and cost five wrong-but-successful
+// queries — 'APAC' for a region that is stored as 'Asia Pacific', 'Vietnam' for
+// a country stored as 'Viet Nam'.
+// ---------------------------------------------------------------------------
+
+func TestGetDimensionValuesForwardsToTheValuesEndpoint(t *testing.T) {
+	captured := setupLensTest(t)
+
+	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
+		Action:    "get_dimension_values",
+		Dimension: "  country__lf_region  ",
+		Metrics:   " total_contributors , current_membership_revenue ",
+		Search:    "asia",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error result: %s", resultText(t, res))
+	}
+	if captured.Path != "/lfx-lens/semantic-layer/dimension-values" {
+		t.Errorf("unexpected request path: %s", captured.Path)
+	}
+	// Whitespace around a copied qualified_name must not reach lens, which
+	// rejects anything outside [A-Za-z0-9_] rather than trimming it.
+	if got := captured.Query.Get("dimension"); got != "country__lf_region" {
+		t.Errorf("dimension = %q; want it trimmed to country__lf_region", got)
+	}
+	if got := captured.Query.Get("metrics"); got != "total_contributors,current_membership_revenue" {
+		t.Errorf("metrics = %q; want the CSV normalised", got)
+	}
+	if got := captured.Query.Get("search"); got != "asia" {
+		t.Errorf("search = %q; want asia", got)
+	}
+}
+
+func TestGetDimensionValuesOmitsAnEmptySearch(t *testing.T) {
+	captured := setupLensTest(t)
+
+	_, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
+		Action:    "get_dimension_values",
+		Dimension: "country__lf_region",
+		Metrics:   "total_contributors",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// An empty search must be absent, not sent as "": lens turns a present
+	// search into an ILIKE '%%' filter and would report zero matches.
+	if captured.Query.Has("search") {
+		t.Errorf("search should be omitted when empty, got %q", captured.Query.Get("search"))
+	}
+}
+
+func TestGetDimensionValuesRejectsMissingArgumentsWithAPointer(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args ExploreSemanticLayerArgs
+		want string
+	}{
+		{
+			name: "no dimension",
+			args: ExploreSemanticLayerArgs{Action: "get_dimension_values", Metrics: "total_contributors"},
+			want: "country__lf_region",
+		},
+		{
+			name: "blank dimension",
+			args: ExploreSemanticLayerArgs{Action: "get_dimension_values", Dimension: "   ", Metrics: "total_contributors"},
+			want: "country__lf_region",
+		},
+		{
+			name: "no metrics",
+			args: ExploreSemanticLayerArgs{Action: "get_dimension_values", Dimension: "country__lf_region"},
+			want: "metrics is required",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setupLensTest(t)
+
+			res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, tc.args)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !res.IsError {
+				t.Fatal("expected an error result")
+			}
+			if text := resultText(t, res); !strings.Contains(text, tc.want) {
+				t.Errorf("error should show the way forward (%q): %q", tc.want, text)
+			}
+		})
+	}
+}
+
+// TestUnknownActionListsTheRealActions guards the recovery message against
+// drift: it is what a model reads after guessing an action name, so an action
+// missing here is one it will not retry with.
+func TestUnknownActionListsTheRealActions(t *testing.T) {
+	setupLensTest(t)
+
+	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
+		Action: "list_dimension_values",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected an error result for an unknown action")
+	}
+	text := resultText(t, res)
+	for _, want := range []string{"list_metrics", "get_dimensions", "get_dimension_values", "help"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("unknown-action error missing %q: %q", want, text)
+		}
+	}
+}
+
+// TestHelpCoversGetDimensionValues checks the long-form guidance is reachable.
+// It is the only place that records the billing_country trap, which has no room
+// in the 2048-byte description.
+func TestHelpCoversGetDimensionValues(t *testing.T) {
+	setupLensTest(t)
+
+	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
+		Action: "help",
+		Target: "get_dimension_values",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error result: %s", resultText(t, res))
+	}
+	text := resultText(t, res)
+	for _, want := range []string{
+		"zero rows",
+		"'Asia Pacific'",
+		"Viet Nam",
+		// asset_id__billing_country is free text holding both spellings, so a
+		// filter on it drops members filed under the other one. The transcript
+		// that motivated this work "succeeded" on exactly that dimension.
+		"asset_id__billing_country",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("get_dimension_values help missing %q", want)
+		}
+	}
+
+	// The overview must advertise the target, or nothing points at it.
+	overview, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
+		Action: "help",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if text := resultText(t, overview); !strings.Contains(text, "get_dimension_values") {
+		t.Errorf("help overview does not mention get_dimension_values: %q", text)
+	}
 }

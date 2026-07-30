@@ -160,6 +160,7 @@ var defaultTools = []string{
 	"list_email_templates",
 	"send_email",
 	"query_lfx_lens",
+	"explore_lfx_semantic_layer",
 	"query_lfx_semantic_layer",
 	"search_b2b_orgs",
 }
@@ -797,8 +798,14 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["query_lfx_lens"] && canRead && isStaff {
 		tools.RegisterQueryLFXLens(server)
 	}
+	// Each semantic layer tool honours its own name in LFXMCP_TOOLS. They are
+	// intended to be enabled together — each description points at the other —
+	// but gating both on one name made the other name select nothing.
+	if enabledTools["explore_lfx_semantic_layer"] && canRead && isStaff {
+		tools.RegisterExploreSemanticLayer(server)
+	}
 	if enabledTools["query_lfx_semantic_layer"] && canRead && isStaff {
-		tools.RegisterSemanticLayer(server)
+		tools.RegisterQuerySemanticLayer(server)
 	}
 
 	return server

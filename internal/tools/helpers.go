@@ -123,3 +123,13 @@ func friendlyAPIError(op string, err error) string {
 	}
 	return op + ": " + err.Error()
 }
+
+// errorResult is a convenience helper for returning a tool error response.
+func errorResult(msg string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "Error: " + msg},
+		},
+		IsError: true,
+	}
+}

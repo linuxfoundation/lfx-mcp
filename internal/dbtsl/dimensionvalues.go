@@ -56,6 +56,30 @@ func escapeSQLLiteral(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), `'`, `''`)
 }
 
+// likeEscapeChar is the ESCAPE character for the search pattern.
+//
+// Backslash is the obvious choice and the wrong one: it is also the escape
+// character of the SQL string literal itself, so it is consumed during string
+// parsing before ILIKE ever sees it. Verified live — a '%\_%' pattern matched
+// Germany and Yemen, which contain no underscore. '!' has no meaning inside a
+// string literal, so what is written is what ILIKE receives.
+const likeEscapeChar = "!"
+
+// escapeLikePattern makes value match literally inside an ILIKE pattern.
+//
+// The search argument is documented as a plain substring, but % and _ are
+// ILIKE wildcards. Unescaped, a search for "_" matched every country name in
+// the environment and "%" matched everything, which is the worst failure this
+// tool can have: it exists to hand back exact literals, and a list of
+// unrelated values reads as though those values matched.
+//
+// The escape character is escaped first, so an input containing it survives.
+func escapeLikePattern(value string) string {
+	value = strings.ReplaceAll(value, likeEscapeChar, likeEscapeChar+likeEscapeChar)
+	value = strings.ReplaceAll(value, "%", likeEscapeChar+"%")
+	return strings.ReplaceAll(value, "_", likeEscapeChar+"_")
+}
+
 // FetchDimensionValues returns the distinct values of a dimension, so a caller
 // can write a filter that matches something.
 //
@@ -129,8 +153,11 @@ func (c *Client) FetchDimensionValues(ctx context.Context, dimension string, met
 		Limit:   limit,
 	}
 	if search != "" {
+		// escapeLikePattern first, so the wildcards it introduces are part of
+		// the value that escapeSQLLiteral then quotes for the literal.
 		args.Where = []string{fmt.Sprintf(
-			"{{ Dimension('%s') }} ILIKE '%%%s%%'", dimension, escapeSQLLiteral(search),
+			"{{ Dimension('%s') }} ILIKE '%%%s%%' ESCAPE '%s'",
+			dimension, escapeSQLLiteral(escapeLikePattern(search)), likeEscapeChar,
 		)}
 	}
 

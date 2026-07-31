@@ -201,6 +201,42 @@ func TestLiveDimensionValuesCountrySearch(t *testing.T) {
 	}
 }
 
+// TestLiveDimensionValuesTreatsSearchAsALiteral is the test that would have
+// caught the wildcard leak. A stub cannot: it echoes whatever rows the test
+// queued, so only the real ILIKE evaluation shows that "_" was matching any
+// character. Before the ESCAPE clause, this search returned every country in
+// the environment.
+func TestLiveDimensionValuesTreatsSearchAsALiteral(t *testing.T) {
+	client := liveClient(t)
+	ctx, cancel := liveContext(t)
+	defer cancel()
+
+	for _, search := range []string{"_", "%"} {
+		values, err := client.FetchDimensionValues(ctx,
+			"country__country_name", []string{"total_contributors"}, search, 100)
+		if err != nil {
+			t.Fatalf("FetchDimensionValues(%q) failed: %v", search, err)
+		}
+		// No country name contains a literal underscore or percent sign, so a
+		// correct literal search finds nothing. Wildcards find everything.
+		if values.ValueCount != 0 {
+			t.Errorf("search %q was treated as a wildcard: %d values returned (%v)",
+				search, values.ValueCount, values.Values[:min(5, len(values.Values))])
+		}
+	}
+
+	// The ordinary case must keep working: escaping is not allowed to break a
+	// search that has no metacharacters in it.
+	values, err := client.FetchDimensionValues(ctx,
+		"country__country_name", []string{"total_contributors"}, "viet", 100)
+	if err != nil {
+		t.Fatalf("control search failed: %v", err)
+	}
+	if !containsValue(values.Values, "Viet Nam") {
+		t.Errorf("escaping broke an ordinary search: %v", values.Values)
+	}
+}
+
 // TestLiveDimensionValuesGate confirms the metric gate holds against the real
 // API, not just the stub. Without it, any dimension in the semantic layer
 // would be enumerable, because a dimension-only query never consults the

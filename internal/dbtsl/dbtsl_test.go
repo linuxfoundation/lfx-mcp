@@ -717,6 +717,61 @@ func TestFetchDimensionValuesRejectsADimensionTheMetricDoesNotExpose(t *testing.
 	}
 }
 
+// TestEscapeLikePatternNeutralisesWildcards: search is documented as a plain
+// substring, but % and _ are ILIKE wildcards. Unescaped, a live search for
+// "_" returned every country name in the environment.
+func TestEscapeLikePatternNeutralisesWildcards(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"viet", "viet"},
+		{"_", `!_`},
+		{"%", `!%`},
+		{"100%", `100!%`},
+		{"_unknown", `!_unknown`},
+		{"a_b%c", `a!_b!%c`},
+		// The escape character itself has to survive being searched for.
+		{"!", `!!`},
+		{"a!_b", `a!!!_b`},
+		// Quotes are not LIKE metacharacters; escapeSQLLiteral owns those.
+		{"d'Ivoire", "d'Ivoire"},
+	}
+	for _, tc := range tests {
+		if got := escapeLikePattern(tc.in); got != tc.want {
+			t.Errorf("escapeLikePattern(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// The ESCAPE clause has to reach the query, or the escaping above turns the
+// pattern into a search for literal "!_" instead.
+func TestFetchDimensionValuesEscapesWildcardsInTheFilter(t *testing.T) {
+	stub := newStubServer(t)
+	stub.queue("GetDimensions", dimensionsForContributors)
+	stub.queue("CreateQuery", `{"data":{"createQuery":{"queryId":"q-1"}}}`)
+	stub.queue("GetQueryResult", `{"data":{"query":{"status":"SUCCESSFUL","error":null,"sql":"","jsonResult":"{\"schema\":{\"fields\":[{\"name\":\"country__country_name\",\"type\":\"string\"}],\"primaryKey\":[]},\"data\":[]}"}}}`)
+
+	client := stub.client(t)
+	_, _ = client.FetchDimensionValues(context.Background(),
+		"country__country_name", []string{"total_contributors"}, "_", 100)
+
+	var createVars map[string]any
+	for _, req := range stub.requests {
+		if query, _ := req["query"].(string); operationOf(query) == "CreateQuery" {
+			createVars, _ = req["variables"].(map[string]any)
+		}
+	}
+	where, _ := createVars["where"].([]any)
+	if len(where) != 1 {
+		t.Fatalf("expected one where clause, got %v", createVars["where"])
+	}
+	clause, _ := where[0].(map[string]any)["sql"].(string)
+	if !strings.Contains(clause, `'%!_%'`) {
+		t.Errorf("expected the underscore escaped in the pattern, got %q", clause)
+	}
+	if !strings.Contains(clause, `ESCAPE '!'`) {
+		t.Errorf("expected an ESCAPE clause, got %q", clause)
+	}
+}
+
 func TestFetchDimensionValuesBuildsAnILIKEFilter(t *testing.T) {
 	stub := newStubServer(t)
 	stub.queue("GetDimensions", dimensionsForContributors)

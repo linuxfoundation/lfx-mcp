@@ -100,6 +100,13 @@ app:
   lensApiUrl: ""
   # lensApiAudience is the Auth0 resource server audience for the LFX Lens API.
   lensApiAudience: ""
+  # dbtSlHost is the dbt Semantic Layer host, without scheme,
+  # e.g. tj283.semantic-layer.us1.dbt.com. Set it together with
+  # dbtSemanticEnvironmentId and the token; the semantic layer tools return an
+  # error when any of the three is missing.
+  dbtSlHost: ""
+  # dbtSemanticEnvironmentId is the dbt environment the semantic layer queries.
+  dbtSemanticEnvironmentId: ""
   # memberOnboardingApiUrl is the base URL of the member onboarding service.
   memberOnboardingApiUrl: ""
   # memberOnboardingApiAudience is the Auth0 resource server audience for the member onboarding API.
@@ -147,6 +154,10 @@ secrets:
     # assertions (used when authenticating with a JWT client assertion instead of a
     # client secret).
     clientAssertionSigningKey: client_private_key
+    # dbtSemanticServiceToken is the key name for the dbt Semantic Layer service
+    # token. It arrives from the AWS Secrets Manager secret tagged
+    # service-lfx-mcp, which lfx-lens also reads.
+    dbtSemanticServiceToken: dbt_semantic_service_token
 # apiCredentials is a TEMPORARY stop-gap for MCP clients that cannot complete a full
 # OAuth2 authorization code flow. Remove this stanza once all clients support proper
 # OAuth2.

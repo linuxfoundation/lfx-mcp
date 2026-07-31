@@ -80,6 +80,14 @@ spec:
             - name: LFXMCP_LENS_API_AUDIENCE
               value: {{ .Values.app.lensApiAudience | quote }}
             {{- end }}
+            {{- if .Values.app.dbtSlHost }}
+            - name: LFXMCP_DBT_SL_HOST
+              value: {{ .Values.app.dbtSlHost | quote }}
+            {{- end }}
+            {{- if .Values.app.dbtSemanticEnvironmentId }}
+            - name: LFXMCP_DBT_SL_ENVIRONMENT_ID
+              value: {{ .Values.app.dbtSemanticEnvironmentId | quote }}
+            {{- end }}
             {{- if .Values.app.memberOnboardingApiUrl }}
             - name: LFXMCP_ONBOARDING_API_URL
               value: {{ .Values.app.memberOnboardingApiUrl | quote }}
@@ -104,6 +112,12 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secrets.name }}
                   key: {{ .Values.secrets.keys.clientAssertionSigningKey }}
+                  optional: true
+            - name: LFXMCP_DBT_SL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.name }}
+                  key: {{ .Values.secrets.keys.dbtSemanticServiceToken }}
                   optional: true
             {{- /*
               TEMPORARY: Expose each API key credential as an individual env var

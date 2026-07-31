@@ -26,6 +26,7 @@ lfx-mcp/
 │   └── lfx-mcp-server/     # Main application entry point
 ├── internal/
 │   ├── auth/               # JWT and API-key verification
+│   ├── dbtsl/              # dbt Semantic Layer client (GraphQL)
 │   ├── lfxv2/              # LFX V2 API client
 │   ├── otel/               # OpenTelemetry instrumentation
 │   ├── serviceapi/         # Shared service API helpers
@@ -490,6 +491,39 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 | `-onboarding_api_audience`      | `LFXMCP_ONBOARDING_API_AUDIENCE`      | —              | Auth0 resource server audience for the member onboarding API      |
 | `-lens_api_url`                 | `LFXMCP_LENS_API_URL`                 | —              | Base URL of the LFX Lens service                                  |
 | `-lens_api_audience`            | `LFXMCP_LENS_API_AUDIENCE`            | —              | Auth0 resource server audience for the LFX Lens API               |
+| `-dbt_sl_host`                  | `LFXMCP_DBT_SL_HOST`                  | —              | dbt Semantic Layer host, without scheme                           |
+| `-dbt_sl_environment_id`        | `LFXMCP_DBT_SL_ENVIRONMENT_ID`        | —              | dbt Semantic Layer environment ID                                 |
+| `-dbt_sl_token`                 | `LFXMCP_DBT_SL_TOKEN`                 | —              | dbt Semantic Layer service token                                  |
+
+### Two data paths, two services
+
+`query_lfx_lens` and the semantic layer tools answer overlapping questions but
+do not share a backend, and the settings above reflect that:
+
+- **`query_lfx_lens`** posts a natural-language question to the LFX Lens
+  service, which generates SQL. It needs `LFXMCP_LENS_API_*`, and its client is
+  built through `internal/serviceapi` with an Auth0 client-credentials token.
+- **`explore_lfx_semantic_layer` and `query_lfx_semantic_layer`** talk to the
+  dbt Semantic Layer directly through `internal/dbtsl`. They need
+  `LFXMCP_DBT_SL_*` and nothing else: a static service token, no Auth0. The
+  client is therefore constructed in its own top-level block in `main.go`
+  rather than inside the LFX API block, so it does not become unconfigured for
+  an unrelated reason.
+
+`internal/dbtsl` uses the GraphQL API for both metadata and query execution.
+That diverges from the Python reference implementations (lfx-lens and dbt Labs'
+`dbt-mcp`), which run queries over Arrow Flight through the `dbtsl` SDK; there
+is no Go SDK, and Arrow plus gRPC buys nothing at a 500-row ceiling. A live
+parity harness sits behind the `parity` build tag:
+
+```bash
+set -a && source ../lfx-lens/.env && set +a
+go test -tags parity -v ./internal/dbtsl/
+```
+
+Do not pass the `serviceapi` debug transport to the dbt client. It dumps the
+`Authorization` header, and production runs with `debugTraffic` enabled, so it
+would print the long-lived service token into the logs.
 
 ## Error Handling Patterns
 

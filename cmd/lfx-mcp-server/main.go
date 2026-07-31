@@ -24,6 +24,7 @@ import (
 	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/v2"
 	lfxauth "github.com/linuxfoundation/lfx-mcp/internal/auth"
+	"github.com/linuxfoundation/lfx-mcp/internal/dbtsl"
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	localOtel "github.com/linuxfoundation/lfx-mcp/internal/otel"
 	"github.com/linuxfoundation/lfx-mcp/internal/serviceapi"
@@ -60,6 +61,13 @@ type Config struct {
 	OnboardingAPIAudience string `koanf:"onboarding_api_audience"`
 	LensAPIURL            string `koanf:"lens_api_url"`
 	LensAPIAudience       string `koanf:"lens_api_audience"`
+
+	// dbt Semantic Layer configuration. Independent of the LFX API settings
+	// above: this client authenticates with a static service token and has no
+	// Auth0 dependency.
+	DBTSLHost          string `koanf:"dbt_sl_host"`
+	DBTSLEnvironmentID string `koanf:"dbt_sl_environment_id"`
+	DBTSLToken         string `koanf:"dbt_sl_token"`
 
 	// Feature flags.
 	CommitteesAsGroups bool `koanf:"committees_as_groups"`
@@ -225,6 +233,9 @@ func main() {
 	f.String("onboarding_api_audience", "", "Auth0 resource server audience for the member onboarding API")
 	f.String("lens_api_url", "", "Base URL of the LFX Lens service")
 	f.String("lens_api_audience", "", "Auth0 resource server audience for the LFX Lens API")
+	f.String("dbt_sl_host", "", "dbt Semantic Layer host, e.g. tj283.semantic-layer.us1.dbt.com")
+	f.String("dbt_sl_environment_id", "", "dbt Semantic Layer environment ID")
+	f.String("dbt_sl_token", "", "dbt Semantic Layer service token")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
@@ -473,6 +484,37 @@ func main() {
 				}
 			}
 		}
+	}
+
+	// The dbt Semantic Layer client is configured on its own, outside the LFX
+	// API block above. It authenticates with a static service token rather than
+	// an Auth0 client-credentials exchange, so nesting it under those settings
+	// would leave it unconfigured for an unrelated reason.
+	//
+	// The HTTP client is deliberately not wrapped in the serviceapi debug
+	// transport: that dumps the Authorization header, which would print this
+	// long-lived service token into the logs whenever debug traffic is on, and
+	// it currently is in production.
+	if cfg.DBTSLHost != "" && cfg.DBTSLEnvironmentID != "" && cfg.DBTSLToken != "" {
+		semanticLayerClient, err := dbtsl.NewClient(dbtsl.Config{
+			Host:          cfg.DBTSLHost,
+			EnvironmentID: cfg.DBTSLEnvironmentID,
+			Token:         cfg.DBTSLToken,
+			HTTPClient: &http.Client{
+				// Query execution polls, so a single round trip is short even
+				// when the warehouse is slow.
+				Timeout:   60 * time.Second,
+				Transport: otelhttp.NewTransport(http.DefaultTransport),
+			},
+		})
+		if err != nil {
+			logger.Warn("failed to create dbt Semantic Layer client", errKey, err)
+		} else {
+			tools.SetSemanticLayerConfig(&tools.SemanticLayerConfig{Client: semanticLayerClient})
+			logger.Info("semantic layer tools configured", "host", cfg.DBTSLHost, "environment_id", cfg.DBTSLEnvironmentID)
+		}
+	} else {
+		logger.Warn("dbt Semantic Layer not configured - semantic layer tools will return an error if called")
 	}
 
 	// Validate configuration for HTTP mode.

@@ -1042,20 +1042,35 @@ func contains(values []string, want string) bool {
 // TestParseQueryResultKeepsLargeIntegersExact guards against float64 decoding,
 // which would render a 4239559 contributor count as 4.239559e+06 by the time
 // the model reads it.
+// The value here is deliberately above 2^53. The real observed case, a
+// 4239559 contributor count, is exactly representable as a float64 and
+// re-encodes as "4239559" with no exponent, so asserting on it passes just as
+// well with UseNumber removed — the guard could not fail. This value cannot
+// survive a float64 round trip, and the decoded type is asserted directly.
 func TestParseQueryResultKeepsLargeIntegersExact(t *testing.T) {
+	const exact = "9007199254740993" // 2^53 + 1
 	raw := `{"schema":{"fields":[{"name":"total_contributors","type":"integer"}],"primaryKey":[]},
-	         "data":[{"total_contributors":4239559}]}`
+	         "data":[{"total_contributors":` + exact + `}]}`
 
 	result, err := parseQueryResult(raw, "")
 	if err != nil {
 		t.Fatalf("parseQueryResult failed: %v", err)
 	}
 
+	value := result.Data[0]["total_contributors"]
+	number, ok := value.(json.Number)
+	if !ok {
+		t.Fatalf("expected json.Number so digits survive verbatim, got %T (%v)", value, value)
+	}
+	if number.String() != exact {
+		t.Errorf("expected %s, got %s", exact, number)
+	}
+
 	encoded, err := json.Marshal(result.Data[0])
 	if err != nil {
 		t.Fatalf("failed to re-encode the row: %v", err)
 	}
-	if !strings.Contains(string(encoded), "4239559") {
+	if !strings.Contains(string(encoded), exact) {
 		t.Errorf("expected the exact integer, got %s", encoded)
 	}
 	if strings.Contains(string(encoded), "e+") {

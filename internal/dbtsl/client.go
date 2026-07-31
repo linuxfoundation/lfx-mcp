@@ -82,8 +82,16 @@ type Client struct {
 
 // NewClient validates cfg and returns a ready client.
 func NewClient(cfg Config) (*Client, error) {
+	// The host is normally bare, e.g. "tj283.semantic-layer.us1.dbt.com", and
+	// is reached over https. An explicit http:// prefix is honoured so the
+	// client can be pointed at a local stub.
 	host := strings.TrimSpace(cfg.Host)
-	host = strings.TrimPrefix(strings.TrimPrefix(host, "https://"), "http://")
+	scheme := "https://"
+	if rest, found := strings.CutPrefix(host, "http://"); found {
+		scheme, host = "http://", rest
+	} else {
+		host = strings.TrimPrefix(host, "https://")
+	}
 	host = strings.TrimSuffix(host, "/")
 	if host == "" {
 		return nil, fmt.Errorf("dbt Semantic Layer host is required")
@@ -106,7 +114,7 @@ func NewClient(cfg Config) (*Client, error) {
 	}
 
 	return &Client{
-		graphqlURL:           "https://" + host + "/api/graphql",
+		graphqlURL:           scheme + host + "/api/graphql",
 		environmentID:        parsedEnvID,
 		token:                cfg.Token,
 		httpClient:           httpClient,

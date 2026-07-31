@@ -850,3 +850,13 @@ func TestParseQueryResultKeepsLargeIntegersExact(t *testing.T) {
 		t.Errorf("expected no scientific notation, got %s", encoded)
 	}
 }
+
+func TestNewClientHonoursAnExplicitHTTPScheme(t *testing.T) {
+	client, err := NewClient(Config{Host: "http://127.0.0.1:9999", EnvironmentID: "1", Token: "t"})
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+	if client.graphqlURL != "http://127.0.0.1:9999/api/graphql" {
+		t.Errorf("expected the http scheme preserved, got %q", client.graphqlURL)
+	}
+}

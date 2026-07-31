@@ -427,7 +427,36 @@ func handleSLGetDimensionValues(ctx context.Context, dimension, metricsArg, sear
 	if values.ValueCount == 0 {
 		return toolError(dbtsl.NoDimensionValuesDetail(dimension, strings.TrimSpace(search)))
 	}
+
+	if note := slugLookupNote(dimension); note != "" {
+		return toolJSONWithNote(values, note)
+	}
 	return toolJSON(values)
+}
+
+// slugLookupNote redirects slug lookups to search_projects.
+//
+// Enumerating a slug dimension works, but it is the wrong tool for it: the
+// values come back capped and alphabetical, so the slug being looked for is
+// usually not among them, and the list is slow to build (project_spine_slug
+// measured 14.8s live against 1-2s for other dimensions). search_projects
+// answers the actual question, by name, directly.
+//
+// This is a runtime note rather than a line in the tool description on
+// purpose. Description bytes are the scarcest resource here — the explore
+// description has 7 bytes of its 2048 left, so this guidance could only be
+// bought by deleting other guidance — and a note fires exactly when the
+// mistake is made rather than being paid for on every call. dbtsl cannot host
+// it either: the name of an MCP tool is not something the semantic layer
+// client should know.
+func slugLookupNote(dimension string) string {
+	if !strings.HasSuffix(strings.TrimSpace(dimension), "_slug") {
+		return ""
+	}
+	return "Note: to find a project or foundation by name, use search_projects instead — " +
+		"it looks the slug up directly. This list is capped and alphabetical, so a specific " +
+		"slug is often absent from it. Enumerating slugs here is only useful when you want " +
+		"a sample of what the dimension holds."
 }
 
 func handleQuerySemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args QuerySemanticLayerArgs) (*mcp.CallToolResult, any, error) {
@@ -498,4 +527,19 @@ func toolJSON(value any) (*mcp.CallToolResult, any, error) {
 		return nil, nil, fmt.Errorf("failed to encode semantic layer result: %w", err)
 	}
 	return toolText(string(pretty))
+}
+
+// toolJSONWithNote returns a result alongside guidance, as a second content
+// block so the note cannot be mistaken for part of the data.
+func toolJSONWithNote(value any, note string) (*mcp.CallToolResult, any, error) {
+	pretty, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to encode semantic layer result: %w", err)
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(pretty)},
+			&mcp.TextContent{Text: note},
+		},
+	}, nil, nil
 }

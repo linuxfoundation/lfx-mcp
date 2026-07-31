@@ -347,6 +347,67 @@ func TestSemanticLayerDefaultsTheLimitToTheAdvertisedCeiling(t *testing.T) {
 	}
 }
 
+// TestSlugLookupNoteFiresOnlyOnSlugDimensions: the note redirects slug
+// lookups to search_projects, which answers by name directly. It must not
+// attach to ordinary dimensions, where it would be noise on every call.
+func TestSlugLookupNoteFiresOnlyOnSlugDimensions(t *testing.T) {
+	for _, dimension := range []string{
+		"registration_id__project_slug",
+		"account_project_month_id__project_slug",
+		" project_spine_slug ",
+	} {
+		if slugLookupNote(dimension) == "" {
+			t.Errorf("expected a note for %q", dimension)
+		}
+	}
+	for _, dimension := range []string{
+		"country__lf_region",
+		"country__country_name",
+		"asset_id__membership_tier",
+		"activity_project_id__organization_name",
+		// Guards against matching on "slug" anywhere in the name.
+		"health_metric_key__slug_status",
+	} {
+		if note := slugLookupNote(dimension); note != "" {
+			t.Errorf("expected no note for %q, got %q", dimension, note)
+		}
+	}
+}
+
+// The note has to reach the caller as its own content block, so it cannot be
+// read as part of the value list.
+func TestSemanticLayerDimensionValuesCarriesTheSlugNote(t *testing.T) {
+	prev := stubResponses["GetDimensions"]
+	stubResponses["GetDimensions"] = `{"data":{"dimensionsPaginated":{"items":[
+	  {"name":"registration_id__project_slug","type":"categorical","description":"Slug","label":"Slug","queryableGranularities":[]}
+	]}}}`
+	t.Cleanup(func() { stubResponses["GetDimensions"] = prev })
+
+	setupSemanticLayerTest(t)
+
+	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
+		Action:    "get_dimension_values",
+		Dimension: "registration_id__project_slug",
+		Metrics:   "total_contributors",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error result: %s", resultText(t, res))
+	}
+	if len(res.Content) != 2 {
+		t.Fatalf("expected the values and the note as separate blocks, got %d", len(res.Content))
+	}
+	note, ok := res.Content[1].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected a text block, got %T", res.Content[1])
+	}
+	if !strings.Contains(note.Text, "search_projects") {
+		t.Errorf("expected the note to name search_projects, got %q", note.Text)
+	}
+}
+
 // TestSemanticLayerHelpQueryDescribesWhereScoping checks the help text moved
 // off the removed scope parameter and onto the where clause.
 func TestSemanticLayerHelpQueryDescribesWhereScoping(t *testing.T) {

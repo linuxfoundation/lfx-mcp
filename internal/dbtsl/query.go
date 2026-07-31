@@ -37,6 +37,12 @@ query GetQueryResult($environmentId: BigInt!, $queryId: String!, $pageNum: Int!)
 // Query polling cadence. The Semantic Layer compiles and runs warehouse SQL,
 // so the first result is rarely ready immediately. The interval backs off so a
 // slow query does not generate a poll storm.
+//
+// A 1s ceiling was considered and rejected. The cap only engages once a query
+// passes about 3s, so for the common case (warm queries return in 0.9 to 1.6s
+// here) it changes nothing at all. Where it does engage it would trade up to
+// 1s of wall time against 10 extra requests on a 22.5s query — polling
+// hardest exactly when the warehouse is already slowest, to save 4%.
 const (
 	pollInitialInterval = 250 * time.Millisecond
 	pollMaxInterval     = 2 * time.Second

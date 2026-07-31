@@ -6,65 +6,11 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 
-	"github.com/linuxfoundation/lfx-mcp/internal/serviceapi"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
-
-type stubTokenSource struct{}
-
-func (stubTokenSource) GetToken(_ context.Context) (string, error) {
-	return "test-token", nil
-}
-
-// capturedLensRequest records the last request received by the stub lens API.
-type capturedLensRequest struct {
-	Method string
-	Path   string
-	Query  url.Values
-	Body   []byte
-}
-
-// setupLensTest points the shared lensConfig at a stub lens API server that
-// captures requests and returns a small JSON payload. The previous config is
-// restored on test cleanup. Tests using this must not run in parallel because
-// lensConfig is a package-level global.
-func setupLensTest(t *testing.T) *capturedLensRequest {
-	t.Helper()
-
-	captured := &capturedLensRequest{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		captured.Method = r.Method
-		captured.Path = r.URL.Path
-		captured.Query = r.URL.Query()
-		body, _ := io.ReadAll(r.Body)
-		captured.Body = body
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok": true}`))
-	}))
-	t.Cleanup(srv.Close)
-
-	client, err := serviceapi.NewClient(serviceapi.Config{
-		BaseURL:     srv.URL,
-		TokenSource: stubTokenSource{},
-	})
-	if err != nil {
-		t.Fatalf("failed to create service API client: %v", err)
-	}
-
-	prev := lensConfig
-	SetLensConfig(&LensConfig{ServiceClient: client})
-	t.Cleanup(func() { lensConfig = prev })
-
-	return captured
-}
 
 func resultText(t *testing.T, res *mcp.CallToolResult) string {
 	t.Helper()

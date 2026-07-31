@@ -394,6 +394,58 @@ func TestParseQueryResultHandlesAnEmptyBody(t *testing.T) {
 	}
 }
 
+// TestFetchAllowedMetricsFollowsEveryPage: a partial metric list is a partial
+// allowlist, so metrics that exist would be reported unknown and a suggested
+// topic search would return nothing. One page holds every metric today, so
+// this only guards the assumption.
+func TestFetchAllowedMetricsFollowsEveryPage(t *testing.T) {
+	stub := newStubServer(t)
+	// Two metrics is under inlineDimensionsThreshold, so the fetch is repeated
+	// with dimensions inlined. Both operations have to page.
+	for _, op := range []string{"GetMetrics", "GetMetricsWithRelated"} {
+		stub.queue(op, `{"data":{"metricsPaginated":{"totalPages":2,"items":[
+		  {"name":"total_contributors","label":"Contributors","description":"","type":"SIMPLE"}
+		]}}}`)
+		stub.queue(op, `{"data":{"metricsPaginated":{"totalPages":2,"items":[
+		  {"name":"active_maintainers","label":"Maintainers","description":"","type":"SIMPLE"}
+		]}}}`)
+	}
+
+	client := stub.client(t)
+	metrics, err := client.FetchAllowedMetrics(context.Background(), "")
+	if err != nil {
+		t.Fatalf("FetchAllowedMetrics failed: %v", err)
+	}
+	if len(metrics) != 2 {
+		t.Fatalf("expected both pages, got %d metrics: %v", len(metrics), metrics)
+	}
+	if got := stub.lastVariables()["pageNum"]; got != float64(2) {
+		t.Errorf("expected the second page requested, got pageNum %v", got)
+	}
+}
+
+// TestFetchDimensionsFollowsEveryPage: FetchDimensionValues decides what may
+// be read from exactly this list, so a dimension missing from it is one the
+// caller is told does not exist.
+func TestFetchDimensionsFollowsEveryPage(t *testing.T) {
+	stub := newStubServer(t)
+	stub.queue("GetDimensions", `{"data":{"dimensionsPaginated":{"totalPages":2,"items":[
+	  {"name":"country__lf_region","type":"categorical","description":"","label":"Region","queryableGranularities":[]}
+	]}}}`)
+	stub.queue("GetDimensions", `{"data":{"dimensionsPaginated":{"totalPages":2,"items":[
+	  {"name":"country__country_name","type":"categorical","description":"","label":"Country","queryableGranularities":[]}
+	]}}}`)
+
+	client := stub.client(t)
+	dimensions, err := client.FetchDimensions(context.Background(), []string{"total_contributors"})
+	if err != nil {
+		t.Fatalf("FetchDimensions failed: %v", err)
+	}
+	if len(dimensions) != 2 {
+		t.Fatalf("expected both pages, got %d dimensions: %v", len(dimensions), dimensions)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Query execution over the poll loop
 // ---------------------------------------------------------------------------

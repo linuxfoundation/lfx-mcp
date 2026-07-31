@@ -265,15 +265,15 @@ func SuggestMetrics(name string, limit int) []string {
 		ratio float64
 		name  string
 	}
-	var close []ranked
+	var closest []ranked
 	for _, metric := range AllowedMetricNames() {
 		if r := similarityRatio(name, metric); r >= cutoff {
-			close = append(close, ranked{ratio: r, name: metric})
+			closest = append(closest, ranked{ratio: r, name: metric})
 		}
 	}
-	sort.SliceStable(close, func(i, j int) bool { return close[i].ratio > close[j].ratio })
+	sort.SliceStable(closest, func(i, j int) bool { return closest[i].ratio > closest[j].ratio })
 	names := make([]string, 0, limit)
-	for _, c := range close {
+	for _, c := range closest {
 		if len(names) == limit {
 			break
 		}

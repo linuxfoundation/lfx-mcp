@@ -16,8 +16,9 @@ import (
 const inlineDimensionsThreshold = 15
 
 const gqlMetrics = `
-query GetMetrics($environmentId: BigInt!, $search: String) {
-  metricsPaginated(environmentId: $environmentId, search: $search) {
+query GetMetrics($environmentId: BigInt!, $search: String, $pageNum: Int!) {
+  metricsPaginated(environmentId: $environmentId, search: $search, pageNum: $pageNum) {
+    totalPages
     items {
       name
       label
@@ -29,8 +30,9 @@ query GetMetrics($environmentId: BigInt!, $search: String) {
 `
 
 const gqlMetricsWithRelated = `
-query GetMetricsWithRelated($environmentId: BigInt!, $search: String) {
-  metricsPaginated(environmentId: $environmentId, search: $search) {
+query GetMetricsWithRelated($environmentId: BigInt!, $search: String, $pageNum: Int!) {
+  metricsPaginated(environmentId: $environmentId, search: $search, pageNum: $pageNum) {
+    totalPages
     items {
       name
       label
@@ -48,8 +50,9 @@ query GetMetricsWithRelated($environmentId: BigInt!, $search: String) {
 `
 
 const gqlDimensions = `
-query GetDimensions($environmentId: BigInt!, $metrics: [MetricInput!]!) {
-  dimensionsPaginated(environmentId: $environmentId, metrics: $metrics) {
+query GetDimensions($environmentId: BigInt!, $metrics: [MetricInput!]!, $pageNum: Int!) {
+  dimensionsPaginated(environmentId: $environmentId, metrics: $metrics, pageNum: $pageNum) {
+    totalPages
     items {
       name
       type
@@ -96,6 +99,7 @@ type metricsResponse struct {
 				Name string `json:"name"`
 			} `json:"entities"`
 		} `json:"items"`
+		TotalPages int `json:"totalPages"`
 	} `json:"metricsPaginated"`
 }
 
@@ -109,6 +113,7 @@ type dimensionsResponse struct {
 			Label                  string   `json:"label"`
 			QueryableGranularities []string `json:"queryableGranularities"`
 		} `json:"items"`
+		TotalPages int `json:"totalPages"`
 	} `json:"dimensionsPaginated"`
 }
 
@@ -189,36 +194,47 @@ func filterAllowed(metrics []MetricInfo) []MetricInfo {
 // unfiltered. When includeDimensions is set each metric carries its available
 // dimension names, at the cost of an extra GraphQL field.
 func (c *Client) fetchMetricsRaw(ctx context.Context, search string, includeDimensions bool) ([]MetricInfo, error) {
-	variables := map[string]any{}
-	if search != "" {
-		variables["search"] = search
-	}
-
 	query := gqlMetrics
 	if includeDimensions {
 		query = gqlMetricsWithRelated
 	}
 
-	var resp metricsResponse
-	if err := c.graphqlRequest(ctx, query, variables, &resp); err != nil {
-		return nil, err
-	}
+	var metrics []MetricInfo
 
-	metrics := make([]MetricInfo, 0, len(resp.MetricsPaginated.Items))
-	for _, item := range resp.MetricsPaginated.Items {
-		metric := MetricInfo{
-			Name:        item.Name,
-			Label:       item.Label,
-			Description: item.Description,
-			Type:        item.Type,
+	// Metadata is paginated on the same terms as query results. One page holds
+	// every metric in this environment today, so this loop runs once, but a
+	// partial metric list is a partial allowlist: metrics that exist would
+	// report as unknown, and the caller would be told to search a topic that
+	// then returns nothing. Follow the pages rather than assume one.
+	for page, totalPages := 1, 1; page <= totalPages; page++ {
+		variables := map[string]any{"pageNum": page}
+		if search != "" {
+			variables["search"] = search
 		}
-		for _, d := range item.Dimensions {
-			metric.Dimensions = append(metric.Dimensions, d.Name)
+
+		var resp metricsResponse
+		if err := c.graphqlRequest(ctx, query, variables, &resp); err != nil {
+			return nil, err
 		}
-		for _, e := range item.Entities {
-			metric.Entities = append(metric.Entities, e.Name)
+		if resp.MetricsPaginated.TotalPages > totalPages {
+			totalPages = resp.MetricsPaginated.TotalPages
 		}
-		metrics = append(metrics, metric)
+
+		for _, item := range resp.MetricsPaginated.Items {
+			metric := MetricInfo{
+				Name:        item.Name,
+				Label:       item.Label,
+				Description: item.Description,
+				Type:        item.Type,
+			}
+			for _, d := range item.Dimensions {
+				metric.Dimensions = append(metric.Dimensions, d.Name)
+			}
+			for _, e := range item.Entities {
+				metric.Entities = append(metric.Entities, e.Name)
+			}
+			metrics = append(metrics, metric)
+		}
 	}
 	return metrics, nil
 }
@@ -238,24 +254,34 @@ func (c *Client) FetchDimensions(ctx context.Context, metricNames []string) ([]D
 		metricInputs = append(metricInputs, map[string]string{"name": name})
 	}
 
-	var resp dimensionsResponse
-	if err := c.graphqlRequest(ctx, gqlDimensions, map[string]any{"metrics": metricInputs}, &resp); err != nil {
-		return nil, err
-	}
+	// Paginated for the same reason as the metric list: a dimension missing
+	// from this result is one the caller is told does not exist, and
+	// FetchDimensionValues uses exactly this list to decide what may be read.
+	var dimensions []DimensionInfo
+	for page, totalPages := 1, 1; page <= totalPages; page++ {
+		variables := map[string]any{"metrics": metricInputs, "pageNum": page}
 
-	dimensions := make([]DimensionInfo, 0, len(resp.DimensionsPaginated.Items))
-	for _, item := range resp.DimensionsPaginated.Items {
-		granularities := item.QueryableGranularities
-		if granularities == nil {
-			granularities = []string{}
+		var resp dimensionsResponse
+		if err := c.graphqlRequest(ctx, gqlDimensions, variables, &resp); err != nil {
+			return nil, err
 		}
-		dimensions = append(dimensions, DimensionInfo{
-			Name:                       item.Name,
-			Type:                       item.Type,
-			Description:                item.Description,
-			Label:                      item.Label,
-			QueryableTimeGranularities: granularities,
-		})
+		if resp.DimensionsPaginated.TotalPages > totalPages {
+			totalPages = resp.DimensionsPaginated.TotalPages
+		}
+
+		for _, item := range resp.DimensionsPaginated.Items {
+			granularities := item.QueryableGranularities
+			if granularities == nil {
+				granularities = []string{}
+			}
+			dimensions = append(dimensions, DimensionInfo{
+				Name:                       item.Name,
+				Type:                       item.Type,
+				Description:                item.Description,
+				Label:                      item.Label,
+				QueryableTimeGranularities: granularities,
+			})
+		}
 	}
 
 	c.dimensionsCache.put(cacheKey, dimensions)

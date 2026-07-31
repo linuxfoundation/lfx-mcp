@@ -1,6 +1,7 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
+// Package dbtsl provides a client for the dbt Semantic Layer API.
 package dbtsl
 
 import (

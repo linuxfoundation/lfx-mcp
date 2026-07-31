@@ -7,9 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -185,27 +188,45 @@ func TestNoMetricsDetailNamesTopicsAndTheDimensionTrap(t *testing.T) {
 // Similarity, mirroring difflib.SequenceMatcher.ratio()
 // ---------------------------------------------------------------------------
 
+// TestSimilarityRatioMatchesDifflib checks similarityRatio against every
+// ordered pair of allowlisted metric names, plus a handful of short
+// adversarial pairs.
+//
+// The fixture holds ratios produced by Python's difflib itself:
+//
+//	python3 -c 'import difflib; print(difflib.SequenceMatcher(None, a, b).ratio())'
+//
+// An earlier version of this test used eight hand-picked pairs and passed
+// while the implementation disagreed with difflib on a quarter of the real
+// domain: every hand-picked pair happened to be one where the tie-break did
+// not bite. Sweeping the domain is the only version of this test that would
+// have caught it, and it still runs in milliseconds.
 func TestSimilarityRatioMatchesDifflib(t *testing.T) {
-	tests := []struct {
-		a, b string
-		want float64
-	}{
-		{"", "", 1},
-		{"abcd", "abcd", 1},
-		{"abcd", "bcde", 0.75}, // longest run "bcd", 2*3/8
-		{"abc", "xyz", 0},      // nothing in common
-		{"ab", "abcdef", 0.5},  // 2*2/8
-		// Only single-character runs match, and the algorithm commits to the
-		// earliest one rather than the one that would score best overall.
-		{"tide", "diet", 0.25},
-		// Two values from the domain, as regression anchors.
-		{"contributor_count", "total_contributors", 0.6285714285714286},
-		{"membership", "memberships", 0.9523809523809523},
+	raw, err := os.ReadFile(filepath.Join("testdata", "difflib_ratios.json"))
+	if err != nil {
+		t.Fatalf("reading fixture: %v", err)
 	}
-	for _, tc := range tests {
-		if got := similarityRatio(tc.a, tc.b); !nearlyEqual(got, tc.want) {
-			t.Errorf("similarityRatio(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+	var cases [][]any
+	if err := json.Unmarshal(raw, &cases); err != nil {
+		t.Fatalf("parsing fixture: %v", err)
+	}
+	if len(cases) < 3000 {
+		t.Fatalf("fixture has only %d pairs, expected the full allowlist sweep", len(cases))
+	}
+
+	mismatched := 0
+	for _, c := range cases {
+		a, b, want := c[0].(string), c[1].(string), c[2].(float64)
+		got := similarityRatio(a, b)
+		if !nearlyEqual(got, want) {
+			mismatched++
+			if mismatched <= 5 {
+				t.Errorf("similarityRatio(%q, %q) = %v, difflib = %v", a, b, got, want)
+			}
 		}
+	}
+	if mismatched > 0 {
+		t.Errorf("%d of %d pairs disagree with difflib", mismatched, len(cases))
 	}
 }
 
@@ -429,6 +450,121 @@ func TestQueryStopsWhenTheContextIsCancelled(t *testing.T) {
 	}
 }
 
+// pagedResultJSON builds a SUCCESSFUL response holding one row, declaring
+// totalPages so the pagination loop has something to follow.
+func pagedResultJSON(region string, totalPages int) string {
+	return fmt.Sprintf(
+		`{"data":{"query":{"status":"SUCCESSFUL","error":null,"sql":"SELECT 1","totalPages":%d,`+
+			`"jsonResult":"{\"schema\":{\"fields\":[{\"name\":\"index\",\"type\":\"integer\"},`+
+			`{\"name\":\"country__lf_region\",\"type\":\"string\"}],\"primaryKey\":[\"index\"]},`+
+			`\"data\":[{\"index\":0,\"country__lf_region\":\"%s\"}]}"}}}`,
+		totalPages, region)
+}
+
+// TestQueryFetchesEveryResultPage guards against silently truncating a result.
+//
+// The GraphQL API pages at about 1024 rows, where the Arrow Flight transport
+// the Python implementation used streamed the whole result. Before this was
+// handled, an unbounded live query came back with exactly 1024 rows and a
+// row_count of 1024, indistinguishable from a complete answer.
+func TestQueryFetchesEveryResultPage(t *testing.T) {
+	stub := newStubServer(t)
+	stub.queue("CreateQuery", `{"data":{"createQuery":{"queryId":"q-1"}}}`)
+	stub.queue("GetQueryResult", pagedResultJSON("Asia Pacific", 3))
+	stub.queue("GetQueryResult", pagedResultJSON("Europe", 3))
+	stub.queue("GetQueryResult", pagedResultJSON("North America", 3))
+
+	client := stub.client(t)
+	result, err := client.Query(context.Background(), QueryArgs{Metrics: []string{"total_contributors"}})
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+	if result.RowCount != 3 {
+		t.Errorf("expected all 3 pages concatenated, got row_count %d", result.RowCount)
+	}
+	if len(result.Data) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(result.Data))
+	}
+	for i, want := range []string{"Asia Pacific", "Europe", "North America"} {
+		if got := result.Data[i]["country__lf_region"]; got != want {
+			t.Errorf("row %d = %v, want %q", i, got, want)
+		}
+	}
+}
+
+// TestQueryRequestsThePageItIsAskingFor checks the pageNum argument is sent,
+// since without it the API silently returns page 1 every time.
+func TestQueryRequestsThePageItIsAskingFor(t *testing.T) {
+	stub := newStubServer(t)
+	stub.queue("CreateQuery", `{"data":{"createQuery":{"queryId":"q-1"}}}`)
+	stub.queue("GetQueryResult", pagedResultJSON("Asia Pacific", 2))
+	stub.queue("GetQueryResult", pagedResultJSON("Europe", 2))
+
+	client := stub.client(t)
+	if _, err := client.Query(context.Background(), QueryArgs{Metrics: []string{"total_contributors"}}); err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+	if got := stub.lastVariables()["pageNum"]; got != float64(2) {
+		t.Errorf("expected the second page requested, got pageNum %v", got)
+	}
+}
+
+// TestQueryToleratesATransientPollFailure: a gateway error mid-poll says
+// nothing about the query, which is still running upstream. The Python route
+// retried once on transport errors, and dropping that made a 502 discard a
+// query that was about to succeed.
+func TestQueryToleratesATransientPollFailure(t *testing.T) {
+	stub := newStubServer(t)
+	stub.queue("CreateQuery", `{"data":{"createQuery":{"queryId":"q-1"}}}`)
+	stub.queue("GetQueryResult", `{"errors":[{"message":"502 Bad Gateway"}]}`)
+	stub.queue("GetQueryResult", successfulResultJSON)
+
+	client := stub.client(t)
+	result, err := client.Query(context.Background(), QueryArgs{Metrics: []string{"total_contributors"}})
+	if err != nil {
+		t.Fatalf("expected the transient failure absorbed, got %v", err)
+	}
+	if result.RowCount != 1 {
+		t.Errorf("expected 1 row, got %d", result.RowCount)
+	}
+}
+
+// TestQueryGivesUpAfterRepeatedPollFailures: tolerance is bounded, so a
+// genuinely broken endpoint still ends the call.
+func TestQueryGivesUpAfterRepeatedPollFailures(t *testing.T) {
+	stub := newStubServer(t)
+	stub.queue("CreateQuery", `{"data":{"createQuery":{"queryId":"q-1"}}}`)
+	stub.queue("GetQueryResult", `{"errors":[{"message":"502 Bad Gateway"}]}`)
+
+	client := stub.client(t)
+	_, err := client.Query(context.Background(), QueryArgs{Metrics: []string{"total_contributors"}})
+	if err == nil {
+		t.Fatal("expected the query to give up on a persistently failing endpoint")
+	}
+	if !strings.Contains(err.Error(), "502 Bad Gateway") {
+		t.Errorf("expected the underlying reason preserved, got %v", err)
+	}
+	if stub.calls["GetQueryResult"] != maxConsecutivePollFailures {
+		t.Errorf("expected %d attempts, got %d", maxConsecutivePollFailures, stub.calls["GetQueryResult"])
+	}
+}
+
+// A FAILED status is an application error, not a transport one, so it must
+// abort immediately rather than consume the transient-failure budget.
+func TestQueryDoesNotRetryAnApplicationFailure(t *testing.T) {
+	stub := newStubServer(t)
+	stub.queue("CreateQuery", `{"data":{"createQuery":{"queryId":"q-1"}}}`)
+	stub.queue("GetQueryResult", `{"data":{"query":{"status":"FAILED","error":"Unable to resolve metric","sql":null,"jsonResult":null}}}`)
+
+	client := stub.client(t)
+	if _, err := client.Query(context.Background(), QueryArgs{Metrics: []string{"total_contributors"}}); err == nil {
+		t.Fatal("expected a failure")
+	}
+	if stub.calls["GetQueryResult"] != 1 {
+		t.Errorf("expected a single poll, got %d", stub.calls["GetQueryResult"])
+	}
+}
+
 func TestQuerySurfacesGraphQLErrors(t *testing.T) {
 	stub := newStubServer(t)
 	stub.queue("CreateQuery", `{"errors":[{"message":"Metric 'nope' not found"}]}`)
@@ -462,6 +598,30 @@ func TestFetchDimensionValuesRejectsAnInjectionShapedName(t *testing.T) {
 	}
 	if len(stub.requests) != 0 {
 		t.Error("expected the name rejected before any request was made")
+	}
+}
+
+// TestFetchDimensionValuesRejectsAnEmptyMetricList closes the hole in the
+// gate. An empty list has nothing disallowed in it, so it passed the allowlist
+// check and then asked for dimensions scoped to no metric at all, which the
+// live API answers with all 295 dimensions in the environment. The only
+// caller rejects an empty list first, but the gate is documented as living
+// here, so it has to hold here.
+func TestFetchDimensionValuesRejectsAnEmptyMetricList(t *testing.T) {
+	for _, metrics := range [][]string{nil, {}, {"", "  "}} {
+		stub := newStubServer(t)
+		client := stub.client(t)
+
+		_, err := client.FetchDimensionValues(context.Background(),
+			"country__lf_region", metrics, "", 100)
+
+		var unknown *UnknownDimensionError
+		if !errors.As(err, &unknown) {
+			t.Fatalf("metrics %q: expected an UnknownDimensionError, got %v", metrics, err)
+		}
+		if len(stub.requests) != 0 {
+			t.Errorf("metrics %q: expected rejection before any request was made", metrics)
+		}
 	}
 }
 

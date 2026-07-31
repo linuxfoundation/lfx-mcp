@@ -317,6 +317,36 @@ func TestSemanticLayerLimitTooLarge(t *testing.T) {
 	}
 }
 
+// TestSemanticLayerDefaultsTheLimitToTheAdvertisedCeiling: an omitted or
+// negative limit reaches the API as "no limit", which returns one result page
+// and reports its length as the row count — 1024 rows presented as the whole
+// answer. The tool description promises a ceiling of 500, so that is what an
+// unspecified limit has to mean.
+func TestSemanticLayerDefaultsTheLimitToTheAdvertisedCeiling(t *testing.T) {
+	for _, limit := range []int{0, -1} {
+		captured := setupSemanticLayerTest(t)
+
+		res, _, err := handleQuerySemanticLayer(context.Background(), &mcp.CallToolRequest{}, QuerySemanticLayerArgs{
+			Metrics: "active_maintainers",
+			Limit:   limit,
+		})
+		if err != nil {
+			t.Fatalf("limit %d: unexpected error: %v", limit, err)
+		}
+		if res.IsError {
+			t.Fatalf("limit %d: unexpected error result: %s", limit, resultText(t, res))
+		}
+
+		vars, called := captured.operation("CreateQuery")
+		if !called {
+			t.Fatalf("limit %d: expected a query to be created", limit)
+		}
+		if got := vars["limit"]; got != float64(maxQueryLimit) {
+			t.Errorf("limit %d: expected the query capped at %d, got %v", limit, maxQueryLimit, got)
+		}
+	}
+}
+
 // TestSemanticLayerHelpQueryDescribesWhereScoping checks the help text moved
 // off the removed scope parameter and onto the where clause.
 func TestSemanticLayerHelpQueryDescribesWhereScoping(t *testing.T) {

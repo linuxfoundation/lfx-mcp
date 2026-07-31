@@ -1,6 +1,7 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
+// Package dbtsl provides a client for the dbt Semantic Layer API.
 package dbtsl
 
 import (
@@ -74,6 +75,15 @@ func (c *Client) FetchDimensionValues(ctx context.Context, dimension string, met
 			"Invalid dimension name %q. Expected a qualified_name from get_dimensions, e.g. 'country__lf_region'.",
 			dimension,
 		)}
+	}
+
+	// An empty list has nothing disallowed in it, so it would pass the check
+	// below and then ask for dimensions scoped to no metric at all, which the
+	// API answers with every dimension in the environment (295 of them here,
+	// including ones no allowlisted metric exposes). Require the gate to have
+	// something to check before checking it.
+	if len(normalizeMetricNames(metricNames)) == 0 {
+		return nil, &UnknownDimensionError{Message: "At least one metric is required. Dimension values are checked against the metrics you intend to query; pass the metric from list_metrics."}
 	}
 
 	if disallowed := ValidateMetrics(metricNames); len(disallowed) > 0 {

@@ -12,9 +12,14 @@
 // dbtsl SDK and split the transport: GraphQL for metadata, Arrow Flight over
 // gRPC for execution. There is no Go SDK for the dbt Semantic Layer, and
 // reproducing the Flight path would mean taking on Arrow, gRPC and session
-// lifecycle for no benefit at the volumes this server queries. Callers are
-// capped at 500 rows, comfortably inside the GraphQL API's 1024-row page, so
-// pagination never engages.
+// lifecycle for no benefit at the volumes this server queries.
+//
+// The one thing the GraphQL transport does not give away for free is
+// completeness. Flight streams a whole result; GraphQL pages it at about 1024
+// rows, and a caller that ignores the paging gets page one and no indication
+// there was ever a page two. Query therefore follows totalPages to the end
+// (see query.go), and the tool layer defaults an unspecified limit to its
+// advertised ceiling rather than sending none.
 //
 // Access to metrics is gated by an allowlist (see allowlist.go). Dimension
 // value discovery is gated on the caller supplying the metrics the dimension

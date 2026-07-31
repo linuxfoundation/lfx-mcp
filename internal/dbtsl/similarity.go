@@ -1,6 +1,7 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
+// Package dbtsl provides a client for the dbt Semantic Layer API.
 package dbtsl
 
 // similarityRatio returns the Ratcliff/Obershelp similarity of a and b, in
@@ -45,29 +46,39 @@ func matchingRunes(a, b []rune) int {
 //
 // Ties resolve to the earliest run in a, then the earliest in b, matching
 // difflib's behaviour.
+// The j scan runs forwards, which is what makes the tie-break match. difflib
+// walks the positions of each character in b in ascending order and keeps a
+// run only when it is strictly longer, so among equal-length runs the
+// earliest j wins. Scanning j backwards over a single rolling array is the
+// more compact way to write this, but it inverts that rule and keeps the
+// latest j instead, which strands the rest of a against a shorter tail and
+// makes the recursion undercount. Two rows cost one extra allocation and are
+// worth it.
 func longestCommonRun(a, b []rune) (aStart, bStart, length int) {
-	// runLengths[j] is the length of the common run ending at a[i], b[j] for
-	// the row being scanned. It is rebuilt per row from its previous values,
-	// walking j backwards so each read happens before it is overwritten.
-	runLengths := make([]int, len(b))
+	// prev and cur hold, for the previous and current row, the length of the
+	// common run ending at a[i], b[j]. Every j is assigned on every row, so
+	// no stale values survive the swap.
+	prev := make([]int, len(b))
+	cur := make([]int, len(b))
 
 	for i := range a {
-		for j := len(b) - 1; j >= 0; j-- {
+		for j := range b {
 			if a[i] != b[j] {
-				runLengths[j] = 0
+				cur[j] = 0
 				continue
 			}
 			if j == 0 {
-				runLengths[j] = 1
+				cur[j] = 1
 			} else {
-				runLengths[j] = runLengths[j-1] + 1
+				cur[j] = prev[j-1] + 1
 			}
-			if runLengths[j] > length {
-				length = runLengths[j]
+			if cur[j] > length {
+				length = cur[j]
 				aStart = i - length + 1
 				bStart = j - length + 1
 			}
 		}
+		prev, cur = cur, prev
 	}
 	return aStart, bStart, length
 }

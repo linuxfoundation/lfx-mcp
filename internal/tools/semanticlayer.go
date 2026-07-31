@@ -1,6 +1,7 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
+// Package tools provides MCP tool implementations for the LFX MCP server.
 package tools
 
 import (
@@ -440,6 +441,13 @@ func handleQuerySemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args 
 	}
 	if args.Limit > maxQueryLimit {
 		return toolError(fmt.Sprintf("Error: limit must be %d or less", maxQueryLimit))
+	}
+	// An omitted or negative limit means "no limit" to the API, which returns
+	// one result page and reports its length as the row count: 1024 rows
+	// presented as the whole answer. Default to the ceiling this tool
+	// advertises so the documented cap is the one that actually applies.
+	if args.Limit < 1 {
+		args.Limit = maxQueryLimit
 	}
 	if disallowed := dbtsl.ValidateMetrics(metrics); len(disallowed) > 0 {
 		return toolError(dbtsl.UnknownMetricsDetail(disallowed))

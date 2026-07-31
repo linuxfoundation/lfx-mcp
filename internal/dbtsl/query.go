@@ -1,6 +1,7 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
+// Package dbtsl provides a client for the dbt Semantic Layer API.
 package dbtsl
 
 import (
@@ -22,11 +23,12 @@ mutation CreateQuery($environmentId: BigInt!, $metrics: [MetricInput!], $groupBy
 `
 
 const gqlQueryResult = `
-query GetQueryResult($environmentId: BigInt!, $queryId: String!) {
-  query(environmentId: $environmentId, queryId: $queryId) {
+query GetQueryResult($environmentId: BigInt!, $queryId: String!, $pageNum: Int!) {
+  query(environmentId: $environmentId, queryId: $queryId, pageNum: $pageNum) {
     status
     error
     sql
+    totalPages
     jsonResult(encoded: false, orient: TABLE)
   }
 }
@@ -34,13 +36,33 @@ query GetQueryResult($environmentId: BigInt!, $queryId: String!) {
 
 // Query polling cadence. The Semantic Layer compiles and runs warehouse SQL,
 // so the first result is rarely ready immediately. The interval backs off so a
-// slow query does not generate a poll storm, and the overall bound comes from
-// the caller's context.
+// slow query does not generate a poll storm.
 const (
 	pollInitialInterval = 250 * time.Millisecond
 	pollMaxInterval     = 2 * time.Second
 	pollBackoffFactor   = 1.5
 )
+
+// queryMaxWait bounds a single Query call end to end.
+//
+// The caller's context is not a sufficient bound on its own: stdio mode runs
+// on a background context, and in HTTP mode main.go sets only
+// ReadHeaderTimeout, so nothing else stops a query that sits in RUNNING
+// forever from holding a goroutine and polling until the process exits. The
+// value is well clear of the slowest query observed against this environment
+// (a year-over-year trend at about 23 seconds).
+const queryMaxWait = 5 * time.Minute
+
+// maxConsecutivePollFailures is how many transport errors in a row the poll
+// loop absorbs before giving up.
+//
+// A single 502 from the gateway mid-poll says nothing about the query, which
+// is still running upstream and may be about to succeed. The Python
+// implementation this was ported from retried once on transport errors while
+// failing fast on application errors (semantic_layer_routes.py), and the same
+// split applies here: a FAILED status still aborts immediately. The counter
+// resets on any successful poll.
+const maxConsecutivePollFailures = 3
 
 // Query status values returned by the Semantic Layer. Anything else means the
 // query is still in flight.
@@ -117,6 +139,7 @@ type queryResultResponse struct {
 		Status     string `json:"status"`
 		Error      string `json:"error"`
 		SQL        string `json:"sql"`
+		TotalPages int    `json:"totalPages"`
 		JSONResult string `json:"jsonResult"`
 	} `json:"query"`
 }
@@ -127,27 +150,78 @@ type queryResultResponse struct {
 // successful or failed. Results come back as JSON rather than Arrow, which
 // keeps this client free of an Arrow and gRPC dependency.
 func (c *Client) Query(ctx context.Context, args QueryArgs) (*QueryResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, queryMaxWait)
+	defer cancel()
+
 	queryID, err := c.createQuery(ctx, args)
 	if err != nil {
 		return nil, err
 	}
 
-	interval := pollInitialInterval
-	for {
-		result, err := c.pollQuery(ctx, queryID)
+	first, err := c.awaitQuery(ctx, queryID)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := parseQueryResult(first.Query.JSONResult, first.Query.SQL)
+	if err != nil {
+		return nil, err
+	}
+
+	// The GraphQL API pages results at about 1024 rows. Arrow Flight, which
+	// the Python implementation used, streamed the whole result, so this is a
+	// truncation risk the port introduced rather than inherited: without this
+	// loop an unbounded query returns page 1 and reports its length as the
+	// row count, and the caller reads 1024 as the answer. Callers are capped
+	// well inside a single page, so this rarely engages, but dropping rows
+	// silently is the wrong way to be wrong.
+	for page := 2; page <= first.Query.TotalPages; page++ {
+		next, err := c.pollQuery(ctx, queryID, page)
+		if err != nil {
+			return nil, fmt.Errorf("fetching result page %d of %d: %w", page, first.Query.TotalPages, err)
+		}
+		more, err := parseQueryResult(next.Query.JSONResult, "")
 		if err != nil {
 			return nil, err
 		}
+		result.Data = append(result.Data, more.Data...)
+	}
+	result.RowCount = len(result.Data)
 
-		switch result.Query.Status {
-		case statusSuccessful:
-			return parseQueryResult(result.Query.JSONResult, result.Query.SQL)
-		case statusFailed:
-			message := strings.TrimSpace(result.Query.Error)
-			if message == "" {
-				message = "the semantic layer reported the query failed but gave no reason"
+	return result, nil
+}
+
+// awaitQuery polls a submitted query until the Semantic Layer reports it
+// successful or failed, and returns its first page.
+func (c *Client) awaitQuery(ctx context.Context, queryID string) (*queryResultResponse, error) {
+	interval := pollInitialInterval
+	failures := 0
+
+	for {
+		result, err := c.pollQuery(ctx, queryID, 1)
+		switch {
+		case err == nil:
+			failures = 0
+			switch result.Query.Status {
+			case statusSuccessful:
+				return result, nil
+			case statusFailed:
+				message := strings.TrimSpace(result.Query.Error)
+				if message == "" {
+					message = "the semantic layer reported the query failed but gave no reason"
+				}
+				return nil, &QueryFailedError{Message: message}
 			}
-			return nil, &QueryFailedError{Message: message}
+		case ctx.Err() != nil:
+			// Out of budget, or the caller went away. Report that rather than
+			// the transport error it surfaced as.
+			return nil, fmt.Errorf("semantic layer query did not finish in time: %w", ctx.Err())
+		default:
+			// A transport error says nothing about the query, which is still
+			// running upstream. Absorb a few before giving up.
+			if failures++; failures >= maxConsecutivePollFailures {
+				return nil, fmt.Errorf("semantic layer polling failed %d times in a row: %w", failures, err)
+			}
 		}
 
 		select {
@@ -195,9 +269,10 @@ func (c *Client) createQuery(ctx context.Context, args QueryArgs) (string, error
 	return resp.CreateQuery.QueryID, nil
 }
 
-func (c *Client) pollQuery(ctx context.Context, queryID string) (*queryResultResponse, error) {
+func (c *Client) pollQuery(ctx context.Context, queryID string, pageNum int) (*queryResultResponse, error) {
 	var resp queryResultResponse
-	if err := c.graphqlRequest(ctx, gqlQueryResult, map[string]any{"queryId": queryID}, &resp); err != nil {
+	variables := map[string]any{"queryId": queryID, "pageNum": pageNum}
+	if err := c.graphqlRequest(ctx, gqlQueryResult, variables, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

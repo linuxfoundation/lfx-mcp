@@ -46,6 +46,10 @@ Always use this tool for:
   IMPORTANT: activities data (contributors, PRs, code contributions etc) not involving maintainers should use query_lfx_semantic_layer.
 - Maintainer time series and trends (the maintainer model lacks good time granularity)
 - Event sponsorships (the semantic layer should be used for events and event registration data not related to sponsorships)
+- Social listening: mentions of a project on social media and the web (Twitter/X, Bluesky, Reddit, Hacker News, DEV,
+  Podcasts, YouTube, LinkedIn, TikTok), sentiment, share of voice by platform, and author reach/followers
+  (e.g. "how is Kubernetes trending on social media?", "sentiment split of our mentions last month").
+  The semantic layer has no social listening data.
 
 Also use this tool for:
 - Open-ended or exploratory analysis (e.g. "which projects need attention?", "contribution overview")
@@ -70,7 +74,7 @@ Tips:
 // QueryLFXLensArgs defines the input for query_lfx_lens.
 type QueryLFXLensArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf') (required)"`
-	Input       string `json:"input" jsonschema:"Natural language question. Use for maintainer names/trends, open-ended analysis, subproject questions, cross-domain joins, and exploratory questions. Contributor, activity and membership questions belong to the semantic layer. Takes 15-30s. (required)"`
+	Input       string `json:"input" jsonschema:"Natural language question. Use for maintainer names/trends, social listening (mentions/sentiment/reach), open-ended analysis, subproject questions, cross-domain joins, and exploratory questions. Contributor, activity and membership questions belong to the semantic layer. Takes 15-30s. (required)"`
 }
 
 type lensWorkflowAdditional struct {

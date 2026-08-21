@@ -107,10 +107,11 @@ ko-build:
 	@echo "Building ko image..."
 	KO_DOCKER_REPO=$(DOCKER_IMAGE) VERSION=$(VERSION) ko build -L --bare --tags local ./cmd/lfx-mcp-server
 
-# Run MegaLinter locally via Docker (matches CI Go flavor at v9).
+# Run MegaLinter locally via Docker (matches CI Go flavor at v9.6.0).
+# Keep this version in sync with .github/workflows/mega-linter.yml.
 megalinter:
-	docker pull oxsecurity/megalinter-go:v9
-	docker run --rm --platform linux/amd64 -v '$(CURDIR):/tmp/lint:rw' oxsecurity/megalinter-go:v9
+	docker pull ghcr.io/oxsecurity/megalinter-go:v9.6.0
+	docker run --rm --platform linux/amd64 -v '$(CURDIR):/tmp/lint:rw' ghcr.io/oxsecurity/megalinter-go:v9.6.0
 
 # Show help
 help:

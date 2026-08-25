@@ -37,6 +37,10 @@ jobs:
         # `megalinter` target in the Makefile.
         uses: oxsecurity/megalinter/flavors/go@ef3e84b8b836d76db562d0f3ed7da61e8fd538bc  # v9.6.0
         env:
+          # Only Actions-specific values (secrets, runner behavior) belong
+          # here. Generic MegaLinter/repo config belongs in .mega-linter.yml
+          # so local runs (e.g. mega-linter-runner) get the same behavior.
+          #
           # All available variables are described in documentation
           # https://megalinter.io/latest/configuration/
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

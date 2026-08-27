@@ -174,6 +174,74 @@ func TestValidateMetricsRejectsUnknown(t *testing.T) {
 	}
 }
 
+// TestUnknownMetricsDetailPoolsSuggestions guards the message against growing
+// with the number of rejected names.
+//
+// Suggestions are scored by matched word length, so a generic word like
+// "count" pulls the same tail in for every name. Listing them per name meant
+// three rejected metrics produced ~700 characters, repeating three filler
+// suggestions three times. lfx-lens pooled and capped them; so does this.
+func TestUnknownMetricsDetailPoolsSuggestions(t *testing.T) {
+	detail := UnknownMetricsDetail([]string{"contributor_count", "membership_total", "event_count"})
+
+	if got := strings.Count(detail, "Did you mean"); got != 1 {
+		t.Errorf("expected one pooled suggestion list, got %d: %s", got, detail)
+	}
+	if strings.Contains(detail, "Did you mean (for") {
+		t.Error("expected suggestions pooled rather than listed per rejected name")
+	}
+	if !strings.Contains(detail, "total_contributors") {
+		t.Errorf("expected the best match kept, got %s", detail)
+	}
+	if !strings.Contains(detail, "Use list_metrics") {
+		t.Errorf("expected the way forward named, got %s", detail)
+	}
+
+	// Every rejected name is still reported, even though suggestions are pooled.
+	for _, name := range []string{"contributor_count", "membership_total", "event_count"} {
+		if !strings.Contains(detail, name) {
+			t.Errorf("expected %q named in the rejection, got %s", name, detail)
+		}
+	}
+
+	// No suggestion appears twice, and the list is capped.
+	list := detail[strings.Index(detail, "Did you mean:")+len("Did you mean:"):]
+	list = list[:strings.Index(list, "?")]
+	parts := strings.Split(list, ",")
+	if len(parts) > maxSuggestions {
+		t.Errorf("expected at most %d suggestions, got %d: %s", maxSuggestions, len(parts), list)
+	}
+	seen := make(map[string]bool, len(parts))
+	for _, part := range parts {
+		name := strings.TrimSpace(part)
+		if seen[name] {
+			t.Errorf("suggestion %q repeated: %s", name, list)
+		}
+		seen[name] = true
+	}
+}
+
+// The dimension-values gate rejects an unknown metric with the same message
+// the query path uses, so a guessed name gets suggestions there too.
+func TestFetchDimensionValuesSuggestsOnAnUnknownMetric(t *testing.T) {
+	stub := newStubServer(t)
+	client := stub.client(t)
+
+	_, err := client.FetchDimensionValues(context.Background(),
+		"country__lf_region", []string{"contributor_count"}, "", 100)
+
+	var unknown *UnknownDimensionError
+	if !errors.As(err, &unknown) {
+		t.Fatalf("expected an UnknownDimensionError, got %v", err)
+	}
+	if !strings.Contains(unknown.Message, "total_contributors") {
+		t.Errorf("expected a suggestion for the guessed name, got %q", unknown.Message)
+	}
+	if len(stub.requests) != 0 {
+		t.Error("expected rejection before any request was made")
+	}
+}
+
 func TestNoMetricsDetailNamesTopicsAndTheDimensionTrap(t *testing.T) {
 	detail := NoMetricsDetail("vietnam")
 	if !strings.Contains(detail, "membership") {

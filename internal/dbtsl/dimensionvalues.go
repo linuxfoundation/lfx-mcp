@@ -110,10 +110,11 @@ func (c *Client) FetchDimensionValues(ctx context.Context, dimension string, met
 		return nil, &UnknownDimensionError{Message: "At least one metric is required. Dimension values are checked against the metrics you intend to query; pass the metric from list_metrics."}
 	}
 
+	// Same rejection as the query path, so it reads the same and carries the
+	// same suggestions. A caller who guessed the metric name here was
+	// otherwise told only that it was rejected, with nothing to try next.
 	if disallowed := ValidateMetrics(metricNames); len(disallowed) > 0 {
-		return nil, &UnknownDimensionError{Message: fmt.Sprintf(
-			"Metrics not in allowlist: %s.", strings.Join(disallowed, ", "),
-		)}
+		return nil, &UnknownDimensionError{Message: UnknownMetricsDetail(disallowed)}
 	}
 
 	available, err := c.FetchDimensions(ctx, metricNames)

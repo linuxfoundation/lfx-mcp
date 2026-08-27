@@ -187,16 +187,43 @@ func NoMetricsDetail(search string) string {
 	)
 }
 
+// maxSuggestions caps a "did you mean" list. Beyond a handful the tail is
+// filler: scoring is by matched word length, so a generic word shared by half
+// the allowlist keeps matching.
+const maxSuggestions = 5
+
 // UnknownMetricsDetail is the rejection message for metric names outside the
 // allowlist, naming plausible alternatives for each.
 func UnknownMetricsDetail(disallowed []string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Metrics not available: %s.", strings.Join(disallowed, ", "))
+
+	// Suggestions are pooled across every rejected name, deduplicated with
+	// their ranking intact, then capped once.
+	//
+	// Listing them per name instead makes the message grow with the number of
+	// bad names while repeating the same generic matches: three rejected
+	// metrics produced about 700 characters, most of it the same three filler
+	// suggestions three times over. Scoring is by matched word length, so
+	// generic words like "count" pull in the same tail for every name.
+	seen := make(map[string]struct{}, maxSuggestions)
+	suggestions := make([]string, 0, maxSuggestions)
 	for _, name := range disallowed {
-		if suggestions := SuggestMetrics(name, 5); len(suggestions) > 0 {
-			fmt.Fprintf(&b, " Did you mean (for %q): %s?", name, strings.Join(suggestions, ", "))
+		for _, s := range SuggestMetrics(name, maxSuggestions) {
+			if _, duplicate := seen[s]; duplicate {
+				continue
+			}
+			seen[s] = struct{}{}
+			suggestions = append(suggestions, s)
 		}
 	}
+	if len(suggestions) > maxSuggestions {
+		suggestions = suggestions[:maxSuggestions]
+	}
+	if len(suggestions) > 0 {
+		fmt.Fprintf(&b, " Did you mean: %s?", strings.Join(suggestions, ", "))
+	}
+
 	b.WriteString(" Use list_metrics to see what is available.")
 	return b.String()
 }

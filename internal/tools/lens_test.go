@@ -82,7 +82,7 @@ func resultText(t *testing.T, res *mcp.CallToolResult) string {
 // Handler behavior
 // ---------------------------------------------------------------------------
 
-func TestSemanticLayer_GlobalQueryOmitsProjectSlugAndWhere(t *testing.T) {
+func TestSemanticLayer_UnfilteredQueryOmitsScopeAndWhere(t *testing.T) {
 	captured := setupLensTest(t)
 
 	res, _, err := handleQuerySemanticLayer(context.Background(), &mcp.CallToolRequest{}, QuerySemanticLayerArgs{
@@ -110,13 +110,12 @@ func TestSemanticLayer_GlobalQueryOmitsProjectSlugAndWhere(t *testing.T) {
 	}
 }
 
-func TestSemanticLayer_ScopedQuerySendsProjectSlugAndWhere(t *testing.T) {
+func TestSemanticLayer_ScopedQueryUsesWhereOnly(t *testing.T) {
 	captured := setupLensTest(t)
 
 	res, _, err := handleQuerySemanticLayer(context.Background(), &mcp.CallToolRequest{}, QuerySemanticLayerArgs{
-		ProjectSlug: "cncf",
-		Metrics:     "active_maintainers",
-		Where:       "{{ Dimension('maintainer_key__project_slug') }} = 'cncf'",
+		Metrics: "total_contributors",
+		Where:   "{{ Dimension('activity_project_id__project_spine_slug') }} = 'cncf'",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -129,8 +128,8 @@ func TestSemanticLayer_ScopedQuerySendsProjectSlugAndWhere(t *testing.T) {
 	if err := json.Unmarshal(captured.Body, &body); err != nil {
 		t.Fatalf("failed to parse captured body: %v", err)
 	}
-	if body["project_slug"] != "cncf" {
-		t.Errorf("expected project_slug 'cncf' in request body, got: %v", body["project_slug"])
+	if _, ok := body["project_slug"]; ok {
+		t.Errorf("project_slug must not be sent; scope belongs in where: %v", body["project_slug"])
 	}
 	if _, ok := body["where"]; !ok {
 		t.Error("expected where key in request body")
@@ -198,8 +197,14 @@ func TestSemanticLayer_DescribeQuery(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	text := resultText(t, res)
-	if !strings.Contains(text, "project_slug is optional") {
-		t.Errorf("describe query text missing optional-scope wording: %q", text)
+	for _, want := range []string{
+		"There is no separate project parameter",
+		"activity_project_id__project_spine_slug",
+		"prior 365 complete UTC days",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("describe query text missing %q", want)
+		}
 	}
 }
 
@@ -260,8 +265,11 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		"entity__field",
 		"country__lf_region",
 		"activity_project_id__organization_lf_region",
-		// Discovery must hand off to the query tool by name.
+		// Discovery must hand off to the query tool by name and explain where
+		// project scope is expressed now that there is no project parameter.
 		"query_lfx_semantic_layer",
+		"Project scope lives in query's where clause (no parameter)",
+		"resolve slugs via search_projects",
 		// The value-discovery action, and the reason it exists. A filter naming
 		// a real dimension but an unknown literal returns zero rows instead of
 		// erroring, so a wrong guess is indistinguishable from missing data. A
@@ -314,20 +322,44 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 		"yyyy-mm-dd",
 		"ceiling 500",
 		"metric_time__year",
-		"The join is outer",
+		"outer-joined",
 		"ranked list",
-		"project_slug",
 		// Splitting discovery out made it possible to query without ever
 		// exploring, and a live client did exactly that — going straight to a
 		// query with guessed names. The rule has to be an instruction, not a
 		// conditional suggestion.
-		"ALWAYS call explore_lfx_semantic_layer first",
+		"ALWAYS use explore_lfx_semantic_layer first",
 		"never guess",
 		// Both neighbours are named so routing works from this tool too.
 		"explore_lfx_semantic_layer",
 		"query_lfx_lens",
-		"query and data-exploration tool",
-		"anything sliced by country or region",
+		"country/region",
+		// Scope dimensions and literals are copied exactly from the current
+		// live layer. A wrong dimension can return a plausible wrong population.
+		"search_projects first",
+		"Kubernetes='k8s'",
+		"kernel='korg'",
+		"PyTorch segment='ptproject'",
+		"activity_project_id__project_spine_slug",
+		"ONLY foundation scope",
+		"REQUIRED for sums",
+		"insertions/deletions inflate 2–4x",
+		"asset_id__project_slug",
+		"registration_id__project_slug",
+		"event_id__project_name",
+		"Cloud Native Computing Foundation (CNCF)",
+		"NEVER slice sponsorship metrics",
+		"maintainer_key__cm_project_grandparents_slug",
+		"is_lf_project=true",
+		"health_metric_key__foundation_slug",
+		"IN (...) + group_by the same dimension",
+		"never total across spine groups",
+		"0 rows = misspelled literal",
+		// Window semantics must survive optional-parameter compaction.
+		"prior 365 complete UTC days",
+		">= start AND < today",
+		"YTD: >= 'YYYY-01-01'",
+		"Always state concrete dates used",
 		// The silent-zero-rows warning is only actionable if it names the way
 		// out; without this the model retries the same wrong literal.
 		"get_dimension_values",
@@ -338,6 +370,7 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 	}
 	for _, unwanted := range []string{
 		"MUST include a project scope filter",
+		"project_slug: optional",
 		// Framings that understate the tool and misroute the questions it
 		// exists to answer: it compiles SQL per request rather than serving
 		// stored rollups, and grouping by a name dimension returns lists of
@@ -360,7 +393,7 @@ func TestSemanticLayerArgs_FieldsFitSchemaBudget(t *testing.T) {
 		props []string
 	}{
 		{listExploreTool(t), []string{"action", "search", "metrics", "dimension", "target"}},
-		{listQueryTool(t), []string{"metrics", "group_by", "where", "order_by", "limit", "project_slug"}},
+		{listQueryTool(t), []string{"metrics", "group_by", "where", "order_by", "limit"}},
 	} {
 		for _, property := range tc.props {
 			if got := len(schemaPropertyDescription(t, tc.tool, property)); got > schemaDescriptionBudget {
@@ -429,7 +462,7 @@ func TestAllLensToolDescriptionsFitBudget(t *testing.T) {
 	} {
 		tool := listRegisteredTool(t, tc.name, tc.register)
 		if got := len(tool.Description); got > schemaDescriptionBudget {
-			t.Errorf("%s description is %d chars; everything past %d is invisible to the model",
+			t.Errorf("%s description is %d bytes; everything past %d is invisible to the model",
 				tc.name, got, schemaDescriptionBudget)
 		}
 	}
@@ -560,16 +593,23 @@ func TestRegisterSemanticLayer_Schema(t *testing.T) {
 	}
 
 	// Query: metrics is required, so its multi-metric join rules survive schema
-	// compaction. Everything else stays optional — above all project_slug,
-	// whose whole point is that global questions omit it.
+	// compaction. Everything else stays optional. Project scope is expressed
+	// only in where, so project_slug must not exist in the schema.
 	queryRequired := schemaRequired(t, query)
 	if !contains(queryRequired, "metrics") {
 		t.Errorf("query required = %v; metrics must be required so its guidance survives compaction", queryRequired)
 	}
-	for _, optional := range []string{"project_slug", "where", "group_by", "order_by", "limit"} {
+	for _, optional := range []string{"where", "group_by", "order_by", "limit"} {
 		if contains(queryRequired, optional) {
 			t.Errorf("query required = %v; %s must stay optional", queryRequired, optional)
 		}
+	}
+	querySchema, err := json.Marshal(query.InputSchema)
+	if err != nil {
+		t.Fatalf("failed to marshal query schema: %v", err)
+	}
+	if strings.Contains(string(querySchema), `"project_slug"`) {
+		t.Errorf("query schema must not expose removed project_slug: %s", querySchema)
 	}
 
 	// The optional descriptions are still expected to be complete, for clients
@@ -583,10 +623,6 @@ func TestRegisterSemanticLayer_Schema(t *testing.T) {
 	groupBy := schemaPropertyDescription(t, query, "group_by")
 	if !strings.Contains(groupBy, "metric_time__year") {
 		t.Errorf("group_by schema description missing the trend grain: %q", groupBy)
-	}
-	slug := schemaPropertyDescription(t, query, "project_slug")
-	if !strings.Contains(slug, "Omit it for global or cross-foundation questions") {
-		t.Errorf("project_slug schema description missing the optional-scope rule: %q", slug)
 	}
 }
 
@@ -653,10 +689,34 @@ func TestHelpActionAndDescribeAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// The worked examples are the reason help exists; they must survive the
-	// move off the description.
-	if text := resultText(t, res); !strings.Contains(text, "metric_time__year") {
-		t.Errorf("help query text missing the trend example: %q", text)
+	// The full doctrine and worked examples are the reason help exists; they
+	// must survive the move off the byte-limited description.
+	text := resultText(t, res)
+	for _, want := range []string{
+		"metric_time__year",
+		"There is no separate project parameter",
+		"activity_project_id__project_spine_slug",
+		"asset_id__project_slug",
+		"registration_id__project_slug",
+		"event_id__project_name",
+		"maintainer_key__cm_project_grandparents_slug",
+		"health_metric_key__foundation_slug",
+		"CNCF contributors, last 12 months",
+		"Kubernetes code volume",
+		"Compare three foundations",
+		"CNCF membership count",
+		"Foundation to its projects (walk-down)",
+		"counts only, never sums",
+		"__segment_slug",
+		"PCC-style foundation rollups",
+		"risc-v-international / riscv",
+		"cff / cloud-foundry",
+		"opensearch-foundation / opensearch-project",
+		`"Direct children of X" and "sub-foundations of X" are not expressible today`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("help query text missing %q", want)
+		}
 	}
 }
 

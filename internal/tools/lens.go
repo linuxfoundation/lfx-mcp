@@ -155,7 +155,7 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 // explore_lfx_semantic_layer / query_lfx_semantic_layer — structured metrics
 // ---------------------------------------------------------------------------
 
-// Both descriptions are truncated at 2048 characters before the model ever sees
+// Both descriptions are truncated at 2048 bytes before the model ever sees
 // them, so each must stay under that: anything past the cut is silently
 // invisible, which is how earlier guidance (the tlf membership caveat, the
 // project_name tip) went unread for as long as it did.
@@ -167,10 +167,10 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 // QuerySemanticLayerArgs for why that distinction matters. Anything that still
 // does not fit belongs in the help action, whose output is a tool result and
 // carries no limit; help is a fallback for a failed query, not a prerequisite.
-const exploreSemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data. This half discovers what can be measured; query_lfx_semantic_layer runs it. Start here whenever you do not already know the exact metric, dimension and value names.
+const exploreSemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data. This tool discovers what can be measured; query_lfx_semantic_layer runs it. Start here unless exact metric, dimension and value names are already known.
 
-COVERS — search one of these topic words:
-- contributor, contribution — activity and org counts, commits, PRs
+COVERS — search one topic word:
+- contributor, contribution — activity/org counts, commits, PRs
 - membership, revenue, churn — counts, discounts, invoices
 - event, registration, speaker — counts and revenue
 - enrollment, certification — education
@@ -178,29 +178,25 @@ COVERS — search one of these topic words:
 - health, project — health scores, software value, cost
 - any of the above sliced by country or region — always here, never query_lfx_lens
 
-A metric is the number measured (total_contributors); a dimension is how you slice, filter or list it (country__lf_region). Names are entity__field and the prefix differs per metric, so copy qualified_names from this tool rather than assembling one — country__lf_region is a person's country, activity_project_id__organization_lf_region an organization's HQ.
+A metric is measured (total_contributors); a dimension slices, filters or lists it (country__lf_region). Names are entity__field and prefixes differ per metric, so copy qualified_names; never assemble them. country__lf_region is a person's country; activity_project_id__organization_lf_region is an organization's HQ.
 
 ACTIONS
-- list_metrics(search): searches metric names and descriptions only, so search a topic word above, not a dimension word like "country". When 15 or fewer match, each returns its dimension qualified_names — usually enough to query.
-- get_dimensions(metrics, search): dimensions available to those metrics; needs at least one. Passing several returns only the ones they share — what a cross-domain query can group by.
-- get_dimension_values(dimension, metrics, search): the literals a dimension holds. Call it before filtering on any value not already seen in output: an unknown literal returns zero rows, not an error, so a wrong guess reads as missing data. Spellings surprise — 'Asia Pacific' not 'APAC', 'Viet Nam' not 'Vietnam'.
-- help(target): worked query examples, for when a query fails.
+- list_metrics(search): searches metric names/descriptions, so use a topic above, not a dimension like "country". At ≤15 matches, each includes dimension qualified_names.
+- get_dimensions(metrics, search): available dimensions; needs a metric. Several metrics return only shared dimensions—a cross-domain query's valid group_by set.
+- get_dimension_values(dimension, metrics, search): stored literals. Call before filtering on unseen values: an unknown returns zero rows, not an error. Spellings surprise—'Asia Pacific' not 'APAC', 'Viet Nam' not 'Vietnam'.
+- help(target): worked query examples after failure.
 
-USE query_lfx_lens INSTEAD for questions that do not reduce to a metric above: narrative or "why", subprojects, maintainer trends, event sponsorships.`
+Project scope lives in query's where clause (no parameter): resolve slugs via search_projects, then see query_lfx_semantic_layer for which dimension scopes each domain.
 
-const querySemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data; this half runs the query. Covers contributions, memberships, events, education, maintainers and project health — and anything sliced by country or region. ALWAYS call explore_lfx_semantic_layer first unless you already have the exact metric, dimension and entity names — never guess or assemble one: a wrong name errors, and a wrong filter value returns no rows rather than an error, so confirm literals with get_dimension_values. Use query_lfx_lens for narrative or "why" questions that do not reduce to a metric.
+USE query_lfx_lens INSTEAD for non-metric narrative/"why", subprojects, maintainer trends, event sponsorships.`
 
-  metrics (required): comma-separated names. List several to combine them in one result, even across domains — they are joined on the dimensions they have in common, the only set such a query can group by. The join is outer, so a group in only one domain still appears with NULL for the other.
-  group_by: dimension qualified_names, comma-separated, copied verbatim. Group by a name dimension for a ranked list of organizations, people or projects. For a trend add metric_time__year, or __quarter, __month, __week, __day.
-  where: MetricFlow filter; this does the filtering.
-    categorical  {{ Dimension('country__lf_region') }} = 'Europe'
-    time         {{ TimeDimension('asset_id__install_date', 'DAY') }} >= '2024-01-01'
-    Dates are yyyy-mm-dd.
-  order_by: comma-separated; each field must also appear in group_by or metrics. Prefix - for descending.
-  limit: ceiling 500. Use 10-20 for top-N, 50-100 for full breakdowns.
-  project_slug: optional. Omit it for global or cross-foundation questions — the normal case for country and region ones. When given, the where clause must also carry a project filter, validated against that foundation's subtree.
+const querySemanticLayerDescription = `Metrics: contributions, memberships, events, education, maintainers, health, country/region. ALWAYS use explore_lfx_semantic_layer first unless exact names are known; never guess. query_lfx_lens: narrative/"why"/carve-outs.
 
-Many metrics are pre-filtered — current_* is active-only, total_contributors excludes bots — so do not re-filter those. Entities listed with a metric are join keys, not group-by values: grouping by one returns raw IDs, so use the name dimension.`
+SYNTAX: metrics (required), CSV. Multiple metrics are outer-joined on shared dimensions; group_by only those; absent sides NULL. group_by qualified names: names for ranked lists; metric_time__year/quarter/month/week/day for trends; entities give raw IDs. where is MetricFlow: {{ Dimension('country__lf_region') }} = 'Europe'; {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'. Dates yyyy-mm-dd. order_by selected fields; - means descending. limit ceiling 500. current_* is active-only; total_contributors excludes bots—do not re-filter.
+
+SCOPE: resolve slugs via search_projects first—stored slugs differ (Kubernetes='k8s', kernel='korg', PyTorch segment='ptproject'). Activities/contributions: {{ Dimension('activity_project_id__project_spine_slug') }} = '<slug>' selects project+descendants. It is the ONLY foundation scope (spine 'cncf'=58M activities; project_slug 'cncf'=1.4M) and REQUIRED for sums: insertions/deletions inflate 2–4x under any other filter. Memberships: asset_id__project_slug. Event registrations: registration_id__project_slug. Events/speakers/sponsorships have NO slug dimension: use event_id__project_name and the EXACT display name from get_dimension_values (e.g. 'Cloud Native Computing Foundation (CNCF)'). NEVER slice sponsorship metrics by asset_id__project_slug: one NULL row with all sponsorships. Maintainers: maintainer_key__cm_project_grandparents_slug; add is_lf_project=true to exclude non-LF. Health: health_metric_key__foundation_slug. Comparing: IN (...) + group_by the same dimension; never total across spine groups. 0 rows = misspelled literal—confirm with get_dimension_values.
+
+WINDOWS: “last 12 months” = prior 365 complete UTC days: {{ TimeDimension('metric_time','DAY') }} >= start AND < today. YTD: >= 'YYYY-01-01'. Always state concrete dates used.`
 
 // The two semantic layer tools register independently so that LFXMCP_TOOLS can
 // select either by name. They are meant to be enabled together — each
@@ -208,9 +204,9 @@ Many metrics are pre-filtered — current_* is active-only, total_contributors e
 // "explore_lfx_semantic_layer" registered nothing while
 // "query_lfx_semantic_layer" silently registered both.
 //
-// The registration gate in cmd/lfx-mcp-server limits both to staff callers, so
-// project scoping is optional here; lfx-lens validates any project filters that
-// are provided against the requested foundation's subtree.
+// The registration gate in cmd/lfx-mcp-server limits both to staff callers.
+// Project scope lives entirely in the query's where clause; there is no
+// separate project parameter.
 //
 // Discovery and querying are separate tools rather than actions on one tool
 // because a tool description and its required parameters are the only guidance
@@ -273,12 +269,11 @@ type ExploreSemanticLayerArgs struct {
 // through unchanged; they just are not the only copy.
 // TestCriticalGuidanceSurvivesSchemaCompaction guards that split.
 type QuerySemanticLayerArgs struct {
-	Metrics     string `json:"metrics" jsonschema:"Required. Comma-separated metric names taken from explore_lfx_semantic_layer — never guessed. List several to combine them in one result, even across domains: they are outer-joined on the dimensions they share, so a group present in only one domain still appears with NULL for the other metric, and you can only group by dimensions they have in common. Many metrics are already filtered — current_* means active-only, total_contributors excludes bots — so do not repeat those conditions in where."`
-	GroupBy     string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names, copied verbatim from explore_lfx_semantic_layer — they are entity__field and the prefix differs per metric. Group by a name dimension for a ranked list of organizations, people or projects; add metric_time__year (or __quarter, __month, __week, __day) for a trend."`
-	Where       string `json:"where,omitempty" jsonschema:"MetricFlow filter; this clause does the actual data filtering. Categorical: {{ Dimension('country__lf_region') }} = 'Europe'. Time: {{ TimeDimension('asset_id__install_date', 'DAY') }} >= '2024-01-01'. Dates are yyyy-mm-dd."`
-	OrderBy     string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields. Each must also appear in group_by or metrics. Prefix with - for descending, e.g. -current_membership_revenue."`
-	Limit       int    `json:"limit,omitempty" jsonschema:"Maximum rows to return, ceiling 500. Use 10-20 for top-N questions and 50-100 for full breakdowns."`
-	ProjectSlug string `json:"project_slug,omitempty" jsonschema:"Optional project slug from search_projects (e.g. 'cncf'). Omit it for global or cross-foundation questions. When provided, the where clause must also carry a project filter, validated against that foundation's subtree."`
+	Metrics string `json:"metrics" jsonschema:"Required. Comma-separated metric names taken from explore_lfx_semantic_layer — never guessed. List several to combine them in one result, even across domains: they are outer-joined on the dimensions they share, so a group present in only one domain still appears with NULL for the other metric, and you can only group by dimensions they have in common. Many metrics are already filtered — current_* means active-only, total_contributors excludes bots — so do not repeat those conditions in where."`
+	GroupBy string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names, copied verbatim from explore_lfx_semantic_layer — they are entity__field and the prefix differs per metric. Group by a name dimension for a ranked list of organizations, people or projects; add metric_time__year (or __quarter, __month, __week, __day) for a trend."`
+	Where   string `json:"where,omitempty" jsonschema:"MetricFlow filter; this clause does the actual data filtering. Categorical: {{ Dimension('country__lf_region') }} = 'Europe'. Time: {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'. Dates are yyyy-mm-dd."`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields. Each must also appear in group_by or metrics. Prefix with - for descending, e.g. -current_membership_revenue."`
+	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum rows to return, ceiling 500. Use 10-20 for top-N questions and 50-100 for full breakdowns."`
 }
 
 // lensHelpTexts back the help action. These are tool results, so they carry no
@@ -368,69 +363,117 @@ name from list_metrics or get_dimensions.
 
 help targets: query, list_metrics, get_dimensions, get_dimension_values`
 
-const lensQueryHelp = `query — run a metric query.
+const lensQueryHelp = `query — run a governed metric query.
+
+Parameters
 
   metrics   (required) comma-separated metric names.
   group_by  (optional) dimension qualified_names, comma-separated.
-  where     (optional) MetricFlow filter:
+  where     (optional) one MetricFlow filter expression:
               categorical  {{ Dimension('country__lf_region') }} = 'Europe'
-              time         {{ TimeDimension('asset_id__install_date', 'DAY') }} >= '2024-01-01'
+              time         {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'
               dates yyyy-mm-dd.
-  order_by  (optional) must also appear in group_by or metrics; - for descending.
-  limit     (optional) ceiling 500. 10-20 for top-N, 50-100 for breakdowns.
+  order_by  (optional) selected group_by or metric fields; - for descending.
+  limit     (optional) ceiling 500. Use 10-20 for top-N, 50-100 for breakdowns.
 
-Trends: add metric_time__year (or __quarter, __month, __week, __day) to
-group_by rather than writing date ranges by hand.
+Multiple metrics outer-join on their shared dimensions, the only dimensions the
+query may group by. A group present in only one domain has NULL for the other.
+Use a name dimension for ranked lists; entities themselves return raw IDs. Add
+metric_time__year (or __quarter, __month, __week, __day) for trends.
 
-Ranked lists: group by a name dimension, order by the metric descending, and
-set a limit.
+Pre-filtered metrics: current_* is active-only and total_contributors excludes
+bots. Do not repeat those conditions.
 
-Combining metrics from different domains outer-joins them, so a group with data
-in only one domain still appears, with NULL for the other metric.
+SCOPE
 
-Pre-filtered metrics: current_* is already active-only and total_contributors
-already excludes bots. Do not add those conditions again.
+Resolve slugs with search_projects first. Stored slugs are not everyday names:
+Kubernetes is 'k8s', kernel is 'korg', and the PyTorch segment is 'ptproject'.
+There is no separate project parameter; scope lives in where.
 
-project_slug is optional. Supply it and the where clause must carry a project
-filter, validated against that foundation's subtree. Omit both for global or
-cross-foundation questions.
+Activities and contributions: filter
 
-Examples
+  {{ Dimension('activity_project_id__project_spine_slug') }} = '<slug>'
 
-  Active maintainers in CNCF
-    project_slug  cncf
-    metrics       active_maintainers
-    where         {{ Dimension('maintainer_key__project_slug') }} = 'cncf'
+This selects the project and everything under it. It is the ONLY correct scope
+for foundations: the same 'cncf' literal represents 58M activities through the
+spine but 1.4M through project_slug. It is also REQUIRED for sum metrics;
+insertions and deletions inflate 2-4x under any other filter.
 
-  Membership revenue by tier, CNCF
-    project_slug  cncf
-    metrics       current_membership_revenue
-    group_by      asset_id__membership_tier
-    where         {{ Dimension('asset_id__project_slug') }} = 'cncf'
-    order_by      -current_membership_revenue
+Domain-specific scope dimensions:
 
-  Top 10 organizations by contribution in a region
-    metrics       total_contributors
-    group_by      activity_project_id__organization_name
-    where         {{ Dimension('activity_project_id__organization_lf_region') }} = 'Asia Pacific'
-    order_by      -total_contributors
-    limit         10
+  memberships          asset_id__project_slug
+  event registrations  registration_id__project_slug
+  maintainers           maintainer_key__cm_project_grandparents_slug
+  health                health_metric_key__foundation_slug
 
-  Filter values are exact strings. lf_region is one of: North America, Europe,
-  China, India, Japan, Asia Pacific, Middle East & Africa, Latin America, Other.
-  For any other dimension use explore_lfx_semantic_layer's get_dimension_values
-  rather than guessing — a wrong literal returns zero rows, not an error.
+For maintainers, also add is_lf_project = true to exclude non-LF projects.
 
-  Contribution against financial involvement, by region, globally
-    metrics       total_contributors, total_contributing_organizations, current_membership_revenue
-    group_by      country__lf_region
-    order_by      -current_membership_revenue
+Events, speakers and sponsorships have NO slug dimension. Filter
+  event_id__project_name with the EXACT display name returned by
+get_dimension_values, for example 'Cloud Native Computing Foundation (CNCF)'.
+NEVER slice sponsorship metrics by asset_id__project_slug: that returns one
+NULL row containing all sponsorships.
 
-  European membership revenue trend by year
-    metrics       current_membership_revenue
-    group_by      country__lf_region, metric_time__year
-    where         {{ Dimension('country__lf_region') }} = 'Europe'
-    limit         100`
+To compare several projects or foundations, filter the correct scope dimension
+with IN (...) and group_by that same dimension. Never report a total across
+spine groups. Zero rows means the literal is probably misspelled; confirm it
+with get_dimension_values.
+
+WINDOWS
+
+"Last 12 months" means the prior 365 complete UTC days: filter
+{{ TimeDimension('metric_time','DAY') }} >= the start date AND
+{{ TimeDimension('metric_time','DAY') }} < today's UTC date. YTD means
+>= 'YYYY-01-01'. Always state the concrete dates used in the answer.
+
+Worked examples
+
+  CNCF contributors, last 12 months
+    metrics   total_contributors
+    where     {{ Dimension('activity_project_id__project_spine_slug') }} = 'cncf'
+              AND {{ TimeDimension('metric_time','DAY') }} >= '<start YYYY-MM-DD>'
+              AND {{ TimeDimension('metric_time','DAY') }} < '<today UTC YYYY-MM-DD>'
+
+  Kubernetes code volume (slug resolved with search_projects)
+    metrics   total_code_insertions
+    where     {{ Dimension('activity_project_id__project_spine_slug') }} = 'k8s'
+
+  Compare three foundations
+    metrics   total_contributors
+    group_by activity_project_id__project_spine_slug
+    where    {{ Dimension('activity_project_id__project_spine_slug') }} IN ('cncf','lf-ai-foundation','openssf')
+
+  CNCF membership count
+    metrics   current_membership_count
+    where     {{ Dimension('asset_id__project_slug') }} = 'cncf'
+
+  Foundation to its projects (walk-down)
+    metrics   total_contributors
+    group_by activity_project_id__project_slug
+    where    {{ Dimension('activity_project_id__project_spine_slug') }} = 'lf-ai-foundation'
+
+The walk-down is flattened: all depths appear at leaf granularity, while an
+intermediate node such as cncf shows only its directly attached activity. Use
+this for counts only, never sums.
+
+SURFACE RECONCILIATION
+
+__project_slug and __segment_slug match what an Insights project page shows for
+that slug: Insights scopes every page to one segment and never walks
+hierarchies. __project_spine_slug matches PCC-style foundation rollups used in
+executive reporting. Pick the scope by which surface the caller must reconcile
+against.
+
+Some foundations have twin Salesforce entities:
+
+  risc-v-international / riscv
+  cff / cloud-foundry
+  opensearch-foundation / opensearch-project
+
+If a total looks low, group_by the slug dimension and check for a twin.
+
+"Direct children of X" and "sub-foundations of X" are not expressible today.
+Say so rather than guessing.`
 
 func handleExploreSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args ExploreSemanticLayerArgs) (*mcp.CallToolResult, any, error) {
 	if lensConfig == nil {
@@ -568,11 +611,6 @@ func handleQuerySemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args 
 
 	reqBody := map[string]any{
 		"metrics": metrics,
-	}
-	if args.ProjectSlug != "" {
-		// Omit project_slug entirely when empty: the lens API treats absence
-		// (not empty string) as "run without project scope validation".
-		reqBody["project_slug"] = args.ProjectSlug
 	}
 	if groupBy := parseCSV(args.GroupBy); len(groupBy) > 0 {
 		reqBody["group_by"] = groupBy

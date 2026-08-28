@@ -720,6 +720,46 @@ func TestHelpActionAndDescribeAlias(t *testing.T) {
 	}
 }
 
+// TestQueryLFXLensScopeIsContextNotBoundary pins the staff-only cross-project
+// contract. project_slug remains required as a default context for the Lens
+// workflow, but it must not be described as an authorization or scope boundary.
+func TestQueryLFXLensScopeIsContextNotBoundary(t *testing.T) {
+	tool := listRegisteredTool(t, "query_lfx_lens", RegisterQueryLFXLens)
+
+	for _, want := range []string{
+		"project_slug is required default context, NOT a scope boundary",
+		"Find it via search_projects",
+		"For multiple foundations",
+		"name the others in input",
+		"compare cncf with lf-ai-foundation and openssf",
+		"LF-wide",
+		"project_slug='tlf' (The Linux Foundation)",
+	} {
+		if !strings.Contains(tool.Description, want) {
+			t.Errorf("query_lfx_lens description missing scope guidance %q", want)
+		}
+	}
+
+	required := schemaRequired(t, tool)
+	for _, want := range []string{"project_slug", "input"} {
+		if !contains(required, want) {
+			t.Errorf("query_lfx_lens required = %v; expected %s to remain compulsory", required, want)
+		}
+	}
+
+	slug := schemaPropertyDescription(t, tool, "project_slug")
+	for _, want := range []string{
+		"Required default context slug",
+		"not a scope boundary",
+		"name the others in input",
+		"'tlf' for LF-wide questions",
+	} {
+		if !strings.Contains(slug, want) {
+			t.Errorf("project_slug schema description missing %q: %q", want, slug)
+		}
+	}
+}
+
 // TestQueryLFXLensDoesNotClaimMemberships guards the other half of the routing
 // contract. query_lfx_lens used to open with "Always use this tool for:
 // Membership questions", carved out only for country/region. Memberships now

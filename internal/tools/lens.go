@@ -59,11 +59,9 @@ Also use this tool for:
 
 Important: contributor, activity and membership questions belong to the semantic layer — explore_lfx_semantic_layer then query_lfx_semantic_layer.
 
-Use search_projects first to find the project slug.
+project_slug is required default context, NOT a scope boundary. Find it via search_projects. For multiple foundations, pass one slug and name the others in input: "compare cncf with lf-ai-foundation and openssf". LF-wide: use project_slug='tlf' (The Linux Foundation).
 
-This tool runs synchronously. Queries take 15–30 seconds — please wait for the result without retrying.
-Tips:
-- This tool returns at most 200 rows per request. If you need more results, explicitly request pagination, for example "page 2", "next 200 rows", or "use LIMIT/OFFSET pagination with a stable ORDER BY" (e.g. all registrations for an event).`,
+Runs synchronously; wait 15–30 seconds without retrying. Returns ≤200 rows; request explicit pagination ("page 2", "next 200 rows", or stable ORDER BY with LIMIT/OFFSET).`,
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Query LFX Lens",
 			ReadOnlyHint: true,
@@ -73,7 +71,7 @@ Tips:
 
 // QueryLFXLensArgs defines the input for query_lfx_lens.
 type QueryLFXLensArgs struct {
-	ProjectSlug string `json:"project_slug" jsonschema:"Project slug from search_projects (e.g. 'cncf') (required)"`
+	ProjectSlug string `json:"project_slug" jsonschema:"Required default context slug from search_projects, not a scope boundary. For multiple foundations, pass one here and name the others in input; use 'tlf' for LF-wide questions."`
 	Input       string `json:"input" jsonschema:"Natural language question. Use for maintainer names/trends, social listening (mentions/sentiment/reach), open-ended analysis, subproject questions, cross-domain joins, and exploratory questions. Contributor, activity and membership questions belong to the semantic layer. Takes 15-30s. (required)"`
 }
 

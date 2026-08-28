@@ -484,10 +484,10 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		"returns zero rows, not an error",
 		"'Asia Pacific' not 'APAC'",
 		"'Viet Nam' not 'Vietnam'",
-		// Either tool can be loaded without the other, so each states what the
-		// semantic layer is. Here the regional rule sits in COVERS, asserted
-		// above, rather than in the opening line.
-		"query and data-exploration tool",
+		// Either tool can be loaded without the other, so each identifies the
+		// semantic layer and what this half does. Here the regional rule sits
+		// in COVERS, asserted above, rather than in the opening line.
+		"discovers Linux Foundation metrics/dimensions",
 	} {
 		if !strings.Contains(exploreSemanticLayerDescription, want) {
 			t.Errorf("explore description missing %q", want)
@@ -516,6 +516,35 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 	}
 }
 
+// TestSemanticLayerDescriptionsExplainScopeCollision guards RC-1. The two
+// activity dimensions accept many of the same literals but select different
+// populations, making a guessed dimension a silent wrong answer rather than a
+// query error. Both tools must carry the warning because either can be loaded
+// or selected without the other.
+func TestSemanticLayerDescriptionsExplainScopeCollision(t *testing.T) {
+	for name, desc := range map[string]string{
+		"explore_lfx_semantic_layer": exploreSemanticLayerDescription,
+		"query_lfx_semantic_layer":   querySemanticLayerDescription,
+	} {
+		for _, want := range []string{
+			"SCOPE COLLISION",
+			"Same literal, different populations",
+			"'agentic-ai-foundation' with activity_project_id__project_slug",
+			"selects one leaf/catch-all project",
+			"with activity_project_id__project_spine_slug",
+			"selects the conformed foundation rollup",
+			"Discover/copy qualified names",
+			"never guess",
+			"Prefer project_spine_slug for project-scoped questions",
+			"segment_slug only for an explicit Insights-segment question",
+		} {
+			if !strings.Contains(desc, want) {
+				t.Errorf("%s description missing RC-1 guidance %q", name, want)
+			}
+		}
+	}
+}
+
 // TestQuerySemanticLayerDescription checks the query tool is self-sufficient:
 // its own description carries the syntax, so a caller never has to call help
 // first.
@@ -538,8 +567,8 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 		// Both neighbours are named so routing works from this tool too.
 		"explore_lfx_semantic_layer",
 		"query_lfx_lens",
-		"query and data-exploration tool",
-		"anything sliced by country or region",
+		"The LFX Insights Semantic Layer",
+		"country/region slices",
 		// The silent-zero-rows warning is only actionable if it names the way
 		// out; without this the model retries the same wrong literal.
 		"get_dimension_values",

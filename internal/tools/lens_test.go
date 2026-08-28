@@ -61,6 +61,31 @@ func TestAllLensToolDescriptionsFitBudget(t *testing.T) {
 	}
 }
 
+// TestDataToolDescriptionsShareLastTwelveMonthsConvention guards RC-2. Lens
+// and the two semantic-layer tools must give the model one boundary convention,
+// and must require the answer to expose the concrete range so users can compare
+// results across tools.
+func TestDataToolDescriptionsShareLastTwelveMonthsConvention(t *testing.T) {
+	const convention = `"last 12 months" means the 365 complete UTC days before today: [UTC today-365d, UTC today), excluding today and never data-max anchored.`
+
+	for _, tc := range []struct {
+		name     string
+		register func(*mcp.Server)
+	}{
+		{"explore_lfx_semantic_layer", RegisterExploreSemanticLayer},
+		{"query_lfx_semantic_layer", RegisterQuerySemanticLayer},
+		{"query_lfx_lens", RegisterQueryLFXLens},
+	} {
+		desc := listRegisteredTool(t, tc.name, tc.register).Description
+		if !strings.Contains(desc, convention) {
+			t.Errorf("%s description does not carry the shared RC-2 convention", tc.name)
+		}
+		if !strings.Contains(desc, "State inclusive dates plus the exclusive UTC anchor") {
+			t.Errorf("%s description does not require a concrete date range and anchor", tc.name)
+		}
+	}
+}
+
 // listRegisteredTool returns the named tool, failing the test if it is absent.
 func listRegisteredTool(t *testing.T, name string, register func(*mcp.Server)) *mcp.Tool {
 	t.Helper()

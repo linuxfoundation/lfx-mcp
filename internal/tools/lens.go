@@ -55,6 +55,8 @@ Important: contributor, activity and membership questions belong to the semantic
 
 Use search_projects first to find the project slug.
 
+WINDOW — "last 12 months" means the 365 complete UTC days before today: [UTC today-365d, UTC today), excluding today and never data-max anchored. State inclusive dates plus the exclusive UTC anchor.
+
 This tool runs synchronously. Queries take 15–30 seconds — please wait for the result without retrying.
 Tips:
 - This tool returns at most 200 rows per request. If you need more results, explicitly request pagination, for example "page 2", "next 200 rows", or "use LIMIT/OFFSET pagination with a stable ORDER BY" (e.g. all registrations for an event).`,

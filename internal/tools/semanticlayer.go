@@ -42,41 +42,47 @@ func SetSemanticLayerConfig(cfg *SemanticLayerConfig) {
 // QuerySemanticLayerArgs for why that distinction matters. Anything that still
 // does not fit belongs in the help action, whose output is a tool result and
 // carries no limit; help is a fallback for a failed query, not a prerequisite.
-const exploreSemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data. This half discovers what can be measured; query_lfx_semantic_layer runs it. Start here whenever you do not already know the exact metric, dimension and value names.
+const exploreSemanticLayerDescription = `The LFX Insights Semantic Layer discovers Linux Foundation metrics/dimensions; query_lfx_semantic_layer runs them. Start here unless exact names/values came from this tool.
 
-COVERS — search one of these topic words:
-- contributor, contribution — activity and org counts, commits, PRs
+COVERS — search a topic:
+- contributor, contribution — activity/org counts, commits, PRs
 - membership, revenue, churn — counts, discounts, invoices
-- event, registration, speaker — counts and revenue
+- event, registration, speaker — counts, revenue
 - enrollment, certification — education
-- maintainer — total and active counts
-- health, project — health scores, software value, cost
+- maintainer — total/active counts
+- health, project — scores, value, cost
 - any of the above sliced by country or region — always here, never query_lfx_lens
 
-A metric is the number measured (total_contributors); a dimension is how you slice, filter or list it (country__lf_region). Names are entity__field and the prefix differs per metric, so copy qualified_names from this tool rather than assembling one — country__lf_region is a person's country, activity_project_id__organization_lf_region an organization's HQ.
+A metric is measured; a dimension slices/filters it. Names are entity__field; prefixes vary by metric, so copy qualified_names from here, never guess. country__lf_region is a person's country; activity_project_id__organization_lf_region an organization's HQ.
+
+SCOPE COLLISION — Same literal, different populations: 'agentic-ai-foundation' with activity_project_id__project_slug selects one leaf/catch-all project; with activity_project_id__project_spine_slug it selects the conformed foundation rollup. Discover/copy qualified names; never guess. Prefer project_spine_slug for project-scoped questions; use segment_slug only for an explicit Insights-segment question.
 
 ACTIONS
-- list_metrics(search): searches metric names and descriptions only, so search a topic word above, not a dimension word like "country". When 15 or fewer match, each returns its dimension qualified_names — usually enough to query.
-- get_dimensions(metrics, search): dimensions available to those metrics; needs at least one. Passing several returns only the ones they share — what a cross-domain query can group by.
-- get_dimension_values(dimension, metrics, search): the literals a dimension holds. Call it before filtering on any value not already seen in output: an unknown literal returns zero rows, not an error, so a wrong guess reads as missing data. Spellings surprise — 'Asia Pacific' not 'APAC', 'Viet Nam' not 'Vietnam'.
-- help(target): worked query examples, for when a query fails.
+- list_metrics(search): names/descriptions by topic; up to 15 matches include dimension qualified_names.
+- get_dimensions(metrics, search): available dimensions; several metrics return only shared ones.
+- get_dimension_values(dimension, metrics, search): exact literals. Call before filtering unseen values: an unknown literal returns zero rows, not an error. 'Asia Pacific' not 'APAC'; 'Viet Nam' not 'Vietnam'.
+- help(target): worked queries.
 
-USE query_lfx_lens INSTEAD for questions that do not reduce to a metric above: narrative or "why", subprojects, maintainer trends, event sponsorships.`
+WINDOW — "last 12 months" means the 365 complete UTC days before today: [UTC today-365d, UTC today), excluding today and never data-max anchored. State inclusive dates plus the exclusive UTC anchor.
 
-const querySemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data; this half runs the query. Covers contributions, memberships, events, education, maintainers and project health — and anything sliced by country or region. ALWAYS call explore_lfx_semantic_layer first unless you already have the exact metric, dimension and entity names — never guess or assemble one: a wrong name errors, and a wrong filter value returns no rows rather than an error, so confirm literals with get_dimension_values. Use query_lfx_lens for narrative or "why" questions that do not reduce to a metric.
+USE query_lfx_lens INSTEAD for narrative/"why", subprojects, maintainer trends or event sponsorships.`
 
-  metrics (required): comma-separated names. List several to combine them in one result, even across domains — they are joined on the dimensions they have in common, the only set such a query can group by. The join is outer, so a group in only one domain still appears with NULL for the other.
-  group_by: dimension qualified_names, comma-separated, copied verbatim. Group by a name dimension for a ranked list of organizations, people or projects. For a trend add metric_time__year, or __quarter, __month, __week, __day.
-  where: MetricFlow filter; this does the filtering, including by project or foundation.
+const querySemanticLayerDescription = `The LFX Insights Semantic Layer runs metrics for contributions, memberships, events, education, maintainers, project health and country/region slices. ALWAYS call explore_lfx_semantic_layer first unless exact names/values came from it — never guess; confirm literals with get_dimension_values because a wrong value returns zero rows, not an error. Use query_lfx_lens for narrative/"why".
+
+  metrics (required): comma-separated. The join is outer on shared dimensions; a group in only one domain has NULL for the other. Group only by shared dimensions.
+  group_by: copied dimension qualified_names. Use a name dimension for a ranked list; add metric_time__year, __quarter, __month, __week or __day for trends.
+  where: MetricFlow filter; also sets project/foundation scope.
     categorical  {{ Dimension('country__lf_region') }} = 'Europe'
     time         {{ TimeDimension('asset_id__install_date', 'DAY') }} >= '2024-01-01'
     Dates are yyyy-mm-dd.
-  order_by: comma-separated; each field must also appear in group_by or metrics. Prefix - for descending.
-  limit: ceiling 500. Use 10-20 for top-N, 50-100 for full breakdowns.
+  order_by: fields also in group_by/metrics; prefix - for descending.
+  limit: ceiling 500. Use 10-20 for top-N, 50-100 for breakdowns.
 
-Queries are global by default. To restrict one to a project or foundation, put that filter in where — there is no separate scope parameter.
+SCOPE COLLISION — Same literal, different populations: 'agentic-ai-foundation' with activity_project_id__project_slug selects one leaf/catch-all project; with activity_project_id__project_spine_slug it selects the conformed foundation rollup. Discover/copy qualified names with explore_lfx_semantic_layer; never guess. Prefer project_spine_slug for project-scoped questions; use segment_slug only for an explicit Insights-segment question. Queries are global without a scope filter.
 
-Many metrics are pre-filtered — current_* is active-only, total_contributors excludes bots — so do not re-filter those. Entities listed with a metric are join keys, not group-by values: grouping by one returns raw IDs, so use the name dimension.`
+WINDOW — "last 12 months" means the 365 complete UTC days before today: [UTC today-365d, UTC today), excluding today and never data-max anchored. State inclusive dates plus the exclusive UTC anchor.
+
+Many metrics are pre-filtered — current_* is active-only, total_contributors excludes bots — do not re-filter them. Entities are join keys, not group-by values: grouping by one returns raw IDs; use a name dimension.`
 
 // The two semantic layer tools register independently so that LFXMCP_TOOLS can
 // select either by name. They are meant to be enabled together — each

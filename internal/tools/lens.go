@@ -40,28 +40,17 @@ func RegisterQueryLFXLens(server *mcp.Server) {
 		Name: "query_lfx_lens",
 		Description: `Ask natural language questions about a project's data using ad-hoc SQL generation.
 
-Always use this tool for:
-- Maintainer names or maintainer+activities data joins, where activities data is the code activities model
-  with code contributions, PRs, commits etc (e.g. "top maintainers by contributions", "who maintains Kubernetes?").
-  IMPORTANT: activities data (contributors, PRs, code contributions etc) not involving maintainers should use query_lfx_semantic_layer.
-- Maintainer time series and trends (the maintainer model lacks good time granularity)
-- Event sponsorships (the semantic layer should be used for events and event registration data not related to sponsorships)
-- Social listening: mentions of a project on social media and the web (Twitter/X, Bluesky, Reddit, Hacker News, DEV,
-  Podcasts, YouTube, LinkedIn, TikTok), sentiment, share of voice by platform, and author reach/followers
-  (e.g. "how is Kubernetes trending on social media?", "sentiment split of our mentions last month").
-  The semantic layer has no social listening data.
+Use this tool ONLY for:
+- Maintainer x activity joins: contribution volumes attributed to maintainers (e.g. "top maintainers by contributions", "what share of work comes from maintainers", "is maintainer activity declining"). The semantic layer holds maintainer rosters and activity metrics but cannot join them at person grain.
+- Social listening: mentions of a project on social media and the web (Twitter/X, Bluesky, Reddit, Hacker News, DEV, Podcasts, YouTube, LinkedIn, TikTok), sentiment, share of voice by platform, and author reach/followers. The semantic layer has no social listening data.
 
-Also use this tool for:
-- Open-ended or exploratory analysis (e.g. "which projects need attention?", "contribution overview")
-- Questions involving subprojects (e.g. "maintainers per project", "health scores by project")
-- Cross-domain joins that the semantic layer cannot do (e.g. maintainers + activities)
-- Any question where query_lfx_semantic_layer is struggling or returning errors
+FALLBACK (the only other use): switch here when the semantic layer genuinely cannot express the question - but do not give up on it too fast. Genuine means you searched list_metrics with the right topic words, ran get_dimensions, checked get_dimension_values for your filter literals, consulted explore's help('doctrine') recipes, and tried at least two differently-formulated queries. Zero rows or an unknown-name error is NOT struggling: zero rows means a misspelled stored literal or the wrong scope dimension, an unknown name means you guessed instead of copying - both are fixed by discovery, not by switching tools. Fall back quickly only when no metric family covers the concept at all.
 
-Important: contributor, activity and membership questions belong to the semantic layer — explore_lfx_semantic_layer then query_lfx_semantic_layer.
+Everything else - contributors, activities, memberships, events and sponsorships, registrations, education, maintainer rosters/counts/names, health - belongs to explore_lfx_semantic_layer + query_lfx_semantic_layer.
 
-project_slug is required default context, NOT a scope boundary. Find it via search_projects. For multiple foundations, pass one slug and name the others in input: "compare cncf with lf-ai-foundation and openssf". LF-wide: use project_slug='tlf' (The Linux Foundation).
+project_slug is required default context, NOT a scope boundary. Find it via search_projects. For multiple foundations, pass one slug and name the others in input. LF-wide: use project_slug='tlf'.
 
-Runs synchronously; wait 15–30 seconds without retrying. Returns ≤200 rows; request explicit pagination ("page 2", "next 200 rows", or stable ORDER BY with LIMIT/OFFSET).`,
+Runs synchronously; wait 15-30 seconds without retrying. Returns <=200 rows; request explicit pagination ("page 2", "next 200 rows", or stable ORDER BY with LIMIT/OFFSET).`,
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Query LFX Lens",
 			ReadOnlyHint: true,
@@ -72,7 +61,7 @@ Runs synchronously; wait 15–30 seconds without retrying. Returns ≤200 rows; 
 // QueryLFXLensArgs defines the input for query_lfx_lens.
 type QueryLFXLensArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Required default context slug from search_projects, not a scope boundary. For multiple foundations, pass one here and name the others in input; use 'tlf' for LF-wide questions."`
-	Input       string `json:"input" jsonschema:"Natural language question. Use for maintainer names/trends, social listening (mentions/sentiment/reach), open-ended analysis, subproject questions, cross-domain joins, and exploratory questions. Contributor, activity and membership questions belong to the semantic layer. Takes 15-30s. (required)"`
+	Input       string `json:"input" jsonschema:"Natural language question. Use for maintainer-contribution joins and social listening (mentions/sentiment/reach). Contributor, activity, membership, event, education and health questions belong to the semantic layer - explore it and consult its help('doctrine') before falling back here. Takes 15-30s. (required)"`
 }
 
 type lensWorkflowAdditional struct {
@@ -170,31 +159,33 @@ const exploreSemanticLayerDescription = `The LFX Insights Semantic Layer is the 
 COVERS — search one topic word:
 - contributor, contribution — activity/org counts, commits, PRs
 - membership, revenue, churn — counts, discounts, invoices
-- event, registration, speaker — counts and revenue
+- event, registration, speaker, sponsorship — counts and revenue
 - enrollment, certification — education
-- maintainer — total and active counts
+- maintainer — rosters (names), total and active counts
 - health, project — health scores, software value, cost
 - any of the above sliced by country or region — always here, never query_lfx_lens
 
-A metric is measured (total_contributors); a dimension slices, filters or lists it (country__lf_region). Names are entity__field and prefixes differ per metric, so copy qualified_names; never assemble them. country__lf_region is a person's country; activity_project_id__organization_lf_region is an organization's HQ.
+A metric is measured (total_contributors); a dimension slices, filters or lists it (country__lf_region). Names are entity__field and prefixes differ per metric, so copy qualified_names; never assemble them.
 
 ACTIONS
-- list_metrics(search): searches metric names/descriptions, so use a topic above, not a dimension like "country". At ≤15 matches, each includes dimension qualified_names.
+- list_metrics(search): searches metric names/descriptions, so use a topic above, not a dimension like "country". At <=15 matches, each includes dimension qualified_names.
 - get_dimensions(metrics, search): available dimensions; needs a metric. Several metrics return only shared dimensions—a cross-domain query's valid group_by set.
 - get_dimension_values(dimension, metrics, search): stored literals. Call before filtering on unseen values: an unknown returns zero rows, not an error. Spellings surprise—'Asia Pacific' not 'APAC', 'Viet Nam' not 'Vietnam'.
-- help(target): worked query examples after failure.
+- help('doctrine'): worked recipes - windows, as-of membership, bots, health, org shares, tiers, name discovery. ALWAYS call it before a query_lfx_lens fallback.
 
 Project scope lives in query's where clause (no parameter): resolve slugs via search_projects, then see query_lfx_semantic_layer for which dimension scopes each domain.
 
-USE query_lfx_lens INSTEAD for non-metric narrative/"why", subprojects, maintainer trends, event sponsorships.`
+USE query_lfx_lens INSTEAD only for maintainer-contribution joins, social listening, or - after discovery AND help('doctrine') have failed, never on a first empty result - a question this layer cannot express.`
 
-const querySemanticLayerDescription = `Metrics: contributions, memberships, events, education, maintainers, health, country/region. ALWAYS use explore_lfx_semantic_layer first unless exact names are known; never guess. query_lfx_lens: narrative/"why"/carve-outs.
+const querySemanticLayerDescription = `Metrics: contributions, memberships, events, sponsorships, education, maintainers, health, country/region. ALWAYS explore_lfx_semantic_layer first unless exact names are known; never guess.
 
-SYNTAX: metrics (required), CSV. Multiple metrics are outer-joined on shared dimensions; group_by only those; absent sides NULL. group_by qualified names: names for ranked lists; metric_time__year/quarter/month/week/day for trends; entities give raw IDs. where is MetricFlow: {{ Dimension('country__lf_region') }} = 'Europe'; {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'. Dates yyyy-mm-dd. order_by selected fields; - means descending. limit ceiling 500. current_* is active-only; total_contributors excludes bots—do not re-filter.
+SYNTAX: metrics (required), CSV. Multiple metrics outer-join on shared dims (group_by only those; absent sides NULL; '-metric' sorts NULLs FIRST - re-sort before top-N). group_by: names for ranked lists, metric_time__year/quarter/month trends. where is MetricFlow: {{ Dimension('country__lf_region') }} = 'Europe'; {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01' (dates yyyy-mm-dd). limit ceiling 500. current_* is active-only.
 
-SCOPE: resolve slugs via search_projects first—stored slugs differ (Kubernetes='k8s', kernel='korg', PyTorch segment='ptproject'). Activities/contributions: {{ Dimension('activity_project_id__project_spine_slug') }} = '<slug>' selects project+descendants. It is the ONLY foundation scope (spine 'cncf'=58M activities; project_slug 'cncf'=1.4M) and REQUIRED for sums: insertions/deletions inflate 2–4x under any other filter. Memberships: asset_id__project_slug. Event registrations: registration_id__project_slug. Events/speakers/sponsorships have NO slug dimension: use event_id__project_name and the EXACT display name from get_dimension_values (e.g. 'Cloud Native Computing Foundation (CNCF)'). NEVER slice sponsorship metrics by asset_id__project_slug: one NULL row with all sponsorships. Maintainers: maintainer_key__cm_project_grandparents_slug; add is_lf_project=true to exclude non-LF. Health: health_metric_key__foundation_slug. Comparing: IN (...) + group_by the same dimension; never total across spine groups. 0 rows = misspelled literal—confirm with get_dimension_values.
+SCOPE: resolve slugs via search_projects. Foundation: {{ Dimension('project__foundation_slug') }} = '<slug>' - conformed, every domain, counts rows once. NEVER scope a foundation with project_slug - matches only its catch-all bucket: silent 40x undercount. Memberships: asset_id__project_slug. Registrations: registration_id__project_slug. Events/speakers: event_id__project_name (EXACT name). Maintainers: maintainer_key__cm_project_grandparents_slug + is_lf_project=true. 0 rows = misspelled literal - get_dimension_values first; org/account names are FULL LEGAL names (IBM = 'International Business Machines Corporation') - short-name searches miss them.
 
-WINDOWS: “last 12 months” = prior 365 complete UTC days: {{ TimeDimension('metric_time','DAY') }} >= start AND < today. YTD: >= 'YYYY-01-01'. Always state concrete dates used.`
+CONTRACT: compute shares/rankings yourself; state definition+window; default trailing 12 months, say so. Raw *_activities: add {{ Dimension('activity_project_id__member_is_bot') }} = false - the Insights default; always safe. total_contributors is code-only non-bot; _with_collaboration only when non-code participants are explicitly wanted. Org shares: use the org-attributed base (drop NULL/unaffiliated) and report that %. Economic/software value = total_software_value (COCOMO). Org headcounts run below published counts - caveat.
+
+WINDOWS: YTD needs AND <= today (installs can be future-dated). Active as of D: metric_time <= 'D' AND asset_id__end_date >= 'D' on membership_count. Struggling? help('doctrine') BEFORE query_lfx_lens - it has the recipes.`
 
 // The two semantic layer tools register independently so that LFXMCP_TOOLS can
 // select either by name. They are meant to be enabled together — each
@@ -244,10 +235,10 @@ func RegisterQuerySemanticLayer(server *mcp.Server) {
 // across the optional fields.
 type ExploreSemanticLayerArgs struct {
 	Action    string `json:"action" jsonschema:"Required. One of: list_metrics, get_dimensions, get_dimension_values, help. Use get_dimension_values before filtering on any value you have not seen in output: a where clause with a real dimension but an unknown literal returns zero rows instead of an error, so a wrong guess looks exactly like missing data."`
-	Search    string `json:"search,omitempty" jsonschema:"For list_metrics, a topic word ('contributor', 'membership', 'event', 'enrollment', 'maintainer', 'health'). For get_dimensions, the slice you are after, e.g. 'region', 'tier', 'name'. For get_dimension_values, a fragment of the value — keep it short, since the stored spelling often differs from the everyday one."`
+	Search    string `json:"search,omitempty" jsonschema:"For list_metrics, a topic word ('contributor', 'membership', 'event', 'sponsorship', 'enrollment', 'maintainer', 'health'). For get_dimensions, the slice you are after, e.g. 'region', 'tier', 'name'. For get_dimension_values, a fragment of the value — keep it short, since the stored spelling often differs from the everyday one."`
 	Metrics   string `json:"metrics,omitempty" jsonschema:"Comma-separated metric names. Required for get_dimensions and get_dimension_values; pass several to get_dimensions to see only the dimensions they share."`
 	Dimension string `json:"dimension,omitempty" jsonschema:"For action=get_dimension_values only: one dimension qualified_name, copied from get_dimensions (e.g. 'country__lf_region')."`
-	Target    string `json:"target,omitempty" jsonschema:"For action=help only: which action to get examples for (e.g. 'query'). Omit for an overview."`
+	Target    string `json:"target,omitempty" jsonschema:"For action=help only: 'doctrine' for the worked recipes and caveats, 'query' for query examples, or an action name. Omit for an overview. An unrecognised target returns the closest matching help rather than an error."`
 }
 
 // QuerySemanticLayerArgs defines the input for query_lfx_semantic_layer.
@@ -267,10 +258,10 @@ type ExploreSemanticLayerArgs struct {
 // through unchanged; they just are not the only copy.
 // TestCriticalGuidanceSurvivesSchemaCompaction guards that split.
 type QuerySemanticLayerArgs struct {
-	Metrics string `json:"metrics" jsonschema:"Required. Comma-separated metric names taken from explore_lfx_semantic_layer — never guessed. List several to combine them in one result, even across domains: they are outer-joined on the dimensions they share, so a group present in only one domain still appears with NULL for the other metric, and you can only group by dimensions they have in common. Many metrics are already filtered — current_* means active-only, total_contributors excludes bots — so do not repeat those conditions in where."`
+	Metrics string `json:"metrics" jsonschema:"Required. Comma-separated metric names taken from explore_lfx_semantic_layer — never guessed. List several to combine them in one result, even across domains: they are outer-joined on the dimensions they share, so a group present in only one domain still appears with NULL for the other metric, and you can only group by dimensions they have in common. Many metrics are already filtered — current_* means active-only, total_contributors excludes bots — so do not repeat those conditions in where. Group by dimension names, never bare entities - entities return raw IDs."`
 	GroupBy string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names, copied verbatim from explore_lfx_semantic_layer — they are entity__field and the prefix differs per metric. Group by a name dimension for a ranked list of organizations, people or projects; add metric_time__year (or __quarter, __month, __week, __day) for a trend."`
 	Where   string `json:"where,omitempty" jsonschema:"MetricFlow filter; this clause does the actual data filtering. Categorical: {{ Dimension('country__lf_region') }} = 'Europe'. Time: {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'. Dates are yyyy-mm-dd."`
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields. Each must also appear in group_by or metrics. Prefix with - for descending, e.g. -current_membership_revenue."`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields. Each must also appear in group_by or metrics. Prefix with - for descending, e.g. -current_membership_revenue. In combined-metric results NULL rows sort first on a descending metric - re-sort client-side before reading a top-N."`
 	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum rows to return, ceiling 500. Use 10-20 for top-N questions and 50-100 for full breakdowns."`
 }
 
@@ -336,8 +327,109 @@ unnormalized free text and holds both 'Viet Nam' and 'Vietnam' alongside
 entries like 'na', 'US' and 'Untied States'. Filtering on it drops members
 filed under a different spelling.`,
 
-	"query": lensQueryHelp,
+	"query":    lensQueryHelp,
+	"doctrine": lensDoctrineHelp,
 }
+
+// lensDoctrineHelp is the overflow doctrine: every worked recipe and caveat
+// that does not fit the 2048-byte tool descriptions. It is a tool result, so
+// it carries no budget - keep it rich. Figures were verified live against the
+// deployed semantic layer in August 2026; treat them as illustrations of the
+// trap sizes, not as current data.
+const lensDoctrineHelp = `WORKED RECIPES AND CAVEATS - consult this before concluding the semantic layer cannot answer, and always before falling back to query_lfx_lens.
+
+1. DEFAULT WINDOW. When the asker gives no window, use the trailing 12 months
+and say so: {{ TimeDimension('metric_time','DAY') }} >= '<today minus 12
+months>' AND {{ TimeDimension('metric_time','DAY') }} < '<today>'. State the
+concrete dates in the answer.
+
+2. MEMBERS AS OF A DATE D (the PCC-parity recipe): metric membership_count
+with where "{{ TimeDimension('metric_time','day') }} <= 'D' AND
+{{ TimeDimension('asset_id__end_date','day') }} >= 'D'". Verified: CNCF as of
+2022-12-31 = 847. Today's active members: current_membership_count (CNCF =
+722, PCC-exact). New members: new_membership_count by install date - but any
+YTD/current-year count needs AND metric_time <= today, because installs can
+be future-dated (2026: 87 in the year bucket vs 77 up to today).
+
+3. FOUNDATION SCOPE. {{ Dimension('project__foundation_slug') }} = '<slug>'
+is the conformed scope: the same filter works on every metric family and
+counts each row once. project_slug matches only a foundation's catch-all
+bucket (cncf: 1.4M activities vs 58M) - a silent undercount, never an error.
+activity_project_id__project_spine_slug returns identical activity counts
+(verified: CNCF 39,371,064 both ways) and is the tool for sub-foundation
+umbrella nodes and hierarchy walks: spine_hierarchy_level = 2 lists a
+foundation's direct children. Some families split across several Salesforce
+entities (risc-v-international/riscv, cff/cloud-foundry,
+opensearch-foundation/opensearch-project); if a total looks low, group by the
+slug dimension and check for twins.
+
+4. BOTS. Bot exclusion is the LFX Insights default. total_contributors and
+the other contributor metrics already exclude bots. On raw *_activities
+metrics add {{ Dimension('activity_project_id__member_is_bot') }} = false -
+it is always safe to include. The gap is large: CNCF code contributions,
+trailing 12 months, 6,561,768 raw vs 3,619,940 non-bot. bot_activities is
+the explicit bot view.
+
+5. ORG SHARES AND CONCENTRATION. Compute shares on the org-ATTRIBUTED base:
+drop NULL organization rows (and 'Individual - No Account') from the
+denominator and report the unattributed share separately - it is large
+(roughly 40-70% depending on the metric). For percentile/concentration
+questions pull the full grouped distribution (high limit) and compute
+client-side. Always state the population definition.
+
+6. NAME DISCOVERY. Org and account names are stored as FULL LEGAL names.
+IBM is 'International Business Machines Corporation' - the string 'IBM' does
+not appear in it, so a value search for 'IBM' misses the main account and
+finds only subsidiaries like 'Turbonomic, an IBM Company'. Search a
+distinctive token instead ('Machines'), or pull top values and scan. Red Hat
+is 'Red Hat LLC' in account dimensions but 'Red Hat' in the activity-side
+organization_name. Corporate families are fragmented across many accounts:
+for 'including subsidiaries' questions, sum the sub-entities explicitly and
+name the ones you included.
+
+7. TIER LITERALS differ per foundation ('Premier Membership' vs 'Premier
+Member'; CNCF has 'Platinum Membership' and no Diamond tier) -
+get_dimension_values per foundation, never reuse literals across foundations.
+
+8. HEALTH SCORES are daily snapshots. Aggregate only after filtering to the
+latest date: first query the ungrouped max of metric_time, then filter
+{{ TimeDimension('metric_time','day') }} = that date. Unfiltered
+category grouping counts a project once per day and per category it passed
+through (~8-9x inflation). Category bands: Critical <20, Unsteady 20-39,
+then Stable/Healthy above.
+
+9. SOFTWARE / ECONOMIC VALUE. Questions about economic value, economic
+impact or the dollar value of code = total_software_value and
+total_estimated_cost (COCOMO model). They are non-additive daily snapshots:
+each project contributes its latest row in the queried window, so a
+project whose latest row lacks a value snapshot contributes nothing -
+totals can read low, never inflated.
+
+10. COMBINED METRICS share only the conformed project__ dimensions and
+metric_time; group_by only those. order_by '-metric' sorts NULL rows FIRST -
+re-sort client-side before reading a top-N.
+
+11. ORG HEADCOUNT CAVEAT. Contributor headcounts by organization run 2-4x
+below externally published counts (conservative member-to-org attribution);
+contribution volumes reconcile to ~1-4%. State the caveat when reporting.
+
+12. CONTRIBUTOR POPULATIONS. total_contributors = code contributions only,
+non-bot (the Insights default) - use it unless non-code participants are
+explicitly wanted, then total_contributors_with_collaboration (adds
+issues/docs/chat) and say so. Neither counts passive activity (stars,
+forks); total_activities is the any-activity volume.
+
+13. MAINTAINERS. Scope with maintainer_key__cm_project_grandparents_slug
+plus {{ Dimension('maintainer_key__is_lf_project') }} = true. Active = no
+recorded end date. start_date carries a 2000-01-01 sentinel on most
+historical records (start unknown) - never build a trend on it.
+Person-grain maintainer x activity joins are not expressible here: that is
+query_lfx_lens's lane.
+
+14. REGION LENSES. country__* dimensions follow the person (contributor);
+organization-side region analysis uses the organization_* dimensions
+(organization_lf_region etc.) - the organization's HQ country, not its
+contributors' countries.`
 
 // lensHelpOverview is returned by help with no target.
 const lensHelpOverview = `LFX Insights Semantic Layer — how to use it
@@ -359,7 +451,11 @@ Dimension qualified_names are entity__field. The prefix is the primary key of
 the metric's own table, so it differs from metric to metric. Always copy the
 name from list_metrics or get_dimensions.
 
-help targets: query, list_metrics, get_dimensions, get_dimension_values`
+help targets: doctrine, query, list_metrics, get_dimensions, get_dimension_values
+
+Struggling with a question? help('doctrine') holds the worked recipes -
+windows, membership as-of dates, bots, org shares, name discovery, health
+snapshots, software value. Consult it BEFORE falling back to query_lfx_lens.`
 
 const lensQueryHelp = `query — run a governed metric query.
 
@@ -388,14 +484,19 @@ Resolve slugs with search_projects first. Stored slugs are not everyday names:
 Kubernetes is 'k8s', kernel is 'korg', and the PyTorch segment is 'ptproject'.
 There is no separate project parameter; scope lives in where.
 
-Activities and contributions: filter
+Foundation scope, any domain: filter
 
-  {{ Dimension('activity_project_id__project_spine_slug') }} = '<slug>'
+  {{ Dimension('project__foundation_slug') }} = '<slug>'
 
-This selects the project and everything under it. It is the ONLY correct scope
-for foundations: the same 'cncf' literal represents 58M activities through the
-spine but 1.4M through project_slug. It is also REQUIRED for sum metrics;
-insertions and deletions inflate 2-4x under any other filter.
+This is the conformed lens: the same filter works on every metric family and
+counts each row once. NEVER scope a foundation with project_slug - the same
+'cncf' literal is 58M activities through the foundation lens but 1.4M through
+project_slug (its catch-all bucket): a silent undercount, not an error.
+activity_project_id__project_spine_slug returns identical activity counts
+(verified: CNCF 39,371,064 both ways) and handles sub-foundation umbrella
+nodes and hierarchy walks - spine_hierarchy_level = 2 lists a foundation's
+direct children. Keep the spine filter for sum metrics: insertions and
+deletions inflate 2-4x under non-hierarchical filters.
 
 Domain-specific scope dimensions:
 
@@ -428,7 +529,7 @@ Worked examples
 
   CNCF contributors, last 12 months
     metrics   total_contributors
-    where     {{ Dimension('activity_project_id__project_spine_slug') }} = 'cncf'
+    where     {{ Dimension('project__foundation_slug') }} = 'cncf'
               AND {{ TimeDimension('metric_time','DAY') }} >= '<start YYYY-MM-DD>'
               AND {{ TimeDimension('metric_time','DAY') }} < '<today UTC YYYY-MM-DD>'
 
@@ -470,8 +571,9 @@ Some foundations have twin Salesforce entities:
 
 If a total looks low, group_by the slug dimension and check for a twin.
 
-"Direct children of X" and "sub-foundations of X" are not expressible today.
-Say so rather than guessing.`
+"Direct children of X": filter the spine slug to X, add
+{{ Dimension('activity_project_id__spine_hierarchy_level') }} = 2, and
+group_by the project slug. help('doctrine') holds the rest of the recipes.`
 
 func handleExploreSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args ExploreSemanticLayerArgs) (*mcp.CallToolResult, any, error) {
 	if lensConfig == nil {
@@ -511,21 +613,44 @@ func handleExploreSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, arg
 	}
 }
 
+// lensHelpAliases routes common words a model reaches for to the help text
+// that answers them, so help lands somewhere useful instead of erroring.
+var lensHelpAliases = []struct {
+	keywords []string
+	target   string
+}{
+	{[]string{"doctrine", "recipe", "caveat", "guide", "guidance", "gotcha", "trick", "advanced", "bot", "window", "date", "member", "org", "share", "concentration", "name", "ibm", "legal", "tier", "health", "value", "cocomo", "economic", "maintainer", "region", "population", "scope", "foundation", "struggl"}, "doctrine"},
+	{[]string{"query", "example", "syntax", "where", "filter", "group", "order", "limit"}, "query"},
+	{[]string{"list_metric", "metrics"}, "list_metrics"},
+	{[]string{"dimension_value", "values", "literal", "spelling"}, "get_dimension_values"},
+	{[]string{"get_dimension", "dimension"}, "get_dimensions"},
+}
+
+// handleLensHelp always returns help: an exact target, the closest alias
+// match, or - for anything unrecognised - the overview plus the full
+// doctrine. A failed help call would push the model toward guessing or a
+// premature query_lfx_lens fallback, which is worse than over-answering.
 func handleLensHelp(target string) (*mcp.CallToolResult, any, error) {
-	if target == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: lensHelpOverview}},
-		}, nil, nil
+	t := strings.ToLower(strings.TrimSpace(target))
+	if t == "" || t == "overview" {
+		return lensHelpResult(lensHelpOverview)
 	}
-
-	text, ok := lensHelpTexts[target]
-	if !ok {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Unknown help target %q. Valid targets: list_metrics, get_dimensions, get_dimension_values, query", target)}},
-			IsError: true,
-		}, nil, nil
+	if text, ok := lensHelpTexts[t]; ok {
+		return lensHelpResult(text)
 	}
+	for _, alias := range lensHelpAliases {
+		for _, kw := range alias.keywords {
+			if strings.Contains(t, kw) {
+				return lensHelpResult(lensHelpTexts[alias.target])
+			}
+		}
+	}
+	return lensHelpResult(fmt.Sprintf(
+		"No help target %q; the closest thing is the full doctrine, below. Named targets: doctrine, query, list_metrics, get_dimensions, get_dimension_values.\n\n%s",
+		target, lensHelpTexts["doctrine"]))
+}
 
+func lensHelpResult(text string) (*mcp.CallToolResult, any, error) {
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: text}},
 	}, nil, nil

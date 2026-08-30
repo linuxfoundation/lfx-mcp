@@ -255,16 +255,17 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		// query_lfx_lens. These singular forms are verified against the API.
 		"contributor, contribution —",
 		"membership, revenue, churn —",
-		"event, registration, speaker —",
+		"event, registration, speaker, sponsorship —",
 		"enrollment, certification —",
 		"maintainer —",
 		"health, project —",
 		// Regional questions route here for every topic, memberships included.
 		"any of the above sliced by country or region — always here, never query_lfx_lens",
-		// Dimension naming, and the regional person-vs-organization split.
+		// Dimension naming. The regional person-vs-organization split moved to
+		// help('doctrine') (asserted in TestDoctrineHelp) to make room for the
+		// eval-verified failure patterns.
 		"entity__field",
 		"country__lf_region",
-		"activity_project_id__organization_lf_region",
 		// Discovery must hand off to the query tool by name and explain where
 		// project scope is expressed now that there is no project parameter.
 		"query_lfx_semantic_layer",
@@ -277,6 +278,12 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		// escaping via a country code.
 		"get_dimension_values(dimension, metrics, search)",
 		"returns zero rows, not an error",
+		// The 207-question eval showed models falling back to query_lfx_lens
+		// without ever reading the recipes; the description now routes
+		// struggling through help('doctrine') first.
+		"help('doctrine')",
+		"ALWAYS call it before a query_lfx_lens fallback",
+		"maintainer-contribution joins, social listening",
 		"'Asia Pacific' not 'APAC'",
 		"'Viet Nam' not 'Vietnam'",
 		// Either tool can be loaded without the other, so each states what the
@@ -289,12 +296,12 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		}
 	}
 
-	// Event sponsorships stay with query_lfx_lens, which does them better, so
-	// this tool must not advertise them. Listing "sponsorship" as a topic here
-	// put two tools in charge of the same question and contradicted the
-	// carve-out query_lfx_lens still states.
-	if strings.Contains(exploreSemanticLayerDescription, "sponsorship,") {
-		t.Error("explore description claims sponsorships as a topic; query_lfx_lens owns them")
+	// Sponsorships flipped owners: the semantic layer covers them now
+	// (sponsored_events_count and the sponsorship revenue metrics), and
+	// query_lfx_lens keeps exactly two lanes. Both descriptions must agree.
+	if strings.Contains(exploreSemanticLayerDescription, "never query_lfx_lens") &&
+		!strings.Contains(exploreSemanticLayerDescription, "sponsorship") {
+		t.Error("explore description no longer claims sponsorships; the semantic layer owns them now")
 	}
 
 	// The description used to warn that a plural search matches nothing. That
@@ -322,44 +329,47 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 		"yyyy-mm-dd",
 		"ceiling 500",
 		"metric_time__year",
-		"outer-joined",
+		"outer-join",
 		"ranked list",
 		// Splitting discovery out made it possible to query without ever
 		// exploring, and a live client did exactly that — going straight to a
 		// query with guessed names. The rule has to be an instruction, not a
 		// conditional suggestion.
-		"ALWAYS use explore_lfx_semantic_layer first",
+		"ALWAYS explore_lfx_semantic_layer first",
 		"never guess",
 		// Both neighbours are named so routing works from this tool too.
 		"explore_lfx_semantic_layer",
 		"query_lfx_lens",
 		"country/region",
-		// Scope dimensions and literals are copied exactly from the current
-		// live layer. A wrong dimension can return a plausible wrong population.
-		"search_projects first",
-		"Kubernetes='k8s'",
-		"kernel='korg'",
-		"PyTorch segment='ptproject'",
-		"activity_project_id__project_spine_slug",
-		"ONLY foundation scope",
-		"REQUIRED for sums",
-		"insertions/deletions inflate 2–4x",
+		// Scope dimensions are copied exactly from the current live layer. A
+		// wrong dimension returns a plausible wrong population. The conformed
+		// project entity replaced the spine as the primary foundation scope;
+		// the spine, per-domain long-form guidance and slug examples moved to
+		// help('query') and help('doctrine'), asserted in their own tests.
+		"resolve slugs via search_projects",
+		"project__foundation_slug",
+		"NEVER scope a foundation with project_slug",
 		"asset_id__project_slug",
 		"registration_id__project_slug",
 		"event_id__project_name",
-		"Cloud Native Computing Foundation (CNCF)",
-		"NEVER slice sponsorship metrics",
 		"maintainer_key__cm_project_grandparents_slug",
 		"is_lf_project=true",
-		"health_metric_key__foundation_slug",
-		"IN (...) + group_by the same dimension",
-		"never total across spine groups",
 		"0 rows = misspelled literal",
-		// Window semantics must survive optional-parameter compaction.
-		"prior 365 complete UTC days",
-		">= start AND < today",
-		"YTD: >= 'YYYY-01-01'",
-		"Always state concrete dates used",
+		// The five eval-verified failure patterns (62 wrong answers in a
+		// 207-question replay traced overwhelmingly to these): bots on raw
+		// activity metrics, full-legal-name lookups, share denominators,
+		// unstated windows, and undiscovered COCOMO value metrics.
+		"member_is_bot",
+		"Insights default",
+		"International Business Machines Corporation",
+		"org-attributed base",
+		"default trailing 12 months",
+		"total_software_value",
+		"COCOMO",
+		"asset_id__end_date",
+		"future-dated",
+		// Struggling routes through the doctrine before the lens fallback.
+		"help('doctrine') BEFORE query_lfx_lens",
 		// The silent-zero-rows warning is only actionable if it names the way
 		// out; without this the model retries the same wrong literal.
 		"get_dimension_values",
@@ -440,6 +450,9 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 		{"raw IDs", "grouping by an entity silently returns unusable output"},
 		{"get_dimension_values", "the only recovery from a wrong filter literal"},
 		{"zero rows", "a wrong literal is silent, so the model must be told to check first"},
+		{"member_is_bot", "unfiltered activity metrics inflate 1.4-1.9x with no error"},
+		{"International Business Machines", "short-name value searches silently miss legal-name accounts"},
+		{"help('doctrine')", "the overflow recipes are useless if nothing routes the model to them"},
 	} {
 		if !strings.Contains(surviving, tc.token) {
 			t.Errorf("%q reaches the model only via an optional parameter, where it gets summarised away (%s). Move it into the tool description or onto a required parameter.",
@@ -695,6 +708,9 @@ func TestHelpActionAndDescribeAlias(t *testing.T) {
 	for _, want := range []string{
 		"metric_time__year",
 		"There is no separate project parameter",
+		"project__foundation_slug",
+		"conformed lens",
+		"spine_hierarchy_level = 2",
 		"activity_project_id__project_spine_slug",
 		"asset_id__project_slug",
 		"registration_id__project_slug",
@@ -712,7 +728,9 @@ func TestHelpActionAndDescribeAlias(t *testing.T) {
 		"risc-v-international / riscv",
 		"cff / cloud-foundry",
 		"opensearch-foundation / opensearch-project",
-		`"Direct children of X" and "sub-foundations of X" are not expressible today`,
+		// Hierarchy walks became expressible with the spine dimensions; the
+		// old "not expressible today" disclaimer must be gone.
+		`"Direct children of X"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("help query text missing %q", want)
@@ -731,9 +749,9 @@ func TestQueryLFXLensScopeIsContextNotBoundary(t *testing.T) {
 		"Find it via search_projects",
 		"For multiple foundations",
 		"name the others in input",
-		"compare cncf with lf-ai-foundation and openssf",
+		"name the others in input",
 		"LF-wide",
-		"project_slug='tlf' (The Linux Foundation)",
+		"project_slug='tlf'",
 	} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("query_lfx_lens description missing scope guidance %q", want)
@@ -778,7 +796,8 @@ func TestQueryLFXLensDoesNotClaimMemberships(t *testing.T) {
 			t.Errorf("query_lfx_lens description still claims memberships: %q", unwanted)
 		}
 	}
-	if !strings.Contains(tool.Description, "contributor, activity and membership questions belong to the semantic layer") {
+	if !strings.Contains(tool.Description, "Everything else - contributors, activities, memberships") ||
+		!strings.Contains(tool.Description, "belongs to explore_lfx_semantic_layer") {
 		t.Error("query_lfx_lens description should hand memberships to the semantic layer explicitly")
 	}
 
@@ -786,7 +805,7 @@ func TestQueryLFXLensDoesNotClaimMemberships(t *testing.T) {
 	if strings.Contains(input, "Always use for memberships") {
 		t.Errorf("query_lfx_lens input schema still claims memberships: %q", input)
 	}
-	if !strings.Contains(input, "Contributor, activity and membership questions belong to the semantic layer") {
+	if !strings.Contains(input, "membership, event, education and health questions belong to the semantic layer") {
 		t.Errorf("query_lfx_lens input schema should redirect memberships: %q", input)
 	}
 }
@@ -988,5 +1007,97 @@ func TestSemanticLayerToolsRegisterIndependently(t *testing.T) {
 					tc.name, tc.absent)
 			}
 		})
+	}
+}
+
+// TestDoctrineHelp pins the overflow doctrine: every recipe that the
+// 2048-byte descriptions cannot hold, verified against the live layer during
+// the August 2026 eval. If one of these tokens disappears, a failure pattern
+// that produced wrong answers in the 207-question replay loses its recipe.
+func TestDoctrineHelp(t *testing.T) {
+	setupLensTest(t)
+
+	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
+		Action: "help",
+		Target: "doctrine",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error result: %s", resultText(t, res))
+	}
+	text := resultText(t, res)
+	for _, want := range []string{
+		// windows and membership parity
+		"trailing 12 months",
+		"asset_id__end_date",
+		"current_membership_count",
+		"future-dated",
+		// scoping and hierarchy
+		"project__foundation_slug",
+		"spine_hierarchy_level = 2",
+		"risc-v-international/riscv",
+		// bots
+		"member_is_bot",
+		"bot_activities",
+		"3,619,940",
+		// org shares and headcounts
+		"org-ATTRIBUTED",
+		"Individual - No Account",
+		"2-4x",
+		// name discovery
+		"International Business Machines Corporation",
+		"Red Hat LLC",
+		// tiers, health, value
+		"Premier Membership",
+		"Critical <20, Unsteady 20-39",
+		"total_software_value",
+		"COCOMO",
+		// populations, maintainers, regions
+		"total_contributors_with_collaboration",
+		"2000-01-01 sentinel",
+		"maintainer_key__is_lf_project",
+		"organization_lf_region",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("doctrine help missing %q", want)
+		}
+	}
+}
+
+// TestHelpNeverFails pins the help contract: help always returns guidance.
+// An IsError help result pushes the model toward guessing or a premature
+// query_lfx_lens fallback - the exact behaviors the doctrine exists to stop.
+func TestHelpNeverFails(t *testing.T) {
+	setupLensTest(t)
+
+	for _, tc := range []struct {
+		target string
+		want   string
+	}{
+		{"", "how to use it"},
+		{"overview", "how to use it"},
+		{"doctrine", "WORKED RECIPES"},
+		{"recipes", "WORKED RECIPES"},              // alias
+		{"bots", "member_is_bot"},                  // topic keyword routes to doctrine
+		{"windows", "trailing 12 months"},          // topic keyword routes to doctrine
+		{"metrics", "list_metrics"},                // action-ish keyword
+		{"total_bananas_metric", "WORKED RECIPES"}, // unknown: overview+doctrine, not an error
+	} {
+		res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
+			Action: "help",
+			Target: tc.target,
+		})
+		if err != nil {
+			t.Fatalf("target %q: unexpected error: %v", tc.target, err)
+		}
+		if res.IsError {
+			t.Errorf("target %q: help returned an error result; it must always return guidance", tc.target)
+			continue
+		}
+		if text := resultText(t, res); !strings.Contains(text, tc.want) {
+			t.Errorf("target %q: help text missing %q", tc.target, text[:min(120, len(text))])
+		}
 	}
 }

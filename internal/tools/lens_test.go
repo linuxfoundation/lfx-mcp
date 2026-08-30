@@ -359,8 +359,11 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 		// 207-question replay traced overwhelmingly to these): bots on raw
 		// activity metrics, full-legal-name lookups, share denominators,
 		// unstated windows, and undiscovered COCOMO value metrics.
-		"member_is_bot",
-		"Insights default",
+		"Bot exclusion is the Insights default",
+		"bot_activities",
+		"Share of work = activity volumes",
+		"DAILY snapshots",
+		"Critical <20",
 		"International Business Machines Corporation",
 		"org-attributed base",
 		"default trailing 12 months",
@@ -450,7 +453,7 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 		{"raw IDs", "grouping by an entity silently returns unusable output"},
 		{"get_dimension_values", "the only recovery from a wrong filter literal"},
 		{"zero rows", "a wrong literal is silent, so the model must be told to check first"},
-		{"member_is_bot", "unfiltered activity metrics inflate 1.4-1.9x with no error"},
+		{"bot_activities", "the explicit bot view; bot exclusion became the metric default in lf-dbt"},
 		{"International Business Machines", "short-name value searches silently miss legal-name accounts"},
 		{"help('doctrine')", "the overflow recipes are useless if nothing routes the model to them"},
 	} {

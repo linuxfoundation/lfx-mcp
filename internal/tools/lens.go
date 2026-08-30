@@ -179,13 +179,13 @@ USE query_lfx_lens INSTEAD only for maintainer-contribution joins, social listen
 
 const querySemanticLayerDescription = `Metrics: contributions, memberships, events, sponsorships, education, maintainers, health, country/region. ALWAYS explore_lfx_semantic_layer first unless exact names are known; never guess.
 
-SYNTAX: metrics (required), CSV. Multiple metrics outer-join on shared dims (group_by only those; absent sides NULL; '-metric' sorts NULLs FIRST - re-sort before top-N). group_by: names for ranked lists, metric_time__year/quarter/month trends. where is MetricFlow: {{ Dimension('country__lf_region') }} = 'Europe'; {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01' (dates yyyy-mm-dd). limit ceiling 500. current_* is active-only.
+SYNTAX: metrics (required), CSV. Multiple metrics outer-join on shared dims (group_by only those; absent sides NULL; '-metric' sorts NULLs FIRST). group_by: names for ranked lists, metric_time__year/quarter/month trends. where is MetricFlow: {{ Dimension('country__lf_region') }} = 'Europe'; {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01' (dates yyyy-mm-dd). limit ceiling 500.
 
-SCOPE: resolve slugs via search_projects. Foundation: {{ Dimension('project__foundation_slug') }} = '<slug>' - conformed, every domain, counts rows once. NEVER scope a foundation with project_slug - matches only its catch-all bucket: silent 40x undercount. Memberships: asset_id__project_slug. Registrations: registration_id__project_slug. Events/speakers: event_id__project_name (EXACT name). Maintainers: maintainer_key__cm_project_grandparents_slug + is_lf_project=true. 0 rows = misspelled literal - get_dimension_values first; org/account names are FULL LEGAL names (IBM = 'International Business Machines Corporation') - short-name searches miss them.
+SCOPE: resolve slugs via search_projects. Foundation: {{ Dimension('project__foundation_slug') }} = '<slug>' - conformed, every domain, counts rows once. NEVER scope a foundation with project_slug: its catch-all bucket, a silent 40x undercount. Memberships: asset_id__project_slug. Registrations: registration_id__project_slug. Events/speakers: event_id__project_name (EXACT name). Maintainers: maintainer_key__cm_project_grandparents_slug + is_lf_project=true. 0 rows = misspelled literal - get_dimension_values first; org/account names are FULL LEGAL names (IBM = 'International Business Machines Corporation') - short-name searches miss them.
 
-CONTRACT: compute shares/rankings yourself; state definition+window; default trailing 12 months, say so. Raw *_activities: add {{ Dimension('activity_project_id__member_is_bot') }} = false - the Insights default; always safe. total_contributors is code-only non-bot; _with_collaboration only when non-code participants are explicitly wanted. Org shares: use the org-attributed base (drop NULL/unaffiliated) and report that %. Economic/software value = total_software_value (COCOMO). Org headcounts run below published counts - caveat.
+CONTRACT: compute shares/rankings yourself; state definition+window; default trailing 12 months. Bot exclusion is the Insights default; bot_activities counts bots. total_contributors is code-only; _with_collaboration only when non-code participants are explicitly wanted. Share of work = activity volumes, not headcounts. Org shares: use the org-attributed base (drop NULL/unaffiliated), report that %; org headcounts run below published counts. Economic/software value = total_software_value (COCOMO). Health scores are DAILY snapshots - aggregate only the latest metric_date; bands Critical <20, Unsteady 20-39.
 
-WINDOWS: YTD needs AND <= today (installs can be future-dated). Active as of D: metric_time <= 'D' AND asset_id__end_date >= 'D' on membership_count. Struggling? help('doctrine') BEFORE query_lfx_lens - it has the recipes.`
+WINDOWS: YTD needs AND <= today (installs can be future-dated). Active as of D: metric_time <= 'D' AND asset_id__end_date >= 'D' on membership_count. Struggling? help('doctrine') BEFORE query_lfx_lens.`
 
 // The two semantic layer tools register independently so that LFXMCP_TOOLS can
 // select either by name. They are meant to be enabled together — each
@@ -363,19 +363,26 @@ entities (risc-v-international/riscv, cff/cloud-foundry,
 opensearch-foundation/opensearch-project); if a total looks low, group by the
 slug dimension and check for twins.
 
-4. BOTS. Bot exclusion is the LFX Insights default. total_contributors and
-the other contributor metrics already exclude bots. On raw *_activities
-metrics add {{ Dimension('activity_project_id__member_is_bot') }} = false -
-it is always safe to include. The gap is large: CNCF code contributions,
-trailing 12 months, 6,561,768 raw vs 3,619,940 non-bot. bot_activities is
-the explicit bot view.
+4. BOTS. Bot exclusion is the LFX Insights default and is built into the
+contributor and activity metrics; adding {{
+Dimension('activity_project_id__member_is_bot') }} = false yourself is
+redundant but always safe. The gap this default closes is large (CNCF code
+contributions, trailing 12 months: 6,561,768 with bots vs 3,619,940
+without). bot_activities is the explicit bot view when bot traffic itself
+is the question.
 
-5. ORG SHARES AND CONCENTRATION. Compute shares on the org-ATTRIBUTED base:
+5. ORG SHARES AND CONCENTRATION. Share of an org's work = ACTIVITY VOLUMES
+(e.g. code_contribution_activities by organization), never contributor
+headcounts. Compute shares on the org-ATTRIBUTED base of the same metric:
 drop NULL organization rows (and 'Individual - No Account') from the
 denominator and report the unattributed share separately - it is large
-(roughly 40-70% depending on the metric). For percentile/concentration
-questions pull the full grouped distribution (high limit) and compute
-client-side. Always state the population definition.
+(roughly 40-70% depending on the metric). For concentration questions pull
+the full grouped distribution and compute client-side. Always state the
+population definition. PERCENTILE CAP: the query limit ceiling is 500 rows,
+so a full per-person distribution over a large population is not
+retrievable - for median/percentile claims over big pools, combine the
+population total with the top-500 slice, state the approximation, or say
+the exact percentile needs ad-hoc SQL.
 
 6. NAME DISCOVERY. Org and account names are stored as FULL LEGAL names.
 IBM is 'International Business Machines Corporation' - the string 'IBM' does

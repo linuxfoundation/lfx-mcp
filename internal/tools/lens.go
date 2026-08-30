@@ -92,7 +92,7 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 	}
 
 	userID := AnonymousUserID
-	if req.Extra.TokenInfo != nil && req.Extra.TokenInfo.UserID != "" {
+	if req.Extra != nil && req.Extra.TokenInfo != nil && req.Extra.TokenInfo.UserID != "" {
 		userID = req.Extra.TokenInfo.UserID
 	}
 

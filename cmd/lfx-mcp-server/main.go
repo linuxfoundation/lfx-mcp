@@ -807,6 +807,12 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["query_lfx_semantic_layer"] && canRead && isStaff {
 		tools.RegisterQuerySemanticLayer(server)
 	}
+	// Not in defaultTools: the saved queries it runs deploy with the lf-dbt
+	// project and the Lens saved-query endpoint, so prod enables this by name
+	// only once both are live.
+	if enabledTools["query_lfx_semantic_layer_saved_queries"] && canRead && isStaff {
+		tools.RegisterSavedQueries(server)
+	}
 
 	return server
 }

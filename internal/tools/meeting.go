@@ -424,7 +424,7 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // handleGetMeeting implements the get_meeting tool logic.
@@ -627,7 +627,7 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // handleGetMeetingRegistrant implements the get_meeting_registrant tool logic.
@@ -834,7 +834,7 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // handleGetPastMeetingParticipant implements the get_past_meeting_participant tool logic.
@@ -958,7 +958,7 @@ func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequ
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // handleGetPastMeetingSummary implements the get_past_meeting_summary tool logic.
@@ -1268,7 +1268,7 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // pastMeetingGetResult is the output type for the get_past_meeting tool. It nests

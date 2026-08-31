@@ -456,7 +456,7 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // handleSearchMailingListMembers implements the search_mailing_list_members tool logic.
@@ -567,5 +567,5 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }

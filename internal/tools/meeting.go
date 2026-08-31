@@ -58,7 +58,7 @@ func RegisterSearchMeetings(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_meetings",
-			Description: "Search for LFX meetings (group calls, also called committee calls, working group sessions) using the query service. IMPORTANT: When the user asks about events, or for event data (conferences, registrations, attendees, speakers, sponsorships), use query_lfx_semantic_layer (preferred) or query_lfx_lens if semantic layer struggles.",
+			Description: "Search for LFX meetings (group calls, also called committee calls, working group sessions) using the query service. Meetings, their occurrences, registrants, attendance and summaries live HERE - prefer these tools over the semantic layer or query_lfx_lens for meeting questions. IMPORTANT: When the user asks about events, or for event data (conferences, registrations, attendees, speakers, sponsorships), use query_lfx_semantic_layer (preferred); query_lfx_lens is a fallback only after semantic-layer discovery (list_metrics, get_dimension_values, help('doctrine')) shows the question cannot be expressed there.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Meetings",
 				ReadOnlyHint: true,
@@ -68,7 +68,7 @@ func RegisterSearchMeetings(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_meetings",
-		Description: "Search for LFX meetings (committee calls, working group sessions) using the query service. IMPORTANT: When the user asks about events, or for event data (conferences, registrations, attendees, speakers, sponsorships), use query_lfx_semantic_layer (preferred) or query_lfx_lens if semantic layer struggles.",
+		Description: "Search for LFX meetings (committee calls, working group sessions) using the query service. Meetings, their occurrences, registrants, attendance and summaries live HERE - prefer these tools over the semantic layer or query_lfx_lens for meeting questions. IMPORTANT: When the user asks about events, or for event data (conferences, registrations, attendees, speakers, sponsorships), use query_lfx_semantic_layer (preferred); query_lfx_lens is a fallback only after semantic-layer discovery (list_metrics, get_dimension_values, help('doctrine')) shows the question cannot be expressed there.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Meetings",
 			ReadOnlyHint: true,
@@ -182,7 +182,7 @@ func RegisterSearchPastMeetings(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_past_meetings",
-			Description: "Search for LFX past meetings (v1_past_meeting) using the query service. Supports filtering by project, group (also known as committee), meeting ID, date range, and name.",
+			Description: "Search for LFX past meetings (v1_past_meeting) using the query service. Supports filtering by project, group (also known as committee), meeting ID, date range, and name. Past attendance and summaries live here, not in the semantic layer or query_lfx_lens.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Past Meetings",
 				ReadOnlyHint: true,
@@ -192,7 +192,7 @@ func RegisterSearchPastMeetings(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meetings",
-		Description: "Search for LFX past meetings using the query service. Supports filtering by project, committee, meeting ID, date range, and name.",
+		Description: "Search for LFX past meetings using the query service. Supports filtering by project, committee, meeting ID, date range, and name. Past attendance and summaries live here, not in the semantic layer or query_lfx_lens.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Past Meetings",
 			ReadOnlyHint: true,

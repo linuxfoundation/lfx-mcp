@@ -1080,6 +1080,9 @@ func TestDoctrineHelp(t *testing.T) {
 		"search_committees",
 		"search_committee_members",
 		"Never infer a roster",
+		// Meetings route to the meeting tools the same way.
+		"search_past_meetings",
+		"not in this layer and\nnot in query_lfx_lens",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("doctrine help missing %q", want)

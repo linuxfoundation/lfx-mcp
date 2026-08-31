@@ -449,7 +449,10 @@ search_committee_members with its committee_uid, paginating until page_token
 is absent. They are NOT in this layer and not query_lfx_lens's lane. Member
 records carry name, organization, role and voting status but no country.
 Never infer a roster from membership tiers or event data - fabricated board
-seats have been reported as fact.`
+seats have been reported as fact. Meetings likewise: schedules, occurrences,
+registrants, attendance and summaries live in the meeting tools
+(search_meetings, search_past_meetings and friends), not in this layer and
+not in query_lfx_lens.`
 
 // lensHelpOverview is returned by help with no target.
 const lensHelpOverview = `LFX Insights Semantic Layer — how to use it

@@ -50,7 +50,7 @@ Everything else - contributors, activities, memberships, events and sponsorships
 
 project_slug is required default context, NOT a scope boundary. Find it via search_projects. For multiple foundations, pass one slug and name the others in input. LF-wide: use project_slug='tlf'.
 
-Runs synchronously; wait 15-30 seconds without retrying. Returns <=200 rows; request explicit pagination ("page 2", "next 200 rows", or stable ORDER BY with LIMIT/OFFSET).`,
+Runs synchronously; wait 15-30 seconds without retrying. Returns <=200 rows; request explicit pagination ("page 2", or stable ORDER BY with LIMIT/OFFSET). Windows: default trailing 12 months; state concrete yyyy-mm-dd dates or the SQL picks its own.`,
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Query LFX Lens",
 			ReadOnlyHint: true,

@@ -752,9 +752,14 @@ func TestQueryLFXLensScopeIsContextNotBoundary(t *testing.T) {
 		"Find it via search_projects",
 		"For multiple foundations",
 		"name the others in input",
-		"name the others in input",
 		"LF-wide",
 		"project_slug='tlf'",
+		// Lens generates its own SQL and picks arbitrary windows when the
+		// question leaves them open — the description must carry the default
+		// window convention and require concrete dates in the question.
+		"default trailing 12 months",
+		"state concrete yyyy-mm-dd dates",
+		"the SQL picks its own",
 	} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("query_lfx_lens description missing scope guidance %q", want)

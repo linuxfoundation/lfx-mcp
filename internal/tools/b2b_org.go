@@ -28,6 +28,7 @@ type SearchB2bOrgsArgs struct {
 type b2bOrgSearchResult struct {
 	Resources []*querysvc.Resource `json:"resources"`
 	PageToken *string              `json:"page_token,omitempty"`
+	Note      string               `json:"note,omitempty"`
 }
 
 // RegisterSearchB2bOrgs registers the search_b2b_orgs tool with the MCP server.
@@ -107,6 +108,7 @@ func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("organizations", len(result.Resources), result.PageToken != nil)
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
@@ -121,34 +123,9 @@ func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args Sea
 
 	logger.InfoContext(ctx, "search_b2b_orgs succeeded", "count", len(result.Resources))
 
-	content := string(prettyJSON)
-	if note := b2bOrgEmptyResultNote(len(result.Resources), result.PageToken != nil); note != "" {
-		content = note + "\n" + content
-	}
-
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: content},
+			&mcp.TextContent{Text: string(prettyJSON)},
 		},
 	}, out, nil
-}
-
-// b2bOrgEmptyResultNote explains an empty search_b2b_orgs page. B2B org
-// records are access-controlled (reading one requires an FGA relationship on
-// it), and the query service silently withholds resources the caller cannot
-// see - so an empty page is ambiguous. The pagination token disambiguates:
-// it is derived from the raw index page before access filtering, so an empty
-// page WITH a token means matches exist that the caller lacks permission to
-// view, while an empty page without one means nothing matched at all.
-func b2bOrgEmptyResultNote(count int, hasPageToken bool) string {
-	if count > 0 {
-		return ""
-	}
-	if hasPageToken {
-		return "No organizations are visible to your identity, but matching records exist: " +
-			"you do not have permission to view them. B2B org records are access-controlled " +
-			"(org-level permissions are required); this is a permissions gap, not missing data."
-	}
-	return "No organizations matched. Note: B2B org records are access-controlled, so results " +
-		"are limited to organizations your identity has permission to view."
 }

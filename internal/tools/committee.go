@@ -34,6 +34,7 @@ var committeeConfig *CommitteeConfig
 type committeeSearchResult struct {
 	Resources []*querysvc.Resource `json:"resources"`
 	PageToken *string              `json:"page_token,omitempty"`
+	Note      string               `json:"note,omitempty"`
 }
 
 // committeeGetResult is the output type for get_committee / get_group.
@@ -46,6 +47,7 @@ type committeeGetResult struct {
 type committeeMemberSearchResult struct {
 	Resources []*querysvc.Resource `json:"resources"`
 	PageToken *string              `json:"page_token,omitempty"`
+	Note      string               `json:"note,omitempty"`
 }
 
 // SetCommitteeConfig sets the configuration for committee tools.
@@ -320,6 +322,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("committees", len(result.Resources), result.PageToken != nil)
 
 	// Warn if fewer results than requested were returned but more pages exist.
 	// This indicates some results on this page were excluded due to access controls.
@@ -615,6 +618,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("committee members", len(result.Resources), result.PageToken != nil)
 
 	// Warn if fewer results than requested were returned but more pages exist.
 	// This indicates some results on this page were excluded due to access controls.

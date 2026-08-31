@@ -392,12 +392,14 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("meetings", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
@@ -593,12 +595,14 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("meeting registrants", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
@@ -798,12 +802,14 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("past-meeting participants", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
@@ -920,12 +926,14 @@ func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequ
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("past-meeting summaries", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
@@ -1228,12 +1236,14 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("past meetings", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {

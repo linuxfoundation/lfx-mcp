@@ -42,11 +42,11 @@ func RegisterQueryLFXLens(server *mcp.Server) {
 
 Use this tool ONLY for:
 - Maintainer x activity joins: contribution volumes attributed to maintainers (e.g. "top maintainers by contributions", "what share of work comes from maintainers", "is maintainer activity declining"). The semantic layer holds maintainer rosters and activity metrics but cannot join them at person grain.
-- Social listening: mentions of a project on social media and the web (Twitter/X, Bluesky, Reddit, Hacker News, DEV, Podcasts, YouTube, LinkedIn, TikTok), sentiment, share of voice by platform, and author reach/followers. The semantic layer has no social listening data.
+- Social listening: mentions of a project on social media and the web (X, Bluesky, Reddit, Hacker News, YouTube, LinkedIn, TikTok), sentiment, share of voice, author reach. The semantic layer has no social listening data.
 
 FALLBACK (the only other use): switch here when the semantic layer genuinely cannot express the question - but do not give up on it too fast. Genuine means you searched list_metrics with the right topic words, ran get_dimensions, checked get_dimension_values for your filter literals, consulted explore's help('doctrine') recipes, and tried at least two differently-formulated queries. Zero rows or an unknown-name error is NOT struggling: zero rows means a misspelled stored literal or the wrong scope dimension, an unknown name means you guessed instead of copying - both are fixed by discovery, not by switching tools. Fall back quickly only when no metric family covers the concept at all.
 
-Everything else - contributors, activities, memberships, events and sponsorships, registrations, education, maintainer rosters/counts/names, health - belongs to explore_lfx_semantic_layer + query_lfx_semantic_layer.
+Everything else - contributors, activities, memberships, events and sponsorships, registrations, education, maintainer rosters/counts/names, health - belongs to explore_lfx_semantic_layer + query_lfx_semantic_layer. Committee/board rosters: the committee tools.
 
 project_slug is required default context, NOT a scope boundary. Find it via search_projects. For multiple foundations, pass one slug and name the others in input. LF-wide: use project_slug='tlf'.
 
@@ -154,7 +154,7 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 // QuerySemanticLayerArgs for why that distinction matters. Anything that still
 // does not fit belongs in the help action, whose output is a tool result and
 // carries no limit; help is a fallback for a failed query, not a prerequisite.
-const exploreSemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data. This tool discovers what can be measured; query_lfx_semantic_layer runs it. Start here unless exact metric, dimension and value names are already known.
+const exploreSemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data. This tool discovers what can be measured; query_lfx_semantic_layer runs it. Start here unless exact names are already known.
 
 COVERS — search one topic word:
 - contributor, contribution — activity/org counts, commits, PRs
@@ -168,14 +168,14 @@ COVERS — search one topic word:
 A metric is measured (total_contributors); a dimension slices, filters or lists it (country__lf_region). Names are entity__field and prefixes differ per metric, so copy qualified_names; never assemble them.
 
 ACTIONS
-- list_metrics(search): searches metric names/descriptions, so use a topic above, not a dimension like "country". At <=15 matches, each includes dimension qualified_names.
+- list_metrics(search): searches metric names/descriptions, so use a topic above, not a dimension like "country". At <=15 matches, each includes qualified_names.
 - get_dimensions(metrics, search): available dimensions; needs a metric. Several metrics return only shared dimensions—a cross-domain query's valid group_by set.
-- get_dimension_values(dimension, metrics, search): stored literals. Call before filtering on unseen values: an unknown returns zero rows, not an error. Spellings surprise—'Asia Pacific' not 'APAC', 'Viet Nam' not 'Vietnam'.
+- get_dimension_values(dimension, metrics, search): stored literals. Call before filtering on unseen values: an unknown returns zero rows, not an error. Spellings surprise—'Asia Pacific' not 'APAC'.
 - help('doctrine'): worked recipes - windows, as-of membership, bots, health, org shares, tiers, name discovery. ALWAYS call it before a query_lfx_lens fallback.
 
 Project scope lives in query's where clause (no parameter): resolve slugs via search_projects, then see query_lfx_semantic_layer for which dimension scopes each domain.
 
-USE query_lfx_lens INSTEAD only for maintainer-contribution joins, social listening, or - after discovery AND help('doctrine') have failed, never on a first empty result - a question this layer cannot express.`
+USE query_lfx_lens INSTEAD only for maintainer-contribution joins, social listening, or - after discovery AND help('doctrine') have failed, never on a first empty result - a question this layer cannot express. Board/committee/ambassador rosters: committee tools, not here.`
 
 const querySemanticLayerDescription = `Metrics: contributions, memberships, events, sponsorships, education, maintainers, health, country/region. ALWAYS explore_lfx_semantic_layer first unless exact names are known; never guess.
 

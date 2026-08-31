@@ -285,7 +285,11 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		"ALWAYS call it before a query_lfx_lens fallback",
 		"maintainer-contribution joins, social listening",
 		"'Asia Pacific' not 'APAC'",
-		"'Viet Nam' not 'Vietnam'",
+		// Governance rosters route to the committee tools: the eval's
+		// board/ambassador questions were declared unavailable or fabricated
+		// because neither semantic-layer description mentioned where rosters
+		// live. (The 'Viet Nam' second spelling example paid for this line.)
+		"Board/committee/ambassador rosters: committee tools",
 		// Either tool can be loaded without the other, so each states what the
 		// semantic layer is. Here the regional rule sits in COVERS, asserted
 		// above, rather than in the opening line.
@@ -760,6 +764,9 @@ func TestQueryLFXLensScopeIsContextNotBoundary(t *testing.T) {
 		"default trailing 12 months",
 		"state concrete yyyy-mm-dd dates",
 		"the SQL picks its own",
+		// Governance rosters are neither lens's lane nor the semantic
+		// layer's — the redirect must survive here too.
+		"Committee/board rosters: the committee tools",
 	} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("query_lfx_lens description missing scope guidance %q", want)

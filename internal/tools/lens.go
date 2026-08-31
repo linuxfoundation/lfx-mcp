@@ -404,8 +404,11 @@ Member'; CNCF has 'Platinum Membership' and no Diamond tier) -
 get_dimension_values per foundation, never reuse literals across foundations.
 
 8. HEALTH SCORES are daily snapshots. Aggregate only after filtering to the
-latest date: first find it with metrics=project_health_count,
-group_by=metric_time__day, order_by='-metric_time__day', limit=1, then filter
+latest HEALTH-BEARING date: first find it with metrics=project_health_count,
+group_by=metric_time__day, order_by='-metric_time__day', limit=1, with filter
+{{ Dimension('health_metric_key__health_score_category') }} IS NOT NULL (the
+fact shares dates with the software-value feed, so the unqualified max can be
+a day with no health scores); then filter
 {{ TimeDimension('metric_time','day') }} = that date in the real query. Unfiltered
 category grouping counts a project once per day and per category it passed
 through (~8-9x inflation). Category bands: Critical <20, Unsteady 20-39,

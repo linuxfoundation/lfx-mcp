@@ -1056,7 +1056,7 @@ func TestDoctrineHelp(t *testing.T) {
 		// bots
 		"member_is_bot",
 		"bot_activities",
-		"3,619,940",
+		"roughly 1.8x",
 		// org shares and headcounts
 		"org-ATTRIBUTED",
 		"Individual - No Account",

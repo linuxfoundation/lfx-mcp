@@ -333,9 +333,10 @@ filed under a different spelling.`,
 
 // lensDoctrineHelp is the overflow doctrine: every worked recipe and caveat
 // that does not fit the 2048-byte tool descriptions. It is a tool result, so
-// it carries no budget - keep it rich. Figures were verified live against the
-// deployed semantic layer in August 2026; treat them as illustrations of the
-// trap sizes, not as current data.
+// it carries no budget - keep it rich. The data is fluid, so the doctrine
+// carries no absolute figures: trap sizes are ratios measured live against
+// the deployed semantic layer in August 2026, and answers always come from
+// fresh queries.
 const lensDoctrineHelp = `WORKED RECIPES AND CAVEATS - consult this before concluding the semantic layer cannot answer, and always before falling back to query_lfx_lens.
 
 1. DEFAULT WINDOW. When the asker gives no window, use the trailing 12 months
@@ -347,18 +348,19 @@ query_lfx_lens question so both lanes read the same window.
 
 2. MEMBERS AS OF A DATE D (the PCC-parity recipe): metric membership_count
 with where "{{ TimeDimension('metric_time','day') }} <= 'D' AND
-{{ TimeDimension('asset_id__end_date','day') }} >= 'D'". Verified: CNCF as of
-2022-12-31 = 847. Today's active members: current_membership_count (CNCF =
-722, PCC-exact). New members: new_membership_count by install date - but any
-YTD/current-year count needs AND metric_time <= today, because installs can
-be future-dated (2026: 87 in the year bucket vs 77 up to today).
+{{ TimeDimension('asset_id__end_date','day') }} >= 'D'". Verified to
+reproduce PCC Health Metrics' member counts exactly; today's active members
+are current_membership_count. New members: new_membership_count by install
+date - but any YTD/current-year count needs AND metric_time <= today,
+because installs can be future-dated and the unbounded year bucket runs
+high.
 
 3. FOUNDATION SCOPE. {{ Dimension('project__foundation_slug') }} = '<slug>'
 is the conformed scope: the same filter works on every metric family and
 counts each row once. project_slug matches only a foundation's catch-all
-bucket (cncf: 1.4M activities vs 58M) - a silent undercount, never an error.
+bucket - a silent ~40x undercount on activities, never an error.
 activity_project_id__project_spine_slug returns identical activity counts
-(verified: CNCF 39,371,064 both ways) and is the tool for sub-foundation
+(verified) and is the tool for sub-foundation
 umbrella nodes and hierarchy walks: spine_hierarchy_level = 2 lists a
 foundation's direct children. Some families split across several Salesforce
 entities (risc-v-international/riscv, cff/cloud-foundry,
@@ -368,10 +370,10 @@ slug dimension and check for twins.
 4. BOTS. Bot exclusion is the LFX Insights default and is built into the
 contributor and activity metrics; adding {{
 Dimension('activity_project_id__member_is_bot') }} = false yourself is
-redundant but always safe. The gap this default closes is large (CNCF code
-contributions, trailing 12 months: 6,561,768 with bots vs 3,619,940
-without). bot_activities is the explicit bot view when bot traffic itself
-is the question.
+redundant but always safe. The gap this default closes is large - code
+contributions measured roughly 1.8x higher with bots than without on a
+large foundation. bot_activities is the explicit bot view when bot traffic
+itself is the question.
 
 5. ORG SHARES AND CONCENTRATION. Share of an org's work = ACTIVITY VOLUMES
 (e.g. code_contribution_activities by organization), never contributor
@@ -513,10 +515,10 @@ Foundation scope, any domain: filter
 
 This is the conformed lens: the same filter works on every metric family and
 counts each row once. NEVER scope a foundation with project_slug - the same
-'cncf' literal is 58M activities through the foundation lens but 1.4M through
-project_slug (its catch-all bucket): a silent undercount, not an error.
+'cncf' literal reaches ~40x fewer activities through project_slug (its
+catch-all bucket): a silent undercount, not an error.
 activity_project_id__project_spine_slug returns identical activity counts
-(verified: CNCF 39,371,064 both ways) and handles sub-foundation umbrella
+(verified) and handles sub-foundation umbrella
 nodes and hierarchy walks - spine_hierarchy_level = 2 lists a foundation's
 direct children. Keep the spine filter for sum metrics: insertions and
 deletions inflate 2-4x under non-hierarchical filters.

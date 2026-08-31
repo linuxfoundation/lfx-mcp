@@ -745,6 +745,28 @@ func TestHelpActionAndDescribeAlias(t *testing.T) {
 	}
 }
 
+// TestQueryLFXLens_StdioNilExtraUsesAnonymous pins the stdio crash fix: in
+// stdio mode req.Extra is nil (HTTP mode always populates it), and the handler
+// used to dereference req.Extra.TokenInfo and SIGSEGV the whole server. The
+// request must complete and run the workflow as the anonymous user.
+func TestQueryLFXLens_StdioNilExtraUsesAnonymous(t *testing.T) {
+	captured := setupLensTest(t)
+
+	res, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+		ProjectSlug: "cncf",
+		Input:       "how many contributors last year?",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error result: %s", resultText(t, res))
+	}
+	if !strings.Contains(string(captured.Body), AnonymousUserID) {
+		t.Errorf("expected workflow request to carry the anonymous user ID %q, body: %s", AnonymousUserID, captured.Body)
+	}
+}
+
 // TestQueryLFXLensScopeIsContextNotBoundary pins the staff-only cross-project
 // contract. project_slug remains required as a default context for the Lens
 // workflow, but it must not be described as an authorization or scope boundary.
@@ -1103,11 +1125,14 @@ func TestHelpNeverFails(t *testing.T) {
 		{"", "how to use it"},
 		{"overview", "how to use it"},
 		{"doctrine", "WORKED RECIPES"},
-		{"recipes", "WORKED RECIPES"},              // alias
-		{"bots", "member_is_bot"},                  // topic keyword routes to doctrine
-		{"windows", "trailing 12 months"},          // topic keyword routes to doctrine
-		{"metrics", "list_metrics"},                // action-ish keyword
-		{"total_bananas_metric", "WORKED RECIPES"}, // unknown: overview+doctrine, not an error
+		{"recipes", "WORKED RECIPES"},                // alias
+		{"bots", "member_is_bot"},                    // topic keyword routes to doctrine
+		{"windows", "trailing 12 months"},            // topic keyword routes to doctrine
+		{"metrics", "list_metrics"},                  // action-ish keyword
+		{"metric names", "list_metrics"},             // specific action beats doctrine's "name"
+		{"dimension values", "get_dimension_values"}, // specific action beats doctrine's "value"
+		{"total_bananas_metric", "WORKED RECIPES"},   // unknown: overview+doctrine, not an error
+		{"total_bananas_metric", "how to use it"},    // unknown target includes the overview
 	} {
 		res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
 			Action: "help",

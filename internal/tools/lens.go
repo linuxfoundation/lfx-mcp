@@ -183,7 +183,7 @@ SYNTAX: metrics (required), CSV. Multiple metrics outer-join on shared dims (gro
 
 SCOPE: resolve slugs via search_projects. Foundation: {{ Dimension('project__foundation_slug') }} = '<slug>' - conformed, every domain, counts rows once. NEVER scope a foundation with project_slug: its catch-all bucket, a silent 40x undercount. Memberships: asset_id__project_slug. Registrations: registration_id__project_slug. Events/speakers: event_id__project_name (EXACT name). Maintainers: maintainer_key__cm_project_grandparents_slug + is_lf_project=true. 0 rows = misspelled literal - get_dimension_values first; org/account names are FULL LEGAL names (IBM = 'International Business Machines Corporation') - short-name searches miss them.
 
-CONTRACT: compute shares/rankings yourself; state definition+window; default trailing 12 months. Bot exclusion is the Insights default; bot_activities counts bots. total_contributors is code-only; _with_collaboration only when non-code participants are explicitly wanted. Share of work = activity volumes, not headcounts. Org shares: use the org-attributed base (drop NULL/unaffiliated), report that %; org headcounts run below published counts. Economic/software value = total_software_value (COCOMO). Health scores are DAILY snapshots - aggregate only the latest metric_date; bands Critical <20, Unsteady 20-39.
+CONTRACT: compute shares/rankings yourself; state definition+window; default trailing 12 months. Bot exclusion is the Insights default; bot_activities counts bots. total_contributors is code-only; _with_collaboration only when non-code participants are explicitly wanted. Share of work = activity volumes, not headcounts. Org shares: use the org-attributed base (drop NULL/unaffiliated), report that %; org headcounts run below published counts. Economic/software value = total_software_value (COCOMO). Health scores are DAILY snapshots - aggregate only the latest metric_time; bands Critical <20, Unsteady 20-39.
 
 WINDOWS: YTD needs AND <= today (installs can be future-dated). Active as of D: metric_time <= 'D' AND asset_id__end_date >= 'D' on membership_count. Struggling? help('doctrine') BEFORE query_lfx_lens.`
 
@@ -384,9 +384,10 @@ denominator and report the unattributed share separately - it is large
 the full grouped distribution and compute client-side. Always state the
 population definition. PERCENTILE CAP: the query limit ceiling is 500 rows,
 so a full per-person distribution over a large population is not
-retrievable - for median/percentile claims over big pools, combine the
-population total with the top-500 slice, state the approximation, or say
-the exact percentile needs ad-hoc SQL.
+retrievable - for median/percentile claims over big pools, report only what
+the top-500 slice actually bounds (e.g. the 500th value as a threshold the
+percentile lies beyond), or say the exact percentile needs ad-hoc SQL. The
+total plus a top slice cannot recover a rank outside the slice.
 
 6. NAME DISCOVERY. Org and account names are stored as FULL LEGAL names.
 IBM is 'International Business Machines Corporation' - the string 'IBM' does
@@ -403,8 +404,9 @@ Member'; CNCF has 'Platinum Membership' and no Diamond tier) -
 get_dimension_values per foundation, never reuse literals across foundations.
 
 8. HEALTH SCORES are daily snapshots. Aggregate only after filtering to the
-latest date: first query the ungrouped max of metric_time, then filter
-{{ TimeDimension('metric_time','day') }} = that date. Unfiltered
+latest date: first find it with metrics=project_health_count,
+group_by=metric_time__day, order_by='-metric_time__day', limit=1, then filter
+{{ TimeDimension('metric_time','day') }} = that date in the real query. Unfiltered
 category grouping counts a project once per day and per category it passed
 through (~8-9x inflation). Category bands: Critical <20, Unsteady 20-39,
 then Stable/Healthy above.
@@ -548,7 +550,9 @@ WINDOWS
 "Last 12 months" means the prior 365 complete UTC days: filter
 {{ TimeDimension('metric_time','DAY') }} >= the start date AND
 {{ TimeDimension('metric_time','DAY') }} < today's UTC date. YTD means
->= 'YYYY-01-01'. Always state the concrete dates used in the answer.
+>= 'YYYY-01-01' AND <= today's date - installs and events can be
+future-dated, so an unbounded year bucket overcounts. Always state the
+concrete dates used in the answer.
 
 Worked examples
 
@@ -640,15 +644,18 @@ func handleExploreSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, arg
 
 // lensHelpAliases routes common words a model reaches for to the help text
 // that answers them, so help lands somewhere useful instead of erroring.
+// Order matters: action-specific aliases come first so that e.g. "dimension
+// values" reaches get_dimension_values rather than matching a broad doctrine
+// topic word; the doctrine bucket is the catch-all and runs last.
 var lensHelpAliases = []struct {
 	keywords []string
 	target   string
 }{
-	{[]string{"doctrine", "recipe", "caveat", "guide", "guidance", "gotcha", "trick", "advanced", "bot", "window", "date", "member", "org", "share", "concentration", "name", "ibm", "legal", "tier", "health", "value", "cocomo", "economic", "maintainer", "region", "population", "scope", "foundation", "struggl"}, "doctrine"},
-	{[]string{"query", "example", "syntax", "where", "filter", "group", "order", "limit"}, "query"},
-	{[]string{"list_metric", "metrics"}, "list_metrics"},
+	{[]string{"list_metric", "metrics", "metric name"}, "list_metrics"},
 	{[]string{"dimension_value", "values", "literal", "spelling"}, "get_dimension_values"},
 	{[]string{"get_dimension", "dimension"}, "get_dimensions"},
+	{[]string{"query", "example", "syntax", "where", "filter", "group", "order", "limit"}, "query"},
+	{[]string{"doctrine", "recipe", "caveat", "guide", "guidance", "gotcha", "trick", "advanced", "bot", "window", "date", "member", "org", "share", "concentration", "name", "ibm", "legal", "tier", "health", "value", "cocomo", "economic", "maintainer", "region", "population", "scope", "foundation", "struggl"}, "doctrine"},
 }
 
 // handleLensHelp always returns help: an exact target, the closest alias
@@ -671,8 +678,8 @@ func handleLensHelp(target string) (*mcp.CallToolResult, any, error) {
 		}
 	}
 	return lensHelpResult(fmt.Sprintf(
-		"No help target %q; the closest thing is the full doctrine, below. Named targets: doctrine, query, list_metrics, get_dimensions, get_dimension_values.\n\n%s",
-		target, lensHelpTexts["doctrine"]))
+		"No help target %q; here is the overview and the full doctrine. Named targets: doctrine, query, list_metrics, get_dimensions, get_dimension_values.\n\n%s\n\n%s",
+		target, lensHelpOverview, lensHelpTexts["doctrine"]))
 }
 
 func lensHelpResult(text string) (*mcp.CallToolResult, any, error) {

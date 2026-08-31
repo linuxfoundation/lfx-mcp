@@ -339,9 +339,11 @@ filed under a different spelling.`,
 const lensDoctrineHelp = `WORKED RECIPES AND CAVEATS - consult this before concluding the semantic layer cannot answer, and always before falling back to query_lfx_lens.
 
 1. DEFAULT WINDOW. When the asker gives no window, use the trailing 12 months
-and say so: {{ TimeDimension('metric_time','DAY') }} >= '<today minus 12
-months>' AND {{ TimeDimension('metric_time','DAY') }} < '<today>'. State the
-concrete dates in the answer.
+- the prior 365 complete UTC days - and say so:
+{{ TimeDimension('metric_time','DAY') }} >= '<today minus 365 days>' AND
+{{ TimeDimension('metric_time','DAY') }} < '<today>'. State the concrete
+dates in the answer, and pass the same concrete dates into any
+query_lfx_lens question so both lanes read the same window.
 
 2. MEMBERS AS OF A DATE D (the PCC-parity recipe): metric membership_count
 with where "{{ TimeDimension('metric_time','day') }} <= 'D' AND

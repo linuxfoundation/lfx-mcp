@@ -453,7 +453,8 @@ has) live in the committee tools when they are available - search_committees
 to find the body (committees named 'Ambassadors', 'Governing Board',
 'Technical Advisory Board' etc. exist per project), then
 search_committee_members with its committee_uid, paginating until page_token
-is absent. They are NOT in this layer and not query_lfx_lens's lane. Member
+is absent (deployments using group terminology name these search_groups and
+search_group_members, with group_uid). They are NOT in this layer and not query_lfx_lens's lane. Member
 records carry name, organization, role and voting status but no country.
 Never infer a roster from membership tiers or event data - fabricated board
 seats have been reported as fact. Meetings likewise: schedules, occurrences,

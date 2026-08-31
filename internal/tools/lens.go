@@ -154,34 +154,34 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 // QuerySemanticLayerArgs for why that distinction matters. Anything that still
 // does not fit belongs in the help action, whose output is a tool result and
 // carries no limit; help is a fallback for a failed query, not a prerequisite.
-const exploreSemanticLayerDescription = `The LFX Insights Semantic Layer is the query and data-exploration tool for Linux Foundation data. This tool discovers what can be measured; query_lfx_semantic_layer runs it. Start here unless exact names are already known.
+const exploreSemanticLayerDescription = `The LFX Insights Semantic Layer is the query tool for Linux Foundation data. This tool discovers what can be measured; query_lfx_semantic_layer runs it. Start here unless exact names are known.
 
 COVERS — search one topic word:
 - contributor, contribution — activity/org counts, commits, PRs
-- membership, revenue, churn — counts, discounts, invoices
+- membership, revenue, churn — counts, invoices
 - event, registration, speaker, sponsorship — counts and revenue
 - enrollment, certification — education
-- maintainer — rosters (names), total and active counts
+- maintainer — rosters, total and active counts
 - health, project — health scores, software value, cost
-- any of the above sliced by country or region — always here, never query_lfx_lens
+- any of the above by country or region — always here, never query_lfx_lens
 
-A metric is measured (total_contributors); a dimension slices, filters or lists it (country__lf_region). Names are entity__field and prefixes differ per metric, so copy qualified_names; never assemble them.
+A metric is measured (total_contributors); a dimension slices or filters it (country__lf_region). Names are entity__field with per-metric prefixes - copy qualified_names; never assemble them.
 
 ACTIONS
-- list_metrics(search): searches metric names/descriptions, so use a topic above, not a dimension like "country". At <=15 matches, each includes qualified_names.
+- list_metrics(search): searches metric names/descriptions - use a topic above, not a dimension like "country". At <=15 matches, each includes qualified_names.
 - get_dimensions(metrics, search): available dimensions; needs a metric. Several metrics return only shared dimensions—a cross-domain query's valid group_by set.
-- get_dimension_values(dimension, metrics, search): stored literals. Call before filtering on unseen values: an unknown returns zero rows, not an error. Spellings surprise—'Asia Pacific' not 'APAC'.
+- get_dimension_values(dimension, metrics, search): stored literals. Call before filtering on unseen values: unknowns return zero rows, not an error. Spellings surprise—'Asia Pacific' not 'APAC'.
 - help('doctrine'): worked recipes - windows, as-of membership, bots, health, org shares, tiers, name discovery. ALWAYS call it before a query_lfx_lens fallback.
 
-Project scope lives in query's where clause (no parameter): resolve slugs via search_projects, then see query_lfx_semantic_layer for which dimension scopes each domain.
+Project scope lives in query's where clause (no parameter): resolve slugs via search_projects, org legal names via search_b2b_orgs (empty may be access-filtered: see doctrine), then query_lfx_semantic_layer names the scope dimension per domain.
 
-USE query_lfx_lens INSTEAD only for maintainer-contribution joins, social listening, or - after discovery AND help('doctrine') have failed, never on a first empty result - a question this layer cannot express. Board/committee/ambassador rosters: committee tools, not here.`
+USE query_lfx_lens INSTEAD only for maintainer-contribution joins, social listening, or - after discovery AND help('doctrine') fail, never on a first empty result - a question this layer cannot express. Board/committee/ambassador rosters: committee tools, not here.`
 
 const querySemanticLayerDescription = `Metrics: contributions, memberships, events, sponsorships, education, maintainers, health, country/region. ALWAYS explore_lfx_semantic_layer first unless exact names are known; never guess.
 
 SYNTAX: metrics (required), CSV. Multiple metrics outer-join on shared dims (group_by only those; absent sides NULL; '-metric' sorts NULLs FIRST). group_by: names for ranked lists, metric_time__year/quarter/month trends. where is MetricFlow: {{ Dimension('country__lf_region') }} = 'Europe'; {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01' (dates yyyy-mm-dd). limit ceiling 500.
 
-SCOPE: resolve slugs via search_projects. Foundation: {{ Dimension('project__foundation_slug') }} = '<slug>' - conformed, every domain, counts rows once. NEVER scope a foundation with project_slug: its catch-all bucket, a silent 40x undercount. Memberships: asset_id__project_slug. Registrations: registration_id__project_slug. Events/speakers: event_id__project_name (EXACT name). Maintainers: maintainer_key__cm_project_grandparents_slug + is_lf_project=true. 0 rows = misspelled literal - get_dimension_values first; org/account names are FULL LEGAL names (IBM = 'International Business Machines Corporation') - short-name searches miss them.
+SCOPE: resolve slugs via search_projects. Foundation: {{ Dimension('project__foundation_slug') }} = '<slug>' - conformed, every domain, counts rows once. NEVER scope a foundation with project_slug: its catch-all bucket, a silent 40x undercount. Memberships: asset_id__project_slug. Registrations: registration_id__project_slug. Events/speakers: event_id__project_name (EXACT name). Maintainers: maintainer_key__cm_project_grandparents_slug + is_lf_project=true. 0 rows = misspelled literal - get_dimension_values first; org/account names are FULL LEGAL names - resolve via search_b2b_orgs; empty may be access-filtered (fallback: help('doctrine')).
 
 CONTRACT: compute shares/rankings yourself; state definition+window; default trailing 12 months. Bot exclusion is the Insights default; bot_activities counts bots. total_contributors is code-only; _with_collaboration only when non-code participants are explicitly wanted. Share of work = activity volumes, not headcounts. Org shares: use the org-attributed base (drop NULL/unaffiliated), report that %; org headcounts run below published counts. Economic/software value = total_software_value (COCOMO). Health scores are DAILY snapshots - aggregate only the latest metric_time; bands Critical <20, Unsteady 20-39.
 
@@ -391,9 +391,15 @@ total plus a top slice cannot recover a rank outside the slice.
 
 6. NAME DISCOVERY. Org and account names are stored as FULL LEGAL names.
 IBM is 'International Business Machines Corporation' - the string 'IBM' does
-not appear in it, so a value search for 'IBM' misses the main account and
-finds only subsidiaries like 'Turbonomic, an IBM Company'. Search a
-distinctive token instead ('Machines'), or pull top values and scan. Red Hat
+not appear in it. Resolve short names with search_b2b_orgs FIRST: a fuzzy
+company search that returns the stored legal name ('IBM' finds
+'International Business Machines Corporation'). Its results are
+permission-filtered, so an empty result can mean your identity cannot see
+the org index, not that the org does not exist - then fall back to
+discovering the name in this layer, which is trickier: a value search for
+'IBM' misses the main account and finds only subsidiaries like
+'Turbonomic, an IBM Company'. Search a distinctive token instead
+('Machines'), or pull top values and scan. Red Hat
 is 'Red Hat LLC' in account dimensions but 'Red Hat' in the activity-side
 organization_name. Corporate families are fragmented across many accounts:
 for 'including subsidiaries' questions, sum the sub-entities explicitly and

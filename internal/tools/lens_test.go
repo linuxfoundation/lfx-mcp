@@ -260,7 +260,7 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		"maintainer —",
 		"health, project —",
 		// Regional questions route here for every topic, memberships included.
-		"any of the above sliced by country or region — always here, never query_lfx_lens",
+		"any of the above by country or region — always here, never query_lfx_lens",
 		// Dimension naming. The regional person-vs-organization split moved to
 		// help('doctrine') (asserted in TestDoctrineHelp) to make room for the
 		// eval-verified failure patterns.
@@ -277,7 +277,7 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		// live client burned five query attempts on 'APAC' and 'Vietnam' before
 		// escaping via a country code.
 		"get_dimension_values(dimension, metrics, search)",
-		"returns zero rows, not an error",
+		"return zero rows, not an error",
 		// The 207-question eval showed models falling back to query_lfx_lens
 		// without ever reading the recipes; the description now routes
 		// struggling through help('doctrine') first.
@@ -293,7 +293,7 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		// Either tool can be loaded without the other, so each states what the
 		// semantic layer is. Here the regional rule sits in COVERS, asserted
 		// above, rather than in the opening line.
-		"query and data-exploration tool",
+		"query tool",
 	} {
 		if !strings.Contains(exploreSemanticLayerDescription, want) {
 			t.Errorf("explore description missing %q", want)
@@ -368,7 +368,9 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 		"Share of work = activity volumes",
 		"DAILY snapshots",
 		"Critical <20",
-		"International Business Machines Corporation",
+		"FULL LEGAL names",
+		"search_b2b_orgs",
+		"access-filtered",
 		"org-attributed base",
 		"default trailing 12 months",
 		"total_software_value",
@@ -458,7 +460,8 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 		{"get_dimension_values", "the only recovery from a wrong filter literal"},
 		{"zero rows", "a wrong literal is silent, so the model must be told to check first"},
 		{"bot_activities", "the explicit bot view; bot exclusion became the metric default in lf-dbt"},
-		{"International Business Machines", "short-name value searches silently miss legal-name accounts"},
+		{"FULL LEGAL names", "short-name value searches silently miss legal-name accounts"},
+		{"search_b2b_orgs", "the resolver for org legal names; its empty results are access-filtered, not proof of absence"},
 		{"help('doctrine')", "the overflow recipes are useless if nothing routes the model to them"},
 	} {
 		if !strings.Contains(surviving, tc.token) {

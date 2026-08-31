@@ -27,21 +27,22 @@ import (
 // A saved query missing from the deployed manifest fails with a clear
 // server-side error, which the handler returns verbatim — that is the signal
 // the dbt side has not deployed it yet, not a reason to retry.
-const savedQueriesDescription = `Governed KPI recipes: the headline figures decks and leadership ask for, pinned as dbt Semantic Layer saved queries so every consumer computes them the same way. When one matches the question, run it by name instead of assembling metrics/group_by through query_lfx_semantic_layer - same data, canonical definition.
+const savedQueriesDescription = `Governed KPI recipes: the headline figures decks and leadership ask for, pinned as dbt saved queries so every consumer computes them identically. When one matches the question, run it by name instead of assembling metrics/group_by through query_lfx_semantic_layer.
 
 SAVED QUERIES (name: use case)
-- kpi_members_and_dues_by_account: current members and dues by account, as-of today (active terms, no time filter)
-- kpi_new_members_by_year: new members per year, YTD-bounded (installs are future-dated)
+- kpi_members_and_dues_by_account: current members and dues by account, as-of today (active terms)
+- kpi_new_members_by_year: new members per year, YTD-bounded
 - kpi_membership_tier_split: active members and dues by tier (tier literals differ per foundation)
-- kpi_membership_churn: churned memberships per year (time axis is churn date; current year partial)
+- kpi_membership_churn: churned memberships per year (churn-date axis; current year partial)
 - kpi_maintainers_by_org: active maintainers by employer on LF projects
-- kpi_contributors_by_project: distinct code contributors per project with its foundation (never sum rows into a foundation total - people span projects)
-- kpi_contributions_by_org: code contribution VOLUME by organization (not headcount)
-- kpi_event_registrations: accepted registrations per event with year and foundation (rows, not people)
-- kpi_training_enrollments: enrollments per course/certification (TI+edX platform scope, not the lifetime trained headline)
+- kpi_contributors_by_project: distinct code contributors per project (never sum rows - people span projects)
+- kpi_contributions_by_org: code contribution VOLUME by organization
+- kpi_contributors_by_org: contributor HEADCOUNT by organization (not additive - people span accounts)
+- kpi_event_registrations: accepted registrations per event (rows, not people)
+- kpi_training_enrollments: enrollments per course/certification (TI+edX scope, not the lifetime trained headline)
 - kpi_event_registrations_by_org / kpi_training_enrollments_by_org: the same by organization (edX enrollments all land in the NULL account)
 
-READING RESULTS: *_by_org/_by_account rows come at the (account_name, account_rollup_name) PAIR grain - for a rollup-grain ranking, sum rows sharing the rollup value client-side; never read the rollup column as a ranking directly. A NULL account row is unresolved attribution, usually the largest row - never present it as an organization. where (MetricFlow syntax, e.g. {{ Dimension('project__foundation_slug') }} = 'akrites') and limit narrow the recipe. If the server reports the saved query does not exist, it is not deployed yet - answer via explore_lfx_semantic_layer + query_lfx_semantic_layer instead.`
+READING RESULTS: *_by_org/_by_account rows come at the (account_name, account_rollup_name) PAIR grain - never read the rollup column as a ranking directly. Rollup-grain rankings: sum rows sharing the rollup value client-side (additive metrics only; for contributor headcount re-query grouped by rollup alone). A NULL account row is unresolved attribution, usually the largest row - never present it as an organization. where (MetricFlow syntax, e.g. {{ Dimension('project__foundation_slug') }} = 'akrites') and limit narrow the recipe. If the server reports the saved query does not exist, it is not deployed yet - answer via explore_lfx_semantic_layer + query_lfx_semantic_layer instead.`
 
 // RegisterSavedQueries registers the query_lfx_semantic_layer_saved_queries tool.
 func RegisterSavedQueries(server *mcp.Server) {

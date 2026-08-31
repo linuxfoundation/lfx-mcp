@@ -43,6 +43,7 @@ func TestSavedQueriesDescription_ListsAllSavedQueries(t *testing.T) {
 		"kpi_maintainers_by_org",
 		"kpi_contributors_by_project",
 		"kpi_contributions_by_org",
+		"kpi_contributors_by_org",
 		"kpi_event_registrations",
 		"kpi_training_enrollments",
 		"kpi_event_registrations_by_org",

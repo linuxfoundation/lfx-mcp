@@ -1067,6 +1067,12 @@ func TestDoctrineHelp(t *testing.T) {
 		"2000-01-01 sentinel",
 		"maintainer_key__is_lf_project",
 		"organization_lf_region",
+		// Recipe 15: governance rosters route to the committee tools - the
+		// eval's board/ambassador questions were answered "unavailable" or
+		// fabricated because nothing said where rosters live.
+		"search_committees",
+		"search_committee_members",
+		"Never infer a roster",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("doctrine help missing %q", want)

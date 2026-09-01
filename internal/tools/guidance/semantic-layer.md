@@ -144,8 +144,7 @@ best effort and disclose there is no canonical way to compute it.
 6). Registrations count rows, not people; edX enrollments land in the NULL bucket
 — present "attributed enrollments".
 
-15. SAVED-QUERY FILTERS are one-hop only (<entity>__<dimension>); multi-hop paths
-fail at parse time. Ad-hoc queries accept both.
+15. SAVED-QUERY FILTERS are one-hop only (<entity>__<dimension>); multi-hop paths fail at parse time. Ad-hoc queries accept both.
 
 Prefer repeatable answers: saved query > named metric > lens SQL — label anything below
 the top rung; struggling, re-read the recipe BEFORE any query_lfx_lens fallback.

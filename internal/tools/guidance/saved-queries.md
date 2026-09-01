@@ -35,7 +35,9 @@ not deployed yet - fall back to query_lfx_semantic_layer, never retry.
 ## Mechanics
 
 - Each recipe's metrics and grouping are fixed: the only inputs are an
-  optional where filter and a limit (default 100, ceiling 500).
+  optional where filter and a limit (ceiling 500). An omitted limit returns
+  EVERY row, and rosters like members-by-account run to thousands - set a
+  limit unless you need the complete set.
   There is no order_by - sort client-side.
 - where uses MetricFlow syntax on ONE-HOP names only:
   {{ Dimension('project__foundation_slug') }} = '<slug>' works;

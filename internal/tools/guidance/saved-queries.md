@@ -34,11 +34,13 @@ not deployed yet - fall back to query_lfx_semantic_layer, never retry.
 
 ## Mechanics
 
-- Each recipe's metrics and grouping are fixed: the only inputs are an
-  optional where filter and a limit (ceiling 500). An omitted limit returns
-  EVERY row, and rosters like members-by-account run to thousands - set a
-  limit unless you need the complete set.
-  There is no order_by - sort client-side.
+- Each recipe's metrics and grouping are fixed: the inputs are an optional
+  where filter, an order_by, and a limit (ceiling 500). An omitted limit
+  returns EVERY row, and rosters like members-by-account run to thousands -
+  set a limit unless you need the complete set.
+- order_by takes the recipe's own fields (its result columns), - prefix for
+  descending: order_by=-total_registrations, limit=15 is a top-15. Never
+  switch to the ad-hoc query tool just to sort - order the saved query.
 - where uses MetricFlow syntax on ONE-HOP names only:
   {{ Dimension('project__foundation_slug') }} = '<slug>' works;
   multi-hop paths like event_id__project__foundation_slug are rejected.

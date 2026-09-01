@@ -15,8 +15,8 @@ digit-stable: the same question re-run gives the same number, which is what
 makes a deck survive verification. Only when no recipe matches, fall back to
 explore_lfx_semantic_layer + query_lfx_semantic_layer.
 
-- Saved queries take a where filter and limit only - no order_by; sort
-  client-side.
+- Saved queries take a where filter, an order_by on the recipe's own
+  fields (- prefix for descending), and a limit.
 - where filters must use one-hop <entity>__<dimension> names
   (project__foundation_slug); multi-hop paths are rejected.
 

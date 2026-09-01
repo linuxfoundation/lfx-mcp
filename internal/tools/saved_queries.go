@@ -56,6 +56,7 @@ func RegisterSavedQueries(server *mcp.Server) {
 type SavedQueriesArgs struct {
 	SavedQuery string `json:"saved_query" jsonschema:"Required. The saved query name, exactly as listed in the tool description (e.g. kpi_members_and_dues_by_account). The recipe's metrics and grouping are fixed - there are no metrics/group_by parameters here."`
 	Where      string `json:"where,omitempty" jsonschema:"Optional MetricFlow filter applied on top of the recipe, e.g. {{ Dimension('project__foundation_slug') }} = 'akrites'. Dates are yyyy-mm-dd. Check literals with explore_lfx_semantic_layer's get_dimension_values first - an unknown literal returns zero rows, not an error."`
+	OrderBy    string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields, prefix with - for descending, e.g. -total_registrations. Each must be one of the saved query's own metrics or group-by fields (its result columns)."`
 	Limit      int    `json:"limit,omitempty" jsonschema:"Maximum rows to return, ceiling 500. Use 10-20 for top-N questions. Omitting it returns EVERY row - set a limit unless you need the complete set."`
 }
 
@@ -83,6 +84,9 @@ func handleSavedQueries(ctx context.Context, _ *mcp.CallToolRequest, args SavedQ
 	}
 	if args.Where != "" {
 		reqBody["where"] = []string{args.Where}
+	}
+	if orderBy := parseCSV(args.OrderBy); len(orderBy) > 0 {
+		reqBody["order_by"] = orderBy
 	}
 	if args.Limit > 0 {
 		reqBody["limit"] = args.Limit

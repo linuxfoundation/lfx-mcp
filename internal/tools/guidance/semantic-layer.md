@@ -66,7 +66,8 @@ dimension by what the question names:
 - SUM METRICS (insertions, deletions): ALWAYS the spine filter — non-hierarchical
   filters inflate them 2-4x. Walk-downs are flattened: counts only, never sums.
 - Domain scope dimensions: memberships asset_id__project_slug; maintainers
-  maintainer_key__cm_project_grandparents_slug (+ is_lf_project = true);
+  maintainer_key__project_slug (+ is_lf_project = true; foundations via
+  project__foundation_slug — the cm_*_slug rollups are NOT project keys);
   health health_metric_key__foundation_slug. Events, registrations, sponsorships
   and training carry the conformed project entity — scope them with
   project__foundation_slug / project__slug (event_id__project_name also works but
@@ -136,8 +137,11 @@ code_contribution_activities by activity_project_id__member_display_name
 (+ organization_name), order by the metric descending. Display names are
 not identity keys — for identity-stable answers use lens (member_id); say which.
 
-11. MAINTAINERS. maintainer_key__cm_project_grandparents_slug +
-maintainer_key__is_lf_project = true; active = no end date; start_date has a
+11. MAINTAINERS. One project: maintainer_key__project_slug ('k8s' returns the
+real roster; cm_project_grandparents_slug = 'k8s' returns ZERO — the cm_*
+rollups hold foundation ancestry, verified live). Foundations:
+project__foundation_slug. Always + maintainer_key__is_lf_project = true;
+active = no end date; start_date has a
 2000-01-01 sentinel — never trend on it. Maintainer-by-contribution questions
 ("top maintainers by contributions", maintainer share of work) are person-grain
 joins this layer cannot express: use query_lfx_lens.

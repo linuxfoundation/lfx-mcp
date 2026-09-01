@@ -182,19 +182,31 @@ A browser window will open for authentication on first use. To re-authenticate, 
 rm -rf ~/.mcp-auth
 ```
 
-### MCP Inspector (developer testing)
+### MCP Inspector
 
 *MCP Inspector requires a client ID. The following client ID only works with MCP Inspector.*
 
-[MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a browser-based tool for exploring and testing MCP servers. To connect it to the LFX MCP Server:
+Add the following to your `~/.mcp-inspector/mcp.json`:
 
-```bash
-npx @modelcontextprotocol/inspector --transport http --server-url https://mcp.lfx.dev/mcp
+```json
+{
+  "mcpServers": {
+    "lfx": {
+      "type": "streamable-http",
+      "url": "https://mcp.lfx.dev/mcp",
+      "oauth": {
+        "clientId": "4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O"
+      }
+    }
+  }
+}
 ```
 
-From the MCP Inspector sidebar, find **Authentication** → **OAuth 2.0 Flow** → **Client ID** and enter `4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O`.
+Run:
 
-Hitting **Connect** will open a browser window for LFID login.
+```bash
+npx @modelcontextprotocol/inspector
+```
 
 ## Available Tools
 

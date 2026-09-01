@@ -108,7 +108,7 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"There is no separate project parameter",
 		"conformed lens",
 		"asset_id__project_slug",
-		"registration_id__project_slug",
+		"carry the conformed project entity",
 		"event_id__project_name",
 		"maintainer_key__cm_project_grandparents_slug",
 		"health_metric_key__foundation_slug",
@@ -159,9 +159,15 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"search_past_meetings",
 		"not answerable with governed data today",
 		"disclose there is no canonical way",
-		// events/training account entities
+		// events/training/sponsorships account entities and tiers
 		"account__account_name",
 		"NULL bucket",
+		"sponsorship__sponsorship_tier_type",
+		"'package_tier'",
+		// governed org-attribution filter
+		"activity_project_id__is_org_contribution = true",
+		// worked examples stay live-verified
+		"## Worked examples (verified live)",
 		// saved queries
 		"one-hop",
 		"query_lfx_semantic_layer_saved_queries",
@@ -191,6 +197,8 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"read_lfx_saved_queries_guidance",
 		"subsidiaries INTO parents",
 		"Meeting attendance by company",
+		"total_sponsorship_revenue",
+		"'package_tier'",
 		"definitional delta",
 		"Be honest about what each figure represents",
 		"label the\nresult as generated SQL",

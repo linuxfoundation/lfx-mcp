@@ -63,11 +63,12 @@ dimension by what the question names:
   ("Direct children of X": spine slug = X + level 2, group by project slug).
 - SUM METRICS (insertions, deletions): ALWAYS the spine filter — non-hierarchical
   filters inflate them 2-4x. Walk-downs are flattened: counts only, never sums.
-- Domain scope dimensions: memberships asset_id__project_slug; registrations
-  registration_id__project_slug; maintainers maintainer_key__cm_project_grandparents_slug
-  (+ is_lf_project = true); health health_metric_key__foundation_slug.
-  Events/speakers/sponsorships have NO slug dimension — filter event_id__project_name
-  with the EXACT stored display name; never slice sponsorships by asset_id__project_slug.
+- Domain scope dimensions: memberships asset_id__project_slug; maintainers
+  maintainer_key__cm_project_grandparents_slug (+ is_lf_project = true);
+  health health_metric_key__foundation_slug. Events, registrations, sponsorships
+  and training carry the conformed project entity — scope them with
+  project__foundation_slug / project__slug (event_id__project_name also works but
+  needs the EXACT stored display name).
 - "The Linux Foundation": the 'tlf' slug is the umbrella foundation's own tree,
   NOT the portfolio. LF-wide = unscoped or grouped by foundation; state which
   population you used (they differ 3-4x on memberships).
@@ -98,9 +99,10 @@ metrics (code volumes read roughly 1.8x higher with bots); bot_activities
 (member_is_bot) is the explicit bot view.
 
 2. ORG SHARES. Share of work = ACTIVITY VOLUMES, never headcounts. Compute on the
-org-ATTRIBUTED base: drop NULL rows and 'Individual - No Account', report the
-unattributed share (roughly 40-70%) separately. The 500-row cap makes exact
-percentiles over big pools unretrievable.
+org-ATTRIBUTED base: filter activity_project_id__is_org_contribution = true — the
+governed real-organization filter (no need to hand-exclude NULL rows and
+'Individual - No Account') — and report the unattributed share (roughly 40-70%)
+separately. The 500-row cap makes exact percentiles over big pools unretrievable.
 
 3. ORG HEADCOUNTS run 2-4x below externally published counts (volumes reconcile
 to ~1-4%). State the caveat.
@@ -147,11 +149,31 @@ best effort and disclose there is no canonical way to compute it.
 
 13. REGIONS. country__* follows the person; organization_lf_region etc. follow the org's HQ.
 
-14. EVENTS/TRAINING BY ORG. Group account__account_name (or the rollup, recipe
+14. EVENTS/TRAINING/SPONSORSHIPS BY ORG. The account entity spans registrations,
+enrollments and sponsorships: group account__account_name (or the rollup, recipe
 6). Registrations count rows, not people; edX enrollments land in the NULL bucket
-— present "attributed enrollments".
+— present "attributed enrollments". Sponsorships: total_sponsorship_revenue (USD)
+and total_sponsorship_count include ALL tier types — filter
+sponsorship__sponsorship_tier_type = 'package_tier' for package-only figures
+('a_la_carte' and 'billing_adjustment' are the others).
 
 15. SAVED-QUERY FILTERS are one-hop only (<entity>__<dimension>); multi-hop paths fail at parse time. Ad-hoc queries accept both.
+
+## Worked examples (verified live)
+
+Top CNCF member orgs by dues:
+  metrics=current_membership_count,current_membership_revenue
+  group_by=account__account_name order_by=-current_membership_revenue limit=20
+  where={{ Dimension('project__foundation_slug') }} = 'cncf'
+
+Kubernetes contributor trend by month:
+  metrics=total_contributors group_by=metric_time__month
+  where={{ Dimension('activity_project_id__project_slug') }} = 'k8s' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-03-01'
+
+Org share of PyTorch code activity (recipe 2):
+  metrics=code_contribution_activities group_by=activity_project_id__organization_name
+  order_by=-code_contribution_activities limit=50
+  where={{ Dimension('activity_project_id__project_spine_slug') }} = 'pytorch' AND {{ Dimension('activity_project_id__is_org_contribution') }} = true
 
 Prefer repeatable answers: saved query > named metric > lens SQL — label anything below
 the top rung; struggling, re-read the recipe BEFORE any query_lfx_lens fallback.

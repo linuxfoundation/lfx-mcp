@@ -25,6 +25,7 @@ func TestGuidanceDescriptions_ShortAndFunctional(t *testing.T) {
 	for name, desc := range map[string]string{
 		"read_lfx_semantic_layer_guidance": semanticLayerGuidanceDescription,
 		"read_lfx_deck_building_guidance":  deckBuildingGuidanceDescription,
+		"read_lfx_saved_queries_guidance":  savedQueriesGuidanceDescription,
 	} {
 		if got := len(desc); got > 400 {
 			t.Errorf("%s description is %d bytes; guidance descriptions stay short (<=400)", name, got)
@@ -52,6 +53,7 @@ func TestGuidanceTools_RegisterReadOnly(t *testing.T) {
 	}{
 		{"read_lfx_semantic_layer_guidance", RegisterSemanticLayerGuidance},
 		{"read_lfx_deck_building_guidance", RegisterDeckBuildingGuidance},
+		{"read_lfx_saved_queries_guidance", RegisterSavedQueriesGuidance},
 	} {
 		tool := listRegisteredTool(t, tc.name, tc.register)
 		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
@@ -76,6 +78,13 @@ func TestGuidanceHandlers_ReturnTheDocuments(t *testing.T) {
 	}
 	if got := resultText(t, res); got != deckBuildingGuidance || len(got) < 2000 {
 		t.Errorf("deck building guidance result is not the embedded document (len %d)", len(got))
+	}
+	res, _, err = handleSavedQueriesGuidance(context.Background(), nil, GuidanceArgs{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := resultText(t, res); got != savedQueriesGuidance || len(got) < 1500 {
+		t.Errorf("saved queries guidance result is not the embedded document (len %d)", len(got))
 	}
 }
 
@@ -178,9 +187,7 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"kpi_training_enrollments_by_org",
 		"one-hop",
 		"no order_by",
-		"PAIR grain",
-		"never present it as an organization",
-		"NOT additive",
+		"read_lfx_saved_queries_guidance",
 		"subsidiaries INTO parents",
 		"Meeting attendance by company",
 		"definitional delta",
@@ -188,6 +195,46 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("deck building guidance missing %q", want)
+		}
+	}
+}
+
+// TestSavedQueriesGuidanceContent pins the saved-query catalog annotations
+// and the reading contract that moved here from the tool description: the
+// pair grain, the NULL-attribution row, rollup direction, one-hop filters,
+// and the not-deployed fallback.
+func TestSavedQueriesGuidanceContent(t *testing.T) {
+	text := savedQueriesGuidance
+	for _, want := range []string{
+		// catalog annotations
+		"as-of today (active terms)",
+		"YTD-bounded",
+		"tier literals\n  differ per foundation",
+		"churn-date axis",
+		"never sum rows - people span projects",
+		"VOLUME by organization",
+		"HEADCOUNT by organization",
+		"rows, not\n  people",
+		"TI+edX",
+		"NULL account",
+		// mechanics
+		"no order_by",
+		"ONE-HOP",
+		"get_dimension_values",
+		"zero rows",
+		"ceiling 500",
+		// reading contract
+		"PAIR grain",
+		"never present it as an organization",
+		"subsidiaries INTO parents",
+		"not deployed yet",
+		"fall back to query_lfx_semantic_layer",
+		// routing
+		"read_lfx_deck_building_guidance",
+		"prefer it over the explore+query flow",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("saved queries guidance missing %q", want)
 		}
 	}
 }

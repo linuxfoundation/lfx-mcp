@@ -15,7 +15,8 @@ from fresh queries, never from remembered figures.
   named metric answers.
 - query_lfx_semantic_layer_saved_queries — saved queries for common
   semantic layer questions (kpi_*). When one matches, PREFER it over the
-  explore+query flow: same figure every run. Building a deck or briefing?
+  explore+query flow: same figure every run. Its catalog and reading
+  contract: read_lfx_saved_queries_guidance. Building a deck or briefing?
   Read read_lfx_deck_building_guidance.
 - query_lfx_lens — text-to-SQL fallback. Only for maintainer-contribution
   joins at person grain, social listening, and questions no metric family can

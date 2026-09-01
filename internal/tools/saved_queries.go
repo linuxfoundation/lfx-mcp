@@ -27,22 +27,13 @@ import (
 // A saved query missing from the deployed manifest fails with a clear
 // server-side error, which the handler returns verbatim — that is the signal
 // the dbt side has not deployed it yet, not a reason to retry.
-const savedQueriesDescription = `Run saved queries for common semantic layer questions: membership, dues, contributor, maintainer, event and training figures that compute identically on every run. When a question matches one, prefer this tool over the explore_lfx_semantic_layer + query_lfx_semantic_layer flow. Building a deck or briefing? Read read_lfx_deck_building_guidance first.
+const savedQueriesDescription = `Run saved queries for common semantic layer questions: fixed recipes that return the same figure on every run. When a question matches one, prefer this tool over the explore_lfx_semantic_layer + query_lfx_semantic_layer flow.
 
-SAVED QUERIES (name: use case)
-- kpi_members_and_dues_by_account: current members and dues by account, as-of today (active terms)
-- kpi_new_members_by_year: new members per year, YTD-bounded
-- kpi_membership_tier_split: active members and dues by tier (tier literals differ per foundation)
-- kpi_membership_churn: churned memberships per year (churn-date axis)
-- kpi_maintainers_by_org: active maintainers by employer on LF projects
-- kpi_contributors_by_project: distinct code contributors per project (never sum rows - people span projects)
-- kpi_contributions_by_org: code contribution VOLUME by organization
-- kpi_contributors_by_org: contributor HEADCOUNT by organization (not additive - people span accounts)
-- kpi_event_registrations: accepted registrations per event (rows, not people)
-- kpi_training_enrollments: enrollments per course/certification (TI+edX scope, not lifetime trained)
-- kpi_event_registrations_by_org / kpi_training_enrollments_by_org: the same by organization (edX enrollments all land in the NULL account)
+Not read read_lfx_saved_queries_guidance this session? Read it BEFORE using this tool - it carries each recipe's use case, the filter mechanics, and how to read the results.
 
-READING RESULTS: *_by_org/_by_account rows come at the (account_name, account_rollup_name) PAIR grain - never read the rollup column as a ranking directly. Rollup-grain rankings: sum rows sharing the rollup value client-side (additive metrics only; for contributor headcount re-query grouped by rollup alone). A NULL account row is unresolved attribution, usually the largest row - never present it as an organization. where (MetricFlow syntax, e.g. {{ Dimension('project__foundation_slug') }} = 'akrites') and limit narrow the recipe. If the server reports the saved query does not exist, it is not deployed yet - fall back to query_lfx_semantic_layer.`
+SAVED QUERIES: kpi_members_and_dues_by_account, kpi_new_members_by_year, kpi_membership_tier_split, kpi_membership_churn, kpi_maintainers_by_org, kpi_contributors_by_project, kpi_contributions_by_org, kpi_contributors_by_org, kpi_event_registrations, kpi_event_registrations_by_org, kpi_training_enrollments, kpi_training_enrollments_by_org.
+
+Building a deck or briefing? Also read read_lfx_deck_building_guidance.`
 
 // RegisterSavedQueries registers the query_lfx_semantic_layer_saved_queries tool.
 func RegisterSavedQueries(server *mcp.Server) {

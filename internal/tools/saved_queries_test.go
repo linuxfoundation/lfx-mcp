@@ -55,29 +55,21 @@ func TestSavedQueriesDescription_ListsAllSavedQueries(t *testing.T) {
 	}
 }
 
-// TestSavedQueriesDescription_CarriesReadingContract pins the result-reading
-// rules that repeatedly go wrong when left to the model: the pair grain on
-// the *_by_org results, the NULL-attribution row, and the
-// not-yet-deployed fallback route.
-func TestSavedQueriesDescription_CarriesReadingContract(t *testing.T) {
+// TestSavedQueriesDescription_RoutesToGuidance pins the slim description's
+// contract: the catalog names plus routing — the guidance-first instruction,
+// the preference over the explore+query flow, and the deck pointer. The
+// reading contract itself (pair grain, NULL row, not-deployed fallback)
+// moved to read_lfx_saved_queries_guidance, pinned in
+// TestSavedQueriesGuidanceContent.
+func TestSavedQueriesDescription_RoutesToGuidance(t *testing.T) {
 	for _, want := range []string{
-		// Pair grain: reading the rollup column as a ranking without
-		// client-side re-aggregation has produced wrong deck figures.
-		"PAIR grain",
-		"sum rows sharing the rollup value client-side",
-		// The NULL account row is the largest row in every org split and has
-		// been presented as an organization.
-		"never present it as an organization",
-		// Saved queries deploy with the dbt project; the tool can be enabled
-		// before the manifest carries them, and the failure must route back
-		// to the ad-hoc tools instead of being read as missing data.
-		"not deployed yet",
-		"fall back to query_lfx_semantic_layer",
-		// The preference chain: a matching recipe outranks explore+query.
 		"prefer this tool over the explore_lfx_semantic_layer",
+		"read_lfx_saved_queries_guidance",
+		"Read it BEFORE using this tool",
+		"read_lfx_deck_building_guidance",
 	} {
 		if !strings.Contains(savedQueriesDescription, want) {
-			t.Errorf("description lost the reading contract fragment %q", want)
+			t.Errorf("description missing routing fragment %q", want)
 		}
 	}
 }

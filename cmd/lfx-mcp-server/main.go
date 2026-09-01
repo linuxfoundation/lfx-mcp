@@ -818,13 +818,17 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	// and are gated exactly like the tools they document — staff-only, one
 	// name per audience so a deployment enables exactly the guidance its
 	// callers need. The semantic layer guidance is in defaultTools because
-	// the explore/query/lens descriptions route models to it; the deck
-	// building guidance ships alongside the saved-queries tool by name.
+	// the explore/query/lens descriptions route models to it; the saved-query
+	// and deck building guidance ship alongside the saved-queries tool by
+	// name.
 	if enabledTools["read_lfx_semantic_layer_guidance"] && canRead && isStaff {
 		tools.RegisterSemanticLayerGuidance(server)
 	}
 	if enabledTools["read_lfx_deck_building_guidance"] && canRead && isStaff {
 		tools.RegisterDeckBuildingGuidance(server)
+	}
+	if enabledTools["read_lfx_saved_queries_guidance"] && canRead && isStaff {
+		tools.RegisterSavedQueriesGuidance(server)
 	}
 
 	return server

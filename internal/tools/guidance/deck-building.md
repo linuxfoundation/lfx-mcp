@@ -35,6 +35,10 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
 - Training enrollments → kpi_training_enrollments,
   kpi_training_enrollments_by_org. edX enrollments carry no organization and
   land in the NULL account - present "attributed enrollments" and say so.
+- Event sponsorships → no kpi_* recipe yet: query total_sponsorship_revenue
+  (USD) / total_sponsorship_count ad hoc. Filter
+  sponsorship__sponsorship_tier_type = 'package_tier' for package-only
+  revenue; group account__account_name or the rollup for sponsor rankings.
 - Maintainer × contribution joins (top maintainers by contributions,
   maintainer share of work) → query_lfx_lens: the semantic layer cannot
   join maintainers to activity at person grain.
@@ -74,7 +78,6 @@ result as generated SQL, not a governed figure; if lens cannot answer, say
 so rather than improvising a number:
 
 - Meeting attendance by company over a period.
-- Event sponsorship revenue totals (primary source: the events CRM).
 - Working-group rosters and official project counts (owned by other teams).
 
 ## Presentation honesty

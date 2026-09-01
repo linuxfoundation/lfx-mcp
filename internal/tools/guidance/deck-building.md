@@ -79,8 +79,8 @@ so rather than improvising a number:
 
 ## Presentation honesty
 
-- Be honest about what each figure is: its population, window and counting
-  rule should be stated somewhere the audience can find them.
+- Be honest about what each figure represents; never present a figure as
+  something it is not.
 - Re-run governed numbers before presenting; if a figure moved, the data
   moved - annotate the as-of date.
 

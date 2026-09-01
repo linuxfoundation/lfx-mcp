@@ -191,7 +191,7 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"subsidiaries INTO parents",
 		"Meeting attendance by company",
 		"definitional delta",
-		"population, window and counting\n  rule",
+		"Be honest about what each figure represents",
 		"label the\nresult as generated SQL",
 		"maintainers to activity at person grain",
 	} {

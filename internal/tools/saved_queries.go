@@ -56,7 +56,7 @@ func RegisterSavedQueries(server *mcp.Server) {
 type SavedQueriesArgs struct {
 	SavedQuery string `json:"saved_query" jsonschema:"Required. The saved query name, exactly as listed in the tool description (e.g. kpi_members_and_dues_by_account). The recipe's metrics and grouping are fixed - there are no metrics/group_by parameters here."`
 	Where      string `json:"where,omitempty" jsonschema:"Optional MetricFlow filter applied on top of the recipe, e.g. {{ Dimension('project__foundation_slug') }} = 'akrites'. Dates are yyyy-mm-dd. Check literals with explore_lfx_semantic_layer's get_dimension_values first - an unknown literal returns zero rows, not an error."`
-	Limit      int    `json:"limit,omitempty" jsonschema:"Maximum rows to return, ceiling 500. Use 10-20 for top-N questions."`
+	Limit      int    `json:"limit,omitempty" jsonschema:"Maximum rows to return, ceiling 500, default 100 when omitted. Use 10-20 for top-N questions."`
 }
 
 func handleSavedQueries(ctx context.Context, _ *mcp.CallToolRequest, args SavedQueriesArgs) (*mcp.CallToolResult, any, error) {
@@ -84,9 +84,14 @@ func handleSavedQueries(ctx context.Context, _ *mcp.CallToolRequest, args SavedQ
 	if args.Where != "" {
 		reqBody["where"] = []string{args.Where}
 	}
-	if args.Limit > 0 {
-		reqBody["limit"] = args.Limit
+	// An omitted limit must not return the full result set: unbounded saved
+	// queries (e.g. every member account) overflow MCP clients' tool-result
+	// budgets. Default to 100, the size the guidance recommends for breakdowns.
+	limit := args.Limit
+	if limit <= 0 {
+		limit = 100
 	}
+	reqBody["limit"] = limit
 
 	body, statusCode, err := lensConfig.ServiceClient.PostJSON(ctx, "/lfx-lens/semantic-layer/saved-query", reqBody)
 	if err != nil {

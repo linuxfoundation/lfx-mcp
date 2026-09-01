@@ -36,7 +36,7 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   where     one MetricFlow expression, dates yyyy-mm-dd:
             {{ Dimension('country__lf_region') }} = 'Europe' AND {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'
   order_by  '-metric' descending — NULL rows sort FIRST; re-sort client-side
-  limit     ceiling 500 (10-20 top-N, 50-100 breakdowns)
+  limit     default 100, ceiling 500 (10-20 top-N, 50-100 breakdowns)
 
 Multiple metrics outer-join on their shared dimensions (the only valid group_by
 set); missing sides show NULL. Name dimensions give ranked lists; bare entities

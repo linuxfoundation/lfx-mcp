@@ -35,8 +35,8 @@ not deployed yet - fall back to query_lfx_semantic_layer, never retry.
 ## Mechanics
 
 - Each recipe's metrics and grouping are fixed: the only inputs are an
-  optional where filter and a limit (ceiling 500). There is no order_by -
-  sort client-side.
+  optional where filter and a limit (default 100, ceiling 500).
+  There is no order_by - sort client-side.
 - where uses MetricFlow syntax on ONE-HOP names only:
   {{ Dimension('project__foundation_slug') }} = '<slug>' works;
   multi-hop paths like event_id__project__foundation_slug are rejected.

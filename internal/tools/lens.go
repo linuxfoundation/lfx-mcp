@@ -251,7 +251,7 @@ type QuerySemanticLayerArgs struct {
 	GroupBy string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names, copied verbatim from explore_lfx_semantic_layer — they are entity__field and the prefix differs per metric. Group by a name dimension for a ranked list of organizations, people or projects; add metric_time__year (or __quarter, __month, __week, __day) for a trend."`
 	Where   string `json:"where,omitempty" jsonschema:"MetricFlow filter; this clause does the actual data filtering. Categorical: {{ Dimension('country__lf_region') }} = 'Europe'. Time: {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'. Dates are yyyy-mm-dd."`
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields. Each must also appear in group_by or metrics. Prefix with - for descending, e.g. -current_membership_revenue. In combined-metric results NULL rows sort first on a descending metric - re-sort client-side before reading a top-N."`
-	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum rows to return, ceiling 500, default 100 when omitted. Use 10-20 for top-N questions and 50-100 for full breakdowns."`
+	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum rows to return, ceiling 500. Use 10-20 for top-N questions and 50-100 for full breakdowns. Omitting it returns EVERY row - set a limit unless you need the complete set."`
 }
 
 func handleExploreSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args ExploreSemanticLayerArgs) (*mcp.CallToolResult, any, error) {
@@ -389,14 +389,9 @@ func handleQuerySemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args 
 	if orderBy := parseCSV(args.OrderBy); len(orderBy) > 0 {
 		reqBody["order_by"] = orderBy
 	}
-	// An omitted limit must not return the full result set — unbounded results
-	// overflow MCP clients' tool-result budgets. Default to 100, the size the
-	// guidance recommends for breakdowns.
-	limit := args.Limit
-	if limit <= 0 {
-		limit = 100
+	if args.Limit > 0 {
+		reqBody["limit"] = args.Limit
 	}
-	reqBody["limit"] = limit
 
 	body, statusCode, err := lensConfig.ServiceClient.PostJSON(ctx, "/lfx-lens/semantic-layer/query", reqBody)
 	if err != nil {

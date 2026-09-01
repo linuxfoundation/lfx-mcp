@@ -21,7 +21,8 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
 
 ## Protocol
 
-0. If a kpi_* saved query matches, prefer it (scope via where, one-hop names — recipe 15).
+0. If a kpi_* saved query matches, prefer it (scope via where — one-hop names,
+   recipe 15; sort via order_by; never go ad hoc just to sort or filter).
 1. Resolve scope: search_projects for slugs ('k8s', 'korg', 'ptproject' — stored
    slugs are not everyday names); search_b2b_orgs for org legal names (recipe 5).
 2. Discover: list_metrics(search) → get_dimensions → get_dimension_values before
@@ -158,7 +159,9 @@ and total_sponsorship_count include ALL tier types — filter
 sponsorship__sponsorship_tier_type = 'package_tier' for package-only figures
 ('a_la_carte' and 'billing_adjustment' are the others).
 
-15. SAVED-QUERY FILTERS are one-hop only (<entity>__<dimension>); multi-hop paths fail at parse time. Ad-hoc queries accept both.
+15. SAVED-QUERY FILTERS are one-hop only (<entity>__<dimension>); multi-hop paths
+fail at parse time. Ad-hoc queries accept both. Saved-query order_by takes the
+recipe's own fields (its result columns), - prefix for descending.
 
 ## Worked examples (verified live)
 

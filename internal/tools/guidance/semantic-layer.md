@@ -44,16 +44,25 @@ return raw IDs. current_* is active-only; total_contributors excludes bots.
 
 ## Scope
 
-There is no separate project parameter; scope lives in where.
+There is no separate project parameter; scope lives in where. Pick the slug
+dimension by what the question names:
 
-- Foundation, any domain: {{ Dimension('project__foundation_slug') }} = '<slug>' —
-  the conformed lens: works on every metric family, counts each row once. NEVER
-  use project_slug for a foundation: it matches only the catch-all bucket, a
-  silent ~40x undercount. activity_project_id__project_spine_slug returns
-  identical counts; spine_hierarchy_level = 2 lists direct children
-  ("Direct children of X": spine slug = X + level 2, group by project slug). Keep
-  the spine filter for sum metrics (insertions/deletions inflate 2-4x otherwise).
-  Walk-downs are flattened: counts only, never sums.
+- A WHOLE FOUNDATION (CNCF, LF AI & Data, OpenSSF...):
+  {{ Dimension('project__foundation_slug') }} = '<slug>' — the conformed lens:
+  works on every metric family, counts each row once. NEVER use project_slug for
+  a foundation: it matches only the foundation's catch-all bucket, a silent ~40x
+  undercount on activities.
+- A SINGLE PROJECT (k8s, pytorch...): activity_project_id__project_slug — matches
+  what that project's Insights page shows (__project_slug and __segment_slug are
+  the page-parity surfaces). For leaf projects the spine slug returns identical
+  counts; for umbrella nodes project_slug is only the node's own bucket.
+- SUBTREES AND HIERARCHY WALKS (umbrella nodes, "foundation to its projects"):
+  activity_project_id__project_spine_slug — identical totals to foundation_slug
+  (verified) and the surface PCC-style foundation rollups reconcile against.
+  spine_hierarchy_level = 2 lists direct children
+  ("Direct children of X": spine slug = X + level 2, group by project slug).
+- SUM METRICS (insertions, deletions): ALWAYS the spine filter — non-hierarchical
+  filters inflate them 2-4x. Walk-downs are flattened: counts only, never sums.
 - Domain scope dimensions: memberships asset_id__project_slug; registrations
   registration_id__project_slug; maintainers maintainer_key__cm_project_grandparents_slug
   (+ is_lf_project = true); health health_metric_key__foundation_slug.
@@ -62,9 +71,7 @@ There is no separate project parameter; scope lives in where.
 - "The Linux Foundation": the 'tlf' slug is the umbrella foundation's own tree,
   NOT the portfolio. LF-wide = unscoped or grouped by foundation; state which
   population you used (they differ 3-4x on memberships).
-- Reconciliation: __project_slug and __segment_slug match Insights project pages;
-  __project_spine_slug matches PCC-style foundation rollups. Twins exist
-  (risc-v-international/riscv, cff/cloud-foundry,
+- Twins exist (risc-v-international/riscv, cff/cloud-foundry,
   opensearch-foundation/opensearch-project): low total → group by the slug.
   Compare entities with IN (...) + group_by; never total across spine groups.
 

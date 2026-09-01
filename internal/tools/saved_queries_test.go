@@ -65,7 +65,7 @@ func TestSavedQueriesDescription_RoutesToGuidance(t *testing.T) {
 	for _, want := range []string{
 		"prefer this tool over the explore_lfx_semantic_layer",
 		"read_lfx_saved_queries_guidance",
-		"Read it BEFORE using this tool",
+		"read it BEFORE using this tool",
 		"read_lfx_deck_building_guidance",
 	} {
 		if !strings.Contains(savedQueriesDescription, want) {

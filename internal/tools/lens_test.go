@@ -230,8 +230,8 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		"country or region",
 		// Guidance-first, once per session, shared with the query tool.
 		"read_lfx_semantic_layer_guidance",
-		"Read it BEFORE using this tool",
-		"also covers query_lfx_semantic_layer",
+		"read it BEFORE using this tool",
+		"one read also covers query_lfx_semantic_layer",
 		// A matching saved query outranks the explore+query flow.
 		"query_lfx_semantic_layer_saved_queries",
 		// The three discovery actions with their arguments.
@@ -268,7 +268,7 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 		"ALWAYS explore_lfx_semantic_layer first",
 		"never guess",
 		"read_lfx_semantic_layer_guidance",
-		"Read it BEFORE querying",
+		"read it BEFORE querying",
 		"query_lfx_semantic_layer_saved_queries",
 		// The unguessable syntax.
 		"metrics (required)",

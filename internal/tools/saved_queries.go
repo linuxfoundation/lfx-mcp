@@ -29,7 +29,7 @@ import (
 // the dbt side has not deployed it yet, not a reason to retry.
 const savedQueriesDescription = `Run saved queries for common semantic layer questions: fixed recipes that return the same figure on every run. When a question matches one, prefer this tool over the explore_lfx_semantic_layer + query_lfx_semantic_layer flow.
 
-Not read read_lfx_saved_queries_guidance this session? Read it BEFORE using this tool - it carries each recipe's use case, the filter mechanics, and how to read the results.
+If you have not read read_lfx_saved_queries_guidance yet this session, read it BEFORE using this tool - it carries each recipe's use case, the filter mechanics, and how to read the results.
 
 SAVED QUERIES: kpi_members_and_dues_by_account, kpi_new_members_by_year, kpi_membership_tier_split, kpi_membership_churn, kpi_maintainers_by_org, kpi_contributors_by_project, kpi_contributions_by_org, kpi_contributors_by_org, kpi_event_registrations, kpi_event_registrations_by_org, kpi_training_enrollments, kpi_training_enrollments_by_org.
 

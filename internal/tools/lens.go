@@ -255,20 +255,23 @@ type QuerySemanticLayerArgs struct {
 }
 
 func handleExploreSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args ExploreSemanticLayerArgs) (*mcp.CallToolResult, any, error) {
-	if lensConfig == nil {
-		return nil, nil, fmt.Errorf("LFX Lens tools not configured")
-	}
-
-	switch args.Action {
 	// The help action's content moved to the read_lfx_semantic_layer_guidance
 	// tool. "describe" is the pre-rename name for help. Callers on a cached
 	// schema still send both, so they get the full guidance rather than an
 	// error — a failed help call would push the model toward guessing or a
 	// premature query_lfx_lens fallback, the exact behaviors the guidance
 	// exists to stop. The target argument is ignored: the guidance is one
-	// document now.
-	case "help", "describe":
+	// document now. Served before the config check: the content is embedded,
+	// so help works even when the Lens backend is not configured.
+	if args.Action == "help" || args.Action == "describe" {
 		return lensHelpResult(semanticLayerGuidance)
+	}
+
+	if lensConfig == nil {
+		return nil, nil, fmt.Errorf("LFX Lens tools not configured")
+	}
+
+	switch args.Action {
 	case "list_metrics":
 		return handleLensListMetrics(ctx, args.Search)
 	case "get_dimensions":

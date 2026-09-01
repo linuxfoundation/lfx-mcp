@@ -193,7 +193,7 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"kpi_event_registrations_by_org",
 		"kpi_training_enrollments_by_org",
 		"one-hop",
-		"no order_by",
+		"an order_by on the recipe's own",
 		"read_lfx_saved_queries_guidance",
 		"subsidiaries INTO parents",
 		"Meeting attendance by company",
@@ -229,7 +229,7 @@ func TestSavedQueriesGuidanceContent(t *testing.T) {
 		"TI+edX",
 		"NULL account",
 		// mechanics
-		"no order_by",
+		"order the saved query",
 		"ONE-HOP",
 		"get_dimension_values",
 		"zero rows",

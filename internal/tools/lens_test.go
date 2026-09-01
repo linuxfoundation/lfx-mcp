@@ -218,152 +218,79 @@ func TestSemanticLayerDescriptions_FitSchemaBudget(t *testing.T) {
 	}
 }
 
-// TestExploreSemanticLayerDescription checks the discovery tool carries the
-// routing contract: which domains are ours, and when to use query_lfx_lens.
+// TestExploreSemanticLayerDescription checks the slimmed discovery tool
+// still carries the routing contract: what the layer covers, the
+// guidance-first instruction, the saved-query preference, the discovery
+// actions, and the redirects. Everything else moved to the guidance tool
+// (pinned in TestSemanticLayerGuidanceContent).
 func TestExploreSemanticLayerDescription(t *testing.T) {
 	for _, want := range []string{
-		// The domains are named explicitly. Without them the routing is
-		// one-sided — query_lfx_lens lists concrete triggers while this tool
-		// describes itself abstractly, so every specific question looks like a
-		// better match for the other tool.
-		// Search terms must be words the Semantic Layer actually matches.
-		// The earlier headings were plurals — "contributions", "memberships",
-		// "education", "project health" all returned zero metrics, and a live
-		// client followed the instruction, got [], and fell back to
-		// query_lfx_lens. These singular forms are verified against the API.
-		"contributor, contribution —",
-		"membership, revenue, churn —",
-		"event, registration, speaker, sponsorship —",
-		"enrollment, certification —",
-		"maintainer —",
-		"health, project —",
-		// Regional questions route here for every topic, memberships included.
-		"any of the above by country or region — always here, never query_lfx_lens",
-		// Dimension naming. The regional person-vs-organization split moved to
-		// the guidance tool (asserted in TestSemanticLayerGuidanceContent) to make room for the
-		// eval-verified failure patterns.
-		"entity__field",
-		"country__lf_region",
-		// Discovery must hand off to the query tool by name and explain where
-		// project scope is expressed now that there is no project parameter.
-		"query_lfx_semantic_layer",
-		"Project scope lives in query's where clause (no parameter)",
-		"resolve slugs via search_projects",
-		// The value-discovery action, and the reason it exists. A filter naming
-		// a real dimension but an unknown literal returns zero rows instead of
-		// erroring, so a wrong guess is indistinguishable from missing data. A
-		// live client burned five query attempts on 'APAC' and 'Vietnam' before
-		// escaping via a country code.
-		"get_dimension_values(dimension, metrics, search)",
-		"return zero rows, not an error",
-		// The 207-question eval showed models falling back to query_lfx_lens
-		// without ever reading the recipes; the description now routes the
-		// model through the guidance tool before first use and before any
-		// fallback.
+		// The covered domains, named so routing works from this tool.
+		"contributor, contribution, membership, revenue, event, registration, speaker, sponsorship, enrollment, certification, maintainer, health",
+		"country or region",
+		// Guidance-first, once per session, shared with the query tool.
 		"read_lfx_semantic_layer_guidance",
 		"Read it BEFORE using this tool",
 		"also covers query_lfx_semantic_layer",
-		// Saved queries outrank the explore+query flow when a recipe matches.
+		// A matching saved query outranks the explore+query flow.
 		"query_lfx_semantic_layer_saved_queries",
-		"ALWAYS consult it before a query_lfx_lens fallback",
-		"maintainer-contribution joins, social listening",
+		// The three discovery actions with their arguments.
+		"list_metrics(search)",
+		"get_dimensions(metrics, search)",
+		"get_dimension_values(dimension, metrics, search)",
+		// The silent-zero-rows trap and its canonical example.
+		"zero rows, not an error",
 		"'Asia Pacific' not 'APAC'",
-		// Governance rosters route to the committee tools: the eval's
-		// board/ambassador questions were declared unavailable or fabricated
-		// because neither semantic-layer description mentioned where rosters
-		// live. (The 'Viet Nam' second spelling example paid for this line.)
+		// Naming discipline and the resolvers.
+		"entity__field",
+		"copy qualified_names, never assemble",
+		"search_projects",
+		"search_b2b_orgs",
+		// Routing to the neighbours.
+		"query_lfx_semantic_layer",
+		"maintainer-contribution joins, social listening",
 		"Board/committee/ambassador rosters: committee tools",
-		// Either tool can be loaded without the other, so each states what the
-		// semantic layer is. Here the regional rule sits in COVERS, asserted
-		// above, rather than in the opening line.
-		"query tool",
+		"Start here unless exact names are known",
 	} {
 		if !strings.Contains(exploreSemanticLayerDescription, want) {
 			t.Errorf("explore description missing %q", want)
 		}
 	}
-
-	// Sponsorships flipped owners: the semantic layer covers them now
-	// (sponsored_events_count and the sponsorship revenue metrics), and
-	// query_lfx_lens keeps exactly two lanes. Both descriptions must agree.
-	if strings.Contains(exploreSemanticLayerDescription, "never query_lfx_lens") &&
-		!strings.Contains(exploreSemanticLayerDescription, "sponsorship") {
-		t.Error("explore description no longer claims sponsorships; the semantic layer owns them now")
-	}
-
-	// The description used to warn that a plural search matches nothing. That
-	// stopped being true once lens learned to fall back to a singular stem:
-	// "memberships" now returns 18 metrics, "contributions" 2. Telling the model
-	// otherwise wastes the budget on a false constraint.
-	for _, unwanted := range []string{
-		"a plural like",
-		"matches nothing",
-	} {
-		if strings.Contains(exploreSemanticLayerDescription, unwanted) {
-			t.Errorf("explore description still warns about plurals, which lens now handles: %q", unwanted)
-		}
-	}
 }
 
-// TestQuerySemanticLayerDescription checks the query tool is self-sufficient:
-// its own description carries the syntax, so a caller never has to call help
-// first.
+// TestQuerySemanticLayerDescription checks the slimmed query tool keeps
+// what a model cannot guess and cannot recover from silently: the MetricFlow
+// syntax, the foundation-scope trap, name resolution, and the recovery path.
+// The full doctrine moved to the guidance tool.
 func TestQuerySemanticLayerDescription(t *testing.T) {
 	for _, want := range []string{
+		// Discovery-first and guidance-first.
+		"ALWAYS explore_lfx_semantic_layer first",
+		"never guess",
+		"read_lfx_semantic_layer_guidance",
+		"Read it BEFORE querying",
+		"query_lfx_semantic_layer_saved_queries",
+		// The unguessable syntax.
 		"metrics (required)",
 		"Dimension(",
 		"TimeDimension(",
 		"yyyy-mm-dd",
 		"ceiling 500",
 		"metric_time__year",
-		"outer-join",
-		"ranked list",
-		// Splitting discovery out made it possible to query without ever
-		// exploring, and a live client did exactly that — going straight to a
-		// query with guessed names. The rule has to be an instruction, not a
-		// conditional suggestion.
-		"ALWAYS explore_lfx_semantic_layer first",
-		"never guess",
-		// Both neighbours are named so routing works from this tool too.
-		"explore_lfx_semantic_layer",
-		"query_lfx_lens",
-		"country/region",
-		// Scope dimensions are copied exactly from the current live layer. A
-		// wrong dimension returns a plausible wrong population. The conformed
-		// project entity replaced the spine as the primary foundation scope;
-		// the spine, per-domain long-form guidance and slug examples moved to
-		// the guidance tool, asserted in TestSemanticLayerGuidanceContent.
-		"resolve slugs via search_projects",
+		// The deadliest scope trap, stated even before the guidance is read.
 		"project__foundation_slug",
 		"NEVER scope a foundation with project_slug",
-		"asset_id__project_slug",
-		"registration_id__project_slug",
-		"event_id__project_name",
-		"maintainer_key__cm_project_grandparents_slug",
-		"is_lf_project=true",
-		"0 rows = misspelled literal",
-		// The five eval-verified failure patterns (62 wrong answers in a
-		// 207-question replay traced overwhelmingly to these): bots on raw
-		// activity metrics, full-legal-name lookups, share denominators,
-		// unstated windows, and undiscovered COCOMO value metrics.
-		"Read it BEFORE querying",
-		// Saved queries outrank ad-hoc assembly when a recipe matches.
-		"query_lfx_semantic_layer_saved_queries",
-		"Bot exclusion is the Insights default",
-		"bot_activities",
-		"Share of work = activity volumes",
-		"DAILY snapshots",
+		"search_projects",
+		// Name resolution.
 		"FULL LEGAL names",
 		"search_b2b_orgs",
-		"access-filtered",
-		"org-attributed base",
-		"default trailing 12 months",
-		"future-dated",
-		// Struggling routes through the guidance before the lens fallback.
-		"read_lfx_semantic_layer_guidance BEFORE query_lfx_lens",
-		// The silent-zero-rows warning is only actionable if it names the way
-		// out; without this the model retries the same wrong literal.
+		// The silent-failure recovery chain.
+		"0 rows = misspelled literal",
 		"get_dimension_values",
+		"query_lfx_lens",
+		// The answer contract.
+		"State definition and window",
+		"country/region",
 	} {
 		if !strings.Contains(querySemanticLayerDescription, want) {
 			t.Errorf("query description missing %q", want)
@@ -372,15 +299,27 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 	for _, unwanted := range []string{
 		"MUST include a project scope filter",
 		"project_slug: optional",
-		// Framings that understate the tool and misroute the questions it
-		// exists to answer: it compiles SQL per request rather than serving
-		// stored rollups, and grouping by a name dimension returns lists of
-		// named organizations and people, not only figures.
 		"pre-aggregated",
 		"returns numbers, not records",
 	} {
 		if strings.Contains(querySemanticLayerDescription, unwanted) {
 			t.Errorf("query description must not contain %q", unwanted)
+		}
+	}
+}
+
+// TestSlimDescriptionsKeepHeadroom encodes the post-guidance contract: the
+// data tools' descriptions carry routing and unguessable syntax only, so
+// they must never creep back toward the 2048-byte cliff. Detail belongs in
+// the guidance tools, whose results have no budget.
+func TestSlimDescriptionsKeepHeadroom(t *testing.T) {
+	for name, desc := range map[string]string{
+		"explore_lfx_semantic_layer":             exploreSemanticLayerDescription,
+		"query_lfx_semantic_layer":               querySemanticLayerDescription,
+		"query_lfx_semantic_layer_saved_queries": savedQueriesDescription,
+	} {
+		if got := len(desc); got > 1600 {
+			t.Errorf("%s description is %d bytes; keep it under 1600 — move detail into the guidance tools", name, got)
 		}
 	}
 }
@@ -441,7 +380,6 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 		{"raw IDs", "grouping by an entity silently returns unusable output"},
 		{"get_dimension_values", "the only recovery from a wrong filter literal"},
 		{"zero rows", "a wrong literal is silent, so the model must be told to check first"},
-		{"bot_activities", "the explicit bot view; bot exclusion became the metric default in lf-dbt"},
 		{"FULL LEGAL names", "short-name value searches silently miss legal-name accounts"},
 		{"search_b2b_orgs", "the resolver for org legal names; its empty results are access-filtered, not proof of absence"},
 		{"read_lfx_semantic_layer_guidance", "the guidance recipes are useless if nothing routes the model to them"},

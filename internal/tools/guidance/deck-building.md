@@ -3,7 +3,8 @@
 Read this before assembling or verifying numbers for customer-facing decks,
 briefings and presentations (memberships, contributions, events, training,
 certification, by organization). It builds on the semantic layer guidance
-(read_lfx_semantic_layer_guidance) - read that first.
+(read_lfx_semantic_layer_guidance) and the saved-query guidance
+(read_lfx_saved_queries_guidance) - read those first.
 
 ## Rule 1: saved queries first
 
@@ -41,14 +42,9 @@ it is not deployed yet, not that the name is wrong.
 
 ## Reading saved-query results
 
-- *_by_org / *_by_account rows come at the (account_name,
-  account_rollup_name) PAIR grain. Never read the rollup column as a ranking
-  directly: for rollup-grain rankings, sum rows sharing the rollup value
-  client-side - additive metrics only. Contributor HEADCOUNTS are
-  NOT additive (people span accounts and projects): re-query grouped by the
-  rollup alone instead of summing pairs.
-- A NULL account row is unresolved attribution, usually the largest row -
-  never present it as an organization.
+The mechanics and reading contract (pair grain, rollup re-grouping,
+headcounts NOT additive, the NULL-attribution row) live in
+read_lfx_saved_queries_guidance - read it before running the recipes.
 
 ## Combined-entity slides ("IBM including Red Hat", "Amazon including AWS")
 

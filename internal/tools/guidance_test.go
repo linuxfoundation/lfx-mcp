@@ -158,6 +158,7 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"Never infer a roster",
 		"search_past_meetings",
 		"not answerable with governed data today",
+		"disclose there is no canonical way",
 		// events/training account entities
 		"account__account_name",
 		"NULL bucket",

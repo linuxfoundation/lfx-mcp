@@ -35,6 +35,9 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
 - Training enrollments → kpi_training_enrollments,
   kpi_training_enrollments_by_org. edX enrollments carry no organization and
   land in the NULL account - present "attributed enrollments" and say so.
+- Maintainer × contribution joins (top maintainers by contributions,
+  maintainer share of work) → query_lfx_lens: the semantic layer cannot
+  join maintainers to activity at person grain.
 
 The catalog in the tool description is the routing surface; the deployed
 manifest is the source of truth. A "saved query does not exist" error means
@@ -64,19 +67,21 @@ and the count excluding quasi-associate tiers). State the definitional delta
 next to the figure; do not force numbers to match and do not silently
 substitute one for the other.
 
-## Out of scope - refuse, do not improvise
+## Outside the semantic layer's scope
 
-- Meeting attendance by company over a period: no governed lane exists, and
-  the meeting tools cannot aggregate it. Say so.
-- Event sponsorship revenue totals: live in the events CRM, not here.
-- Working-group rosters and official project counts: owned by other teams.
+These have no governed lane. Try query_lfx_lens for them and label the
+result as generated SQL, not a governed figure; if lens cannot answer, say
+so rather than improvising a number:
 
-## Presentation rules
+- Meeting attendance by company over a period.
+- Event sponsorship revenue totals (primary source: the events CRM).
+- Working-group rosters and official project counts (owned by other teams).
 
-- Every figure carries population, exact window, and counting rule - at
-  minimum in speaker notes.
+## Presentation honesty
+
+- Be honest about what each figure is: its population, window and counting
+  rule should be stated somewhere the audience can find them.
 - Re-run governed numbers before presenting; if a figure moved, the data
   moved - annotate the as-of date.
-- Prefer organization-level rankings over person names on slides; display
-  names are not identity-verified (semantic layer guidance, recipe 13).
-- Round consistently and label currency; dues figures are USD.
+
+How figures are formatted and presented is the deck author's call.

@@ -191,7 +191,9 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"subsidiaries INTO parents",
 		"Meeting attendance by company",
 		"definitional delta",
-		"population, exact window, and counting rule",
+		"population, window and counting\n  rule",
+		"label the\nresult as generated SQL",
+		"maintainers to activity at person grain",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("deck building guidance missing %q", want)

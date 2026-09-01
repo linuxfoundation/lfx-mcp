@@ -72,7 +72,9 @@ func TestSavedQueriesDescription_CarriesReadingContract(t *testing.T) {
 		// before the manifest carries them, and the failure must route back
 		// to the ad-hoc tools instead of being read as missing data.
 		"not deployed yet",
-		"query_lfx_semantic_layer instead",
+		"fall back to query_lfx_semantic_layer",
+		// The preference chain: a matching recipe outranks explore+query.
+		"prefer this tool over the explore_lfx_semantic_layer",
 	} {
 		if !strings.Contains(savedQueriesDescription, want) {
 			t.Errorf("description lost the reading contract fragment %q", want)

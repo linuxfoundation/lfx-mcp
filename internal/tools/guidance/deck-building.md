@@ -21,18 +21,27 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   may be reused as is; never put a guessed slug or organization name in a
   deck query.
 - Slice a metric with its own parameters: project + subprojects
-  (none|separate|combined, default separate), org + subsidiaries
-  (none|separate|combined, default none), since/until on FLOW metrics, as_of
-  on SNAPSHOT ones, an order_by on the result columns (- prefix for
-  descending), and a limit. subprojects=combined folds every project column of
-  the result. The maintainer metrics have no parent-company lens, so
-  subsidiaries must be none there - name one employer with org.
+  (excluded|separate|combined, default combined), org + subsidiaries
+  (excluded|separate|combined, default excluded), since/until on FLOW
+  metrics, as_of on SNAPSHOT ones, an order_by on the result columns (-
+  prefix for descending), and a limit. subprojects=combined folds every
+  project column of the result; a per-project slide needs
+  subprojects=separate. The maintainer metrics have no parent-company lens,
+  so subsidiaries must be excluded there - name one employer with org.
+- DEFAULTS are the headline reading: a project name alone is its whole tree
+  as one figure, an organization name alone is that account, and a
+  contribution metric with no since is the trailing 365 days. Most slides
+  want the headline AND the breakdown - two calls, the second with
+  subprojects=separate or subsidiaries=separate. Every result carries an
+  applied block saying which scope and window ran; the caption under the
+  figure comes from it.
 - DEPTH: the contribution metrics cover a named node's tree at any depth
   within its foundation; the membership and maintainer metrics cover a
   foundation completely but reach an umbrella below foundation level only to
   its direct children - say so on a slide scoped to such an umbrella.
-- where adds a filter on top, one-hop <entity>__<dimension> names only
-  (account__account_name); multi-hop paths are rejected.
+- There is no free filter on a standard metric. A slide that needs one
+  (a single tier, a single role) is an explore + query slide, labelled ad
+  hoc.
 
 ## Deck lane → recipe mapping
 
@@ -40,6 +49,8 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   members_and_dues_by_org, membership_tiers, new_members_by_year,
   membership_churn_by_year. Membership counts are deduplicated; dues are the
   list price on active terms, on a different grain from the count.
+- One-figure headlines ("how many contributors / maintainers does X have")
+  → contributors, contributions, maintainers.
 - Contributor and maintainer leaderboards → contributions_by_org (volume),
   contributors_by_org (headcount), contributors_by_project,
   maintainers_by_org, maintainers_by_project. Named maintainers per project →
@@ -70,7 +81,7 @@ read_lfx_standard_metrics_guidance - read it before running the metrics.
 
 Name the TOP parent and set subsidiaries: separate lists the parts (IBM and
 Red Hat as their own rows), combined returns the single folded row the slide
-means. org alone, with the default subsidiaries=none, is that company by
+means. org alone, with the default subsidiaries=excluded, is that company by
 itself - which is the right call for "Red Hat", and the wrong one for "IBM
 including Red Hat".
 
@@ -99,7 +110,9 @@ substitute one for the other.
 Do not reconcile figures against Insights pages or collections either: those
 surfaces differ by repo registration, member cleaning and curated
 collections, so a mismatch is construction, not error. PCC-style reporting is
-the reconciliation surface.
+the reconciliation surface. If a reader holds an Insights foundation figure
+next to yours, the one-line contrast is: LFX counts every project in the
+CNCF tree; Insights counts the CNCF collection as curated on the site.
 
 ## Outside the semantic layer's scope
 

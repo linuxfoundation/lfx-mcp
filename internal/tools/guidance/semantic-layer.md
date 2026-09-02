@@ -225,23 +225,29 @@ registrations has no account either, so every org-scoped figure here is a
 floor — present "attributed registrations/enrollments" and say so.
 
 15. STANDARD METRIC CALLS take uniform parameters — metric, project +
-subprojects (none|separate|combined, default separate), org + subsidiaries
-(none|separate|combined, default none), since/until on FLOW metrics, as_of on
-SNAPSHOT ones, where, order_by, limit. The ten: members_and_dues_by_org,
-membership_tiers, new_members_by_year, membership_churn_by_year,
-contributions_by_org, contributors_by_org, contributors_by_project,
-maintainers_by_org, maintainers_by_project, maintainer_roster. The switches
-say what a name covers: none = that project or account alone, separate = it
-and everything under it one row each, combined = folded into one row
-(subprojects=combined folds every project column of the result). DEPTH: the
+subprojects (excluded|separate|combined, default combined), org + subsidiaries
+(excluded|separate|combined, default excluded), since/until on FLOW metrics,
+as_of on SNAPSHOT ones, where, order_by, limit. The thirteen:
+members_and_dues_by_org, membership_tiers, new_members_by_year,
+membership_churn_by_year, contributors, contributions, contributions_by_org,
+contributors_by_org, contributors_by_project, maintainers, maintainers_by_org,
+maintainers_by_project, maintainer_roster. The switches say what a name
+covers: excluded = that project or account alone, separate = it and
+everything under it one row each (the breakdown), combined = folded into one
+row (subprojects=combined folds every project column of the result). The
+DEFAULTS are the Insights reading: a project name alone is its whole tree as
+ONE figure, an organization name alone is that account, and a contribution
+metric with no since is the trailing 365 days; every result carries an
+applied block saying which scope and window ran. A briefing usually wants the
+headline and the breakdown — two calls. DEPTH: the
 contribution metrics cover a named node's tree at ANY depth within its
 foundation; the membership and maintainer metrics cover a foundation
 completely but reach an umbrella below foundation level only to its DIRECT
 children. Results come back in the same words (account, parent_org, project,
 foundation, year), and order_by takes them. The maintainer metrics have no
-parent-company lens, so subsidiaries must be none there. where adds a
-filter and is one-hop only (<entity>__<dimension>); multi-hop paths fail at
-parse time, though ad-hoc queries accept both.
+parent-company lens, so subsidiaries must be excluded there. There is no
+free filter on a standard metric: a slice the switches and the window cannot
+express is an explore + query question, and its answer is labelled ad hoc.
 
 ## Worked examples (verified live)
 

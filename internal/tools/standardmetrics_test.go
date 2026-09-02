@@ -33,15 +33,16 @@ func metricLimit(value int) *int { return &value }
 
 // standardMetricsDescriptionCeiling is tighter than the hard schema budget:
 // this description is read on every tools/list alongside ten siblings, so it
-// is held to the space the contract and the metric inventory actually need,
-// with headroom for the next metric name rather than for more prose.
-const standardMetricsDescriptionCeiling = 1850
+// is held to the space the contract, the metric inventory and the two
+// defaults actually need, with headroom for the next metric name rather than
+// for more prose.
+const standardMetricsDescriptionCeiling = 1950
 
 // standardMetricParameters is the whole contract; anything else is not a parameter of
 // this tool.
 var standardMetricParameters = []string{
 	"metric", "project", "subprojects", "org", "subsidiaries",
-	"since", "until", "as_of", "where", "order_by", "limit",
+	"since", "until", "as_of", "order_by", "limit",
 }
 
 // standardMetricNames is the advertised inventory, in the order the guidance
@@ -53,9 +54,12 @@ var standardMetricNames = []string{
 	"membership_tiers",
 	"new_members_by_year",
 	"membership_churn_by_year",
+	"contributors",
+	"contributions",
 	"contributions_by_org",
 	"contributors_by_org",
 	"contributors_by_project",
+	"maintainers",
 	"maintainers_by_org",
 	"maintainers_by_project",
 	"maintainer_roster",
@@ -87,8 +91,8 @@ func TestStandardMetricsDescription_FitsSchemaBudget(t *testing.T) {
 func TestStandardMetricsDescription_ListsTheInventoryByDomain(t *testing.T) {
 	for _, want := range []string{
 		"Memberships: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year",
-		"Contributions: contributions_by_org, contributors_by_org, contributors_by_project",
-		"Maintainers: maintainers_by_org, maintainers_by_project, maintainer_roster",
+		"Contributions: contributors, contributions, contributions_by_org, contributors_by_org, contributors_by_project",
+		"Maintainers: maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster",
 	} {
 		if !strings.Contains(standardMetricsDescription, want) {
 			t.Errorf("description missing inventory line %q", want)
@@ -123,12 +127,15 @@ func TestStandardMetricsDescription_CarriesTheContract(t *testing.T) {
 		"metric ",
 		"project ",
 		"subprojects",
-		"Default separate",
+		"excluded | separate | combined",
+		"Default combined",
 		"subsidiaries",
-		"Default none",
+		"Default excluded",
 		"since, until",
+		"trailing 365 days",
+		"applied block",
 		"as_of",
-		"where",
+		"no free filter",
 		"order_by",
 		"1..500",
 		"yyyy-mm-dd",
@@ -170,7 +177,7 @@ func TestStandardMetricsSurface_NamesNoWarehouseRecipe(t *testing.T) {
 		}
 	}
 	// The events and training recipes stay callable through the lens
-	// registry, and unnamed here: only the ten advertised names route.
+	// registry, and unnamed here: only the thirteen advertised names route.
 	for _, unadvertised := range []string{"event_registrations", "training_enrollments"} {
 		if strings.Contains(standardMetricsDescription, unadvertised) {
 			t.Errorf("tool description names the unadvertised recipe family %q", unadvertised)
@@ -179,7 +186,7 @@ func TestStandardMetricsSurface_NamesNoWarehouseRecipe(t *testing.T) {
 			t.Errorf("standard metric guidance names the unadvertised recipe family %q", unadvertised)
 		}
 	}
-	for _, field := range []string{"SavedQuery", "Foundation", "By"} {
+	for _, field := range []string{"SavedQuery", "Foundation", "By", "Where"} {
 		if _, ok := reflect.TypeOf(StandardMetricsArgs{}).FieldByName(field); ok {
 			t.Errorf("StandardMetricsArgs still carries %s; it is not part of the contract", field)
 		}
@@ -240,12 +247,11 @@ func TestStandardMetrics_SendsTheArgumentsAsGiven(t *testing.T) {
 	res, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{
 		Metric:       "contributors_by_org",
 		Project:      "cncf",
-		Subprojects:  "none",
+		Subprojects:  "excluded",
 		Org:          "International Business Machines Corporation",
 		Subsidiaries: "combined",
 		Since:        "2025-09-01",
 		Until:        "2026-09-01",
-		Where:        "{{ Dimension('account__account_name') }} = 'Red Hat LLC'",
 		OrderBy:      "-total_contributors",
 		Limit:        metricLimit(10),
 	})
@@ -259,51 +265,39 @@ func TestStandardMetrics_SendsTheArgumentsAsGiven(t *testing.T) {
 		t.Errorf("unexpected request: %s %s", captured.Method, captured.Path)
 	}
 
-	want := `{"metric":"contributors_by_org","project":"cncf","subprojects":"none",` +
+	want := `{"metric":"contributors_by_org","project":"cncf","subprojects":"excluded",` +
 		`"org":"International Business Machines Corporation","subsidiaries":"combined",` +
 		`"since":"2025-09-01","until":"2026-09-01",` +
-		`"where":["{{ Dimension('account__account_name') }} = 'Red Hat LLC'"],` +
 		`"order_by":["-total_contributors"],"limit":10}`
 	if got := string(captured.Body); got != want {
 		t.Errorf("request body =\n%s\nwant\n%s", got, want)
 	}
 }
 
-// where and order_by are the two parameters whose wire spelling is not the
-// caller's: the endpoint reads them as lists. A filter is one clause and may
-// contain commas, so it travels whole; order_by is comma-separated fields and
-// is split. Sending either as a bare string would be rejected by a typed route
-// — or, worse, read character by character into a filter list that returns a
-// confident wrong answer.
-func TestStandardMetrics_SendsWhereAndOrderByAsLists(t *testing.T) {
+// order_by is the one parameter whose wire spelling is not the tool's own:
+// the endpoint reads a list, the tool takes a comma-separated string, so the
+// split is pinned here rather than trusted.
+func TestStandardMetrics_SendsOrderByAsAList(t *testing.T) {
 	captured := setupLensTest(t)
 
-	if _, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{
-		Metric:  "contributors_by_project",
-		Where:   "{{ Dimension('project__slug') }} = 'k8s'",
-		OrderBy: "-total_contributors, project",
-	}); err != nil {
+	_, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{
+		Metric:  "contributors_by_org",
+		OrderBy: "-total_contributors, account",
+	})
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
 	var body struct {
-		Where   []string `json:"where"`
 		OrderBy []string `json:"order_by"`
 	}
 	if err := json.Unmarshal(captured.Body, &body); err != nil {
-		t.Fatalf("request body is not JSON: %v", err)
+		t.Fatalf("body is not JSON: %v", err)
 	}
-	if want := []string{"{{ Dimension('project__slug') }} = 'k8s'"}; !reflect.DeepEqual(body.Where, want) {
-		t.Errorf("where = %#v, want %#v", body.Where, want)
-	}
-	if want := []string{"-total_contributors", "project"}; !reflect.DeepEqual(body.OrderBy, want) {
+	if want := []string{"-total_contributors", "account"}; !reflect.DeepEqual(body.OrderBy, want) {
 		t.Errorf("order_by = %#v, want %#v", body.OrderBy, want)
 	}
 }
 
-// An argument the caller left out is absent from the body, not sent empty: an
-// empty string is a scope the lens would have to guess at, and limit=0 is a
-// value a caller chose rather than the omitted "every row".
 func TestStandardMetrics_OmitsUnsetArguments(t *testing.T) {
 	captured := setupLensTest(t)
 

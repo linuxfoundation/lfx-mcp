@@ -165,8 +165,22 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"NULL bucket",
 		"sponsorship__sponsorship_tier_type",
 		"'package_tier'",
-		// governed org-attribution filter
+		// governed org-attribution filter, and the account-attributed superset
 		"activity_project_id__is_org_contribution = true",
+		"SUPERSET of is_org_contribution",
+		// account vs rollup doctrine, in full, once
+		"is its parent",
+		"value-searching 'IBM' finds",
+		"their OWN\nrollup",
+		"headcounts may NOT",
+		// the fuzzy did-you-mean trap
+		"get_dimensions(search=) is authoritative",
+		// as-of maintainers
+		"As of date D: total_maintainers where",
+		"one as-of reading per period",
+		// two-line recipes for the unadvertised per-event / per-course cuts
+		"event_id__event_name",
+		"enrollment_id__course_name",
 		// worked examples stay live-verified
 		"## Worked examples (verified live)",
 		// KPI recipes

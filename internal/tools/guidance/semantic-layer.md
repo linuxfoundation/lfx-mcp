@@ -90,7 +90,9 @@ new members = new_membership_count by install date.
 ## Value discovery
 
 An unknown filter literal returns zero rows, not an error — call
-get_dimension_values before filtering on anything unseen. Stored spellings
+get_dimension_values before filtering on anything unseen. The "did you mean"
+list an unknown dimension name returns is MetricFlow's fuzzy match and can omit
+the right name — get_dimensions(search=) is authoritative. Stored spellings
 surprise: 'Asia Pacific' never 'APAC'; 'Viet Nam', 'Türkiye' (ISO). Prefer country__*
 over asset_id__billing_country (unnormalized free text). Zero rows = suspect
 spelling and scope first; only then report absence.
@@ -105,7 +107,10 @@ metrics (code volumes read roughly 1.8x higher with bots); bot_activities
 org-ATTRIBUTED base: filter activity_project_id__is_org_contribution = true — the
 governed real-organization filter (no need to hand-exclude NULL rows and
 'Individual - No Account') — and report the unattributed share (roughly 40-70%)
-separately. The 500-row cap makes exact percentiles over big pools unretrievable.
+separately. Account-attributed rows are a SUPERSET of is_org_contribution; the
+difference is exactly the Individual placeholder accounts, so a numerator
+filtered on an account rollup sits inside this base. The 500-row cap makes
+exact percentiles over big pools unretrievable.
 
 3. ORG HEADCOUNTS run 2-4x below externally published counts (volumes reconcile
 to ~1-4%). State the caveat.
@@ -116,12 +121,19 @@ total_contributors_with_collaboration adds issues/docs/chat (say so); total_acti
 5. NAME DISCOVERY. Org/account names are stored FULL LEGAL names: IBM is
 'International Business Machines Corporation'; Red Hat is 'Red Hat LLC' in account
 dimensions, 'Red Hat' in activity-side organization_name. Resolve via search_b2b_orgs
-FIRST; empty may be permission-filtering — value-search a token ('Machines').
+FIRST; empty may be permission-filtering — value-search a distinctive token of
+the legal name ('Machines') on account__account_rollup_name.
 
-6. ROLLUPS ("including subsidiaries"): account__account_rollup_name folds
-subsidiaries INTO parents — Red Hat's rollup value is IBM, so filtering rollup =
-'Red Hat' finds almost nothing; group by the rollup or filter the PARENT. No
-rollup dimension → sum named sub-entities and list them.
+6. ACCOUNT vs ROLLUP ("including subsidiaries"). account__account_name is the
+account holding the record; account__account_rollup_name is its parent, and
+rollups fold subsidiaries INTO parents — Red Hat's rollup value is IBM, so
+filtering rollup = 'Red Hat' finds almost nothing; group by the rollup or filter
+the PARENT. Legal names do not contain the acronym: value-searching 'IBM' finds
+accounts SPELLED with it, mostly regional or stray accounts that are their OWN
+rollup and NOT folded under the parent — present those separately rather than as
+part of it. Additive metrics (dues, volumes) may be summed across accounts
+sharing a rollup; headcounts may NOT — re-read them at rollup grain. No rollup
+dimension → sum named sub-entities and list them.
 
 7. TIER LITERALS differ per foundation ('Premier Membership' vs 'Premier Member') — get_dimension_values per foundation, never reuse.
 
@@ -142,8 +154,11 @@ real roster; cm_project_grandparents_slug = 'k8s' returns ZERO — the cm_*
 rollups hold foundation ancestry, verified live). Foundations:
 project__foundation_slug. Always + maintainer_key__is_lf_project = true;
 active = no end date; start_date has a
-2000-01-01 sentinel — never trend on it. Maintainer-by-contribution questions
-("top maintainers by contributions", maintainer share of work) are person-grain
+2000-01-01 sentinel — never trend on it. As of date D: total_maintainers where
+maintainer_key__start_date <= 'D' AND (end_date IS NULL OR end_date >= 'D');
+since/until on start_date is meaningless, readings before tracking began run
+high, and a trend is one as-of reading per period. Maintainer-by-contribution
+questions ("top maintainers by contributions", maintainer share of work) are person-grain
 joins this layer cannot express: use query_lfx_lens.
 
 12. ROSTERS AND MEETINGS. search_committees → search_committee_members (paginate;
@@ -161,7 +176,9 @@ enrollments and sponsorships: group account__account_name (or the rollup, recipe
 — present "attributed enrollments". Sponsorships: total_sponsorship_revenue (USD)
 and total_sponsorship_count include ALL tier types — filter
 sponsorship__sponsorship_tier_type = 'package_tier' for package-only figures
-('a_la_carte' and 'billing_adjustment' are the others).
+('a_la_carte' and 'billing_adjustment' are the others). Per event:
+total_registrations by event_id__event_name + the event start year. Per course:
+total_enrollments by enrollment_id__course_name + product_type.
 
 15. KPI RECIPE CALLS take uniform parameters — foundation, project, org, by
 (account | rollup), since/until on FLOW recipes, as_of on SNAPSHOT ones,

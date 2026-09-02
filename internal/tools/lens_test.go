@@ -422,9 +422,7 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 				// pinned by name.
 				{"Memberships: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year", "the membership inventory reaches the model only here"},
 				{"Contributions: contributions_by_org, contributors_by_org, contributors_by_project", "the contribution inventory reaches the model only here"},
-				{"Maintainers: maintainers_by_org", "the maintainer inventory reaches the model only here"},
-				{"Events: event_registrations_by_org", "the events inventory reaches the model only here"},
-				{"Training: training_enrollments_by_org", "the training inventory reaches the model only here"},
+				{"Maintainers: maintainers_by_org, maintainers_by_project, maintainer_roster", "the maintainer inventory reaches the model only here"},
 				{"search_projects", "project takes the stored slug; an everyday name silently misses"},
 				{"search_b2b_orgs", "org takes the stored legal name; a short name silently misses"},
 				{"subprojects", "what a project name covers is a choice the caller has to be told about"},
@@ -547,6 +545,27 @@ func schemaRequired(t *testing.T, tool *mcp.Tool) []string {
 		t.Fatalf("failed to parse input schema: %v", err)
 	}
 	return schema.Required
+}
+
+// schemaProperties returns the names of every input-schema property, in no
+// particular order.
+func schemaProperties(t *testing.T, tool *mcp.Tool) []string {
+	t.Helper()
+	raw, err := json.Marshal(tool.InputSchema)
+	if err != nil {
+		t.Fatalf("failed to marshal input schema: %v", err)
+	}
+	var schema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatalf("failed to parse input schema: %v", err)
+	}
+	names := make([]string, 0, len(schema.Properties))
+	for name := range schema.Properties {
+		names = append(names, name)
+	}
+	return names
 }
 
 // schemaPropertyDescription returns the description a client sees for one

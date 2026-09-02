@@ -808,9 +808,9 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["query_lfx_semantic_layer"] && canRead && isStaff {
 		tools.RegisterQuerySemanticLayer(server)
 	}
-	// Not in defaultTools: the standard metric recipes it runs deploy with
-	// the lf-dbt project and the Lens saved-query endpoint, so prod enables
-	// this by name only once both are live.
+	// Not in defaultTools: the recipes it runs live in the Lens service's
+	// standard-metric endpoint, so prod enables this by name only once that
+	// endpoint is live.
 	if enabledTools["query_lfx_standard_metrics"] && canRead && isStaff {
 		tools.RegisterStandardMetrics(server)
 	}

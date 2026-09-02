@@ -78,7 +78,8 @@ dimension by what the question names:
   figure is foundation-level. Enrollments and maintainers attach below the
   foundation too.
 - Domain scope dimensions: memberships asset_id__project_slug; maintainers
-  maintainer_key__project_slug (+ is_lf_project = true; foundations via
+  maintainer_key__project_slug (ALWAYS + maintainer_key__is_lf_project = true, see
+  recipe 11; foundations via
   project__foundation_slug — the cm_*_slug rollups are NOT project keys);
   health health_metric_key__foundation_slug. Events, registrations, sponsorships
   and training carry the conformed project entity — scope them with
@@ -176,8 +177,11 @@ not identity keys — for identity-stable answers use lens (member_id); say whic
 11. MAINTAINERS. One project: maintainer_key__project_slug ('k8s' returns the
 real roster; cm_project_grandparents_slug = 'k8s' returns ZERO — the cm_*
 rollups hold foundation ancestry, verified live). Foundations:
-project__foundation_slug. Always + maintainer_key__is_lf_project = true;
-active = no end date; start_date has a
+project__foundation_slug. ALWAYS add maintainer_key__is_lf_project = true: the
+maintainers model also holds maintainers of non-LF projects crowd.dev tracks
+(about half the rows) and they carry a project slug too, so a slug filter alone
+does not exclude them; the maintainers_by_org standard metric has this filter
+built in. Active = no end date; start_date has a
 2000-01-01 sentinel — never trend on it. As of date D: total_maintainers where
 maintainer_key__start_date <= 'D' AND (end_date IS NULL OR end_date >= 'D');
 since/until on start_date is meaningless, readings before tracking began run

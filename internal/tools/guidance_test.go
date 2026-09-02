@@ -183,13 +183,27 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"one as-of reading per period",
 		// two-line recipes for the unadvertised per-event / per-course cuts
 		"event_id__event_name",
+		"kpi=kpi_event_registrations",
 		"enrollment_id__course_name",
+		"kpi=kpi_training_enrollments",
 		// worked examples stay live-verified
 		"## Worked examples (verified live)",
-		// KPI recipes
+		// resolve-first: a guessed slug or account name is a silent wrong answer
+		"ALWAYS resolve names first",
+		"has not come back from them",
+		// the rollup is one hop, and activities are parent-resolved first
+		"ONE HOP",
+		"not\ntheir own acquisitions",
+		"already resolved to the parent account FOR THAT PROJECT",
+		// where each domain attaches
+		"ATTACHMENT LEVELS",
+		"legitimately\n  near-empty",
+		// KPI calls
 		"one-hop",
-		"there is no rollup-grain parameter yet",
-		"kpi_maintainers_by_org) rejects org",
+		"KPI CALLS take uniform parameters",
+		"default separate",
+		"default none",
+		"maintainers_by_org has no parent-company lens",
 		"query_lfx_kpis",
 		"PREFER it over the",
 		"read_lfx_deck_building_guidance",
@@ -208,19 +222,23 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 	for _, want := range []string{
 		"read_lfx_semantic_layer_guidance",
 		"query_lfx_kpis",
-		"kpi_members_and_dues_by_account",
-		"kpi_contributors_by_org",
-		"kpi_event_registrations_by_org",
-		"kpi_training_enrollments_by_org",
+		"members_and_dues_by_org",
+		"contributors_by_org",
+		"event_registrations_by_org",
+		"training_enrollments_by_org",
 		"one-hop",
-		"an order_by on the recipe's own",
+		"an order_by on the result columns",
 		"read_lfx_kpi_guidance",
-		"subsidiaries INTO parents",
-		"returns only what rolls up to THAT subsidiary",
-		"A rollup grain is coming",
-		"label it\na client-side sum",
-		"no\ncombined figure is governed yet",
-		"(kpi_maintainers_by_org) rejects\n  org",
+		// resolve-first, the two switches, and the one-hop disclosure
+		"ALWAYS resolve names first",
+		"never put a guessed slug",
+		"subprojects\n  (none|separate|combined, default separate)",
+		"subsidiaries\n  (none|separate|combined, default none)",
+		"ONE HOP",
+		"separate lists the parts",
+		"combined returns the single folded row",
+		"never from summing rows",
+		"maintainers_by_org has no parent-company lens",
 		"Meeting attendance by company",
 		"total_sponsorship_revenue",
 		"'package_tier'",
@@ -235,57 +253,77 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 	}
 }
 
-// TestKPIGuidanceContent pins the recipe inventory annotations and the
-// contract that only lives here: how to call (the uniform parameters), the
-// SNAPSHOT/FLOW rule, the top-parent rule for org (with no rollup grain to
-// switch to yet), the NULL-attribution row, and the not-deployed fallbacks.
+// TestKPIGuidanceContent pins the contract that only lives here: resolve
+// names before calling, the two switches and their opposite defaults, the
+// inventory with what each KPI answers and the columns it returns, the
+// account/parent_org reading with its one-hop limit, where each domain
+// attaches, and the rejections.
 func TestKPIGuidanceContent(t *testing.T) {
 	text := kpiGuidance
 	for _, want := range []string{
-		// inventory annotations
-		"current members and their annual dues",
-		"tier literals differ per\n  foundation",
-		"the\n  current year is year-to-date",
-		"churn date",
-		"code contribution volume per account",
-		"NOT additive - people span accounts",
-		"NOT additive across projects",
-		"active maintainers per employer account",
-		"org not accepted yet (no",
-		"maintainer_key__account_name",
-		"rows are registrations, not people",
-		"edX rows carry no account",
-		"EVENT start date",
+		// resolve names first, always
+		"Resolve names first — ALWAYS",
+		"search_projects",
+		"search_b2b_orgs",
+		"has\nnot come back from them",
+		"zero rows, not an error",
+		// the two switches and their opposite defaults
+		"subprojects: none | separate | combined, DEFAULT separate",
+		"subsidiaries: none | separate | combined, DEFAULT none",
+		"a subsidiary is a different company",
+		"a subproject is part of its project",
+		"folded into ONE row",
+		"one row per parent organization",
+		// the shape rule
+		"A FLOW KPI takes since/until",
+		"a SNAPSHOT KPI takes as_of",
+		"one call per period",
 		// how to call
 		"ONE-HOP",
 		"get_dimension_values",
-		"zero rows",
-		"ceiling 500",
-		"order_by takes the recipe's own result columns",
-		"search_b2b_orgs",
-		// the shape rule
-		"A FLOW recipe takes since/until on its own time axis; a\n   SNAPSHOT recipe takes as_of",
-		"one call per\n   period",
-		// organizations: the account and its top parent. The old claim
-		// that a subsidiary name "finds nothing" was false - Red Hat LLC is
-		// itself a rollup parent - and a small plausible answer is the
-		// dangerous failure, so the true rule is pinned instead.
-		"The org parameter always names the PARENT",
-		"returns only what rolls up to THAT\nsubsidiary",
-		"excludes the\nsubsidiary's own row",
-		"Always name the TOP\nparent",
-		"filter account__account_name in where",
-		// no by parameter: no rollup twin is deployed for any recipe
-		"a rollup grain is coming",
-		"label it a client-side sum",
-		"no combined figure is governed yet - say\nso rather than summing",
-		"has no parent lens at all yet: org is rejected on it",
-		// reading contract
+		"1..500",
+		"order_by takes the result columns as they come back",
+		// inventory: what each KPI answers, its shape, its result columns
+		"members_and_dues_by_org",
+		"membership_tiers",
+		"new_members_by_year",
+		"membership_churn_by_year",
+		"contributions_by_org",
+		"contributors_by_org",
+		"contributors_by_project",
+		"maintainers_by_org",
+		"event_registrations_by_org",
+		"training_enrollments_by_org",
+		"account, parent_org, current_membership_count",
+		"metric_time__year, new_membership_count",
+		"foundation, foundation_name, project, project_name, total_contributors",
+		"maintainer_key__account_name, active_maintainers",
+		"FLOW · EVENT start date",
+		"NOT additive - people span accounts",
+		"Tier literals differ per foundation",
+		"edX rows carry no account",
+		// organizations: account, parent_org, and the one-hop limit
+		"`account` is the",
+		"`parent_org` is the company it",
+		"Red Hat LLC is an account whose parent_org is International",
+		"ONE HOP",
+		"not their own acquisitions",
+		"never sum their rows into a parent figure",
+		"no parent-company lens yet",
+		// projects: depth of a subtree
+		"DEPTH: a foundation is covered completely",
+		"direct children only",
+		// attachment levels
+		"attach at FOUNDATION level almost\nentirely",
+		"legitimately near-empty",
+		// reading results
 		"never an organization",
+		"already resolved to the parent account for that project",
+		"never mix the two in one",
 		"compiled_sql",
 		// errors
 		"not deployed yet",
-		"org on kpi_maintainers_by_org is rejected",
+		"subsidiaries other than none on maintainers_by_org",
 		"read_lfx_deck_building_guidance",
 	} {
 		if !strings.Contains(text, want) {

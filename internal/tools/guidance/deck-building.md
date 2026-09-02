@@ -6,40 +6,45 @@ certification, by organization). It builds on the semantic layer guidance
 (read_lfx_semantic_layer_guidance) and the KPI guidance
 (read_lfx_kpi_guidance) - read those first.
 
-## Rule 1: KPI recipes first
+## Rule 1: governed KPIs first
 
-Every recurring deck KPI has a curated recipe. Check the query_lfx_kpis
-inventory and use the matching kpi_* recipe before assembling an ad-hoc
-query. Recipes are governed and digit-stable: the same question re-run gives
-the same number, which is what makes a deck survive verification. Only when
-no recipe matches, fall back to explore_lfx_semantic_layer +
-query_lfx_semantic_layer.
+Every recurring deck KPI has a curated recipe behind query_lfx_kpis. Check
+the inventory in read_lfx_kpi_guidance and use the matching KPI before
+assembling an ad-hoc query. They are governed and digit-stable: the same
+question re-run gives the same number, which is what makes a deck survive
+verification. Only when no KPI matches, fall back to
+explore_lfx_semantic_layer + query_lfx_semantic_layer.
 
-- Slice a recipe with its own parameters: foundation, project, org,
-  since/until on FLOW recipes, as_of on SNAPSHOT ones,
-  an order_by on the recipe's own result columns (- prefix for descending),
-  and a limit. org names the TOP parent and returns its rows per account; a
-  recipe with no parent-organization lens (kpi_maintainers_by_org) rejects
-  org - filter maintainer_key__account_name in where instead.
+- ALWAYS resolve names first: project slugs from search_projects,
+  organization names from search_b2b_orgs. A name they returned this session
+  may be reused as is; never put a guessed slug or organization name in a
+  deck query.
+- Slice a KPI with its own parameters: project + subprojects
+  (none|separate|combined, default separate), org + subsidiaries
+  (none|separate|combined, default none), since/until on FLOW KPIs, as_of on
+  SNAPSHOT ones, an order_by on the result columns (- prefix for descending),
+  and a limit. maintainers_by_org has no parent-company lens, so subsidiaries
+  must be none there - name one employer with org, or filter
+  maintainer_key__account_name in where.
 - where adds a filter on top, one-hop <entity>__<dimension> names only
   (account__account_name); multi-hop paths are rejected.
 
 ## Deck lane → recipe mapping
 
-- Memberships, tiers, dues, ranks per account →
-  kpi_members_and_dues_by_account, kpi_membership_tier_split,
-  kpi_new_members_by_year, kpi_membership_churn. Membership counts are
-  deduplicated; dues sum by account.
-- Contributor and maintainer leaderboards → kpi_contributions_by_org
-  (volume), kpi_contributors_by_org (headcount), kpi_maintainers_by_org,
-  kpi_contributors_by_project.
-- Event registrations → kpi_event_registrations_by_org, windowed on the
-  event start date. Registrations count rows, not unique people - present
+- Memberships, tiers, dues, ranks per organization →
+  members_and_dues_by_org, membership_tiers, new_members_by_year,
+  membership_churn_by_year. Membership counts are deduplicated; dues sum by
+  account.
+- Contributor and maintainer leaderboards → contributions_by_org (volume),
+  contributors_by_org (headcount), maintainers_by_org,
+  contributors_by_project.
+- Event registrations → event_registrations_by_org, windowed on the event
+  start date. Registrations count rows, not unique people - present
   "registrations", not "attendees".
-- Training enrollments → kpi_training_enrollments_by_org. edX enrollments
-  carry no organization and land in the NULL account - present "attributed
+- Training enrollments → training_enrollments_by_org. edX enrollments carry
+  no organization and land in the NULL account - present "attributed
   enrollments" and say so.
-- Event sponsorships → no kpi_* recipe yet: query total_sponsorship_revenue
+- Event sponsorships → no governed KPI yet: query total_sponsorship_revenue
   (USD) / total_sponsorship_count ad hoc. Filter
   sponsorship__sponsorship_tier_type = 'package_tier' for package-only
   revenue; group account__account_name or the rollup for sponsor rankings.
@@ -47,31 +52,30 @@ query_lfx_semantic_layer.
   maintainer share of work) → query_lfx_lens: the semantic layer cannot
   join maintainers to activity at person grain.
 
-The inventory in the tool description is the routing surface; the deployed
-manifest is the source of truth. A "recipe does not exist" error means it is
-not deployed yet, not that the name is wrong.
+The inventory in read_lfx_kpi_guidance is the routing surface; the deployed
+manifest is the source of truth. A "does not exist" error from the server
+means the recipe is not deployed yet, not that the name is wrong.
 
 ## Reading recipe results
 
-The parameters and the reading contract (org names the top parent, headcounts
+The parameters and the reading contract (what each switch covers, headcounts
 NOT additive, the NULL-attribution row) live in read_lfx_kpi_guidance - read
-it before running the recipes.
+it before running the KPIs.
 
 ## Combined-entity slides ("IBM including Red Hat", "Amazon including AWS")
 
-The direction matters: rollups fold subsidiaries INTO parents, so org = a
-subsidiary's name returns only what rolls up to THAT subsidiary - a small,
-plausible-looking answer that excludes the subsidiary's own row, which sits
-under the top parent. Always name the TOP parent; to see one subsidiary
-alone, filter account__account_name in where.
+Name the TOP parent and set subsidiaries: separate lists the parts (IBM and
+Red Hat as their own rows), combined returns the single folded row the slide
+means. org alone, with the default subsidiaries=none, is that company by
+itself - which is the right call for "Red Hat", and the wrong one for "IBM
+including Red Hat".
 
-A rollup grain is coming. Today org = the top parent returns that parent's
-rows per account; for ADDITIVE recipes (members and dues, contribution
-volume, registrations, enrollments) sum those rows client-side and label it
-a client-side sum; for HEADCOUNT recipes (contributors, maintainers) no
-combined figure is governed yet - say so rather than summing. Where the deck
-shows the parts, present the named sub-entities (IBM and Red Hat as separate
-membership counts).
+ONE HOP: the parent link is a single hop, so a combined figure for a top
+parent covers its DIRECT subsidiaries but not their own acquisitions -
+disclose that next to the number. Headcount KPIs (contributors, maintainers)
+are not additive across accounts: take the parent figure from
+subsidiaries=combined, never from summing rows, and for maintainers_by_org -
+which has no parent-company lens yet - say no combined figure is available.
 
 ## Reconciling with official series
 

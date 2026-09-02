@@ -1,141 +1,154 @@
-# LFX KPI recipes — agent guidance
+# LFX KPIs — agent guidance
 
-Read this before your first query_lfx_kpis call. A recipe is a governed
-saved query: its metrics and grouping are fixed in the warehouse, so the
-same question re-run gives the same figure. When one matches the question,
-prefer it over the explore+query flow.
+Read this before your first query_lfx_kpis call. A KPI here is a governed
+recipe: its metrics and grouping are fixed in the warehouse, so the same
+question re-run gives the same figure. When one matches the question, prefer
+it over the explore+query flow, and never rewrite it as an ad-hoc query just
+to sort, filter or scope it — order_by, the scope parameters and where do
+that on the governed recipe.
 
-Answer three questions, then call once:
+## Resolve names first — ALWAYS
 
-1. Which recipe? Pick from the inventory below by what it answers.
-2. Which scope? foundation, project or org, resolved with search_projects /
-   search_b2b_orgs. Omit all three for an LF-wide figure.
-3. Which time? A FLOW recipe takes since/until on its own time axis; a
-   SNAPSHOT recipe takes as_of. A trend on a SNAPSHOT recipe is one call per
-   period with as_of at the period end - label those readings as snapshots.
+project takes a stored project slug from search_projects; org takes an
+organization's legal name, in its stored spelling, from search_b2b_orgs.
+Stored spellings are not the everyday ones ('k8s', 'ptproject', 'Red Hat
+LLC'). A name either tool has returned in this session may be reused as is;
+what is never acceptable is passing a slug or an organization name that has
+not come back from them. An unknown literal returns zero rows, not an error,
+so a guess reads exactly like missing data.
 
-Never rewrite a recipe as an ad-hoc query to sort, filter or scope it:
-order_by, the scope parameters and where do that on the governed recipe.
+## The contract
 
-## Calling
+Answer four questions, then call once.
 
-- saved_query is the recipe name; everything else is the slice. The
-  parameters are identical for every recipe (the tool description lists
-  them), and a parameter the recipe cannot honour returns an error naming
-  the recipe's shape rather than silently ignoring it.
-- foundation and project take stored slugs from search_projects ('k8s',
-  'korg'), not everyday names. org takes the legal name from
-  search_b2b_orgs.
-- where is an extra MetricFlow filter ANDed with the scope parameters, on
-  ONE-HOP names only: {{ Dimension('account__account_name') }} = 'Red Hat LLC'
-  works; multi-hop paths like event_id__project__foundation_slug are
-  rejected. Check literals with explore_lfx_semantic_layer's
-  get_dimension_values first - an unknown literal returns zero rows, not an
-  error.
-- order_by takes the recipe's own result columns, - prefix for descending:
-  order_by=-total_registrations with limit=15 is a top-15. limit has a
-  ceiling 500 and, omitted, returns EVERY row - rosters run long, so set one
-  unless you need the complete set.
+1. WHICH KPI? Pick from the inventory below by what it answers.
+2. WHICH SCOPE? project, org, both, or neither for an LF-wide figure.
+3. WHAT DOES THE NAME COVER? Two switches, and their defaults differ on
+   purpose — a subsidiary is a different company ("Red Hat" means Red Hat),
+   a subproject is part of its project ("CNCF" means all of CNCF).
+   - subprojects: none | separate | combined, DEFAULT separate.
+   - subsidiaries: none | separate | combined, DEFAULT none.
+   - none = the named thing's own rows only.
+   - separate = it plus everything under it, rows as the KPI defines them.
+   - combined = it plus everything under it folded into ONE row. Without
+     org, subsidiaries=combined gives one row per parent organization;
+     subprojects=combined changes the shape only of contributors_by_project,
+     the one per-project KPI.
+4. WHICH TIME? A FLOW KPI takes since/until (yyyy-mm-dd) on its own time
+   axis; a SNAPSHOT KPI takes as_of, and today is the only as_of available.
+   A trend on a SNAPSHOT KPI is one call per period once history exists —
+   label such readings as snapshots.
+
+The rest: where adds a MetricFlow filter ANDed with the scope parameters, on
+ONE-HOP names only ({{ Dimension('account__account_name') }} = 'Red Hat LLC'
+works; a multi-hop path like event_id__project__foundation_slug is rejected);
+check literals with explore_lfx_semantic_layer's get_dimension_values first.
+order_by takes the result columns as they come back, - prefix for descending
+(order_by=-total_registrations with limit=15 is a top-15). limit runs 1..500
+and, omitted, returns EVERY row — rosters run long, so set one unless you
+need the complete set.
 
 ## Inventory
 
-Each entry: what it answers · result columns (qualified names, as order_by
-needs them) · shape and time axis · notes.
+Result columns are given in the vocabulary the results come back in.
 
-- kpi_members_and_dues_by_account — current members and their annual dues
-  per account. account__account_name, account__account_rollup_name,
-  current_membership_count, current_membership_revenue · SNAPSHOT · additive
-  across accounts; dues are list price on active terms, not cash.
-- kpi_membership_tier_split — active members and dues per membership tier.
-  asset_id__membership_tier, current_membership_count,
-  current_membership_revenue · SNAPSHOT · tier literals differ per
-  foundation, so scope with foundation first.
-- kpi_new_members_by_year — new memberships per calendar year, by install
-  date. metric_time__year, new_membership_count · FLOW, install date · the
-  current year is year-to-date.
-- kpi_membership_churn — memberships that ended with no renewal, per year.
-  metric_time__year, churned_membership_count · FLOW, churn date · the
-  current year is partial.
-- kpi_contributions_by_org — code contribution volume per account.
-  account__account_name, account__account_rollup_name,
-  code_contribution_activities · FLOW, activity date · additive; the NULL
-  account row is unattributed work.
-- kpi_contributors_by_org — distinct code contributors per account.
-  account__account_name, account__account_rollup_name, total_contributors ·
-  FLOW, activity date · NOT additive - people span accounts, so there is no
-  governed combined figure for a parent today.
-- kpi_contributors_by_project — distinct code contributors per project,
-  with its foundation. project__foundation_slug, project__foundation_name,
-  project__slug, project__name, total_contributors · FLOW, activity date ·
-  NOT additive across projects.
-- kpi_maintainers_by_org — active maintainers per employer account.
-  maintainer_key__account_name, active_maintainers · SNAPSHOT · NOT
-  additive; the NULL row is unresolved employer; org not accepted yet (no
-  parent lens on this recipe) - use where on maintainer_key__account_name
-  (exact account name) and present the figure as per-account.
-- kpi_event_registrations_by_org — accepted registrations per account.
-  account__account_name, account__account_rollup_name, total_registrations ·
-  FLOW, event start date · additive; rows are registrations, not people.
-- kpi_training_enrollments_by_org — enrollments per account.
-  account__account_name, account__account_rollup_name, total_enrollments ·
-  FLOW, enrollment date · additive; edX rows carry no account and land in
-  the NULL row.
+| KPI | What it answers | Shape · time axis | Result columns | Notes |
+|---|---|---|---|---|
+| members_and_dues_by_org | Current members and their annual dues per organization | SNAPSHOT | account, parent_org, current_membership_count, current_membership_revenue | Additive across accounts; dues are the list price on active terms, not cash collected |
+| membership_tiers | Active members and dues per membership tier | SNAPSHOT | asset_id__membership_tier, current_membership_count, current_membership_revenue | Tier literals differ per foundation, so scope with project (a foundation slug) first |
+| new_members_by_year | New memberships per calendar year, by install date | FLOW · install date | metric_time__year, new_membership_count | The current year is year-to-date |
+| membership_churn_by_year | Memberships that ended with no renewal, per calendar year | FLOW · churn date | metric_time__year, churned_membership_count | The current year is partial and not comparable to a completed one |
+| contributions_by_org | Code contribution volume per organization | FLOW · activity date | account, parent_org, code_contribution_activities | Additive; the NULL account row is unattributed work |
+| contributors_by_org | Distinct code contributors per organization | FLOW · activity date | account, parent_org, total_contributors | NOT additive - people span accounts, so a parent figure comes from subsidiaries=combined, never from summing rows |
+| contributors_by_project | Distinct code contributors per project, with its foundation | FLOW · activity date | foundation, foundation_name, project, project_name, total_contributors | NOT additive across projects; subprojects=combined folds the rows into one |
+| maintainers_by_org | Active maintainers per employer | SNAPSHOT | maintainer_key__account_name, active_maintainers | NOT additive; the NULL row is an unresolved employer; no parent-company lens yet, so subsidiaries must be none |
+| event_registrations_by_org | Accepted registrations per organization | FLOW · EVENT start date | account, parent_org, total_registrations | Additive; rows are registrations, not people; a window means "events in the window" |
+| training_enrollments_by_org | Training and certification enrollments per organization | FLOW · enrollment date | account, parent_org, total_enrollments | Additive; edX rows carry no account and land in the NULL row, so this is a platform coverage gap, not unknown employers |
 
-Windows on kpi_event_registrations_by_org run on the EVENT start date, so
-since/until mean "events in the window", matching the recipe's event-year
-grouping.
+## Organizations: account and parent_org
 
-## Organizations: the account and its parent
+Every *_by_org KPI carries two organization columns. `account` is the
+Salesforce account that holds the record; `parent_org` is the company it
+rolls up to. Red Hat LLC is an account whose parent_org is International
+Business Machines Corporation, and IBM's own direct business is another
+account under the same parent. So:
 
-Every *_by_org recipe carries two organization columns. account_name is the
-Salesforce account that holds the record; account_rollup_name is the parent
-company it belongs to. Red Hat LLC is an account whose rollup is
-International Business Machines Corporation; IBM's own direct business is
-another account under the same rollup.
+- org = 'Red Hat LLC' (subsidiaries none) → Red Hat's own rows.
+- org = 'Red Hat LLC', subsidiaries separate → Red Hat plus every account
+  that rolls up to it, one row each.
+- org = 'International Business Machines Corporation', subsidiaries combined
+  → one row, IBM with Red Hat and its other subsidiaries folded in.
 
-The org parameter always names the PARENT, and the rows come back per
-account. org = a subsidiary's name returns only what rolls up to THAT
-subsidiary - a small, plausible-looking answer that excludes the
-subsidiary's own row, which sits under the top parent. Always name the TOP
-parent; to see one subsidiary alone, filter account__account_name in where.
+ONE HOP: the parent link is a single hop, so a combined figure for a top
+parent covers its DIRECT subsidiaries but not their own acquisitions — an
+account that rolls up to Red Hat LLC is not folded into IBM. Disclose that
+next to any combined figure.
 
-Combined "including subsidiaries" figures: a rollup grain is coming. Today
-org = the top parent returns that parent's rows per account; for ADDITIVE
-recipes (members and dues, contribution volume, registrations, enrollments)
-sum those rows client-side and label it a client-side sum; for HEADCOUNT
-recipes (contributors, maintainers) no combined figure is governed yet - say
-so rather than summing.
+Headcount KPIs (contributors, maintainers) are not additive across accounts:
+never sum their rows into a parent figure — ask for the combined row instead.
+maintainers_by_org has no parent-company lens yet, so it has no combined row
+at all; say so rather than summing.
 
-kpi_maintainers_by_org has no parent lens at all yet: org is rejected on it.
-Filter maintainer_key__account_name in where with the exact account name and
-present the figure as per-account, not per parent.
+The full account-vs-rollup doctrine (the acronym trap, accounts that are
+their own parent, the NULL row) is in read_lfx_semantic_layer_guidance.
 
-The full account-vs-rollup doctrine (acronym trap, accounts that are their
-own rollup, the NULL row) is in read_lfx_semantic_layer_guidance.
+## Projects and subprojects
+
+project takes ONE slug, and that slug may name a project, a foundation or an
+umbrella node — you are not asked to know which. With subprojects separate or
+combined the scope covers the node's own bucket, a whole foundation, and an
+umbrella's direct children.
+
+DEPTH: a foundation is covered completely; an umbrella node BELOW foundation
+level reaches its direct children only, so a grandchild project's rows are
+missing from an umbrella subtree. Say so when the umbrella you scoped has
+grandchildren. subprojects=none is the node's own bucket alone, which for a
+foundation is its catch-all bucket, not the foundation's projects.
+
+## Where each domain attaches
+
+Memberships and event registrations attach at FOUNDATION level almost
+entirely: a project filter on those KPIs is legitimately near-empty, not a
+failed query — scope them with the foundation's slug and say the figure is
+foundation-level. Enrollments and maintainers attach below the foundation as
+well; contribution and contributor KPIs resolve on each activity's own
+project.
 
 ## Reading results
 
 - *_by_org rows come per account with the parent alongside: read account
-  rankings straight off the rows. A parent total is a client-side sum of the
-  rows sharing a rollup name, and only for additive recipes - label it as
-  one.
-- The NULL account row is unattributed - never an organization, never folded
+  rankings straight off the rows, and take parent figures from
+  subsidiaries=combined rather than from a client-side sum.
+- The NULL account row is unattributed — never an organization, never folded
   into a parent. Report it as unattributed.
-- SNAPSHOT readings are the state today. Historical as-of readings run high
-  once they exist (departures before tracking began are not recorded); say
-  so next to any historical figure.
+- Activities carry a parent-resolved account: a contribution row's account is
+  already resolved to the parent account for that project before parent_org
+  applies, so it can differ from the account on the source record. The
+  crowd.dev spelling of a company ('Red Hat') is a different vocabulary from
+  the Salesforce account name ('Red Hat LLC'); never mix the two in one
+  answer.
+- SNAPSHOT readings are the state today. Historical as-of readings, once they
+  exist, run high (departures before tracking began are not recorded); say so
+  next to any historical figure.
 - Every result carries compiled_sql; quote it when an auditor asks how a
   figure was produced.
 
 ## Errors
 
-- A recipe name the server does not know is not deployed yet: fall back to
+Each rejection names the rule and the fix; correct the call rather than
+retrying it unchanged.
+
+- unknown kpi: the message lists the valid names.
+- since/until on a SNAPSHOT KPI, as_of on a FLOW KPI, or an as_of other than
+  today.
+- subsidiaries other than none on maintainers_by_org: that KPI has no
+  parent-company lens yet. Name one employer with org, or filter
+  maintainer_key__account_name in where, and present the figure as
+  per-account.
+- an unknown subprojects/subsidiaries value, a date that is not yyyy-mm-dd,
+  or a limit outside 1..500.
+- A recipe the server does not know is not deployed yet: fall back to
   explore_lfx_semantic_layer + query_lfx_semantic_layer and label the figure
   as not governed. Never retry the name.
-- org on kpi_maintainers_by_org is rejected: that recipe has no
-  parent-organization lens yet. Use where on maintainer_key__account_name.
-- since/until on a SNAPSHOT recipe, as_of on a FLOW recipe, and an as_of
-  other than today are rejected with the recipe's shape named. Correct the
-  call; do not retry it unchanged.
 
 Building a deck or briefing? Also read read_lfx_deck_building_guidance.

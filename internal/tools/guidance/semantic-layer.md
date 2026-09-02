@@ -10,9 +10,10 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
 ## Routing
 
 - explore_lfx_semantic_layer discovers metrics, dimensions and stored values; query_lfx_semantic_layer runs the query. Explore first.
-- query_lfx_kpis answers common questions with fixed recipes (kpi_*). When one
-  matches, PREFER it over the explore+query flow. Inventory:
-  read_lfx_kpi_guidance. Decks: read_lfx_deck_building_guidance.
+- query_lfx_kpis answers common questions with governed KPIs named in plain
+  words (contributors_by_org, members_and_dues_by_org...). When one matches,
+  PREFER it over the explore+query flow. Inventory: read_lfx_kpi_guidance.
+  Decks: read_lfx_deck_building_guidance.
 - query_lfx_lens (text-to-SQL): only maintainer×contribution joins ("top
   maintainers by contributions", maintainer share of work), social listening, and
   questions no metric family expresses — label its answers as generated SQL.
@@ -21,10 +22,13 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
 
 ## Protocol
 
-0. If a kpi_* recipe matches, prefer it (scope and window via its own uniform
-   parameters, recipe 15; never go ad hoc just to sort, filter or scope).
-1. Resolve scope: search_projects for slugs ('k8s', 'korg', 'ptproject' — stored
-   slugs are not everyday names); search_b2b_orgs for org legal names (recipe 5).
+0. If a KPI matches, prefer it (scope and window via its own parameters,
+   recipe 15; never go ad hoc just to sort, filter or scope).
+1. ALWAYS resolve names first: search_projects for project slugs ('k8s', 'korg',
+   'ptproject' — stored slugs are not everyday names), search_b2b_orgs for org
+   legal names (recipe 5). A name either tool returned in this session may be
+   reused as is; never filter, scope or call a KPI with a slug or an
+   organization name that has not come back from them.
 2. Discover: list_metrics(search) → get_dimensions → get_dimension_values before
    filtering on any value you have not seen in output.
 3. Query; state population, exact date window, and what counts as one in answers.
@@ -65,6 +69,11 @@ dimension by what the question names:
   ("Direct children of X": spine slug = X + level 2, group by project slug).
 - SUM METRICS (insertions, deletions): ALWAYS the spine filter — non-hierarchical
   filters inflate them 2-4x. Walk-downs are flattened: counts only, never sums.
+- ATTACHMENT LEVELS: memberships and event registrations attach at FOUNDATION
+  level almost entirely, so a project-level filter on them is legitimately
+  near-empty rather than a failed query — scope them by foundation and say the
+  figure is foundation-level. Enrollments and maintainers attach below the
+  foundation too.
 - Domain scope dimensions: memberships asset_id__project_slug; maintainers
   maintainer_key__project_slug (+ is_lf_project = true; foundations via
   project__foundation_slug — the cm_*_slug rollups are NOT project keys);
@@ -138,7 +147,14 @@ stray accounts that are their OWN rollup and NOT folded under the parent —
 present those separately rather than as part of it. Additive metrics (dues,
 volumes) may be summed across accounts sharing a rollup; headcounts may NOT —
 re-read them at rollup grain. No rollup dimension → sum named sub-entities
-and list them.
+and list them. ONE HOP: the parent link is a single hop, so an "including
+subsidiaries" figure for a top parent covers its DIRECT subsidiaries but not
+their own acquisitions (an account rolling up to Red Hat LLC is not folded
+into IBM) — disclose that next to any combined figure. On ACTIVITIES the
+account is already resolved to the parent account FOR THAT PROJECT before the
+rollup applies, so a contribution row's Salesforce account can differ from the
+account on the source record; organization_name stays the crowd.dev spelling
+and the two vocabularies never mix in one answer.
 
 7. TIER LITERALS differ per foundation ('Premier Membership' vs 'Premier Member') — get_dimension_values per foundation, never reuse.
 
@@ -182,16 +198,21 @@ enrollments and sponsorships: group account__account_name (or the rollup, recipe
 and total_sponsorship_count include ALL tier types — filter
 sponsorship__sponsorship_tier_type = 'package_tier' for package-only figures
 ('a_la_carte' and 'billing_adjustment' are the others). Per event:
-total_registrations by event_id__event_name + the event start year. Per course:
-total_enrollments by enrollment_id__course_name + product_type.
+total_registrations by event_id__event_name + the event start year — or call
+query_lfx_kpis with kpi=kpi_event_registrations, the deployed saved query for
+exactly that cut. Per course: total_enrollments by enrollment_id__course_name
++ product_type — or kpi=kpi_training_enrollments.
 
-15. KPI RECIPE CALLS take uniform parameters — foundation, project, org,
-since/until on FLOW recipes, as_of on SNAPSHOT ones, order_by on the recipe's
-own result columns, limit. org names the TOP parent and returns its rows per
-account; there is no rollup-grain parameter yet, and a recipe with no
-parent-organization lens (kpi_maintainers_by_org) rejects org. where adds a
-filter and is one-hop only (<entity>__<dimension>); multi-hop paths fail at
-parse time, though ad-hoc queries accept both.
+15. KPI CALLS take uniform parameters — kpi, project + subprojects
+(none|separate|combined, default separate), org + subsidiaries
+(none|separate|combined, default none), since/until on FLOW KPIs, as_of on
+SNAPSHOT ones, where, order_by, limit. The switches say what a name covers:
+none = that project or account alone, separate = it and everything under it
+one row each, combined = folded into one row. Results come back in the same
+words (account, parent_org, project, foundation), and order_by takes them.
+maintainers_by_org has no parent-company lens, so subsidiaries must be none
+there. where adds a filter and is one-hop only (<entity>__<dimension>);
+multi-hop paths fail at parse time, though ad-hoc queries accept both.
 
 ## Worked examples (verified live)
 

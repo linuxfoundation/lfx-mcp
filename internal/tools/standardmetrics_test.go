@@ -1087,3 +1087,18 @@ func TestStandardMetrics_UndeployedRecipeErrorPassesThrough(t *testing.T) {
 		t.Errorf("undeployed recipe error must pass through verbatim, got %q", text)
 	}
 }
+
+// Snowflake returns upper-case column names; the relabeller must still fire
+// and every column must come back in the lower-case client vocabulary.
+func TestMetricRelabelJSON_HandlesUpperCaseWarehouseColumns(t *testing.T) {
+	body := []byte(`{"columns":["ACCOUNT__ACCOUNT_NAME","ACCOUNT__ACCOUNT_ROLLUP_NAME","TOTAL_CONTRIBUTORS","METRIC_TIME__YEAR"],"data":[{"ACCOUNT__ACCOUNT_NAME":"Red Hat LLC","ACCOUNT__ACCOUNT_ROLLUP_NAME":"IBM","TOTAL_CONTRIBUTORS":310,"METRIC_TIME__YEAR":"2026-01-01"}],"compiled_sql":"SELECT ACCOUNT__ACCOUNT_NAME FROM x"}`)
+	got := string(metricRelabelJSON(body))
+	for _, want := range []string{`"account":"Red Hat LLC"`, `"parent_org":"IBM"`, `"total_contributors":310`, `"metric_time__year":"2026-01-01"`, `"columns":["account","parent_org","total_contributors","metric_time__year"]`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("relabelled body %s missing %s", got, want)
+		}
+	}
+	if !strings.Contains(got, `"compiled_sql":"SELECT ACCOUNT__ACCOUNT_NAME FROM x"`) {
+		t.Errorf("compiled_sql was rewritten: %s", got)
+	}
+}

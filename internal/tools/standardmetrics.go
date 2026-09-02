@@ -525,16 +525,21 @@ var metricColumnLabels = map[string]string{
 // metricClientColumn is the client vocabulary for one result column: the explicit
 // label if there is one, else the column with its entity prefix stripped.
 // Anything else is left exactly as it came back.
+//
+// Snowflake returns column names in upper case (ACCOUNT__ACCOUNT_NAME), so the
+// match is case-insensitive and every column comes back in the lower-case
+// vocabulary the guidance uses (account, total_contributors, metric_time__year).
 func metricClientColumn(name string) string {
-	if label, ok := metricColumnLabels[name]; ok {
+	lower := strings.ToLower(name)
+	if label, ok := metricColumnLabels[lower]; ok {
 		return label
 	}
 	for _, prefix := range []string{"account__", "project__"} {
-		if strings.HasPrefix(name, prefix) && len(name) > len(prefix) {
-			return strings.TrimPrefix(name, prefix)
+		if strings.HasPrefix(lower, prefix) && len(lower) > len(prefix) {
+			return strings.TrimPrefix(lower, prefix)
 		}
 	}
-	return name
+	return lower
 }
 
 // metricRelabelKeys maps the keys of one JSON object to the client vocabulary,
@@ -616,16 +621,18 @@ func metricRelabelJSON(body []byte) []byte {
 	decoder.UseNumber()
 
 	var out bytes.Buffer
-	if err := metricRewriteJSONValue(decoder, &out); err != nil {
+	if err := metricRewriteJSONValue(decoder, &out, false); err != nil {
 		return body
 	}
 	return out.Bytes()
 }
 
 // metricRewriteJSONValue copies one JSON value from the decoder to out, renaming
-// object keys and any string that is itself a column name (a response that
-// lists its columns names them the same way a row keys them).
-func metricRewriteJSONValue(decoder *json.Decoder, out *bytes.Buffer) error {
+// object keys and, inside the response's "columns" list, the strings that name
+// the columns. Every other string value — a row value, compiled_sql — is copied
+// exactly as it arrived; columnNames says whether the value being copied sits
+// inside that list.
+func metricRewriteJSONValue(decoder *json.Decoder, out *bytes.Buffer, columnNames bool) error {
 	token, err := decoder.Token()
 	if err != nil {
 		return err
@@ -633,7 +640,7 @@ func metricRewriteJSONValue(decoder *json.Decoder, out *bytes.Buffer) error {
 
 	delim, isDelim := token.(json.Delim)
 	if !isDelim {
-		if text, isString := token.(string); isString {
+		if text, isString := token.(string); isString && columnNames {
 			return metricWriteJSONToken(metricClientColumn(text), out)
 		}
 		return metricWriteJSONToken(token, out)
@@ -656,7 +663,7 @@ func metricRewriteJSONValue(decoder *json.Decoder, out *bytes.Buffer) error {
 				return fmt.Errorf("unexpected object key %v", keyToken)
 			}
 			var value bytes.Buffer
-			if err := metricRewriteJSONValue(decoder, &value); err != nil {
+			if err := metricRewriteJSONValue(decoder, &value, key == "columns"); err != nil {
 				return err
 			}
 			members = append(members, member{key: key, value: value.Bytes()})
@@ -690,7 +697,7 @@ func metricRewriteJSONValue(decoder *json.Decoder, out *bytes.Buffer) error {
 			if i > 0 {
 				out.WriteByte(',')
 			}
-			if err := metricRewriteJSONValue(decoder, out); err != nil {
+			if err := metricRewriteJSONValue(decoder, out, columnNames); err != nil {
 				return err
 			}
 		}

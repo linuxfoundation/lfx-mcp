@@ -25,9 +25,12 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   (none|separate|combined, default none), since/until on FLOW metrics, as_of
   on SNAPSHOT ones, an order_by on the result columns (- prefix for
   descending), and a limit. subprojects=combined folds every project column of
-  the result. maintainers_by_org has no parent-company lens, so subsidiaries
-  must be none there - name one employer with org, or filter
-  maintainer_key__account_name in where.
+  the result. The maintainer metrics have no parent-company lens, so
+  subsidiaries must be none there - name one employer with org.
+- DEPTH: the contribution metrics cover a named node's tree at any depth
+  within its foundation; the membership and maintainer metrics cover a
+  foundation completely but reach an umbrella below foundation level only to
+  its direct children - say so on a slide scoped to such an umbrella.
 - where adds a filter on top, one-hop <entity>__<dimension> names only
   (account__account_name); multi-hop paths are rejected.
 
@@ -35,28 +38,27 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
 
 - Memberships, tiers, dues, ranks per organization →
   members_and_dues_by_org, membership_tiers, new_members_by_year,
-  membership_churn_by_year. Membership counts are deduplicated; dues sum by
-  account.
+  membership_churn_by_year. Membership counts are deduplicated; dues are the
+  list price on active terms, on a different grain from the count.
 - Contributor and maintainer leaderboards → contributions_by_org (volume),
-  contributors_by_org (headcount), maintainers_by_org,
-  contributors_by_project.
-- Event registrations → event_registrations_by_org, windowed on the event
-  start date. Registrations count rows, not unique people - present
-  "registrations", not "attendees".
-- Training enrollments → training_enrollments_by_org. edX enrollments carry
-  no organization and land in the NULL account - present "attributed
-  enrollments" and say so.
-- Event sponsorships → no governed metric yet: query total_sponsorship_revenue
-  (USD) / total_sponsorship_count ad hoc. Filter
+  contributors_by_org (headcount), contributors_by_project,
+  maintainers_by_org, maintainers_by_project. Named maintainers per project →
+  maintainer_roster (personal names: use it only where naming individuals is
+  appropriate).
+- Event registrations, training enrollments and sponsorships → no standard
+  metric: compose them with explore + query (recipe 14 in
+  read_lfx_semantic_layer_guidance) and label them as ad-hoc figures.
+  Registrations count rows, not unique people - present "registrations", not
+  "attendees"; edX enrollments carry no organization, so an org-scoped
+  enrollment figure is a floor. Sponsorships:
+  total_sponsorship_revenue (USD) / total_sponsorship_count, filtered
   sponsorship__sponsorship_tier_type = 'package_tier' for package-only
   revenue; group account__account_name or the rollup for sponsor rankings.
 - Maintainer × contribution joins (top maintainers by contributions,
   maintainer share of work) → query_lfx_lens: the semantic layer cannot
   join maintainers to activity at person grain.
 
-The inventory in read_lfx_standard_metrics_guidance is the routing surface;
-the deployed manifest is the source of truth. A "does not exist" error from
-the server means the recipe is not deployed yet, not that the name is wrong.
+The inventory in read_lfx_standard_metrics_guidance is the routing surface.
 
 ## Reading recipe results
 
@@ -76,8 +78,15 @@ ONE HOP: the parent link is a single hop, so a combined figure for a top
 parent covers its DIRECT subsidiaries but not their own acquisitions -
 disclose that next to the number. Headcount metrics (contributors,
 maintainers) are not additive across accounts: take the parent figure from
-subsidiaries=combined, never from summing rows, and for maintainers_by_org -
-which has no parent-company lens yet - say no combined figure is available.
+subsidiaries=combined, never from summing rows, and for the maintainer
+metrics - which have no parent-company lens - say no combined figure is
+available.
+
+STRAY SAME-COMPANY ACCOUNTS: a company can hold accounts that are their own
+rollup parent (regional and research arms spelled with its name), and those
+are folded into nothing. search_b2b_orgs for the company name before a
+combined slide, and either name those accounts beside the figure or add them
+deliberately - say which you did.
 
 ## Reconciling with official series
 

@@ -94,7 +94,11 @@ dimension by what the question names:
 
 ## Windows
 
-Default is the trailing 12 months (prior 365 complete UTC days); state the concrete
+Day boundaries are US-Pacific for every TimeDimension filter: a 'DAY' bound cuts
+at midnight US Pacific, not UTC, so a window sits a few hours off a UTC one —
+state the window, never claim an exact UTC calendar month.
+
+Default is the trailing 12 months (the prior 365 complete days); state the concrete
 dates and reuse them in any lens question. YTD needs AND metric_time <= today —
 installs can be future-dated. Members as of date D: membership_count with metric_time
 <= 'D' AND asset_id__end_date >= 'D'; today's actives are current_membership_count;
@@ -180,7 +184,7 @@ rollups hold foundation ancestry, verified live). Foundations:
 project__foundation_slug. ALWAYS add maintainer_key__is_lf_project = true: the
 maintainers model also holds maintainers of non-LF projects crowd.dev tracks
 (about half the rows) and they carry a project slug too, so a slug filter alone
-does not exclude them; the maintainers_by_org standard metric has this filter
+does not exclude them; the maintainer standard metrics have this filter
 built in. Active = no end date; start_date has a
 2000-01-01 sentinel — never trend on it. As of date D: total_maintainers where
 maintainer_key__start_date <= 'D' AND (end_date IS NULL OR end_date >= 'D');
@@ -198,27 +202,44 @@ best effort and disclose there is no canonical way to compute it.
 
 13. REGIONS. country__* follows the person; organization_lf_region etc. follow the org's HQ.
 
-14. EVENTS/TRAINING/SPONSORSHIPS BY ORG. The account entity spans registrations,
-enrollments and sponsorships: group account__account_name (or the rollup, recipe
-6). Registrations count rows, not people; edX enrollments land in the NULL bucket
-— present "attributed enrollments". Sponsorships: total_sponsorship_revenue (USD)
-and total_sponsorship_count include ALL tier types — filter
+14. EVENTS/TRAINING/SPONSORSHIPS BY ORG. No standard metric covers these —
+compose them here. METRICS: total_registrations counts ACCEPTED registrations
+only; total_enrollments counts enrollment records only (the source table is
+mostly other lifecycle events, and the metric filters them out) — neither
+needs a status filter of your own. Sponsorships: total_sponsorship_revenue
+(USD) and total_sponsorship_count include ALL tier types — filter
 sponsorship__sponsorship_tier_type = 'package_tier' for package-only figures
-('a_la_carte' and 'billing_adjustment' are the others). Per event:
-total_registrations by event_id__event_name + the event start year — or call
-query_lfx_standard_metrics with metric=kpi_event_registrations, the deployed
-saved query for exactly that cut. Per course: total_enrollments by
-enrollment_id__course_name + product_type — or metric=kpi_training_enrollments.
+('a_la_carte' and 'billing_adjustment' are the others). ACCOUNT LENS: the
+account entity spans all three — group or filter account__account_name, or
+account__account_rollup_name for the parent (recipe 6). ATTACHMENT: all three
+attach at foundation level, so scope them with project__foundation_slug; a
+leaf project's own slug returns NOTHING, which is the attachment, not missing
+data. TIME AXES: registrations carry two — registration_id__event_start_date,
+where a window means "events in the window", and metric_time, the sign-up
+date; pick the one the question means and say which. Enrollments use
+metric_time. PER EVENT: total_registrations by event_id__event_name +
+registration_id__event_start_date__year. PER COURSE: total_enrollments by
+enrollment_id__course_name + enrollment_id__product_type. FLOORS: edX
+enrollments carry no account and land in the NULL bucket, and a share of
+registrations has no account either, so every org-scoped figure here is a
+floor — present "attributed registrations/enrollments" and say so.
 
 15. STANDARD METRIC CALLS take uniform parameters — metric, project +
 subprojects (none|separate|combined, default separate), org + subsidiaries
 (none|separate|combined, default none), since/until on FLOW metrics, as_of on
-SNAPSHOT ones, where, order_by, limit. The switches say what a name covers:
-none = that project or account alone, separate = it and everything under it
-one row each, combined = folded into one row (subprojects=combined folds every
-project column of the result). Results come back in the same words (account,
-parent_org, project, foundation), and order_by takes them. maintainers_by_org
-has no parent-company lens, so subsidiaries must be none there. where adds a
+SNAPSHOT ones, where, order_by, limit. The ten: members_and_dues_by_org,
+membership_tiers, new_members_by_year, membership_churn_by_year,
+contributions_by_org, contributors_by_org, contributors_by_project,
+maintainers_by_org, maintainers_by_project, maintainer_roster. The switches
+say what a name covers: none = that project or account alone, separate = it
+and everything under it one row each, combined = folded into one row
+(subprojects=combined folds every project column of the result). DEPTH: the
+contribution metrics cover a named node's tree at ANY depth within its
+foundation; the membership and maintainer metrics cover a foundation
+completely but reach an umbrella below foundation level only to its DIRECT
+children. Results come back in the same words (account, parent_org, project,
+foundation, year), and order_by takes them. The maintainer metrics have no
+parent-company lens, so subsidiaries must be none there. where adds a
 filter and is one-hop only (<entity>__<dimension>); multi-hop paths fail at
 parse time, though ad-hoc queries accept both.
 

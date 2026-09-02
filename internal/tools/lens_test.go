@@ -220,7 +220,7 @@ func TestSemanticLayerDescriptions_FitSchemaBudget(t *testing.T) {
 
 // TestExploreSemanticLayerDescription checks the slimmed discovery tool
 // still carries the routing contract: what the layer covers, the
-// guidance-first instruction, the saved-query preference, the discovery
+// guidance-first instruction, the KPI recipe preference, the discovery
 // actions, and the redirects. Everything else moved to the guidance tool
 // (pinned in TestSemanticLayerGuidanceContent).
 func TestExploreSemanticLayerDescription(t *testing.T) {
@@ -232,8 +232,8 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		"read_lfx_semantic_layer_guidance",
 		"read it BEFORE using this tool",
 		"one read also covers query_lfx_semantic_layer",
-		// A matching saved query outranks the explore+query flow.
-		"query_lfx_semantic_layer_saved_queries",
+		// A matching KPI recipe outranks the explore+query flow.
+		"query_lfx_kpis",
 		// The three discovery actions with their arguments.
 		"list_metrics(search)",
 		"get_dimensions(metrics, search)",
@@ -269,7 +269,7 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 		"never guess",
 		"read_lfx_semantic_layer_guidance",
 		"read it BEFORE querying",
-		"query_lfx_semantic_layer_saved_queries",
+		"query_lfx_kpis",
 		// The unguessable syntax.
 		"metrics (required)",
 		"Dimension(",
@@ -314,9 +314,9 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 // the guidance tools, whose results have no budget.
 func TestSlimDescriptionsKeepHeadroom(t *testing.T) {
 	for name, desc := range map[string]string{
-		"explore_lfx_semantic_layer":             exploreSemanticLayerDescription,
-		"query_lfx_semantic_layer":               querySemanticLayerDescription,
-		"query_lfx_semantic_layer_saved_queries": savedQueriesDescription,
+		"explore_lfx_semantic_layer": exploreSemanticLayerDescription,
+		"query_lfx_semantic_layer":   querySemanticLayerDescription,
+		"query_lfx_kpis":             kpisDescription,
 	} {
 		if got := len(desc); got > 1600 {
 			t.Errorf("%s description is %d bytes; keep it under 1600 — move detail into the guidance tools", name, got)
@@ -359,7 +359,7 @@ func TestSemanticLayerArgs_FieldsFitSchemaBudget(t *testing.T) {
 // pass it through; it just may not be the only copy.
 func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 	var surviving string
-	for _, tool := range []*mcp.Tool{listExploreTool(t), listQueryTool(t)} {
+	for _, tool := range []*mcp.Tool{listExploreTool(t), listQueryTool(t), listKPIsTool(t)} {
 		surviving += "\n" + tool.Description
 		for _, name := range schemaRequired(t, tool) {
 			surviving += "\n" + schemaPropertyDescription(t, tool, name)
@@ -383,6 +383,11 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 		{"FULL LEGAL names", "short-name value searches silently miss legal-name accounts"},
 		{"search_b2b_orgs", "the resolver for org legal names; its empty results are access-filtered, not proof of absence"},
 		{"read_lfx_semantic_layer_guidance", "the guidance recipes are useless if nothing routes the model to them"},
+		{"read_lfx_kpi_guidance", "the recipe inventory is only reachable if the KPI tool routes the model to it"},
+		{"kpi_members_and_dues_by_account", "recipe names cannot be guessed, and the inventory reaches the model only here"},
+		{"account | rollup", "the org grain is a closed set; an invented value is rejected"},
+		{"FLOW", "since/until on the wrong shape is rejected, not silently ignored"},
+		{"SNAPSHOT", "as_of on the wrong shape is rejected, not silently ignored"},
 	} {
 		if !strings.Contains(surviving, tc.token) {
 			t.Errorf("%q reaches the model only via an optional parameter, where it gets summarised away (%s). Move it into the tool description or onto a required parameter.",

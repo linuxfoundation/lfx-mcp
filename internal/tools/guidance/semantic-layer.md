@@ -10,9 +10,9 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
 ## Routing
 
 - explore_lfx_semantic_layer discovers metrics, dimensions and stored values; query_lfx_semantic_layer runs the query. Explore first.
-- query_lfx_semantic_layer_saved_queries answers common questions with fixed
-  recipes (kpi_*). When one matches, PREFER it over the explore+query flow.
-  Catalog: read_lfx_saved_queries_guidance. Decks: read_lfx_deck_building_guidance.
+- query_lfx_kpis answers common questions with fixed recipes (kpi_*). When one
+  matches, PREFER it over the explore+query flow. Inventory:
+  read_lfx_kpi_guidance. Decks: read_lfx_deck_building_guidance.
 - query_lfx_lens (text-to-SQL): only maintainer×contribution joins ("top
   maintainers by contributions", maintainer share of work), social listening, and
   questions no metric family expresses — label its answers as generated SQL.
@@ -21,8 +21,8 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
 
 ## Protocol
 
-0. If a kpi_* saved query matches, prefer it (scope via where — one-hop names,
-   recipe 15; sort via order_by; never go ad hoc just to sort or filter).
+0. If a kpi_* recipe matches, prefer it (scope and window via its own uniform
+   parameters, recipe 15; never go ad hoc just to sort, filter or scope).
 1. Resolve scope: search_projects for slugs ('k8s', 'korg', 'ptproject' — stored
    slugs are not everyday names); search_b2b_orgs for org legal names (recipe 5).
 2. Discover: list_metrics(search) → get_dimensions → get_dimension_values before
@@ -163,9 +163,11 @@ and total_sponsorship_count include ALL tier types — filter
 sponsorship__sponsorship_tier_type = 'package_tier' for package-only figures
 ('a_la_carte' and 'billing_adjustment' are the others).
 
-15. SAVED-QUERY FILTERS are one-hop only (<entity>__<dimension>); multi-hop paths
-fail at parse time. Ad-hoc queries accept both. Saved-query order_by takes the
-recipe's own fields (its result columns), - prefix for descending.
+15. KPI RECIPE CALLS take uniform parameters — foundation, project, org, by
+(account | rollup), since/until on FLOW recipes, as_of on SNAPSHOT ones,
+order_by on the recipe's own result columns, limit. where adds a filter and is
+one-hop only (<entity>__<dimension>); multi-hop paths fail at parse time,
+though ad-hoc queries accept both.
 
 ## Worked examples (verified live)
 
@@ -183,5 +185,5 @@ Org share of PyTorch code activity (recipe 2):
   order_by=-code_contribution_activities limit=50
   where={{ Dimension('activity_project_id__project_spine_slug') }} = 'pytorch' AND {{ Dimension('activity_project_id__is_org_contribution') }} = true
 
-Prefer repeatable answers: saved query > named metric > lens SQL — label anything below
+Prefer repeatable answers: KPI recipe > named metric > lens SQL — label anything below
 the top rung; struggling, re-read the recipe BEFORE any query_lfx_lens fallback.

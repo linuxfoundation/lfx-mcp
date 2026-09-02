@@ -35,14 +35,14 @@ var semanticLayerGuidance string
 //go:embed guidance/deck-building.md
 var deckBuildingGuidance string
 
-//go:embed guidance/saved-queries.md
-var savedQueriesGuidance string
+//go:embed guidance/kpis.md
+var kpiGuidance string
 
 const semanticLayerGuidanceDescription = `Agent guidance for the LFX semantic layer and lens tools: routing, query syntax, scoping, worked recipes, failure modes. Read once per session BEFORE the first explore_lfx_semantic_layer, query_lfx_semantic_layer or query_lfx_lens call.`
 
-const deckBuildingGuidanceDescription = `Agent guidance for building customer-facing KPI decks and presentations from LFX data: saved-query-first workflow, deck lane mapping, rollups, reconciliation, presentation rules. Read BEFORE assembling deck or briefing numbers.`
+const deckBuildingGuidanceDescription = `Agent guidance for building customer-facing KPI decks and presentations from LFX data: recipe-first workflow, deck lane mapping, rollups, reconciliation, presentation rules. Read BEFORE assembling deck or briefing numbers.`
 
-const savedQueriesGuidanceDescription = `Agent guidance for the LFX saved queries: the catalog with use cases, filter mechanics, and how to read the results. Read once per session BEFORE the first query_lfx_semantic_layer_saved_queries call.`
+const kpiGuidanceDescription = `Agent guidance for the LFX KPI recipes: the inventory with result columns, time shape and caveats, how to scope and window a call, and how to read the results. Read once per session BEFORE the first query_lfx_kpis call.`
 
 // GuidanceArgs is the (empty) input for the guidance tools: the content is
 // the whole point, so there is nothing to parameterize.
@@ -74,22 +74,22 @@ func RegisterDeckBuildingGuidance(server *mcp.Server) {
 	}, handleDeckBuildingGuidance)
 }
 
-// RegisterSavedQueriesGuidance registers the read_lfx_saved_queries_guidance tool.
-func RegisterSavedQueriesGuidance(server *mcp.Server) {
+// RegisterKPIGuidance registers the read_lfx_kpi_guidance tool.
+func RegisterKPIGuidance(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "read_lfx_saved_queries_guidance",
-		Description: savedQueriesGuidanceDescription,
+		Name:        "read_lfx_kpi_guidance",
+		Description: kpiGuidanceDescription,
 		Annotations: &mcp.ToolAnnotations{
-			Title:          "Read LFX Saved Queries Guidance",
+			Title:          "Read LFX KPI Guidance",
 			ReadOnlyHint:   true,
 			IdempotentHint: true,
 		},
-	}, handleSavedQueriesGuidance)
+	}, handleKPIGuidance)
 }
 
-func handleSavedQueriesGuidance(_ context.Context, _ *mcp.CallToolRequest, _ GuidanceArgs) (*mcp.CallToolResult, any, error) {
+func handleKPIGuidance(_ context.Context, _ *mcp.CallToolRequest, _ GuidanceArgs) (*mcp.CallToolResult, any, error) {
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: savedQueriesGuidance}},
+		Content: []mcp.Content{&mcp.TextContent{Text: kpiGuidance}},
 	}, nil, nil
 }
 

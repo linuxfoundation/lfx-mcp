@@ -808,27 +808,26 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["query_lfx_semantic_layer"] && canRead && isStaff {
 		tools.RegisterQuerySemanticLayer(server)
 	}
-	// Not in defaultTools: the saved queries it runs deploy with the lf-dbt
+	// Not in defaultTools: the KPI recipes it runs deploy with the lf-dbt
 	// project and the Lens saved-query endpoint, so prod enables this by name
 	// only once both are live.
-	if enabledTools["query_lfx_semantic_layer_saved_queries"] && canRead && isStaff {
-		tools.RegisterSavedQueries(server)
+	if enabledTools["query_lfx_kpis"] && canRead && isStaff {
+		tools.RegisterKPIs(server)
 	}
 	// Guidance tools carry the query doctrine as tool results (no byte budget)
 	// and are gated exactly like the tools they document — staff-only, one
 	// name per audience so a deployment enables exactly the guidance its
 	// callers need. The semantic layer guidance is in defaultTools because
-	// the explore/query/lens descriptions route models to it; the saved-query
-	// and deck building guidance ship alongside the saved-queries tool by
-	// name.
+	// the explore/query/lens descriptions route models to it; the KPI and
+	// deck building guidance ship alongside the KPI tool by name.
 	if enabledTools["read_lfx_semantic_layer_guidance"] && canRead && isStaff {
 		tools.RegisterSemanticLayerGuidance(server)
 	}
 	if enabledTools["read_lfx_deck_building_guidance"] && canRead && isStaff {
 		tools.RegisterDeckBuildingGuidance(server)
 	}
-	if enabledTools["read_lfx_saved_queries_guidance"] && canRead && isStaff {
-		tools.RegisterSavedQueriesGuidance(server)
+	if enabledTools["read_lfx_kpi_guidance"] && canRead && isStaff {
+		tools.RegisterKPIGuidance(server)
 	}
 
 	return server

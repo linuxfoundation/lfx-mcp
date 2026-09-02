@@ -25,7 +25,7 @@ func TestGuidanceDescriptions_ShortAndFunctional(t *testing.T) {
 	for name, desc := range map[string]string{
 		"read_lfx_semantic_layer_guidance": semanticLayerGuidanceDescription,
 		"read_lfx_deck_building_guidance":  deckBuildingGuidanceDescription,
-		"read_lfx_saved_queries_guidance":  savedQueriesGuidanceDescription,
+		"read_lfx_kpi_guidance":            kpiGuidanceDescription,
 	} {
 		if got := len(desc); got > 400 {
 			t.Errorf("%s description is %d bytes; guidance descriptions stay short (<=400)", name, got)
@@ -53,7 +53,7 @@ func TestGuidanceTools_RegisterReadOnly(t *testing.T) {
 	}{
 		{"read_lfx_semantic_layer_guidance", RegisterSemanticLayerGuidance},
 		{"read_lfx_deck_building_guidance", RegisterDeckBuildingGuidance},
-		{"read_lfx_saved_queries_guidance", RegisterSavedQueriesGuidance},
+		{"read_lfx_kpi_guidance", RegisterKPIGuidance},
 	} {
 		tool := listRegisteredTool(t, tc.name, tc.register)
 		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
@@ -79,12 +79,12 @@ func TestGuidanceHandlers_ReturnTheDocuments(t *testing.T) {
 	if got := resultText(t, res); got != deckBuildingGuidance || len(got) < 2000 {
 		t.Errorf("deck building guidance result is not the embedded document (len %d)", len(got))
 	}
-	res, _, err = handleSavedQueriesGuidance(context.Background(), nil, GuidanceArgs{})
+	res, _, err = handleKPIGuidance(context.Background(), nil, GuidanceArgs{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got := resultText(t, res); got != savedQueriesGuidance || len(got) < 1500 {
-		t.Errorf("saved queries guidance result is not the embedded document (len %d)", len(got))
+	if got := resultText(t, res); got != kpiGuidance || len(got) < 1500 {
+		t.Errorf("KPI guidance result is not the embedded document (len %d)", len(got))
 	}
 }
 
@@ -92,7 +92,7 @@ func TestGuidanceHandlers_ReturnTheDocuments(t *testing.T) {
 // against the live layer during the August 2026 evals, plus the failure
 // modes the 2026-08-31 post-deploy eval rounds surfaced (rollup direction,
 // person-grain rankings, events/training account dimensions, LF-wide scope,
-// one-hop saved-query filters).
+// one-hop KPI recipe filters).
 func TestSemanticLayerGuidanceContent(t *testing.T) {
 	text := semanticLayerGuidance
 	for _, want := range []string{
@@ -169,9 +169,9 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"activity_project_id__is_org_contribution = true",
 		// worked examples stay live-verified
 		"## Worked examples (verified live)",
-		// saved queries
+		// KPI recipes
 		"one-hop",
-		"query_lfx_semantic_layer_saved_queries",
+		"query_lfx_kpis",
 		"PREFER it over the",
 		"read_lfx_deck_building_guidance",
 	} {
@@ -181,21 +181,21 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 	}
 }
 
-// TestDeckBuildingGuidanceContent pins the deck workflow: saved queries
+// TestDeckBuildingGuidanceContent pins the deck workflow: KPI recipes
 // first, the pair-grain reading contract, rollup direction, and the honest
 // out-of-scope list.
 func TestDeckBuildingGuidanceContent(t *testing.T) {
 	text := deckBuildingGuidance
 	for _, want := range []string{
 		"read_lfx_semantic_layer_guidance",
-		"query_lfx_semantic_layer_saved_queries",
+		"query_lfx_kpis",
 		"kpi_members_and_dues_by_account",
 		"kpi_contributors_by_org",
 		"kpi_event_registrations_by_org",
 		"kpi_training_enrollments_by_org",
 		"one-hop",
 		"an order_by on the recipe's own",
-		"read_lfx_saved_queries_guidance",
+		"read_lfx_kpi_guidance",
 		"subsidiaries INTO parents",
 		"Meeting attendance by company",
 		"total_sponsorship_revenue",
@@ -211,42 +211,51 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 	}
 }
 
-// TestSavedQueriesGuidanceContent pins the saved-query catalog annotations
-// and the reading contract that moved here from the tool description: the
-// pair grain, the NULL-attribution row, rollup direction, one-hop filters,
-// and the not-deployed fallback.
-func TestSavedQueriesGuidanceContent(t *testing.T) {
-	text := savedQueriesGuidance
+// TestKPIGuidanceContent pins the recipe inventory annotations and the
+// contract that only lives here: how to call (the uniform parameters), the
+// SNAPSHOT/FLOW rule, the by=account / by=rollup grain lines with the parent
+// -name rule, the NULL-attribution row, and the not-deployed fallbacks.
+func TestKPIGuidanceContent(t *testing.T) {
+	text := kpiGuidance
 	for _, want := range []string{
-		// catalog annotations
-		"as-of today (active terms)",
-		"YTD-bounded",
-		"tier literals\n  differ per foundation",
-		"churn-date axis",
-		"never sum rows - people span projects",
-		"VOLUME by organization",
-		"HEADCOUNT by organization",
-		"rows, not\n  people",
-		"TI+edX",
-		"NULL account",
-		// mechanics
-		"order the saved query",
+		// inventory annotations
+		"current members and their annual dues",
+		"tier literals differ per\n  foundation",
+		"the\n  current year is year-to-date",
+		"churn date",
+		"code contribution volume per account",
+		"NOT additive - people span accounts",
+		"NOT additive across projects",
+		"active maintainers per employer account",
+		"rows are registrations, not people",
+		"edX rows carry no account",
+		"EVENT start date",
+		// how to call
 		"ONE-HOP",
 		"get_dimension_values",
 		"zero rows",
 		"ceiling 500",
+		"order_by takes the recipe's own result columns",
+		"search_b2b_orgs",
+		// the shape rule
+		"A FLOW recipe takes since/until on its own time axis; a\n   SNAPSHOT recipe takes as_of",
+		"one call per\n   period",
+		// org versus rollup
+		"by=account   one row per account",
+		"by=rollup    one row per parent, subsidiaries folded in",
+		"The org parameter always names the PARENT",
+		"org = Red Hat LLC finds nothing",
+		"never from summing\nrows",
 		// reading contract
-		"PAIR grain",
-		"never present it as an organization",
-		"subsidiaries INTO parents",
+		"never an organization",
+		"compiled_sql",
+		// errors
 		"not deployed yet",
-		"fall back to query_lfx_semantic_layer",
-		// routing
+		"rollup grain is not deployed yet",
 		"read_lfx_deck_building_guidance",
-		"prefer it over the explore+query flow",
 	} {
 		if !strings.Contains(text, want) {
-			t.Errorf("saved queries guidance missing %q", want)
+			t.Errorf("KPI guidance missing %q", want)
 		}
 	}
 }

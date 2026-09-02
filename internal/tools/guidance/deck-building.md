@@ -3,22 +3,24 @@
 Read this before assembling or verifying numbers for customer-facing decks,
 briefings and presentations (memberships, contributions, events, training,
 certification, by organization). It builds on the semantic layer guidance
-(read_lfx_semantic_layer_guidance) and the saved-query guidance
-(read_lfx_saved_queries_guidance) - read those first.
+(read_lfx_semantic_layer_guidance) and the KPI guidance
+(read_lfx_kpi_guidance) - read those first.
 
-## Rule 1: saved queries first
+## Rule 1: KPI recipes first
 
-Every recurring deck KPI has a curated recipe. Check the
-query_lfx_semantic_layer_saved_queries catalog and use the matching kpi_*
-recipe before assembling an ad-hoc query. Saved queries are governed and
-digit-stable: the same question re-run gives the same number, which is what
-makes a deck survive verification. Only when no recipe matches, fall back to
-explore_lfx_semantic_layer + query_lfx_semantic_layer.
+Every recurring deck KPI has a curated recipe. Check the query_lfx_kpis
+inventory and use the matching kpi_* recipe before assembling an ad-hoc
+query. Recipes are governed and digit-stable: the same question re-run gives
+the same number, which is what makes a deck survive verification. Only when
+no recipe matches, fall back to explore_lfx_semantic_layer +
+query_lfx_semantic_layer.
 
-- Saved queries take a where filter, an order_by on the recipe's own
-  fields (- prefix for descending), and a limit.
-- where filters must use one-hop <entity>__<dimension> names
-  (project__foundation_slug); multi-hop paths are rejected.
+- Slice a recipe with its own parameters: foundation, project, org, by
+  (account | rollup), since/until on FLOW recipes, as_of on SNAPSHOT ones,
+  an order_by on the recipe's own result columns (- prefix for descending),
+  and a limit.
+- where adds a filter on top, one-hop <entity>__<dimension> names only
+  (account__account_name); multi-hop paths are rejected.
 
 ## Deck lane → recipe mapping
 
@@ -29,12 +31,12 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
 - Contributor and maintainer leaderboards → kpi_contributions_by_org
   (volume), kpi_contributors_by_org (headcount), kpi_maintainers_by_org,
   kpi_contributors_by_project.
-- Event registrations → kpi_event_registrations,
-  kpi_event_registrations_by_org. Registrations count rows, not unique
-  people - present "registrations", not "attendees".
-- Training enrollments → kpi_training_enrollments,
-  kpi_training_enrollments_by_org. edX enrollments carry no organization and
-  land in the NULL account - present "attributed enrollments" and say so.
+- Event registrations → kpi_event_registrations_by_org, windowed on the
+  event start date. Registrations count rows, not unique people - present
+  "registrations", not "attendees".
+- Training enrollments → kpi_training_enrollments_by_org. edX enrollments
+  carry no organization and land in the NULL account - present "attributed
+  enrollments" and say so.
 - Event sponsorships → no kpi_* recipe yet: query total_sponsorship_revenue
   (USD) / total_sponsorship_count ad hoc. Filter
   sponsorship__sponsorship_tier_type = 'package_tier' for package-only
@@ -43,19 +45,19 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   maintainer share of work) → query_lfx_lens: the semantic layer cannot
   join maintainers to activity at person grain.
 
-The catalog in the tool description is the routing surface; the deployed
-manifest is the source of truth. A "saved query does not exist" error means
-it is not deployed yet, not that the name is wrong.
+The inventory in the tool description is the routing surface; the deployed
+manifest is the source of truth. A "recipe does not exist" error means it is
+not deployed yet, not that the name is wrong.
 
-## Reading saved-query results
+## Reading recipe results
 
-The mechanics and reading contract (pair grain, rollup re-grouping,
-headcounts NOT additive, the NULL-attribution row) live in
-read_lfx_saved_queries_guidance - read it before running the recipes.
+The parameters and the reading contract (account vs rollup grain, headcounts
+NOT additive, the NULL-attribution row) live in read_lfx_kpi_guidance - read
+it before running the recipes.
 
 ## Combined-entity slides ("IBM including Red Hat", "Amazon including AWS")
 
-Group by account_rollup_name for the combined figure. The direction matters:
+Call the recipe with by=rollup for the combined figure. The direction matters:
 rollups fold subsidiaries INTO parents - Red Hat's rollup value is IBM, so
 filtering rollup = 'Red Hat' finds almost nothing; filter or group by the
 parent. Where the deck shows the parts, also present the named sub-entities

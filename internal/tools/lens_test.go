@@ -220,7 +220,7 @@ func TestSemanticLayerDescriptions_FitSchemaBudget(t *testing.T) {
 
 // TestExploreSemanticLayerDescription checks the slimmed discovery tool
 // still carries the routing contract: what the layer covers, the
-// guidance-first instruction, the KPI recipe preference, the discovery
+// guidance-first instruction, the standard metric recipe preference, the discovery
 // actions, and the redirects. Everything else moved to the guidance tool
 // (pinned in TestSemanticLayerGuidanceContent).
 func TestExploreSemanticLayerDescription(t *testing.T) {
@@ -232,8 +232,8 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		"read_lfx_semantic_layer_guidance",
 		"read it BEFORE using this tool",
 		"one read also covers query_lfx_semantic_layer",
-		// A matching KPI recipe outranks the explore+query flow.
-		"query_lfx_kpis",
+		// A matching standard metric recipe outranks the explore+query flow.
+		"query_lfx_standard_metrics",
 		// The three discovery actions with their arguments.
 		"list_metrics(search)",
 		"get_dimensions(metrics, search)",
@@ -269,7 +269,7 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 		"never guess",
 		"read_lfx_semantic_layer_guidance",
 		"read it BEFORE querying",
-		"query_lfx_kpis",
+		"query_lfx_standard_metrics",
 		// The unguessable syntax.
 		"metrics (required)",
 		"Dimension(",
@@ -312,14 +312,22 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 // data tools' descriptions carry routing and unguessable syntax only, so
 // they must never creep back toward the 2048-byte cliff. Detail belongs in
 // the guidance tools, whose results have no budget.
+//
+// query_lfx_standard_metrics carries one thing the others do not — the metric
+// inventory, which a caller cannot guess and which must reach the model from
+// the tool itself — so it keeps its own ceiling instead of the shared 1600.
 func TestSlimDescriptionsKeepHeadroom(t *testing.T) {
-	for name, desc := range map[string]string{
-		"explore_lfx_semantic_layer": exploreSemanticLayerDescription,
-		"query_lfx_semantic_layer":   querySemanticLayerDescription,
-		"query_lfx_kpis":             kpisDescription,
+	for _, tc := range []struct {
+		name    string
+		desc    string
+		ceiling int
+	}{
+		{"explore_lfx_semantic_layer", exploreSemanticLayerDescription, 1600},
+		{"query_lfx_semantic_layer", querySemanticLayerDescription, 1600},
+		{"query_lfx_standard_metrics", standardMetricsDescription, standardMetricsDescriptionCeiling},
 	} {
-		if got := len(desc); got > 1600 {
-			t.Errorf("%s description is %d bytes; keep it under 1600 — move detail into the guidance tools", name, got)
+		if got := len(tc.desc); got > tc.ceiling {
+			t.Errorf("%s description is %d bytes; keep it under %d — move detail into the guidance tools", tc.name, got, tc.ceiling)
 		}
 	}
 }
@@ -374,12 +382,12 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 	}
 
 	// Asserted PER TOOL, not over the concatenation: a caller looking at
-	// query_lfx_kpis never sees explore_lfx_semantic_layer's description, so
+	// query_lfx_standard_metrics never sees explore_lfx_semantic_layer's description, so
 	// a token that only survives on a sibling has not survived for this one.
 	for _, tc := range []struct {
 		// tools is the set that must carry the tokens between them: the
 		// explore/query pair is one routing surface (a caller reaching for
-		// either sees both), query_lfx_kpis is its own.
+		// either sees both), query_lfx_standard_metrics is its own.
 		name   string
 		tools  []*mcp.Tool
 		tokens []token
@@ -404,11 +412,19 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 			},
 		},
 		{
-			name:  "query_lfx_kpis",
-			tools: []*mcp.Tool{listKPIsTool(t)},
+			name:  "query_lfx_standard_metrics",
+			tools: []*mcp.Tool{listStandardMetricsTool(t)},
 			tokens: []token{
-				{"read_lfx_kpi_guidance", "the KPI inventory is only reachable if the tool routes the model to it"},
-				{"members_and_dues_by_org", "KPI names cannot be guessed, and the inventory reaches the model only here"},
+				{"read_lfx_standard_metrics_guidance", "the standard metric inventory is only reachable if the tool routes the model to it"},
+				{"members_and_dues_by_org", "standard metric names cannot be guessed, and the inventory reaches the model only here"},
+				// The domain grouping is what tells a caller whether this
+				// tool covers its question at all, so each domain line is
+				// pinned by name.
+				{"Memberships: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year", "the membership inventory reaches the model only here"},
+				{"Contributions: contributions_by_org, contributors_by_org, contributors_by_project", "the contribution inventory reaches the model only here"},
+				{"Maintainers: maintainers_by_org", "the maintainer inventory reaches the model only here"},
+				{"Events: event_registrations_by_org", "the events inventory reaches the model only here"},
+				{"Training: training_enrollments_by_org", "the training inventory reaches the model only here"},
 				{"search_projects", "project takes the stored slug; an everyday name silently misses"},
 				{"search_b2b_orgs", "org takes the stored legal name; a short name silently misses"},
 				{"subprojects", "what a project name covers is a choice the caller has to be told about"},

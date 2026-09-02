@@ -35,14 +35,14 @@ var semanticLayerGuidance string
 //go:embed guidance/deck-building.md
 var deckBuildingGuidance string
 
-//go:embed guidance/kpis.md
-var kpiGuidance string
+//go:embed guidance/standard-metrics.md
+var standardMetricsGuidance string
 
 const semanticLayerGuidanceDescription = `Agent guidance for the LFX semantic layer and lens tools: routing, query syntax, scoping, worked recipes, failure modes. Read once per session BEFORE the first explore_lfx_semantic_layer, query_lfx_semantic_layer or query_lfx_lens call.`
 
-const deckBuildingGuidanceDescription = `Agent guidance for building customer-facing KPI decks and presentations from LFX data: recipe-first workflow, deck lane mapping, rollups, reconciliation, presentation rules. Read BEFORE assembling deck or briefing numbers.`
+const deckBuildingGuidanceDescription = `Agent guidance for building customer-facing metric decks and presentations from LFX data: recipe-first workflow, deck lane mapping, rollups, reconciliation, presentation rules. Read BEFORE assembling deck or briefing numbers.`
 
-const kpiGuidanceDescription = `Agent guidance for the LFX KPI recipes: the inventory with result columns, time shape and caveats, how to scope and window a call, and how to read the results. Read once per session BEFORE the first query_lfx_kpis call.`
+const standardMetricsGuidanceDescription = `Agent guidance for the LFX standard metrics: the inventory with result columns, time shape and caveats, how to scope and window a call, and how to read the results. Read once per session BEFORE the first query_lfx_standard_metrics call.`
 
 // GuidanceArgs is the (empty) input for the guidance tools: the content is
 // the whole point, so there is nothing to parameterize.
@@ -74,22 +74,22 @@ func RegisterDeckBuildingGuidance(server *mcp.Server) {
 	}, handleDeckBuildingGuidance)
 }
 
-// RegisterKPIGuidance registers the read_lfx_kpi_guidance tool.
-func RegisterKPIGuidance(server *mcp.Server) {
+// RegisterStandardMetricsGuidance registers the read_lfx_standard_metrics_guidance tool.
+func RegisterStandardMetricsGuidance(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "read_lfx_kpi_guidance",
-		Description: kpiGuidanceDescription,
+		Name:        "read_lfx_standard_metrics_guidance",
+		Description: standardMetricsGuidanceDescription,
 		Annotations: &mcp.ToolAnnotations{
-			Title:          "Read LFX KPI Guidance",
+			Title:          "Read LFX Standard Metrics Guidance",
 			ReadOnlyHint:   true,
 			IdempotentHint: true,
 		},
-	}, handleKPIGuidance)
+	}, handleStandardMetricsGuidance)
 }
 
-func handleKPIGuidance(_ context.Context, _ *mcp.CallToolRequest, _ GuidanceArgs) (*mcp.CallToolResult, any, error) {
+func handleStandardMetricsGuidance(_ context.Context, _ *mcp.CallToolRequest, _ GuidanceArgs) (*mcp.CallToolResult, any, error) {
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: kpiGuidance}},
+		Content: []mcp.Content{&mcp.TextContent{Text: standardMetricsGuidance}},
 	}, nil, nil
 }
 

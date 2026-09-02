@@ -157,7 +157,7 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 // there before its first query.
 const exploreSemanticLayerDescription = `The LFX Semantic Layer is the query tool for LF data: contributor, contribution, membership, revenue, event, registration, speaker, sponsorship, enrollment, certification, maintainer, health and project metrics, sliceable by country or region. This discovers what can be measured; query_lfx_semantic_layer runs it. Start here unless exact names are known.
 
-If you have not read read_lfx_semantic_layer_guidance yet this session, read it BEFORE using this tool; one read also covers query_lfx_semantic_layer. Common KPIs: prefer query_lfx_kpis when a recipe matches.
+If you have not read read_lfx_semantic_layer_guidance yet this session, read it BEFORE using this tool; one read also covers query_lfx_semantic_layer. Common questions: prefer query_lfx_standard_metrics when a standard metric matches.
 
 ACTIONS
 - list_metrics(search): search by one topic word from the list above
@@ -168,7 +168,7 @@ Names are entity__field with per-metric prefixes - copy qualified_names, never a
 
 const querySemanticLayerDescription = `Run governed LFX Semantic Layer metric queries: contributions, memberships, events, sponsorships, education, maintainers, health, country/region. ALWAYS explore_lfx_semantic_layer first unless exact names are known; never guess.
 
-If you have not read read_lfx_semantic_layer_guidance yet this session, read it BEFORE querying; one read also covers explore. If a query_lfx_kpis recipe matches the question, prefer it.
+If you have not read read_lfx_semantic_layer_guidance yet this session, read it BEFORE querying; one read also covers explore. If a query_lfx_standard_metrics recipe matches the question, prefer it.
 
 SYNTAX: metrics (required), CSV. group_by: dimension qualified_names copied from explore; add metric_time__year (or __quarter, __month) for trends. where is MetricFlow: {{ Dimension('country__lf_region') }} = 'Europe'; {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'; dates yyyy-mm-dd. limit ceiling 500.
 

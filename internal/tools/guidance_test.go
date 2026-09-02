@@ -23,9 +23,9 @@ import (
 // the query tools for routing budget.
 func TestGuidanceDescriptions_ShortAndFunctional(t *testing.T) {
 	for name, desc := range map[string]string{
-		"read_lfx_semantic_layer_guidance": semanticLayerGuidanceDescription,
-		"read_lfx_deck_building_guidance":  deckBuildingGuidanceDescription,
-		"read_lfx_kpi_guidance":            kpiGuidanceDescription,
+		"read_lfx_semantic_layer_guidance":   semanticLayerGuidanceDescription,
+		"read_lfx_deck_building_guidance":    deckBuildingGuidanceDescription,
+		"read_lfx_standard_metrics_guidance": standardMetricsGuidanceDescription,
 	} {
 		if got := len(desc); got > 400 {
 			t.Errorf("%s description is %d bytes; guidance descriptions stay short (<=400)", name, got)
@@ -53,7 +53,7 @@ func TestGuidanceTools_RegisterReadOnly(t *testing.T) {
 	}{
 		{"read_lfx_semantic_layer_guidance", RegisterSemanticLayerGuidance},
 		{"read_lfx_deck_building_guidance", RegisterDeckBuildingGuidance},
-		{"read_lfx_kpi_guidance", RegisterKPIGuidance},
+		{"read_lfx_standard_metrics_guidance", RegisterStandardMetricsGuidance},
 	} {
 		tool := listRegisteredTool(t, tc.name, tc.register)
 		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
@@ -79,12 +79,12 @@ func TestGuidanceHandlers_ReturnTheDocuments(t *testing.T) {
 	if got := resultText(t, res); got != deckBuildingGuidance || len(got) < 2000 {
 		t.Errorf("deck building guidance result is not the embedded document (len %d)", len(got))
 	}
-	res, _, err = handleKPIGuidance(context.Background(), nil, GuidanceArgs{})
+	res, _, err = handleStandardMetricsGuidance(context.Background(), nil, GuidanceArgs{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got := resultText(t, res); got != kpiGuidance || len(got) < 1500 {
-		t.Errorf("KPI guidance result is not the embedded document (len %d)", len(got))
+	if got := resultText(t, res); got != standardMetricsGuidance || len(got) < 1500 {
+		t.Errorf("standard metric guidance result is not the embedded document (len %d)", len(got))
 	}
 }
 
@@ -92,7 +92,7 @@ func TestGuidanceHandlers_ReturnTheDocuments(t *testing.T) {
 // against the live layer during the August 2026 evals, plus the failure
 // modes the 2026-08-31 post-deploy eval rounds surfaced (rollup direction,
 // person-grain rankings, events/training account dimensions, LF-wide scope,
-// one-hop KPI recipe filters).
+// one-hop standard metric recipe filters).
 func TestSemanticLayerGuidanceContent(t *testing.T) {
 	text := semanticLayerGuidance
 	for _, want := range []string{
@@ -183,9 +183,13 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"one as-of reading per period",
 		// two-line recipes for the unadvertised per-event / per-course cuts
 		"event_id__event_name",
-		"kpi=kpi_event_registrations",
+		"metric=kpi_event_registrations",
 		"enrollment_id__course_name",
-		"kpi=kpi_training_enrollments",
+		"metric=kpi_training_enrollments",
+		// Insights is a definitional mirror, never a reconciliation target
+		"mirrors the Insights default (code contributions, bots excluded)",
+		"Do NOT\n  reconcile figures against Insights pages or collections",
+		"PCC-style reporting is\n  the reconciliation surface",
 		// worked examples stay live-verified
 		"## Worked examples (verified live)",
 		// resolve-first: a guessed slug or account name is a silent wrong answer
@@ -198,13 +202,13 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		// where each domain attaches
 		"ATTACHMENT LEVELS",
 		"legitimately\n  near-empty",
-		// KPI calls
+		// standard metric calls
 		"one-hop",
-		"KPI CALLS take uniform parameters",
+		"STANDARD METRIC CALLS take uniform parameters",
 		"default separate",
 		"default none",
-		"maintainers_by_org has no parent-company lens",
-		"query_lfx_kpis",
+		"maintainers_by_org\nhas no parent-company lens",
+		"query_lfx_standard_metrics",
 		"PREFER it over the",
 		"read_lfx_deck_building_guidance",
 	} {
@@ -214,21 +218,21 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 	}
 }
 
-// TestDeckBuildingGuidanceContent pins the deck workflow: KPI recipes
+// TestDeckBuildingGuidanceContent pins the deck workflow: standard metric recipes
 // first, the pair-grain reading contract, rollup direction, and the honest
 // out-of-scope list.
 func TestDeckBuildingGuidanceContent(t *testing.T) {
 	text := deckBuildingGuidance
 	for _, want := range []string{
 		"read_lfx_semantic_layer_guidance",
-		"query_lfx_kpis",
+		"query_lfx_standard_metrics",
 		"members_and_dues_by_org",
 		"contributors_by_org",
 		"event_registrations_by_org",
 		"training_enrollments_by_org",
 		"one-hop",
 		"an order_by on the result columns",
-		"read_lfx_kpi_guidance",
+		"read_lfx_standard_metrics_guidance",
 		// resolve-first, the two switches, and the one-hop disclosure
 		"ALWAYS resolve names first",
 		"never put a guessed slug",
@@ -239,6 +243,9 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"combined returns the single folded row",
 		"never from summing rows",
 		"maintainers_by_org has no parent-company lens",
+		"subprojects=combined folds every project column of\n  the result",
+		"Do not reconcile figures against Insights pages or collections",
+		"PCC-style reporting is\nthe reconciliation surface",
 		"Meeting attendance by company",
 		"total_sponsorship_revenue",
 		"'package_tier'",
@@ -253,13 +260,13 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 	}
 }
 
-// TestKPIGuidanceContent pins the contract that only lives here: resolve
+// TestStandardMetricsGuidanceContent pins the contract that only lives here: resolve
 // names before calling, the two switches and their opposite defaults, the
-// inventory with what each KPI answers and the columns it returns, the
+// inventory with what each standard metric answers and the columns it returns, the
 // account/parent_org reading with its one-hop limit, where each domain
 // attaches, and the rejections.
-func TestKPIGuidanceContent(t *testing.T) {
-	text := kpiGuidance
+func TestStandardMetricsGuidanceContent(t *testing.T) {
+	text := standardMetricsGuidance
 	for _, want := range []string{
 		// resolve names first, always
 		"Resolve names first — ALWAYS",
@@ -275,15 +282,16 @@ func TestKPIGuidanceContent(t *testing.T) {
 		"folded into ONE row",
 		"one row per parent organization",
 		// the shape rule
-		"A FLOW KPI takes since/until",
-		"a SNAPSHOT KPI takes as_of",
+		"A FLOW metric takes since/until",
+		"a SNAPSHOT metric takes as_of",
+		"folds every project column of the result away",
 		"one call per period",
 		// how to call
 		"ONE-HOP",
 		"get_dimension_values",
 		"1..500",
 		"order_by takes the result columns as they come back",
-		// inventory: what each KPI answers, its shape, its result columns
+		// inventory: what each standard metric answers, its shape, its result columns
 		"members_and_dues_by_org",
 		"membership_tiers",
 		"new_members_by_year",
@@ -297,15 +305,16 @@ func TestKPIGuidanceContent(t *testing.T) {
 		"account, parent_org, current_membership_count",
 		"metric_time__year, new_membership_count",
 		"foundation, foundation_name, project, project_name, total_contributors",
-		"maintainer_key__account_name, active_maintainers",
+		"| account, active_maintainers |",
 		"FLOW · EVENT start date",
 		"NOT additive - people span accounts",
 		"Tier literals differ per foundation",
 		"edX rows carry no account",
 		// organizations: account, parent_org, and the one-hop limit
-		"`account` is the",
-		"`parent_org` is the company it",
-		"Red Hat LLC is an account whose parent_org is International",
+		"names its organization column `account`",
+		"`parent_org`, the company",
+		"maintainers_by_org is the exception",
+		"Red Hat LLC is an account\nwhose parent_org is International",
 		"ONE HOP",
 		"not their own acquisitions",
 		"never sum their rows into a parent figure",
@@ -327,7 +336,7 @@ func TestKPIGuidanceContent(t *testing.T) {
 		"read_lfx_deck_building_guidance",
 	} {
 		if !strings.Contains(text, want) {
-			t.Errorf("KPI guidance missing %q", want)
+			t.Errorf("standard metric guidance missing %q", want)
 		}
 	}
 }

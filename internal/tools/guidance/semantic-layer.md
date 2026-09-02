@@ -10,10 +10,10 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
 ## Routing
 
 - explore_lfx_semantic_layer discovers metrics, dimensions and stored values; query_lfx_semantic_layer runs the query. Explore first.
-- query_lfx_kpis answers common questions with governed KPIs named in plain
-  words (contributors_by_org, members_and_dues_by_org...). When one matches,
-  PREFER it over the explore+query flow. Inventory: read_lfx_kpi_guidance.
-  Decks: read_lfx_deck_building_guidance.
+- query_lfx_standard_metrics answers common questions with governed metrics
+  named in plain words (contributors_by_org, members_and_dues_by_org...). When
+  one matches, PREFER it over the explore+query flow. Inventory:
+  read_lfx_standard_metrics_guidance. Decks: read_lfx_deck_building_guidance.
 - query_lfx_lens (text-to-SQL): only maintainer×contribution joins ("top
   maintainers by contributions", maintainer share of work), social listening, and
   questions no metric family expresses — label its answers as generated SQL.
@@ -22,13 +22,13 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
 
 ## Protocol
 
-0. If a KPI matches, prefer it (scope and window via its own parameters,
-   recipe 15; never go ad hoc just to sort, filter or scope).
+0. If a standard metric matches, prefer it (scope and window via its own
+   parameters, recipe 15; never go ad hoc just to sort, filter or scope).
 1. ALWAYS resolve names first: search_projects for project slugs ('k8s', 'korg',
    'ptproject' — stored slugs are not everyday names), search_b2b_orgs for org
    legal names (recipe 5). A name either tool returned in this session may be
-   reused as is; never filter, scope or call a KPI with a slug or an
-   organization name that has not come back from them.
+   reused as is; never filter, scope or call a standard metric with a slug or
+   an organization name that has not come back from them.
 2. Discover: list_metrics(search) → get_dimensions → get_dimension_values before
    filtering on any value you have not seen in output.
 3. Query; state population, exact date window, and what counts as one in answers.
@@ -58,9 +58,12 @@ dimension by what the question names:
   works on every metric family, counts each row once. NEVER use project_slug for
   a foundation: it matches only the foundation's catch-all bucket, a silent ~40x
   undercount on activities.
-- A SINGLE PROJECT (k8s, pytorch...): activity_project_id__project_slug — matches
-  what that project's Insights page shows (__project_slug and __segment_slug are
-  the page-parity surfaces). For leaf projects the spine slug returns identical
+- A SINGLE PROJECT (k8s, pytorch...): activity_project_id__project_slug — the
+  per-project surface (__project_slug and __segment_slug), whose DEFINITION
+  mirrors the Insights default (code contributions, bots excluded). Do NOT
+  reconcile figures against Insights pages or collections: they differ by repo
+  registration, member cleaning and curated collections; PCC-style reporting is
+  the reconciliation surface. For leaf projects the spine slug returns identical
   counts; for umbrella nodes project_slug is only the node's own bucket.
 - SUBTREES AND HIERARCHY WALKS (umbrella nodes, "foundation to its projects"):
   activity_project_id__project_spine_slug — identical totals to foundation_slug
@@ -199,20 +202,21 @@ and total_sponsorship_count include ALL tier types — filter
 sponsorship__sponsorship_tier_type = 'package_tier' for package-only figures
 ('a_la_carte' and 'billing_adjustment' are the others). Per event:
 total_registrations by event_id__event_name + the event start year — or call
-query_lfx_kpis with kpi=kpi_event_registrations, the deployed saved query for
-exactly that cut. Per course: total_enrollments by enrollment_id__course_name
-+ product_type — or kpi=kpi_training_enrollments.
+query_lfx_standard_metrics with metric=kpi_event_registrations, the deployed
+saved query for exactly that cut. Per course: total_enrollments by
+enrollment_id__course_name + product_type — or metric=kpi_training_enrollments.
 
-15. KPI CALLS take uniform parameters — kpi, project + subprojects
-(none|separate|combined, default separate), org + subsidiaries
-(none|separate|combined, default none), since/until on FLOW KPIs, as_of on
+15. STANDARD METRIC CALLS take uniform parameters — metric, project +
+subprojects (none|separate|combined, default separate), org + subsidiaries
+(none|separate|combined, default none), since/until on FLOW metrics, as_of on
 SNAPSHOT ones, where, order_by, limit. The switches say what a name covers:
 none = that project or account alone, separate = it and everything under it
-one row each, combined = folded into one row. Results come back in the same
-words (account, parent_org, project, foundation), and order_by takes them.
-maintainers_by_org has no parent-company lens, so subsidiaries must be none
-there. where adds a filter and is one-hop only (<entity>__<dimension>);
-multi-hop paths fail at parse time, though ad-hoc queries accept both.
+one row each, combined = folded into one row (subprojects=combined folds every
+project column of the result). Results come back in the same words (account,
+parent_org, project, foundation), and order_by takes them. maintainers_by_org
+has no parent-company lens, so subsidiaries must be none there. where adds a
+filter and is one-hop only (<entity>__<dimension>); multi-hop paths fail at
+parse time, though ad-hoc queries accept both.
 
 ## Worked examples (verified live)
 
@@ -230,5 +234,6 @@ Org share of PyTorch code activity (recipe 2):
   order_by=-code_contribution_activities limit=50
   where={{ Dimension('activity_project_id__project_spine_slug') }} = 'pytorch' AND {{ Dimension('activity_project_id__is_org_contribution') }} = true
 
-Prefer repeatable answers: KPI recipe > named metric > lens SQL — label anything below
-the top rung; struggling, re-read the recipe BEFORE any query_lfx_lens fallback.
+Prefer repeatable answers: standard metric > named metric > lens SQL — label
+anything below the top rung; struggling, re-read the recipe BEFORE any
+query_lfx_lens fallback.

@@ -15,10 +15,12 @@ the same number, which is what makes a deck survive verification. Only when
 no recipe matches, fall back to explore_lfx_semantic_layer +
 query_lfx_semantic_layer.
 
-- Slice a recipe with its own parameters: foundation, project, org, by
-  (account | rollup), since/until on FLOW recipes, as_of on SNAPSHOT ones,
+- Slice a recipe with its own parameters: foundation, project, org,
+  since/until on FLOW recipes, as_of on SNAPSHOT ones,
   an order_by on the recipe's own result columns (- prefix for descending),
-  and a limit.
+  and a limit. org names the TOP parent and returns its rows per account; a
+  recipe with no parent-organization lens (kpi_maintainers_by_org) rejects
+  org - filter maintainer_key__account_name in where instead.
 - where adds a filter on top, one-hop <entity>__<dimension> names only
   (account__account_name); multi-hop paths are rejected.
 
@@ -51,19 +53,25 @@ not deployed yet, not that the name is wrong.
 
 ## Reading recipe results
 
-The parameters and the reading contract (account vs rollup grain, headcounts
+The parameters and the reading contract (org names the top parent, headcounts
 NOT additive, the NULL-attribution row) live in read_lfx_kpi_guidance - read
 it before running the recipes.
 
 ## Combined-entity slides ("IBM including Red Hat", "Amazon including AWS")
 
-Call the recipe with by=rollup for the combined figure. The direction matters:
-rollups fold subsidiaries INTO parents - Red Hat's rollup value is IBM, so
-filtering rollup = 'Red Hat' finds almost nothing; filter or group by the
-parent. Where the deck shows the parts, also present the named sub-entities
-(IBM and Red Hat as separate membership counts). Verified live: the
-Amazon-including-AWS dues and membership figures reproduce deck digits
-exactly through the rollup.
+The direction matters: rollups fold subsidiaries INTO parents, so org = a
+subsidiary's name returns only what rolls up to THAT subsidiary - a small,
+plausible-looking answer that excludes the subsidiary's own row, which sits
+under the top parent. Always name the TOP parent; to see one subsidiary
+alone, filter account__account_name in where.
+
+A rollup grain is coming. Today org = the top parent returns that parent's
+rows per account; for ADDITIVE recipes (members and dues, contribution
+volume, registrations, enrollments) sum those rows client-side and label it
+a client-side sum; for HEADCOUNT recipes (contributors, maintainers) no
+combined figure is governed yet - say so rather than summing. Where the deck
+shows the parts, present the named sub-entities (IBM and Red Hat as separate
+membership counts).
 
 ## Reconciling with official series
 

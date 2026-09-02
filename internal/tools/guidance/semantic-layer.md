@@ -126,14 +126,19 @@ the legal name ('Machines') on account__account_rollup_name.
 
 6. ACCOUNT vs ROLLUP ("including subsidiaries"). account__account_name is the
 account holding the record; account__account_rollup_name is its parent, and
-rollups fold subsidiaries INTO parents — Red Hat's rollup value is IBM, so
-filtering rollup = 'Red Hat' finds almost nothing; group by the rollup or filter
-the PARENT. Legal names do not contain the acronym: value-searching 'IBM' finds
-accounts SPELLED with it, mostly regional or stray accounts that are their OWN
-rollup and NOT folded under the parent — present those separately rather than as
-part of it. Additive metrics (dues, volumes) may be summed across accounts
-sharing a rollup; headcounts may NOT — re-read them at rollup grain. No rollup
-dimension → sum named sub-entities and list them.
+rollups fold subsidiaries INTO parents — so filtering the rollup on a
+SUBSIDIARY's name returns only what rolls up to THAT subsidiary: a small,
+plausible-looking answer that excludes the subsidiary's own row, which sits
+under the top parent (Red Hat LLC is itself a rollup parent, while its own row
+sits under International Business Machines Corporation). Always filter the TOP
+parent, or group by the rollup; to see one subsidiary alone filter
+account__account_name. Legal names do not contain the acronym:
+value-searching 'IBM' finds accounts SPELLED with it, mostly regional or
+stray accounts that are their OWN rollup and NOT folded under the parent —
+present those separately rather than as part of it. Additive metrics (dues,
+volumes) may be summed across accounts sharing a rollup; headcounts may NOT —
+re-read them at rollup grain. No rollup dimension → sum named sub-entities
+and list them.
 
 7. TIER LITERALS differ per foundation ('Premier Membership' vs 'Premier Member') — get_dimension_values per foundation, never reuse.
 
@@ -180,11 +185,13 @@ sponsorship__sponsorship_tier_type = 'package_tier' for package-only figures
 total_registrations by event_id__event_name + the event start year. Per course:
 total_enrollments by enrollment_id__course_name + product_type.
 
-15. KPI RECIPE CALLS take uniform parameters — foundation, project, org, by
-(account | rollup), since/until on FLOW recipes, as_of on SNAPSHOT ones,
-order_by on the recipe's own result columns, limit. where adds a filter and is
-one-hop only (<entity>__<dimension>); multi-hop paths fail at parse time,
-though ad-hoc queries accept both.
+15. KPI RECIPE CALLS take uniform parameters — foundation, project, org,
+since/until on FLOW recipes, as_of on SNAPSHOT ones, order_by on the recipe's
+own result columns, limit. org names the TOP parent and returns its rows per
+account; there is no rollup-grain parameter yet, and a recipe with no
+parent-organization lens (kpi_maintainers_by_org) rejects org. where adds a
+filter and is one-hop only (<entity>__<dimension>); multi-hop paths fail at
+parse time, though ad-hoc queries accept both.
 
 ## Worked examples (verified live)
 

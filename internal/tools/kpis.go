@@ -33,27 +33,26 @@ import (
 // A recipe missing from the deployed manifest fails with a clear server-side
 // error, which the handler returns verbatim — that is the signal the dbt side
 // has not deployed it yet, not a reason to retry.
-const kpisDescription = `Run a governed KPI recipe: fixed metrics and grouping, the same figure on every run. When a recipe matches the question, prefer it over explore + query.
+const kpisDescription = `Run a governed KPI recipe: fixed metrics and grouping, the same figure every run. When one matches the question, prefer it over explore + query.
 
-Read read_lfx_kpi_guidance once per session first - it lists every recipe with its result columns, time shape and caveats.
+Read read_lfx_kpi_guidance once per session first: result columns, time shape and caveats per recipe.
 
 PARAMETERS (identical for every recipe)
 saved_query  required. Recipe name from the list below.
-foundation   project slug from search_projects (e.g. cncf): whole foundation.
-project      project slug from search_projects (e.g. k8s): one project.
-org          organization legal name from search_b2b_orgs. Matches the PARENT account, so subsidiaries are included.
-by           account | rollup (default account). One row per account, or one per parent with subsidiaries folded in.
+foundation   slug from search_projects (e.g. cncf): whole foundation.
+project      slug from search_projects (e.g. k8s): one project.
+org          legal name from search_b2b_orgs. Matches the PARENT account, so name the TOP parent; rows come back per account. Rejected on a recipe with no organization lens.
 since, until yyyy-mm-dd. FLOW recipes: rows dated in the window. Omitted = all time.
-as_of        yyyy-mm-dd. SNAPSHOT recipes: the state on that date. Omitted = today.
+as_of        yyyy-mm-dd. SNAPSHOT recipes: state on that date. Omitted = today.
 where        extra MetricFlow filter, one-hop names, ANDed with the above.
 order_by     a result column, - prefix for descending.
 limit        max rows, ceiling 500. Omitted returns every row.
 
-A parameter the recipe cannot honour returns an error naming the recipe's shape. Every result includes compiled_sql.
+A parameter the recipe cannot honour returns an error naming the recipe's shape. Results carry compiled_sql.
 
 RECIPES: kpi_members_and_dues_by_account, kpi_membership_tier_split, kpi_new_members_by_year, kpi_membership_churn, kpi_contributions_by_org, kpi_contributors_by_org, kpi_contributors_by_project, kpi_maintainers_by_org, kpi_event_registrations_by_org, kpi_training_enrollments_by_org.
 
-Building a deck or briefing? Also read read_lfx_deck_building_guidance.`
+Deck or briefing? Also read read_lfx_deck_building_guidance.`
 
 // RegisterKPIs registers the query_lfx_kpis tool.
 func RegisterKPIs(server *mcp.Server) {
@@ -75,11 +74,10 @@ func RegisterKPIs(server *mcp.Server) {
 // wrong (fixed recipe, the slice parameters, FLOW vs SNAPSHOT) is stated there
 // as well as in the tool description, never only on an optional parameter.
 type KPIArgs struct {
-	SavedQuery string `json:"saved_query" jsonschema:"Required. The recipe name, exactly as listed in the tool description and read_lfx_kpi_guidance (e.g. kpi_members_and_dues_by_account). The recipe's metrics and grouping are fixed - there are no metrics/group_by parameters; slice it with foundation, project, org, by, since/until or as_of, and where. FLOW recipes take since/until on their time axis; SNAPSHOT recipes take as_of."`
+	SavedQuery string `json:"saved_query" jsonschema:"Required. The recipe name, exactly as listed in the tool description and read_lfx_kpi_guidance (e.g. kpi_members_and_dues_by_account). The recipe's metrics and grouping are fixed - there are no metrics/group_by parameters; slice it with foundation, project, org, since/until or as_of, and where. FLOW recipes take since/until on their time axis; SNAPSHOT recipes take as_of."`
 	Foundation string `json:"foundation,omitempty" jsonschema:"Optional foundation scope: a project slug from search_projects (e.g. cncf). Scopes the whole foundation."`
 	Project    string `json:"project,omitempty" jsonschema:"Optional single-project scope: a project slug from search_projects (e.g. k8s)."`
-	Org        string `json:"org,omitempty" jsonschema:"Optional organization scope: the legal name from search_b2b_orgs (e.g. International Business Machines Corporation). It matches the PARENT account, so subsidiaries are included; a subsidiary name matches nothing."`
-	By         string `json:"by,omitempty" jsonschema:"Grain of the organization rows: account (default, one row per account) or rollup (one row per parent, subsidiaries folded in). Headcount recipes are not additive - a parent figure must come from by=rollup, never from summing rows."`
+	Org        string `json:"org,omitempty" jsonschema:"Optional organization scope: the legal name from search_b2b_orgs (e.g. International Business Machines Corporation). It matches the PARENT account, so name the TOP parent - a subsidiary's name returns only what rolls up to that subsidiary, excluding the subsidiary's own row. Rows come back per account; a rollup grain is not deployed yet. Rejected on a recipe with no organization lens, such as kpi_maintainers_by_org."`
 	Since      string `json:"since,omitempty" jsonschema:"Optional window start, yyyy-mm-dd, on the recipe's own time axis. FLOW recipes only. Omitted = all time."`
 	Until      string `json:"until,omitempty" jsonschema:"Optional window end, yyyy-mm-dd, on the recipe's own time axis. FLOW recipes only. Omitted = all time."`
 	AsOf       string `json:"as_of,omitempty" jsonschema:"Optional as-of date, yyyy-mm-dd, for SNAPSHOT recipes. Only today's date is available until as-of history is deployed; omitted = today."`
@@ -106,8 +104,15 @@ type kpiRecipe struct {
 	shape kpiShape
 	// timeAxis is the MetricFlow time dimension since/until filter on.
 	timeAxis string
-	// orgDimension is the dimension the org parameter filters on.
+	// orgDimension is the dimension the org parameter filters on. The
+	// sentinel kpiNoOrgLens means the recipe has no parent-organization
+	// lens at all, so org is rejected instead of expanded — silently
+	// filtering the wrong dimension returns zero rows, not an error.
 	orgDimension string
+	// accountNameDimension is the exact account-name dimension a recipe
+	// without an org lens must be filtered on with where instead. Only
+	// recipes marked kpiNoOrgLens set it.
+	accountNameDimension string
 }
 
 const (
@@ -117,9 +122,11 @@ const (
 	defaultKPITimeAxis     = "metric_time"
 	defaultKPIOrgDimension = "account__account_rollup_name"
 
-	// kpiRollupSuffix is the naming convention for the rollup-grain twin of a
-	// recipe in lf-dbt: by=rollup runs '<name>_rollup'.
-	kpiRollupSuffix = "_rollup"
+	// kpiNoOrgLens marks a recipe with no parent-organization dimension.
+	// Its only employer column is an exact account name, which is a
+	// different question from "this parent and everything under it", so org
+	// is rejected rather than quietly answered per account.
+	kpiNoOrgLens = "none"
 )
 
 // kpiRecipes carries only what differs from the defaults. Verified live
@@ -134,10 +141,10 @@ var kpiRecipes = map[string]kpiRecipe{
 	"kpi_contributors_by_org":         {shape: kpiFlow},
 	"kpi_contributors_by_project":     {shape: kpiFlow},
 	// Maintainers have no usable start date, so the roster is only readable
-	// as a snapshot. Until the account entity lands on silver_dim_maintainers
-	// the organization lens is the maintainer's own exact account name, not
-	// the account rollup.
-	"kpi_maintainers_by_org": {shape: kpiSnapshot, orgDimension: "maintainer_key__account_name"},
+	// as a snapshot. There is no account entity on silver_dim_maintainers
+	// yet, so the recipe has NO parent-organization lens: its only employer
+	// column is the maintainer's own exact account name.
+	"kpi_maintainers_by_org": {shape: kpiSnapshot, orgDimension: kpiNoOrgLens, accountNameDimension: "maintainer_key__account_name"},
 	// Registrations are windowed on the EVENT start date, so a window means
 	// "events in the window" and matches the recipe's event-year grouping.
 	"kpi_event_registrations_by_org":  {shape: kpiFlow, timeAxis: "registration_id__event_start_date"},
@@ -171,10 +178,6 @@ type kpiRequest struct {
 	where      []string
 	orderBy    []string
 	limit      int
-	// rollup records that savedQuery is the '<name>_rollup' twin, so a
-	// missing-saved-query rejection from lens can be translated into the
-	// by=rollup instruction rather than returned raw.
-	rollup bool
 }
 
 // kpiDateLayout is the only date format the tool accepts; anything else is
@@ -209,15 +212,14 @@ func buildKPIRequest(args KPIArgs, today time.Time) (kpiRequest, string) {
 	if name == "" {
 		return kpiRequest{}, "Error: saved_query is required. Pick a recipe name from the tool description, e.g. kpi_members_and_dues_by_account."
 	}
-	if args.Limit > 500 {
-		return kpiRequest{}, "Error: limit must be 500 or less"
+	if args.Limit < 0 || args.Limit > 500 {
+		return kpiRequest{}, fmt.Sprintf("Error: limit must be between 1 and 500, got %d. Omit it entirely to return every row.", args.Limit)
 	}
 
 	recipe := kpiRecipeFor(name)
 
-	by := strings.ToLower(strings.TrimSpace(args.By))
-	if by != "" && by != "account" && by != "rollup" {
-		return kpiRequest{}, fmt.Sprintf("Error: by must be account or rollup, got %q. account gives one row per account; rollup gives one row per parent with subsidiaries folded in.", args.By)
+	if org := strings.TrimSpace(args.Org); org != "" && recipe.orgDimension == kpiNoOrgLens {
+		return kpiRequest{}, fmt.Sprintf("Error: %s has no parent-organization lens yet: org is not accepted. Filter with where on %s = '<exact account name>' and present the figure as per-account, not per parent.", name, recipe.accountNameDimension)
 	}
 
 	since := strings.TrimSpace(args.Since)
@@ -243,10 +245,6 @@ func buildKPIRequest(args KPIArgs, today time.Time) (kpiRequest, string) {
 	}
 
 	req := kpiRequest{savedQuery: name, limit: args.Limit}
-	if by == "rollup" {
-		req.savedQuery = name + kpiRollupSuffix
-		req.rollup = true
-	}
 
 	if foundation := strings.TrimSpace(args.Foundation); foundation != "" {
 		req.where = append(req.where, kpiDimensionFilter("project__foundation_slug", foundation))
@@ -269,28 +267,6 @@ func buildKPIRequest(args KPIArgs, today time.Time) (kpiRequest, string) {
 	req.orderBy = parseCSV(args.OrderBy)
 
 	return req, ""
-}
-
-// kpiRollupNotDeployedMessage translates the lens error for a missing rollup
-// twin into the instruction that follows from it. Summing account rows is
-// never the workaround: headcount recipes are not additive across accounts.
-func kpiRollupNotDeployedMessage(name string) string {
-	return fmt.Sprintf("Error: rollup grain for this recipe is not deployed yet (%s does not exist); use by=account. For headcount recipes the combined parent figure is not available yet - never sum rows to make one.", name)
-}
-
-// isUnknownSavedQueryError reports whether a lens rejection is the semantic
-// layer saying it has no such saved query, rather than a query-time failure.
-func isUnknownSavedQueryError(statusCode int, body, name string) bool {
-	if statusCode != http.StatusBadRequest && statusCode != http.StatusNotFound {
-		return false
-	}
-	lower := strings.ToLower(body)
-	for _, phrase := range []string{"does not exist", "not found", "unknown saved query", "no saved query"} {
-		if strings.Contains(lower, phrase) {
-			return true
-		}
-	}
-	return strings.Contains(lower, strings.ToLower(name))
 }
 
 func handleKPIs(ctx context.Context, _ *mcp.CallToolRequest, args KPIArgs) (*mcp.CallToolResult, any, error) {
@@ -324,12 +300,12 @@ func handleKPIs(ctx context.Context, _ *mcp.CallToolRequest, args KPIArgs) (*mcp
 		return nil, nil, fmt.Errorf("KPI recipe call failed: %w", err)
 	}
 	if statusCode != http.StatusOK {
-		message := fmt.Sprintf("Error (HTTP %d): %s", statusCode, string(body))
-		if req.rollup && isUnknownSavedQueryError(statusCode, string(body), req.savedQuery) {
-			message = kpiRollupNotDeployedMessage(req.savedQuery)
-		}
+		// Lens errors reach the caller verbatim: an invented friendlier
+		// message would have the model correct the wrong thing, and a
+		// recipe the server does not know is the deployment state, not a
+		// caller mistake.
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: message}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error (HTTP %d): %s", statusCode, string(body))}},
 			IsError: true,
 		}, nil, nil
 	}

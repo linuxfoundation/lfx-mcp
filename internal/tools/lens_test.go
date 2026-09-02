@@ -358,41 +358,77 @@ func TestSemanticLayerArgs_FieldsFitSchemaBudget(t *testing.T) {
 // parameter. Keeping the full text there is fine and useful for clients that do
 // pass it through; it just may not be the only copy.
 func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
-	var surviving string
-	for _, tool := range []*mcp.Tool{listExploreTool(t), listQueryTool(t), listKPIsTool(t)} {
-		surviving += "\n" + tool.Description
+	// surviving is what a compacting client still shows for one tool: its
+	// description plus the descriptions of its REQUIRED parameters.
+	surviving := func(tool *mcp.Tool) string {
+		text := tool.Description
 		for _, name := range schemaRequired(t, tool) {
-			surviving += "\n" + schemaPropertyDescription(t, tool, name)
+			text += "\n" + schemaPropertyDescription(t, tool, name)
 		}
+		return text
 	}
 
-	for _, tc := range []struct {
+	type token struct {
 		token string
 		why   string
+	}
+
+	// Asserted PER TOOL, not over the concatenation: a caller looking at
+	// query_lfx_kpis never sees explore_lfx_semantic_layer's description, so
+	// a token that only survives on a sibling has not survived for this one.
+	for _, tc := range []struct {
+		// tools is the set that must carry the tokens between them: the
+		// explore/query pair is one routing surface (a caller reaching for
+		// either sees both), query_lfx_kpis is its own.
+		name   string
+		tools  []*mcp.Tool
+		tokens []token
 	}{
-		{"Dimension(", "categorical filter syntax is unguessable"},
-		{"TimeDimension(", "time filter syntax is unguessable"},
-		{"yyyy-mm-dd", "date format silently returns wrong rows if guessed"},
-		{"ceiling 500", "over-limit requests are rejected outright"},
-		{"metric_time__year", "the only way to build a trend"},
-		{"entity__field", "dimension names cannot be assembled by hand"},
-		{"outer-joined", "explains NULLs in cross-domain results"},
-		{"raw IDs", "grouping by an entity silently returns unusable output"},
-		{"get_dimension_values", "the only recovery from a wrong filter literal"},
-		{"zero rows", "a wrong literal is silent, so the model must be told to check first"},
-		{"FULL LEGAL names", "short-name value searches silently miss legal-name accounts"},
-		{"search_b2b_orgs", "the resolver for org legal names; its empty results are access-filtered, not proof of absence"},
-		{"read_lfx_semantic_layer_guidance", "the guidance recipes are useless if nothing routes the model to them"},
-		{"read_lfx_kpi_guidance", "the recipe inventory is only reachable if the KPI tool routes the model to it"},
-		{"kpi_members_and_dues_by_account", "recipe names cannot be guessed, and the inventory reaches the model only here"},
-		{"account | rollup", "the org grain is a closed set; an invented value is rejected"},
-		{"FLOW", "since/until on the wrong shape is rejected, not silently ignored"},
-		{"SNAPSHOT", "as_of on the wrong shape is rejected, not silently ignored"},
+		{
+			name:  "explore_lfx_semantic_layer + query_lfx_semantic_layer",
+			tools: []*mcp.Tool{listExploreTool(t), listQueryTool(t)},
+			tokens: []token{
+				{"Dimension(", "categorical filter syntax is unguessable"},
+				{"TimeDimension(", "time filter syntax is unguessable"},
+				{"yyyy-mm-dd", "date format silently returns wrong rows if guessed"},
+				{"ceiling 500", "over-limit requests are rejected outright"},
+				{"metric_time__year", "the only way to build a trend"},
+				{"entity__field", "dimension names cannot be assembled by hand"},
+				{"outer-joined", "explains NULLs in cross-domain results"},
+				{"raw IDs", "grouping by an entity silently returns unusable output"},
+				{"get_dimension_values", "the only recovery from a wrong filter literal"},
+				{"zero rows", "a wrong literal is silent, so the model must be told to check first"},
+				{"FULL LEGAL names", "short-name value searches silently miss legal-name accounts"},
+				{"search_b2b_orgs", "the resolver for org legal names; its empty results are access-filtered, not proof of absence"},
+				{"read_lfx_semantic_layer_guidance", "the guidance recipes are useless if nothing routes the model to them"},
+			},
+		},
+		{
+			name:  "query_lfx_kpis",
+			tools: []*mcp.Tool{listKPIsTool(t)},
+			tokens: []token{
+				{"read_lfx_kpi_guidance", "the recipe inventory is only reachable if the KPI tool routes the model to it"},
+				{"kpi_members_and_dues_by_account", "recipe names cannot be guessed, and the inventory reaches the model only here"},
+				{"search_b2b_orgs", "org takes the stored legal name; a short name silently misses"},
+				{"yyyy-mm-dd", "date format silently returns wrong rows if guessed"},
+				{"ceiling 500", "over-limit requests are rejected outright"},
+				{"FLOW", "since/until on the wrong shape is rejected, not silently ignored"},
+				{"SNAPSHOT", "as_of on the wrong shape is rejected, not silently ignored"},
+			},
+		},
 	} {
-		if !strings.Contains(surviving, tc.token) {
-			t.Errorf("%q reaches the model only via an optional parameter, where it gets summarised away (%s). Move it into the tool description or onto a required parameter.",
-				tc.token, tc.why)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			var text string
+			for _, tool := range tc.tools {
+				text += "\n" + surviving(tool)
+			}
+			for _, tk := range tc.tokens {
+				if !strings.Contains(text, tk.token) {
+					t.Errorf("%q reaches the model only via an optional parameter of %s, where it gets summarised away (%s). Move it into the tool description or onto a required parameter.",
+						tk.token, tc.name, tk.why)
+				}
+			}
+		})
 	}
 }
 

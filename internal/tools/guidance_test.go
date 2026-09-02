@@ -170,8 +170,11 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"SUPERSET of is_org_contribution",
 		// account vs rollup doctrine, in full, once
 		"is its parent",
+		"returns only what rolls up to THAT subsidiary",
+		"Red Hat LLC is itself a rollup parent",
+		"Always filter the TOP\nparent",
 		"value-searching 'IBM' finds",
-		"their OWN\nrollup",
+		"their OWN rollup",
 		"headcounts may NOT",
 		// the fuzzy did-you-mean trap
 		"get_dimensions(search=) is authoritative",
@@ -185,6 +188,8 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"## Worked examples (verified live)",
 		// KPI recipes
 		"one-hop",
+		"there is no rollup-grain parameter yet",
+		"kpi_maintainers_by_org) rejects org",
 		"query_lfx_kpis",
 		"PREFER it over the",
 		"read_lfx_deck_building_guidance",
@@ -211,6 +216,11 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"an order_by on the recipe's own",
 		"read_lfx_kpi_guidance",
 		"subsidiaries INTO parents",
+		"returns only what rolls up to THAT subsidiary",
+		"A rollup grain is coming",
+		"label it\na client-side sum",
+		"no\ncombined figure is governed yet",
+		"(kpi_maintainers_by_org) rejects\n  org",
 		"Meeting attendance by company",
 		"total_sponsorship_revenue",
 		"'package_tier'",
@@ -227,8 +237,8 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 
 // TestKPIGuidanceContent pins the recipe inventory annotations and the
 // contract that only lives here: how to call (the uniform parameters), the
-// SNAPSHOT/FLOW rule, the by=account / by=rollup grain lines with the parent
-// -name rule, the NULL-attribution row, and the not-deployed fallbacks.
+// SNAPSHOT/FLOW rule, the top-parent rule for org (with no rollup grain to
+// switch to yet), the NULL-attribution row, and the not-deployed fallbacks.
 func TestKPIGuidanceContent(t *testing.T) {
 	text := kpiGuidance
 	for _, want := range []string{
@@ -241,6 +251,8 @@ func TestKPIGuidanceContent(t *testing.T) {
 		"NOT additive - people span accounts",
 		"NOT additive across projects",
 		"active maintainers per employer account",
+		"org not accepted yet (no",
+		"maintainer_key__account_name",
 		"rows are registrations, not people",
 		"edX rows carry no account",
 		"EVENT start date",
@@ -254,18 +266,26 @@ func TestKPIGuidanceContent(t *testing.T) {
 		// the shape rule
 		"A FLOW recipe takes since/until on its own time axis; a\n   SNAPSHOT recipe takes as_of",
 		"one call per\n   period",
-		// org versus rollup
-		"by=account   one row per account",
-		"by=rollup    one row per parent, subsidiaries folded in",
+		// organizations: the account and its top parent. The old claim
+		// that a subsidiary name "finds nothing" was false - Red Hat LLC is
+		// itself a rollup parent - and a small plausible answer is the
+		// dangerous failure, so the true rule is pinned instead.
 		"The org parameter always names the PARENT",
-		"org = Red Hat LLC finds nothing",
-		"never from summing\nrows",
+		"returns only what rolls up to THAT\nsubsidiary",
+		"excludes the\nsubsidiary's own row",
+		"Always name the TOP\nparent",
+		"filter account__account_name in where",
+		// no by parameter: no rollup twin is deployed for any recipe
+		"a rollup grain is coming",
+		"label it a client-side sum",
+		"no combined figure is governed yet - say\nso rather than summing",
+		"has no parent lens at all yet: org is rejected on it",
 		// reading contract
 		"never an organization",
 		"compiled_sql",
 		// errors
 		"not deployed yet",
-		"rollup grain is not deployed yet",
+		"org on kpi_maintainers_by_org is rejected",
 		"read_lfx_deck_building_guidance",
 	} {
 		if !strings.Contains(text, want) {

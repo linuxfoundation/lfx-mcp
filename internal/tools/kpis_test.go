@@ -30,15 +30,26 @@ var kpiTestToday = time.Date(2026, 9, 2, 11, 30, 0, 0, time.UTC)
 // Description and schema
 // ---------------------------------------------------------------------------
 
+// kpisDescriptionCeiling is tighter than the hard schema budget: this
+// description is read on every tools/list alongside ten siblings, so it is
+// held to the space the contract actually needs, with headroom for the next
+// recipe name rather than for more prose.
+const kpisDescriptionCeiling = 1500
+
 // TestKPIsDescription_FitsSchemaBudget holds the tool to the same budget as
-// its siblings: everything past the limit is invisible to the model, and this
-// description IS the recipe inventory and the parameter contract.
+// its siblings, and to the tighter ceiling above: everything past the limit is
+// invisible to the model, and this description IS the recipe inventory and the
+// parameter contract.
 func TestKPIsDescription_FitsSchemaBudget(t *testing.T) {
 	if got := len(kpisDescription); got > schemaDescriptionBudget {
 		t.Errorf("query_lfx_kpis description is %d bytes; everything past %d is invisible to the model",
 			got, schemaDescriptionBudget)
 	}
-	for _, property := range []string{"saved_query", "foundation", "project", "org", "by", "since", "until", "as_of", "where", "order_by", "limit"} {
+	if got := len(kpisDescription); got > kpisDescriptionCeiling {
+		t.Errorf("query_lfx_kpis description is %d bytes; the ceiling is %d - tighten the prose, keep the parameter lines",
+			got, kpisDescriptionCeiling)
+	}
+	for _, property := range []string{"saved_query", "foundation", "project", "org", "since", "until", "as_of", "where", "order_by", "limit"} {
 		if got := len(schemaPropertyDescription(t, listKPIsTool(t), property)); got > schemaDescriptionBudget {
 			t.Errorf("kpis.%s description is %d bytes; limit %d", property, got, schemaDescriptionBudget)
 		}
@@ -74,6 +85,20 @@ func TestKPIsDescription_ListsAdvertisedRecipes(t *testing.T) {
 	}
 }
 
+// TestKPIsDescription_HasNoRollupGrain pins the removal of the by parameter:
+// no '<name>_rollup' twin is deployed for any recipe, so a documented grain
+// switch would be a documented failure. It comes back with the twins.
+func TestKPIsDescription_HasNoRollupGrain(t *testing.T) {
+	for _, gone := range []string{"account | rollup", "by=rollup", "by=account"} {
+		if strings.Contains(kpisDescription, gone) {
+			t.Errorf("description still advertises %q; the rollup grain is not deployed", gone)
+		}
+	}
+	if _, ok := reflect.TypeOf(KPIArgs{}).FieldByName("By"); ok {
+		t.Error("KPIArgs still carries By; the rollup grain is not deployed for any recipe")
+	}
+}
+
 // TestKPIsDescription_CarriesTheContract pins the uniform contract: every
 // parameter line, the shape rule, and the routing to the guidance tools.
 func TestKPIsDescription_CarriesTheContract(t *testing.T) {
@@ -85,7 +110,8 @@ func TestKPIsDescription_CarriesTheContract(t *testing.T) {
 		"foundation",
 		"project",
 		"search_b2b_orgs",
-		"account | rollup",
+		"name the TOP parent",
+		"no organization lens",
 		"since, until",
 		"as_of",
 		"where",
@@ -166,14 +192,36 @@ func TestKPIExpansion_OrgUsesAccountRollup(t *testing.T) {
 	}
 }
 
-// Maintainers have no account entity yet, so org filters their own exact
-// account name instead of the rollup. The expansion table is what encodes
-// that; getting it wrong returns zero rows, not an error.
-func TestKPIExpansion_OrgOnMaintainersUsesMaintainerAccountName(t *testing.T) {
-	req := buildOrFail(t, KPIArgs{SavedQuery: "kpi_maintainers_by_org", Org: "Red Hat LLC"})
-	want := []string{"{{ Dimension('maintainer_key__account_name') }} = 'Red Hat LLC'"}
+// Maintainers have no account entity yet, so the recipe has no
+// parent-organization lens at all: its only employer column is an exact
+// account name. Answering org on it per account would be a confident wrong
+// answer (a per-account figure presented as a parent's), so it is rejected.
+func TestKPIExpansion_OrgOnMaintainersIsRejected(t *testing.T) {
+	_, rejection := buildKPIRequest(KPIArgs{SavedQuery: "kpi_maintainers_by_org", Org: "International Business Machines Corporation"}, kpiTestToday)
+	if rejection == "" {
+		t.Fatal("org on kpi_maintainers_by_org must be rejected: the recipe has no parent-organization lens")
+	}
+	for _, want := range []string{
+		"kpi_maintainers_by_org",
+		"no parent-organization lens",
+		"org is not accepted",
+		"maintainer_key__account_name",
+		"per-account, not per parent",
+	} {
+		if !strings.Contains(rejection, want) {
+			t.Errorf("rejection %q missing %q", rejection, want)
+		}
+	}
+}
+
+// A recipe WITH an organization lens is unaffected: org still expands to the
+// account rollup, so the no-lens rejection is per recipe, not a retreat from
+// the parameter.
+func TestKPIExpansion_OrgOnFlowRecipeStillExpandsToRollup(t *testing.T) {
+	req := buildOrFail(t, KPIArgs{SavedQuery: "kpi_contributors_by_org", Org: "International Business Machines Corporation"})
+	want := []string{"{{ Dimension('account__account_rollup_name') }} = 'International Business Machines Corporation'"}
 	if !reflect.DeepEqual(req.where, want) {
-		t.Errorf("maintainer org expansion = %v, want %v", req.where, want)
+		t.Errorf("org expansion on a FLOW recipe = %v, want %v", req.where, want)
 	}
 }
 
@@ -208,23 +256,6 @@ func TestKPIExpansion_AsOfTodayAddsNoFilter(t *testing.T) {
 	}
 }
 
-func TestKPIExpansion_ByRollupPicksTheTwin(t *testing.T) {
-	req := buildOrFail(t, KPIArgs{SavedQuery: "kpi_contributors_by_org", By: "rollup"})
-	if req.savedQuery != "kpi_contributors_by_org_rollup" {
-		t.Errorf("by=rollup must run the twin, got %q", req.savedQuery)
-	}
-	if !req.rollup {
-		t.Error("by=rollup must record that the twin was selected")
-	}
-}
-
-func TestKPIExpansion_ByAccountKeepsTheRecipe(t *testing.T) {
-	req := buildOrFail(t, KPIArgs{SavedQuery: "kpi_contributors_by_org", By: "account"})
-	if req.savedQuery != "kpi_contributors_by_org" || req.rollup {
-		t.Errorf("by=account must run the recipe itself, got %q (rollup=%v)", req.savedQuery, req.rollup)
-	}
-}
-
 // A single quote in a literal must not end the literal: doubling it is the
 // escape MetricFlow's SQL literals take.
 func TestKPIExpansion_EscapesSingleQuotes(t *testing.T) {
@@ -243,7 +274,6 @@ func TestKPIExpansion_CombinedParameters(t *testing.T) {
 		Foundation: "cncf",
 		Project:    "k8s",
 		Org:        "International Business Machines Corporation",
-		By:         "rollup",
 		Since:      "2025-01-01",
 		Until:      "2025-12-31",
 		Where:      "{{ Dimension('account__account_name') }} = 'Red Hat LLC'",
@@ -251,7 +281,7 @@ func TestKPIExpansion_CombinedParameters(t *testing.T) {
 		Limit:      20,
 	})
 	want := kpiRequest{
-		savedQuery: "kpi_contributions_by_org_rollup",
+		savedQuery: "kpi_contributions_by_org",
 		where: []string{
 			"{{ Dimension('project__foundation_slug') }} = 'cncf'",
 			"{{ Dimension('project__slug') }} = 'k8s'",
@@ -262,7 +292,6 @@ func TestKPIExpansion_CombinedParameters(t *testing.T) {
 		},
 		orderBy: []string{"-code_contribution_activities"},
 		limit:   20,
-		rollup:  true,
 	}
 	if !reflect.DeepEqual(req, want) {
 		t.Errorf("combined expansion =\n%#v\nwant\n%#v", req, want)
@@ -304,7 +333,14 @@ func TestKPIRejections(t *testing.T) {
 		{
 			name:  "limit over the ceiling",
 			args:  KPIArgs{SavedQuery: "kpi_contributions_by_org", Limit: 501},
-			wants: []string{"limit must be 500 or less"},
+			wants: []string{"limit must be between 1 and 500", "501"},
+		},
+		{
+			// A negative limit is not "no limit": passed through it would
+			// reach the semantic layer as a nonsense bound.
+			name:  "negative limit",
+			args:  KPIArgs{SavedQuery: "kpi_contributions_by_org", Limit: -1},
+			wants: []string{"limit must be between 1 and 500", "-1", "Omit it entirely"},
 		},
 		{
 			name:  "since on a SNAPSHOT recipe",
@@ -340,11 +376,6 @@ func TestKPIRejections(t *testing.T) {
 			name:  "invalid as_of",
 			args:  KPIArgs{SavedQuery: "kpi_maintainers_by_org", AsOf: "2026-13-45"},
 			wants: []string{"as_of must be a yyyy-mm-dd date"},
-		},
-		{
-			name:  "unknown by",
-			args:  KPIArgs{SavedQuery: "kpi_contributions_by_org", By: "parent"},
-			wants: []string{"by must be account or rollup", "parent"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -446,15 +477,15 @@ func setupLensErrorTest(t *testing.T, status int, body string) {
 	t.Cleanup(func() { lensConfig = prev })
 }
 
-// A missing '<name>_rollup' twin is the deployment state, not a caller
-// mistake: it becomes the by=account instruction, and never an invitation to
-// sum account rows into a parent headcount.
-func TestKPIs_TranslatesMissingRollupTwin(t *testing.T) {
-	setupLensErrorTest(t, http.StatusBadRequest, `{"detail":"saved query kpi_contributors_by_org_rollup does not exist"}`)
+// org on a recipe with no parent-organization lens is rejected before any
+// call: a per-account figure returned for an org question is a confident
+// wrong answer, and the round trip would look like it worked.
+func TestKPIs_OrgOnMaintainersNeverReachesLens(t *testing.T) {
+	captured := setupLensTest(t)
 
 	res, _, err := handleKPIs(context.Background(), &mcp.CallToolRequest{}, KPIArgs{
-		SavedQuery: "kpi_contributors_by_org",
-		By:         "rollup",
+		SavedQuery: "kpi_maintainers_by_org",
+		Org:        "International Business Machines Corporation",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -462,22 +493,41 @@ func TestKPIs_TranslatesMissingRollupTwin(t *testing.T) {
 	if !res.IsError {
 		t.Fatal("expected an error result")
 	}
-	text := resultText(t, res)
-	for _, want := range []string{"rollup grain for this recipe is not deployed yet", "use by=account", "never sum rows"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("translated error %q missing %q", text, want)
-		}
+	if captured.Method != "" {
+		t.Errorf("org on a recipe with no org lens must not reach lens, got %s %s", captured.Method, captured.Path)
+	}
+	if text := resultText(t, res); !strings.Contains(text, "no parent-organization lens") {
+		t.Errorf("rejection %q does not name the missing lens", text)
 	}
 }
 
-// Only the missing-twin case is translated: a genuine query failure must
-// reach the caller verbatim, or the model corrects the wrong thing.
-func TestKPIs_PassesOtherLensErrorsThrough(t *testing.T) {
+// Lens errors are never rewritten: a friendlier message invented here would
+// have the model correct the wrong thing.
+func TestKPIs_PassesLensErrorsThrough(t *testing.T) {
 	setupLensErrorTest(t, http.StatusInternalServerError, `{"detail":"semantic layer timeout"}`)
 
+	res, _, err := handleKPIs(context.Background(), &mcp.CallToolRequest{}, KPIArgs{SavedQuery: "kpi_contributors_by_org"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected an error result")
+	}
+	if text := resultText(t, res); !strings.Contains(text, "semantic layer timeout") {
+		t.Errorf("lens errors must pass through verbatim, got %q", text)
+	}
+}
+
+// A 400 that names the recipe but is a different failure (a bad order_by
+// column) must still arrive verbatim: the recipe name appearing in an error
+// body is not evidence the recipe is missing.
+func TestKPIs_NamedRecipeInAnotherErrorPassesThrough(t *testing.T) {
+	setupLensErrorTest(t, http.StatusBadRequest,
+		`{"detail":"order_by column 'total_contributorz' is not a result column of kpi_contributors_by_org"}`)
+
 	res, _, err := handleKPIs(context.Background(), &mcp.CallToolRequest{}, KPIArgs{
 		SavedQuery: "kpi_contributors_by_org",
-		By:         "rollup",
+		OrderBy:    "-total_contributorz",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -486,12 +536,15 @@ func TestKPIs_PassesOtherLensErrorsThrough(t *testing.T) {
 		t.Fatal("expected an error result")
 	}
 	text := resultText(t, res)
-	if !strings.Contains(text, "semantic layer timeout") || strings.Contains(text, "not deployed yet") {
-		t.Errorf("non-existence errors must pass through verbatim, got %q", text)
+	if !strings.Contains(text, "is not a result column") {
+		t.Errorf("order_by error must pass through verbatim, got %q", text)
+	}
+	if strings.Contains(text, "not deployed") {
+		t.Errorf("a query-time error must not be reported as a missing recipe, got %q", text)
 	}
 }
 
-// An unknown recipe name (by=account) is the dbt side not having deployed it;
+// An unknown recipe name is the dbt side not having deployed it;
 // the server's own error is the signal, returned verbatim.
 func TestKPIs_UnknownRecipeErrorPassesThrough(t *testing.T) {
 	setupLensErrorTest(t, http.StatusBadRequest, `{"detail":"saved query kpi_not_real does not exist"}`)

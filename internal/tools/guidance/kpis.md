@@ -62,16 +62,17 @@ needs them) · shape and time axis · notes.
   account row is unattributed work.
 - kpi_contributors_by_org — distinct code contributors per account.
   account__account_name, account__account_rollup_name, total_contributors ·
-  FLOW, activity date · NOT additive - people span accounts; use by=rollup
-  for a parent figure.
+  FLOW, activity date · NOT additive - people span accounts, so there is no
+  governed combined figure for a parent today.
 - kpi_contributors_by_project — distinct code contributors per project,
   with its foundation. project__foundation_slug, project__foundation_name,
   project__slug, project__name, total_contributors · FLOW, activity date ·
   NOT additive across projects.
 - kpi_maintainers_by_org — active maintainers per employer account.
   maintainer_key__account_name, active_maintainers · SNAPSHOT · NOT
-  additive; the NULL row is unresolved employer; org matches the account
-  name exactly here, not the parent.
+  additive; the NULL row is unresolved employer; org not accepted yet (no
+  parent lens on this recipe) - use where on maintainer_key__account_name
+  (exact account name) and present the figure as per-account.
 - kpi_event_registrations_by_org — accepted registrations per account.
   account__account_name, account__account_rollup_name, total_registrations ·
   FLOW, event start date · additive; rows are registrations, not people.
@@ -84,7 +85,7 @@ Windows on kpi_event_registrations_by_org run on the EVENT start date, so
 since/until mean "events in the window", matching the recipe's event-year
 grouping.
 
-## Org versus org rollup
+## Organizations: the account and its parent
 
 Every *_by_org recipe carries two organization columns. account_name is the
 Salesforce account that holds the record; account_rollup_name is the parent
@@ -92,23 +93,32 @@ company it belongs to. Red Hat LLC is an account whose rollup is
 International Business Machines Corporation; IBM's own direct business is
 another account under the same rollup.
 
-  by=account   one row per account - "IBM and Red Hat shown separately"
-  by=rollup    one row per parent, subsidiaries folded in - "IBM including
-               Red Hat"
+The org parameter always names the PARENT, and the rows come back per
+account. org = a subsidiary's name returns only what rolls up to THAT
+subsidiary - a small, plausible-looking answer that excludes the
+subsidiary's own row, which sits under the top parent. Always name the TOP
+parent; to see one subsidiary alone, filter account__account_name in where.
 
-The org parameter always names the PARENT. org = International Business
-Machines Corporation with by=account lists the parts; with by=rollup gives
-the combined figure. org = Red Hat LLC finds nothing - Red Hat is never
-anyone's parent. To see one subsidiary alone, use by=account and filter
-account__account_name in where. Headcount recipes are not additive across
-accounts, so a parent figure must come from by=rollup, never from summing
-rows. The full account-vs-rollup doctrine (acronym trap, accounts that are
-their own rollup, the NULL row) is in read_lfx_semantic_layer_guidance.
+Combined "including subsidiaries" figures: a rollup grain is coming. Today
+org = the top parent returns that parent's rows per account; for ADDITIVE
+recipes (members and dues, contribution volume, registrations, enrollments)
+sum those rows client-side and label it a client-side sum; for HEADCOUNT
+recipes (contributors, maintainers) no combined figure is governed yet - say
+so rather than summing.
+
+kpi_maintainers_by_org has no parent lens at all yet: org is rejected on it.
+Filter maintainer_key__account_name in where with the exact account name and
+present the figure as per-account, not per parent.
+
+The full account-vs-rollup doctrine (acronym trap, accounts that are their
+own rollup, the NULL row) is in read_lfx_semantic_layer_guidance.
 
 ## Reading results
 
 - *_by_org rows come per account with the parent alongside: read account
-  rankings off the rows, parent rankings from by=rollup.
+  rankings straight off the rows. A parent total is a client-side sum of the
+  rows sharing a rollup name, and only for additive recipes - label it as
+  one.
 - The NULL account row is unattributed - never an organization, never folded
   into a parent. Report it as unattributed.
 - SNAPSHOT readings are the state today. Historical as-of readings run high
@@ -122,9 +132,8 @@ their own rollup, the NULL row) is in read_lfx_semantic_layer_guidance.
 - A recipe name the server does not know is not deployed yet: fall back to
   explore_lfx_semantic_layer + query_lfx_semantic_layer and label the figure
   as not governed. Never retry the name.
-- by=rollup can report that the rollup grain is not deployed yet for that
-  recipe. Use by=account and present the parts; for headcount recipes say
-  the combined figure is not available yet - never sum rows to make one.
+- org on kpi_maintainers_by_org is rejected: that recipe has no
+  parent-organization lens yet. Use where on maintainer_key__account_name.
 - since/until on a SNAPSHOT recipe, as_of on a FLOW recipe, and an as_of
   other than today are rejected with the recipe's shape named. Correct the
   call; do not retry it unchanged.

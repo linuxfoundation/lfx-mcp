@@ -202,8 +202,8 @@ best effort and disclose there is no canonical way to compute it.
 
 13. REGIONS. country__* follows the person; organization_lf_region etc. follow the org's HQ.
 
-14. EVENTS/TRAINING/SPONSORSHIPS BY ORG. No standard metric covers these —
-compose them here. METRICS: total_registrations counts ACCEPTED registrations
+14. EVENTS/TRAINING/SPONSORSHIPS BY ORG. No advertised standard metric covers
+these — compose them here. METRICS: total_registrations counts ACCEPTED registrations
 only; total_enrollments counts enrollment records only (the source table is
 mostly other lifecycle events, and the metric filters them out) — neither
 needs a status filter of your own. Sponsorships: total_sponsorship_revenue

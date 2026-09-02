@@ -67,10 +67,9 @@ func RegisterStandardMetrics(server *mcp.Server) {
 	}, handleStandardMetrics)
 }
 
-// StandardMetricsArgs defines the input for query_lfx_standard_metrics, and is
-// also the request body: the field names, the omitempty tags and the pointer
-// on Limit are the wire contract with the lens standard-metric endpoint, so
-// the arguments travel exactly as the caller gave them.
+// StandardMetricsArgs defines the input for query_lfx_standard_metrics. Every
+// field travels to the lens standard-metric endpoint unchanged in meaning;
+// standardMetricRequest below is the body it becomes.
 //
 // Metric is the only required field, so under the schema compaction described
 // on QuerySemanticLayerArgs its description is the one that survives intact
@@ -90,10 +89,53 @@ type StandardMetricsArgs struct {
 	Subsidiaries string `json:"subsidiaries,omitempty" jsonschema:"How to treat the accounts that roll up to org: none (default) = that account only; separate = the account plus every account rolling up to it, one row each; combined = the account plus those accounts folded into one row. Without org, combined returns one row per parent organization. The parent link is one hop, so a combined figure covers direct subsidiaries, not their own acquisitions - disclose that next to it."`
 	Since        string `json:"since,omitempty" jsonschema:"Optional window start, yyyy-mm-dd, on the metric's own time axis. FLOW metrics only. Omitted = all time."`
 	Until        string `json:"until,omitempty" jsonschema:"Optional window end, yyyy-mm-dd, on the metric's own time axis. FLOW metrics only. Omitted = all time."`
-	AsOf         string `json:"as_of,omitempty" jsonschema:"Optional as-of date, yyyy-mm-dd, for SNAPSHOT metrics. Only today's date is available until as-of history is deployed; omitted = today."`
+	AsOf         string `json:"as_of,omitempty" jsonschema:"Optional as-of date, yyyy-mm-dd, for SNAPSHOT metrics. Only today's date is available until as-of history exists; omitted = today."`
 	Where        string `json:"where,omitempty" jsonschema:"Optional MetricFlow filter applied on top of the metric and the scope parameters, e.g. {{ Dimension('account__account_name') }} = 'Red Hat LLC'. One-hop names only. Dates are yyyy-mm-dd. Check literals with explore_lfx_semantic_layer's get_dimension_values first - an unknown literal returns zero rows, not an error."`
 	OrderBy      string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields, prefix with - for descending, e.g. -total_contributors. Use the result columns as they come back (account, parent_org, project, foundation, or a metric name)."`
 	Limit        *int   `json:"limit,omitempty" jsonschema:"Maximum rows to return, 1..500. Use 10-20 for top-N questions. Omitting it returns EVERY row - set a limit unless you need the complete set."`
+}
+
+// standardMetricRequest is the body of a standard-metric call. It mirrors
+// StandardMetricsArgs field for field, with the one difference the caller
+// never sees: the endpoint reads where and order_by as LISTS, the same
+// spelling the ad-hoc query endpoint takes. The omitempty tags are the rest of
+// the contract — an argument the caller left out is absent from the body
+// rather than sent as an empty scope the lens would have to interpret.
+type standardMetricRequest struct {
+	Metric       string   `json:"metric"`
+	Project      string   `json:"project,omitempty"`
+	Subprojects  string   `json:"subprojects,omitempty"`
+	Org          string   `json:"org,omitempty"`
+	Subsidiaries string   `json:"subsidiaries,omitempty"`
+	Since        string   `json:"since,omitempty"`
+	Until        string   `json:"until,omitempty"`
+	AsOf         string   `json:"as_of,omitempty"`
+	Where        []string `json:"where,omitempty"`
+	OrderBy      []string `json:"order_by,omitempty"`
+	Limit        *int     `json:"limit,omitempty"`
+}
+
+// newStandardMetricRequest maps the tool arguments onto the wire body. where
+// is one filter, so it becomes a one-element list; order_by is a comma-
+// separated list of fields, split the way handleQuerySemanticLayer splits it.
+// Nothing else is interpreted here: the lens validates the values.
+func newStandardMetricRequest(args StandardMetricsArgs) standardMetricRequest {
+	request := standardMetricRequest{
+		Metric:       args.Metric,
+		Project:      args.Project,
+		Subprojects:  args.Subprojects,
+		Org:          args.Org,
+		Subsidiaries: args.Subsidiaries,
+		Since:        args.Since,
+		Until:        args.Until,
+		AsOf:         args.AsOf,
+		OrderBy:      parseCSV(args.OrderBy),
+		Limit:        args.Limit,
+	}
+	if args.Where != "" {
+		request.Where = []string{args.Where}
+	}
+	return request
 }
 
 // standardMetricEndpoint runs one recipe from the lens registry.
@@ -104,10 +146,11 @@ func handleStandardMetrics(ctx context.Context, _ *mcp.CallToolRequest, args Sta
 		return nil, nil, fmt.Errorf("LFX Lens tools not configured")
 	}
 
-	body, statusCode, err := lensConfig.ServiceClient.PostJSON(ctx, standardMetricEndpoint, args)
+	body, statusCode, err := lensConfig.ServiceClient.PostJSON(ctx, standardMetricEndpoint, newStandardMetricRequest(args))
 	if err != nil {
 		return nil, nil, fmt.Errorf("standard metric call failed: %w", err)
 	}
+	// Any 2xx carries a result; everything else is a failure to report.
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: standardMetricError(body, statusCode)}},

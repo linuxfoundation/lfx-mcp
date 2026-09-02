@@ -260,8 +260,8 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"at any depth\n  within its foundation",
 		"only to\n  its direct children",
 		"STRAY SAME-COMPANY ACCOUNTS",
-		// events, training and sponsorships have no standard metric
-		"no standard\n  metric: compose them with explore + query",
+		// events, training and sponsorships have no advertised standard metric
+		"no advertised\n  standard metric: compose them with explore + query",
 		"Do not reconcile figures against Insights pages or collections",
 		"PCC-style reporting is\nthe reconciliation surface",
 		"Meeting attendance by company",
@@ -344,9 +344,12 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"not their own acquisitions",
 		"STRAY SAME-COMPANY ACCOUNTS",
 		"never sum their rows into a parent figure",
-		// projects: how deep each family reaches
+		// projects: how deep each family reaches, and that reaching the whole
+		// subtree is coverage, never permission to add the rows up
 		"AT ANY DEPTH",
 		"grandchildren included",
+		"covers the whole subtree with nothing missing",
+		"never sum to a subtree total",
 		"reaches its direct children only",
 		"Memberships attach at FOUNDATION level",
 		// reading results

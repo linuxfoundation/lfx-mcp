@@ -120,7 +120,9 @@ differently:
   separate or combined they cover a named node's tree AT ANY DEPTH within its
   foundation — grandchildren included. In contributors_by_project the rows are
   the projects that carry the activity, and the named node's own bucket is one
-  of them, so a per-project table adds up to the subtree total.
+  of them, so the table covers the whole subtree with nothing missing. The rows
+  are still distinct people per project and never sum to a subtree total — take
+  that from subprojects=combined.
 - The membership and maintainer metrics reach a FOUNDATION completely, but an
   umbrella node BELOW foundation level reaches its direct children only, so a
   grandchild's rows are missing from an umbrella subtree. Say so when the node

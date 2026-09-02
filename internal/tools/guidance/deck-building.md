@@ -45,8 +45,8 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   maintainers_by_org, maintainers_by_project. Named maintainers per project →
   maintainer_roster (personal names: use it only where naming individuals is
   appropriate).
-- Event registrations, training enrollments and sponsorships → no standard
-  metric: compose them with explore + query (recipe 14 in
+- Event registrations, training enrollments and sponsorships → no advertised
+  standard metric: compose them with explore + query (recipe 14 in
   read_lfx_semantic_layer_guidance) and label them as ad-hoc figures.
   Registrations count rows, not unique people - present "registrations", not
   "attendees"; edX enrollments carry no organization, so an org-scoped

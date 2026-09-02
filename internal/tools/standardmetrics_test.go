@@ -214,8 +214,8 @@ func TestStandardMetrics_RegistersReadOnly(t *testing.T) {
 }
 
 // TestStandardMetrics_SchemaIsTheParameterContract pins the parameter set
-// itself: the arguments ARE the lens request body, so a field added or
-// dropped here changes the wire contract, not just the documentation.
+// itself: every argument is a field of the lens request body, so a field added
+// or dropped here changes the wire contract, not just the documentation.
 func TestStandardMetrics_SchemaIsTheParameterContract(t *testing.T) {
 	got := schemaProperties(t, listStandardMetricsTool(t))
 	want := append([]string(nil), standardMetricParameters...)
@@ -230,9 +230,10 @@ func TestStandardMetrics_SchemaIsTheParameterContract(t *testing.T) {
 // Handler
 // ---------------------------------------------------------------------------
 
-// The arguments reach the lens exactly as the caller gave them: the recipes,
-// the scope filters and the rejections all live there, so anything this tool
-// rewrote on the way would be a second, divergent copy of the contract.
+// The arguments reach the lens with their values untouched: the recipes, the
+// scope filters and the rejections all live there, so anything this tool
+// rewrote on the way would be a second, divergent copy of the contract. Only
+// the shape changes, where the endpoint takes a list.
 func TestStandardMetrics_SendsTheArgumentsAsGiven(t *testing.T) {
 	captured := setupLensTest(t)
 
@@ -261,10 +262,42 @@ func TestStandardMetrics_SendsTheArgumentsAsGiven(t *testing.T) {
 	want := `{"metric":"contributors_by_org","project":"cncf","subprojects":"none",` +
 		`"org":"International Business Machines Corporation","subsidiaries":"combined",` +
 		`"since":"2025-09-01","until":"2026-09-01",` +
-		`"where":"{{ Dimension('account__account_name') }} = 'Red Hat LLC'",` +
-		`"order_by":"-total_contributors","limit":10}`
+		`"where":["{{ Dimension('account__account_name') }} = 'Red Hat LLC'"],` +
+		`"order_by":["-total_contributors"],"limit":10}`
 	if got := string(captured.Body); got != want {
 		t.Errorf("request body =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// where and order_by are the two parameters whose wire spelling is not the
+// caller's: the endpoint reads them as lists. A filter is one clause and may
+// contain commas, so it travels whole; order_by is comma-separated fields and
+// is split. Sending either as a bare string would be rejected by a typed route
+// — or, worse, read character by character into a filter list that returns a
+// confident wrong answer.
+func TestStandardMetrics_SendsWhereAndOrderByAsLists(t *testing.T) {
+	captured := setupLensTest(t)
+
+	if _, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{
+		Metric:  "contributors_by_project",
+		Where:   "{{ Dimension('project__slug') }} = 'k8s'",
+		OrderBy: "-total_contributors, project",
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var body struct {
+		Where   []string `json:"where"`
+		OrderBy []string `json:"order_by"`
+	}
+	if err := json.Unmarshal(captured.Body, &body); err != nil {
+		t.Fatalf("request body is not JSON: %v", err)
+	}
+	if want := []string{"{{ Dimension('project__slug') }} = 'k8s'"}; !reflect.DeepEqual(body.Where, want) {
+		t.Errorf("where = %#v, want %#v", body.Where, want)
+	}
+	if want := []string{"-total_contributors", "project"}; !reflect.DeepEqual(body.OrderBy, want) {
+		t.Errorf("order_by = %#v, want %#v", body.OrderBy, want)
 	}
 }
 

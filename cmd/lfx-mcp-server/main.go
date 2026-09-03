@@ -162,6 +162,7 @@ var defaultTools = []string{
 	"query_lfx_lens",
 	"explore_lfx_semantic_layer",
 	"query_lfx_semantic_layer",
+	"read_lfx_semantic_layer_guidance",
 	"search_b2b_orgs",
 }
 
@@ -806,6 +807,24 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	if enabledTools["query_lfx_semantic_layer"] && canRead && isStaff {
 		tools.RegisterQuerySemanticLayer(server)
+	}
+	// Not in defaultTools: the recipes it runs live in the Lens service's
+	// standard-metric endpoint, so prod enables this by name only once that
+	// endpoint is live.
+	if enabledTools["query_lfx_standard_metrics"] && canRead && isStaff {
+		tools.RegisterStandardMetrics(server)
+	}
+	// Guidance tools carry the query doctrine as tool results (no byte budget)
+	// and are gated exactly like the tools they document — staff-only, one
+	// name per audience so a deployment enables exactly the guidance its
+	// callers need. The semantic layer guidance is in defaultTools because
+	// the explore/query/lens descriptions route models to it; the standard
+	// metrics guidance ships alongside the standard metrics tool by name.
+	if enabledTools["read_lfx_semantic_layer_guidance"] && canRead && isStaff {
+		tools.RegisterSemanticLayerGuidance(server)
+	}
+	if enabledTools["read_lfx_standard_metrics_guidance"] && canRead && isStaff {
+		tools.RegisterStandardMetricsGuidance(server)
 	}
 
 	return server

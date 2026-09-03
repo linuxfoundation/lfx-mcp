@@ -4,8 +4,15 @@
 package main
 
 import (
+	"context"
+	"io"
+	"log/slog"
 	"reflect"
 	"testing"
+
+	"github.com/linuxfoundation/lfx-mcp/internal/tools"
+	"github.com/modelcontextprotocol/go-sdk/auth"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestSplitTrimmed(t *testing.T) {
@@ -81,5 +88,74 @@ func TestSplitTrimmed(t *testing.T) {
 				t.Errorf("splitTrimmed(%q) = %#v, want %#v", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+// staffOnlyTools are the lens-backed tools and the guidance that documents
+// them: they read cross-project warehouse data, so newServer registers them
+// for LF staff only, exactly alike — a tool this list grows by is gated the
+// day it is added, not when someone notices.
+var staffOnlyTools = []string{
+	"query_lfx_lens",
+	"explore_lfx_semantic_layer",
+	"query_lfx_semantic_layer",
+	"query_lfx_standard_metrics",
+	"read_lfx_semantic_layer_guidance",
+	"read_lfx_standard_metrics_guidance",
+}
+
+// listedTools is the tools/list a caller holding token sees from a server
+// with every name in staffOnlyTools enabled.
+func listedTools(t *testing.T, token *auth.TokenInfo) map[string]bool {
+	t.Helper()
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	server := newServer(Config{Tools: staffOnlyTools}, "test", token)
+
+	ctx := context.Background()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect failed: %v", err)
+	}
+	t.Cleanup(func() { _ = serverSession.Close() })
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect failed: %v", err)
+	}
+	t.Cleanup(func() { _ = clientSession.Close() })
+
+	res, err := clientSession.ListTools(ctx, &mcp.ListToolsParams{})
+	if err != nil {
+		t.Fatalf("ListTools failed: %v", err)
+	}
+	listed := make(map[string]bool, len(res.Tools))
+	for _, tool := range res.Tools {
+		listed[tool.Name] = true
+	}
+	return listed
+}
+
+// TestNewServer_LensToolsAreStaffOnly pins the gate: a read-scoped caller who
+// is not LF staff sees none of the lens-backed tools or their guidance, and a
+// read-scoped staff caller sees all of them.
+func TestNewServer_LensToolsAreStaffOnly(t *testing.T) {
+	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
+	staff := &auth.TokenInfo{
+		Scopes: []string{tools.ScopeRead},
+		Extra:  map[string]any{tools.ClaimLFStaff: true},
+	}
+
+	forReader := listedTools(t, reader)
+	forStaff := listedTools(t, staff)
+	for _, name := range staffOnlyTools {
+		if forReader[name] {
+			t.Errorf("%s is listed for a non-staff reader; it must be staff-only", name)
+		}
+		if !forStaff[name] {
+			t.Errorf("%s is not listed for a staff reader", name)
+		}
 	}
 }

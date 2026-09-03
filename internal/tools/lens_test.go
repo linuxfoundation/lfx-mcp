@@ -171,8 +171,8 @@ func TestSemanticLayer_GetDimensionsWithoutProjectSlug(t *testing.T) {
 	}
 }
 
-func TestSemanticLayer_LimitTooLarge(t *testing.T) {
-	setupLensTest(t)
+func TestSemanticLayer_LimitPassesThrough(t *testing.T) {
+	captured := setupLensTest(t)
 
 	res, _, err := handleQuerySemanticLayer(context.Background(), &mcp.CallToolRequest{}, QuerySemanticLayerArgs{
 		Metrics: "active_maintainers",
@@ -181,30 +181,11 @@ func TestSemanticLayer_LimitTooLarge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !res.IsError || resultText(t, res) != "Error: limit must be 500 or less" {
-		t.Errorf("expected limit error, got: %q (IsError=%v)", resultText(t, res), res.IsError)
+	if res.IsError {
+		t.Errorf("a limit above 500 is no longer rejected here; got: %q", resultText(t, res))
 	}
-}
-
-func TestSemanticLayer_DescribeQuery(t *testing.T) {
-	setupLensTest(t)
-
-	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
-		Action: "describe",
-		Target: "query",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	text := resultText(t, res)
-	for _, want := range []string{
-		"There is no separate project parameter",
-		"activity_project_id__project_spine_slug",
-		"prior 365 complete UTC days",
-	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("describe query text missing %q", want)
-		}
+	if captured.Path != "/lfx-lens/semantic-layer/query" {
+		t.Errorf("the request did not reach the lens query route: %s", captured.Path)
 	}
 }
 
@@ -240,148 +221,80 @@ func TestSemanticLayerDescriptions_FitSchemaBudget(t *testing.T) {
 	}
 }
 
-// TestExploreSemanticLayerDescription checks the discovery tool carries the
-// routing contract: which domains are ours, and when to use query_lfx_lens.
+// TestExploreSemanticLayerDescription checks the slimmed discovery tool
+// still carries the routing contract: what the layer covers, the
+// guidance-first instruction, the standard metric recipe preference, the discovery
+// actions, and the redirects. Everything else moved to the guidance tool
+// (pinned in TestSemanticLayerGuidanceContent).
 func TestExploreSemanticLayerDescription(t *testing.T) {
 	for _, want := range []string{
-		// The domains are named explicitly. Without them the routing is
-		// one-sided — query_lfx_lens lists concrete triggers while this tool
-		// describes itself abstractly, so every specific question looks like a
-		// better match for the other tool.
-		// Search terms must be words the Semantic Layer actually matches.
-		// The earlier headings were plurals — "contributions", "memberships",
-		// "education", "project health" all returned zero metrics, and a live
-		// client followed the instruction, got [], and fell back to
-		// query_lfx_lens. These singular forms are verified against the API.
-		"contributor, contribution —",
-		"membership, revenue, churn —",
-		"event, registration, speaker, sponsorship —",
-		"enrollment, certification —",
-		"maintainer —",
-		"health, project —",
-		// Regional questions route here for every topic, memberships included.
-		"any of the above by country or region — always here, never query_lfx_lens",
-		// Dimension naming. The regional person-vs-organization split moved to
-		// help('doctrine') (asserted in TestDoctrineHelp) to make room for the
-		// eval-verified failure patterns.
-		"entity__field",
-		"country__lf_region",
-		// Discovery must hand off to the query tool by name and explain where
-		// project scope is expressed now that there is no project parameter.
-		"query_lfx_semantic_layer",
-		"Project scope lives in query's where clause (no parameter)",
-		"resolve slugs via search_projects",
-		// The value-discovery action, and the reason it exists. A filter naming
-		// a real dimension but an unknown literal returns zero rows instead of
-		// erroring, so a wrong guess is indistinguishable from missing data. A
-		// live client burned five query attempts on 'APAC' and 'Vietnam' before
-		// escaping via a country code.
+		// The covered domains, named so routing works from this tool.
+		"contributor, contribution, membership, revenue, event, registration, speaker, sponsorship, enrollment, certification, maintainer, health",
+		"country or region",
+		// Guidance-first, once per session, shared with the query tool.
+		"read_lfx_semantic_layer_guidance",
+		"read it BEFORE using this tool",
+		"one read also covers query_lfx_semantic_layer",
+		// A matching standard metric recipe outranks the explore+query flow.
+		"query_lfx_standard_metrics",
+		// The three discovery actions with their arguments.
+		"list_metrics(search)",
+		"get_dimensions(metrics, search)",
 		"get_dimension_values(dimension, metrics, search)",
-		"return zero rows, not an error",
-		// The 207-question eval showed models falling back to query_lfx_lens
-		// without ever reading the recipes; the description now routes
-		// struggling through help('doctrine') first.
-		"help('doctrine')",
-		"ALWAYS call it before a query_lfx_lens fallback",
-		"maintainer-contribution joins, social listening",
+		// The silent-zero-rows trap and its canonical example.
+		"zero rows, not an error",
 		"'Asia Pacific' not 'APAC'",
-		// Governance rosters route to the committee tools: the eval's
-		// board/ambassador questions were declared unavailable or fabricated
-		// because neither semantic-layer description mentioned where rosters
-		// live. (The 'Viet Nam' second spelling example paid for this line.)
+		// Naming discipline and the resolvers.
+		"entity__field",
+		"copy qualified_names, never assemble",
+		"search_projects",
+		"search_b2b_orgs",
+		// Routing to the neighbours.
+		"query_lfx_semantic_layer",
+		"past-date membership counts, cross-domain joins",
+		"social listening (mentions, sentiment, reach)",
 		"Board/committee/ambassador rosters: committee tools",
-		// Either tool can be loaded without the other, so each states what the
-		// semantic layer is. Here the regional rule sits in COVERS, asserted
-		// above, rather than in the opening line.
-		"query tool",
+		"Start here unless exact names are known",
 	} {
 		if !strings.Contains(exploreSemanticLayerDescription, want) {
 			t.Errorf("explore description missing %q", want)
 		}
 	}
-
-	// Sponsorships flipped owners: the semantic layer covers them now
-	// (sponsored_events_count and the sponsorship revenue metrics), and
-	// query_lfx_lens keeps exactly two lanes. Both descriptions must agree.
-	if strings.Contains(exploreSemanticLayerDescription, "never query_lfx_lens") &&
-		!strings.Contains(exploreSemanticLayerDescription, "sponsorship") {
-		t.Error("explore description no longer claims sponsorships; the semantic layer owns them now")
-	}
-
-	// The description used to warn that a plural search matches nothing. That
-	// stopped being true once lens learned to fall back to a singular stem:
-	// "memberships" now returns 18 metrics, "contributions" 2. Telling the model
-	// otherwise wastes the budget on a false constraint.
-	for _, unwanted := range []string{
-		"a plural like",
-		"matches nothing",
-	} {
-		if strings.Contains(exploreSemanticLayerDescription, unwanted) {
-			t.Errorf("explore description still warns about plurals, which lens now handles: %q", unwanted)
-		}
-	}
 }
 
-// TestQuerySemanticLayerDescription checks the query tool is self-sufficient:
-// its own description carries the syntax, so a caller never has to call help
-// first.
+// TestQuerySemanticLayerDescription checks the slimmed query tool keeps
+// what a model cannot guess and cannot recover from silently: the MetricFlow
+// syntax, the foundation-scope trap, name resolution, and the recovery path.
+// The full doctrine moved to the guidance tool.
 func TestQuerySemanticLayerDescription(t *testing.T) {
 	for _, want := range []string{
+		// Discovery-first and guidance-first.
+		"ALWAYS explore_lfx_semantic_layer first",
+		"never guess",
+		"read_lfx_semantic_layer_guidance",
+		"read it BEFORE querying",
+		"query_lfx_standard_metrics",
+		// The unguessable syntax.
 		"metrics (required)",
 		"Dimension(",
 		"TimeDimension(",
 		"yyyy-mm-dd",
-		"ceiling 500",
+		"limit optional",
 		"metric_time__year",
-		"outer-join",
-		"ranked list",
-		// Splitting discovery out made it possible to query without ever
-		// exploring, and a live client did exactly that — going straight to a
-		// query with guessed names. The rule has to be an instruction, not a
-		// conditional suggestion.
-		"ALWAYS explore_lfx_semantic_layer first",
-		"never guess",
-		// Both neighbours are named so routing works from this tool too.
-		"explore_lfx_semantic_layer",
-		"query_lfx_lens",
-		"country/region",
-		// Scope dimensions are copied exactly from the current live layer. A
-		// wrong dimension returns a plausible wrong population. The conformed
-		// project entity replaced the spine as the primary foundation scope;
-		// the spine, per-domain long-form guidance and slug examples moved to
-		// help('query') and help('doctrine'), asserted in their own tests.
-		"resolve slugs via search_projects",
+		// The deadliest scope trap, stated even before the guidance is read.
 		"project__foundation_slug",
 		"NEVER scope a foundation with project_slug",
-		"asset_id__project_slug",
-		"registration_id__project_slug",
-		"event_id__project_name",
-		"maintainer_key__cm_project_grandparents_slug",
-		"is_lf_project=true",
-		"0 rows = misspelled literal",
-		// The five eval-verified failure patterns (62 wrong answers in a
-		// 207-question replay traced overwhelmingly to these): bots on raw
-		// activity metrics, full-legal-name lookups, share denominators,
-		// unstated windows, and undiscovered COCOMO value metrics.
-		"Bot exclusion is the Insights default",
-		"bot_activities",
-		"Share of work = activity volumes",
-		"DAILY snapshots",
-		"Critical <20",
+		"search_projects",
+		// Name resolution.
 		"FULL LEGAL names",
 		"search_b2b_orgs",
-		"access-filtered",
-		"org-attributed base",
-		"default trailing 12 months",
-		"total_software_value",
-		"COCOMO",
-		"asset_id__end_date",
-		"future-dated",
-		// Struggling routes through the doctrine before the lens fallback.
-		"help('doctrine') BEFORE query_lfx_lens",
-		// The silent-zero-rows warning is only actionable if it names the way
-		// out; without this the model retries the same wrong literal.
+		// The silent-failure recovery chain.
+		"0 rows = misspelled literal",
 		"get_dimension_values",
+		"query_lfx_lens",
+		// The answer contract.
+		"State definition and window",
+		"country/region",
 	} {
 		if !strings.Contains(querySemanticLayerDescription, want) {
 			t.Errorf("query description missing %q", want)
@@ -390,15 +303,35 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 	for _, unwanted := range []string{
 		"MUST include a project scope filter",
 		"project_slug: optional",
-		// Framings that understate the tool and misroute the questions it
-		// exists to answer: it compiles SQL per request rather than serving
-		// stored rollups, and grouping by a name dimension returns lists of
-		// named organizations and people, not only figures.
 		"pre-aggregated",
 		"returns numbers, not records",
 	} {
 		if strings.Contains(querySemanticLayerDescription, unwanted) {
 			t.Errorf("query description must not contain %q", unwanted)
+		}
+	}
+}
+
+// TestSlimDescriptionsKeepHeadroom encodes the post-guidance contract: the
+// data tools' descriptions carry routing and unguessable syntax only, so
+// they must never creep back toward the 2048-byte cliff. Detail belongs in
+// the guidance tools, whose results have no budget.
+//
+// query_lfx_standard_metrics carries one thing the others do not — the metric
+// inventory, which a caller cannot guess and which must reach the model from
+// the tool itself — so it keeps its own ceiling instead of the shared 1600.
+func TestSlimDescriptionsKeepHeadroom(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		desc    string
+		ceiling int
+	}{
+		{"explore_lfx_semantic_layer", exploreSemanticLayerDescription, 1600},
+		{"query_lfx_semantic_layer", querySemanticLayerDescription, 1600},
+		{"query_lfx_standard_metrics", standardMetricsDescription, standardMetricsDescriptionCeiling},
+	} {
+		if got := len(tc.desc); got > tc.ceiling {
+			t.Errorf("%s description is %d bytes; keep it under %d — move detail into the guidance tools", tc.name, got, tc.ceiling)
 		}
 	}
 }
@@ -437,37 +370,91 @@ func TestSemanticLayerArgs_FieldsFitSchemaBudget(t *testing.T) {
 // parameter. Keeping the full text there is fine and useful for clients that do
 // pass it through; it just may not be the only copy.
 func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
-	var surviving string
-	for _, tool := range []*mcp.Tool{listExploreTool(t), listQueryTool(t)} {
-		surviving += "\n" + tool.Description
+	// surviving is what a compacting client still shows for one tool: its
+	// description plus the descriptions of its REQUIRED parameters.
+	surviving := func(tool *mcp.Tool) string {
+		text := tool.Description
 		for _, name := range schemaRequired(t, tool) {
-			surviving += "\n" + schemaPropertyDescription(t, tool, name)
+			text += "\n" + schemaPropertyDescription(t, tool, name)
 		}
+		return text
 	}
 
-	for _, tc := range []struct {
+	type token struct {
 		token string
 		why   string
+	}
+
+	// Asserted PER TOOL, not over the concatenation: a caller looking at
+	// query_lfx_standard_metrics never sees explore_lfx_semantic_layer's description, so
+	// a token that only survives on a sibling has not survived for this one.
+	for _, tc := range []struct {
+		// tools is the set that must carry the tokens between them: the
+		// explore/query pair is one routing surface (a caller reaching for
+		// either sees both), query_lfx_standard_metrics is its own.
+		name   string
+		tools  []*mcp.Tool
+		tokens []token
 	}{
-		{"Dimension(", "categorical filter syntax is unguessable"},
-		{"TimeDimension(", "time filter syntax is unguessable"},
-		{"yyyy-mm-dd", "date format silently returns wrong rows if guessed"},
-		{"ceiling 500", "over-limit requests are rejected outright"},
-		{"metric_time__year", "the only way to build a trend"},
-		{"entity__field", "dimension names cannot be assembled by hand"},
-		{"outer-joined", "explains NULLs in cross-domain results"},
-		{"raw IDs", "grouping by an entity silently returns unusable output"},
-		{"get_dimension_values", "the only recovery from a wrong filter literal"},
-		{"zero rows", "a wrong literal is silent, so the model must be told to check first"},
-		{"bot_activities", "the explicit bot view; bot exclusion became the metric default in lf-dbt"},
-		{"FULL LEGAL names", "short-name value searches silently miss legal-name accounts"},
-		{"search_b2b_orgs", "the resolver for org legal names; its empty results are access-filtered, not proof of absence"},
-		{"help('doctrine')", "the overflow recipes are useless if nothing routes the model to them"},
+		{
+			name:  "explore_lfx_semantic_layer + query_lfx_semantic_layer",
+			tools: []*mcp.Tool{listExploreTool(t), listQueryTool(t)},
+			tokens: []token{
+				{"Dimension(", "categorical filter syntax is unguessable"},
+				{"TimeDimension(", "time filter syntax is unguessable"},
+				{"yyyy-mm-dd", "date format silently returns wrong rows if guessed"},
+				{"limit optional", "an omitted limit returns the complete set"},
+				{"metric_time__year", "the only way to build a trend"},
+				{"entity__field", "dimension names cannot be assembled by hand"},
+				{"outer-joined", "explains NULLs in cross-domain results"},
+				{"raw IDs", "grouping by an entity silently returns unusable output"},
+				{"get_dimension_values", "the only recovery from a wrong filter literal"},
+				{"zero rows", "a wrong literal is silent, so the model must be told to check first"},
+				{"FULL LEGAL names", "short-name value searches silently miss legal-name accounts"},
+				{"search_b2b_orgs", "the resolver for org legal names; its empty results are access-filtered, not proof of absence"},
+				{"read_lfx_semantic_layer_guidance", "the guidance recipes are useless if nothing routes the model to them"},
+			},
+		},
+		{
+			name:  "query_lfx_standard_metrics",
+			tools: []*mcp.Tool{listStandardMetricsTool(t)},
+			tokens: []token{
+				{"read_lfx_standard_metrics_guidance", "the standard metric inventory is only reachable if the tool routes the model to it"},
+				{"memberships", "standard metric names cannot be guessed, and the inventory reaches the model only here"},
+				// The domain grouping is what tells a caller whether this
+				// tool covers its question at all, so each domain line is
+				// pinned by name.
+				{"memberships (SNAPSHOT): total | org | tier", "the membership inventory, its shape and its groupings reach the model only here"},
+				{"contributors (FLOW): total | org | project", "the contribution inventory, its shape and its groupings reach the model only here"},
+				{"maintainers (SNAPSHOT): total | org | project | maintainer", "the maintainer inventory, its shape and its groupings reach the model only here"},
+				{"maintainer_contributions (FLOW): total | org | project | maintainer", "the maintainer-contribution inventory reaches the model only here"},
+				{"search_projects", "project takes the stored slug; an everyday name silently misses"},
+				{"search_b2b_orgs", "org takes the stored legal name; a short name silently misses"},
+				{"subprojects", "what a project name covers is a choice the caller has to be told about"},
+				{"subsidiaries", "what an organization name covers is a choice the caller has to be told about"},
+				{"Default combined", "the subprojects default folds the tree into one figure"},
+				{"Default excluded", "the subsidiaries default changes which rows come back"},
+				{"trailing 365 days", "the contribution window default is applied silently otherwise"},
+				{"applied block", "the response says which defaults ran; the model must know to read it"},
+				{"yyyy-mm-dd", "date format silently returns wrong rows if guessed"},
+				{"Omitted = every row", "an omitted limit returns the complete set"},
+				{"FLOW", "since/until on the wrong shape is rejected, not silently ignored"},
+				{"SNAPSHOT", "as_of on the wrong shape is rejected, not silently ignored"},
+			},
+		},
 	} {
-		if !strings.Contains(surviving, tc.token) {
-			t.Errorf("%q reaches the model only via an optional parameter, where it gets summarised away (%s). Move it into the tool description or onto a required parameter.",
-				tc.token, tc.why)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			var text string
+			for _, tool := range tc.tools {
+				text += "\n" + surviving(tool)
+			}
+			for _, tk := range tc.tokens {
+				if !strings.Contains(text, tk.token) {
+					t.Errorf("%q reaches the model only via an optional parameter of %s, where it gets summarised away (%s). Move it into the tool description or onto a required parameter.",
+						tk.token, tc.name, tk.why)
+				}
+			}
+		})
 	}
 }
 
@@ -567,6 +554,27 @@ func schemaRequired(t *testing.T, tool *mcp.Tool) []string {
 	return schema.Required
 }
 
+// schemaProperties returns the names of every input-schema property, in no
+// particular order.
+func schemaProperties(t *testing.T, tool *mcp.Tool) []string {
+	t.Helper()
+	raw, err := json.Marshal(tool.InputSchema)
+	if err != nil {
+		t.Fatalf("failed to marshal input schema: %v", err)
+	}
+	var schema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatalf("failed to parse input schema: %v", err)
+	}
+	names := make([]string, 0, len(schema.Properties))
+	for name := range schema.Properties {
+		names = append(names, name)
+	}
+	return names
+}
+
 // schemaPropertyDescription returns the description a client sees for one
 // input-schema property. These travel with tools/list alongside the tool
 // description, so guidance in them must not contradict it.
@@ -606,7 +614,7 @@ func TestRegisterSemanticLayer_Schema(t *testing.T) {
 		t.Errorf("explore required = %v; metrics is only needed for get_dimensions", exploreRequired)
 	}
 	action := schemaPropertyDescription(t, explore, "action")
-	for _, want := range []string{"list_metrics", "get_dimensions", "get_dimension_values", "help"} {
+	for _, want := range []string{"list_metrics", "get_dimensions", "get_dimension_values", "read_lfx_semantic_layer_guidance"} {
 		if !strings.Contains(action, want) {
 			t.Errorf("action schema description missing %q: %q", want, action)
 		}
@@ -666,6 +674,38 @@ func TestQueryToolRejectsMissingMetricsWithAPointer(t *testing.T) {
 	}
 }
 
+// TestHelpAndDescribeReturnGuidance keeps the retired help action safe for
+// callers on a cached schema: both old action words return the full semantic
+// layer guidance rather than an error, whatever target they pass. A failed
+// help call would push the model toward guessing or a premature
+// query_lfx_lens fallback.
+func TestHelpAndDescribeReturnGuidance(t *testing.T) {
+	setupLensTest(t)
+
+	for _, tc := range []struct{ action, target string }{
+		{"help", ""},
+		{"help", "doctrine"},
+		{"help", "query"},
+		{"describe", ""},
+		{"describe", "total_bananas_metric"},
+	} {
+		res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
+			Action: tc.action,
+			Target: tc.target,
+		})
+		if err != nil {
+			t.Fatalf("action %q target %q: unexpected error: %v", tc.action, tc.target, err)
+		}
+		if res.IsError {
+			t.Errorf("action %q target %q: help must never fail", tc.action, tc.target)
+			continue
+		}
+		if text := resultText(t, res); !strings.Contains(text, "Worked recipes") {
+			t.Errorf("action %q target %q: expected the guidance document, got %q", tc.action, tc.target, text[:min(120, len(text))])
+		}
+	}
+}
+
 // TestExploreToolRedirectsQueryAction covers the other half of that migration:
 // a caller still passing action=query to the discovery tool gets told where
 // querying moved rather than a bare unknown-action error.
@@ -683,68 +723,6 @@ func TestExploreToolRedirectsQueryAction(t *testing.T) {
 	}
 	if text := resultText(t, res); !strings.Contains(text, "query_lfx_semantic_layer") {
 		t.Errorf("redirect should name the query tool: %q", text)
-	}
-}
-
-// TestHelpActionAndDescribeAlias checks the renamed action works and that the
-// old action word still dispatches on this tool. It deliberately does NOT claim
-// to cover the pre-split schema: that caller addresses query_lfx_semantic_layer,
-// which no longer accepts an action, so no assertion here can exercise it.
-func TestHelpActionAndDescribeAlias(t *testing.T) {
-	setupLensTest(t)
-
-	for _, action := range []string{"help", "describe"} {
-		res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
-			Action: action,
-		})
-		if err != nil {
-			t.Fatalf("action %q: unexpected error: %v", action, err)
-		}
-		if text := resultText(t, res); !strings.Contains(text, "how to use it") {
-			t.Errorf("action %q did not return the help overview: %q", action, text)
-		}
-	}
-
-	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
-		Action: "help",
-		Target: "query",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// The full doctrine and worked examples are the reason help exists; they
-	// must survive the move off the byte-limited description.
-	text := resultText(t, res)
-	for _, want := range []string{
-		"metric_time__year",
-		"There is no separate project parameter",
-		"project__foundation_slug",
-		"conformed lens",
-		"spine_hierarchy_level = 2",
-		"activity_project_id__project_spine_slug",
-		"asset_id__project_slug",
-		"registration_id__project_slug",
-		"event_id__project_name",
-		"maintainer_key__cm_project_grandparents_slug",
-		"health_metric_key__foundation_slug",
-		"CNCF contributors, last 12 months",
-		"Kubernetes code volume",
-		"Compare three foundations",
-		"CNCF membership count",
-		"Foundation to its projects (walk-down)",
-		"counts only, never sums",
-		"__segment_slug",
-		"PCC-style foundation rollups",
-		"risc-v-international / riscv",
-		"cff / cloud-foundry",
-		"opensearch-foundation / opensearch-project",
-		// Hierarchy walks became expressible with the spine dimensions; the
-		// old "not expressible today" disclaimer must be gone.
-		`"Direct children of X"`,
-	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("help query text missing %q", want)
-		}
 	}
 }
 
@@ -845,7 +823,7 @@ func TestQueryLFXLensDoesNotClaimMemberships(t *testing.T) {
 	if strings.Contains(input, "Always use for memberships") {
 		t.Errorf("query_lfx_lens input schema still claims memberships: %q", input)
 	}
-	if !strings.Contains(input, "membership, event, education and health questions belong to the semantic layer") {
+	if !strings.Contains(input, "membership, event, education, health and social listening questions belong to the semantic layer") {
 		t.Errorf("query_lfx_lens input schema should redirect memberships: %q", input)
 	}
 }
@@ -973,53 +951,10 @@ func TestUnknownActionListsTheRealActions(t *testing.T) {
 		t.Fatal("expected an error result for an unknown action")
 	}
 	text := resultText(t, res)
-	for _, want := range []string{"list_metrics", "get_dimensions", "get_dimension_values", "help"} {
+	for _, want := range []string{"list_metrics", "get_dimensions", "get_dimension_values", "read_lfx_semantic_layer_guidance"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("unknown-action error missing %q: %q", want, text)
 		}
-	}
-}
-
-// TestHelpCoversGetDimensionValues checks the long-form guidance is reachable.
-// It is the only place that records the billing_country trap, which has no room
-// in the 2048-byte description.
-func TestHelpCoversGetDimensionValues(t *testing.T) {
-	setupLensTest(t)
-
-	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
-		Action: "help",
-		Target: "get_dimension_values",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if res.IsError {
-		t.Fatalf("unexpected error result: %s", resultText(t, res))
-	}
-	text := resultText(t, res)
-	for _, want := range []string{
-		"zero rows",
-		"'Asia Pacific'",
-		"Viet Nam",
-		// asset_id__billing_country is free text holding both spellings, so a
-		// filter on it drops members filed under the other one. The transcript
-		// that motivated this work "succeeded" on exactly that dimension.
-		"asset_id__billing_country",
-	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("get_dimension_values help missing %q", want)
-		}
-	}
-
-	// The overview must advertise the target, or nothing points at it.
-	overview, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
-		Action: "help",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if text := resultText(t, overview); !strings.Contains(text, "get_dimension_values") {
-		t.Errorf("help overview does not mention get_dimension_values: %q", text)
 	}
 }
 
@@ -1047,109 +982,5 @@ func TestSemanticLayerToolsRegisterIndependently(t *testing.T) {
 					tc.name, tc.absent)
 			}
 		})
-	}
-}
-
-// TestDoctrineHelp pins the overflow doctrine: every recipe that the
-// 2048-byte descriptions cannot hold, verified against the live layer during
-// the August 2026 eval. If one of these tokens disappears, a failure pattern
-// that produced wrong answers in the 207-question replay loses its recipe.
-func TestDoctrineHelp(t *testing.T) {
-	setupLensTest(t)
-
-	res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
-		Action: "help",
-		Target: "doctrine",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if res.IsError {
-		t.Fatalf("unexpected error result: %s", resultText(t, res))
-	}
-	text := resultText(t, res)
-	for _, want := range []string{
-		// windows and membership parity
-		"trailing 12 months",
-		"asset_id__end_date",
-		"current_membership_count",
-		"future-dated",
-		// scoping and hierarchy
-		"project__foundation_slug",
-		"spine_hierarchy_level = 2",
-		"risc-v-international/riscv",
-		// bots
-		"member_is_bot",
-		"bot_activities",
-		"roughly 1.8x",
-		// org shares and headcounts
-		"org-ATTRIBUTED",
-		"Individual - No Account",
-		"2-4x",
-		// name discovery
-		"International Business Machines Corporation",
-		"Red Hat LLC",
-		// tiers, health, value
-		"Premier Membership",
-		"Critical <20, Unsteady 20-39",
-		"total_software_value",
-		"COCOMO",
-		// populations, maintainers, regions
-		"total_contributors_with_collaboration",
-		"2000-01-01 sentinel",
-		"maintainer_key__is_lf_project",
-		"organization_lf_region",
-		// Recipe 15: governance rosters route to the committee tools - the
-		// eval's board/ambassador questions were answered "unavailable" or
-		// fabricated because nothing said where rosters live.
-		"search_committees",
-		"search_committee_members",
-		"Never infer a roster",
-		// Meetings route to the meeting tools the same way.
-		"search_past_meetings",
-		"not in this layer and\nnot in query_lfx_lens",
-	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("doctrine help missing %q", want)
-		}
-	}
-}
-
-// TestHelpNeverFails pins the help contract: help always returns guidance.
-// An IsError help result pushes the model toward guessing or a premature
-// query_lfx_lens fallback - the exact behaviors the doctrine exists to stop.
-func TestHelpNeverFails(t *testing.T) {
-	setupLensTest(t)
-
-	for _, tc := range []struct {
-		target string
-		want   string
-	}{
-		{"", "how to use it"},
-		{"overview", "how to use it"},
-		{"doctrine", "WORKED RECIPES"},
-		{"recipes", "WORKED RECIPES"},                // alias
-		{"bots", "member_is_bot"},                    // topic keyword routes to doctrine
-		{"windows", "trailing 12 months"},            // topic keyword routes to doctrine
-		{"metrics", "list_metrics"},                  // action-ish keyword
-		{"metric names", "list_metrics"},             // specific action beats doctrine's "name"
-		{"dimension values", "get_dimension_values"}, // specific action beats doctrine's "value"
-		{"total_bananas_metric", "WORKED RECIPES"},   // unknown: overview+doctrine, not an error
-		{"total_bananas_metric", "how to use it"},    // unknown target includes the overview
-	} {
-		res, _, err := handleExploreSemanticLayer(context.Background(), &mcp.CallToolRequest{}, ExploreSemanticLayerArgs{
-			Action: "help",
-			Target: tc.target,
-		})
-		if err != nil {
-			t.Fatalf("target %q: unexpected error: %v", tc.target, err)
-		}
-		if res.IsError {
-			t.Errorf("target %q: help returned an error result; it must always return guidance", tc.target)
-			continue
-		}
-		if text := resultText(t, res); !strings.Contains(text, tc.want) {
-			t.Errorf("target %q: help text missing %q", tc.target, text[:min(120, len(text))])
-		}
 	}
 }

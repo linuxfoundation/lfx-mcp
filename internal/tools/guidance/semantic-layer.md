@@ -254,6 +254,11 @@ parent-company lens, so subsidiaries must be excluded there. There is no
 free filter on a standard metric: a slice the switches and the window cannot
 express is an explore + query question, and its answer is labelled ad hoc.
 
+16. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
+is the figure, one line on what it covers, and only the caveats that change
+how that figure is read; vocabulary, grain and timezone notes stay in context
+unless they answer the question asked or would change the conclusion.
+
 ## Worked examples (verified live)
 
 Top CNCF member orgs by dues:

@@ -133,5 +133,8 @@ so rather than improvising a number:
   something it is not.
 - Re-run governed numbers before presenting; if a figure moved, the data
   moved - annotate the as-of date.
+- Caveats go on a slide only when they change how that slide's figure is
+  read; everything else in the guidance is working knowledge, kept in
+  context and said only when it answers the question asked.
 
 How figures are formatted and presented is the deck author's call.

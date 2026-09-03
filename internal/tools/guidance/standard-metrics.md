@@ -214,6 +214,17 @@ scope them with the foundation's slug and say the figure is foundation-level.
 Maintainers attach below the foundation as well, and contribution metrics
 resolve on each activity's own project.
 
+## What goes in the answer
+
+Everything in this document is working knowledge: it shapes the call and
+how you read the result. The ANSWER carries the figure, one line on what it
+covers (from the applied block), and only the caveats that change how THIS
+figure is read — a NULL row in the table, a distinct count that must not be
+summed, a one-hop parent on a combined figure, a partial year. Keep the rest
+in context: vocabulary differences, grains, timezone edges, identity keys
+and the like are said only when they answer the question asked or would
+change the reader's conclusion. Then offer the breakdown or another window.
+
 ## Reading results
 
 - Start from the `applied` block: it is the scope and window that ran, and

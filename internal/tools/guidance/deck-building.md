@@ -148,7 +148,7 @@ so rather than improvising a number:
 - Re-run governed numbers before presenting; if a figure moved, the data
   moved - annotate the as-of date.
 - Caveats go on a slide only when they change how that slide's figure is
-  read; everything else in the guidance is working knowledge, kept in
-  context and said only when it answers the question asked.
+  read, in the audience's words — no field names, keys, SQL or tool names;
+  the rest is working knowledge, kept in context.
 
 How figures are formatted and presented is the deck author's call.

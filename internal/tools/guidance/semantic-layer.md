@@ -309,8 +309,9 @@ labelled ad hoc.
 
 16. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
 is the figure, one line on what it covers, and only the caveats that change
-how that figure is read; vocabulary, grain and timezone notes stay in context
-unless they answer the question asked or would change the conclusion.
+how that figure is read, in the reader's words: no metric, dimension or
+column names, keys, SQL or tool names unless asked how it was made. Grain,
+vocabulary and timezone notes stay in context.
 
 ## Worked examples (verified live)
 

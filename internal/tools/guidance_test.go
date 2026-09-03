@@ -99,6 +99,7 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		// windows and membership parity
 		"trailing 12 months",
 		"membership counts as of a PAST date or by year",
+		"no metric, dimension or\ncolumn names, keys, SQL or tool names",
 		"asset_id__end_date",
 		"current_membership_count",
 		"future-dated",
@@ -291,6 +292,7 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"'package_tier'",
 		"definitional delta",
 		"Be honest about what each figure represents",
+		"in the audience's words",
 		"label the\nresult as generated SQL",
 		"as named PEOPLE → maintainer_contributions\n  by=maintainer",
 	} {
@@ -321,6 +323,8 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"do not ask\n   which reading was meant",
 		"## What goes in the answer",
 		"only the caveats that change how THIS\nfigure is read",
+		"in the reader's\nwords",
+		"Column names, keys, engines, SQL and the other tools stay\nout",
 		"Keep the rest in\ncontext",
 		"## The switches, row by row",
 		"| combined (default) | X plus everything under it, any depth | folded into ONE row",
@@ -415,7 +419,7 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"different grains",
 		"rows are NAMES, not identities",
 		"`maintainer` and `contributor` are personal names",
-		"already resolved to the parent account for that project",
+		"already resolved to the parent account\n  for that project",
 		"never mix the two in one",
 		"as of the last warehouse build",
 		"US-Pacific day boundaries",

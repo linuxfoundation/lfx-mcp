@@ -244,12 +244,14 @@ resolve on each activity's own project.
 Everything in this document is working knowledge: it shapes the call and
 how you read the result. The ANSWER carries the figure, one line on what it
 covers (from the applied block), and only the caveats that change how THIS
-figure is read — a NULL row in the table, a distinct count that must not be
-summed, a partial year, maintainership read as of today. Keep the rest in
-context: vocabulary differences, grains, timezone edges, identity keys,
-which engine ran and how deep a hierarchy was walked are said only when they
-answer the question asked or would change the reader's conclusion. Then
-offer the breakdown or another window.
+figure is read — an unattributed row, a distinct count that must not be
+summed, a partial year, maintainership read as of today — in the reader's
+words: "ranked by the name on the record", not a note on display names and
+identity keys. Column names, keys, engines, SQL and the other tools stay
+out unless the reader asks how a figure was made. Keep the rest in
+context: vocabulary, grains, timezone edges and hierarchy depth are said
+only when they answer the question or change the conclusion. Then offer
+the breakdown or another window.
 
 ## Reading results
 
@@ -259,10 +261,9 @@ offer the breakdown or another window.
   rankings straight off the rows, and take parent figures from
   subsidiaries=combined rather than from a client-side sum.
 - maintainer_contributions rows: maintainership is the roster as of the
-  build, the contributions are the window's — a person who became a
-  maintainer last month carries their whole year. "Share of work" is
-  maintainer_contributions over contributions for the same scope and window,
-  two calls.
+  build, the contributions are the window's — a new maintainer carries
+  their whole year. "Share of work" is maintainer_contributions over
+  contributions for the same scope and window, two calls.
 - The NULL account row is unattributed work, and the NULL employer row is a
   maintainer whose employer was not resolved — never an organization, never
   folded into a parent. Report them as unattributed.
@@ -273,27 +274,26 @@ offer the breakdown or another window.
 - maintainers by=maintainer, contributions by=contributor and
   maintainer_contributions by=maintainer rows are NAMES, not identities: two
   people who share a name read as one row, one person under two spellings
-  as two, and on the roster the same person appears once per project,
-  employer and role. On the two rankings `account` is the account the
-  activity resolved to, and the NULL account row is unattributed.
-  `maintainer` and `contributor` are personal names — present them only
-  where naming individuals is appropriate, and never as a contact list.
-- Activities carry a parent-resolved account: a contribution row's account is
-  already resolved to the parent account for that project before parent_org
-  applies, so it can differ from the account on the source record. The
-  crowd.dev spelling of a company ('Red Hat') is a different vocabulary from
-  the Salesforce account name ('Red Hat LLC'); never mix the two in one
-  answer.
+  as two, and the roster lists a person once per project, employer and
+  role. In the answer that is one plain clause ("by the name on the record,
+  so a shared name can merge two people"), not a data note. `account` on
+  the rankings is the account the activity resolved to; NULL is
+  unattributed. `maintainer` and `contributor` are personal names — present
+  them only where naming individuals is appropriate, never as a contact
+  list.
+- A contribution row's account is already resolved to the parent account
+  for that project before parent_org applies, so it can differ from the
+  source record. The crowd.dev spelling of a company ('Red Hat') is a
+  different vocabulary from the Salesforce account name ('Red Hat LLC');
+  never mix the two in one answer.
 - SNAPSHOT readings are the state as of the last warehouse build, not a live
-  reading and not a historical one — date them by the build, and label
-  historical as-of readings, once they exist, as snapshots that run high
-  (departures before tracking began are not recorded).
+  reading and not a historical one — date them by the build.
 - FLOW windows cut on US-Pacific day boundaries: since and until are days in
   US Pacific time, so a window sits a few hours off a UTC one. Say which
   window you used; do not present a figure as an exact UTC-calendar month.
 - A FLOW window also drops rows with no usable timestamp, so an all-time
   figure can exceed the sum of its windows.
-- Every result carries compiled_sql; quote it when an auditor asks how a
+- Every result carries compiled_sql; quote it only when someone asks how a
   figure was produced.
 
 ## Errors

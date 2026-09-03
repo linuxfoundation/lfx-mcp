@@ -28,6 +28,14 @@ Answer four questions, then call once.
    metric. Both scope parameters combine: "which CNCF projects does IBM
    work on" is contributions_by_project with project=cncf, org=IBM,
    subprojects=separate — no ad-hoc query needed.
+   "TOP CONTRIBUTORS" with nothing more said means INDIVIDUALS ranked by
+   contribution volume: no standard metric ranks people, so run recipe 10
+   of read_lfx_semantic_layer_guidance (ad hoc, labelled as such) without
+   asking which reading was meant. The other common readings each have a
+   governed metric — name them as follow-ups, do not ask first: top
+   organizations by volume = contributions_by_org, by headcount =
+   contributors_by_org; top projects by volume = contributions_by_project,
+   by headcount = contributors_by_project.
 2. WHICH SCOPE? project, org, both, or neither for an LF-wide figure.
 3. WHAT DOES THE NAME COVER? Two switches, and their defaults differ on
    purpose — a subsidiary is a different company ("Red Hat" means Red Hat),

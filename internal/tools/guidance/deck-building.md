@@ -51,6 +51,9 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   list price on active terms, on a different grain from the count.
 - One-figure headlines ("how many contributors / maintainers does X have")
   → contributors, contributions, maintainers.
+- "Top contributors" unqualified → individuals by contribution volume,
+  recipe 10 of read_lfx_semantic_layer_guidance (ad hoc); offer the
+  organization and project leaderboards below as the follow-ups.
 - Contributor and maintainer leaderboards → contributions_by_org (volume),
   contributors_by_org (headcount), contributions_by_project,
   contributors_by_project (a company's projects: add org to either),

@@ -213,6 +213,7 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"Day boundaries are US-Pacific",
 		// standard metric calls
 		"STANDARD METRIC CALLS take uniform parameters",
+		"this means INDIVIDUALS by contribution volume — run it, do not ask",
 		"There is no\nfree filter on a standard metric",
 		"default combined",
 		"default excluded",
@@ -263,6 +264,7 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"separate lists the parts",
 		"combined returns the single folded row",
 		"never from summing rows",
+		"\"Top contributors\" unqualified → individuals by contribution volume",
 		"The maintainer metrics have no parent-company lens",
 		"subprojects=combined folds every\n  project column of the result",
 		// depth, and the accounts a rollup never folds in
@@ -305,6 +307,8 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		// the two switches and their opposite defaults
 		"subprojects: excluded | separate | combined, DEFAULT combined",
 		"subsidiaries: excluded | separate | combined, DEFAULT excluded",
+		"\"TOP CONTRIBUTORS\" with nothing more said means INDIVIDUALS",
+		"without\n   asking which reading was meant",
 		"## The switches, row by row",
 		"| combined (default) | X plus everything under it, any depth | folded into ONE row",
 		"| separate | X plus everything under it, any depth | as the metric groups them, one row each: the breakdown",

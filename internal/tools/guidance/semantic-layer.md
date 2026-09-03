@@ -173,10 +173,15 @@ grouping inflates ~8-9x. Bands: Critical <20, Unsteady 20-39.
 9. ECONOMIC VALUE = total_software_value / total_estimated_cost (COCOMO): non-additive
 daily snapshots; totals can read low, never inflated.
 
-10. RANKING CONTRIBUTORS BY CONTRIBUTIONS ("top contributors"). Group
+10. RANKING CONTRIBUTORS BY CONTRIBUTIONS ("top contributors"). Unqualified,
+this means INDIVIDUALS by contribution volume — run it, do not ask. Group
 code_contribution_activities by activity_project_id__member_display_name
-(+ organization_name), order by the metric descending. Display names are
-not identity keys — for identity-stable answers use lens (member_id); say which.
+(+ organization_name), order by the metric descending, spine-scoped, trailing
+365 days. Display names are not identity keys — for identity-stable answers
+use lens (member_id); say which. Offer the governed readings as follow-ups:
+organizations by volume (contributions_by_org) or headcount
+(contributors_by_org), projects by volume (contributions_by_project) or
+headcount (contributors_by_project).
 
 11. MAINTAINERS. One project: maintainer_key__project_slug ('k8s' returns the
 real roster; cm_project_grandparents_slug = 'k8s' returns ZERO — the cm_*

@@ -52,7 +52,8 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
 - One-figure headlines ("how many contributors / maintainers does X have")
   → contributors, contributions, maintainers.
 - Contributor and maintainer leaderboards → contributions_by_org (volume),
-  contributors_by_org (headcount), contributors_by_project,
+  contributors_by_org (headcount), contributions_by_project,
+  contributors_by_project (a company's projects: add org to either),
   maintainers_by_org, maintainers_by_project. Named maintainers per project →
   maintainer_roster (personal names: use it only where naming individuals is
   appropriate).

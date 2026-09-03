@@ -25,7 +25,9 @@ Answer four questions, then call once.
 1. WHICH METRIC? Pick from the inventory below by what it answers. A
    one-figure question takes a scope total (contributors, contributions,
    maintainers); a "which ... most" or "per ..." question takes a *_by_*
-   metric.
+   metric. Both scope parameters combine: "which CNCF projects does IBM
+   work on" is contributions_by_project with project=cncf, org=IBM,
+   subprojects=separate — no ad-hoc query needed.
 2. WHICH SCOPE? project, org, both, or neither for an LF-wide figure.
 3. WHAT DOES THE NAME COVER? Two switches, and their defaults differ on
    purpose — a subsidiary is a different company ("Red Hat" means Red Hat),
@@ -123,6 +125,7 @@ Result columns are given in the vocabulary the results come back in.
 | contributors | Distinct code contributors over the scope, ONE figure | FLOW · activity date | total_contributors | The headline for "how many contributors does X have"; trailing 365 days unless since is given |
 | contributions | Code contribution volume over the scope, ONE figure | FLOW · activity date | code_contribution_activities | Additive; bots excluded; trailing 365 days unless since is given |
 | contributions_by_org | Code contribution volume per organization | FLOW · activity date | account, parent_org, code_contribution_activities | Additive; bots excluded; the NULL account row is unattributed work |
+| contributions_by_project | Code contribution volume per project | FLOW · activity date | project, project_name, code_contribution_activities | Additive; bots excluded; with org it is "which projects does this company work on"; the default folds it to one row — subprojects=separate for the table |
 | contributors_by_org | Distinct code contributors per organization | FLOW · activity date | account, parent_org, total_contributors | A distinct-person count: never sum the rows |
 | contributors_by_project | Distinct code contributors per project | FLOW · activity date | project, project_name, total_contributors | A distinct-person count: never sum the rows, across projects least of all; the default folds it to one row — subprojects=separate for the table |
 | maintainers | Active maintainers over the scope, ONE figure (LF projects only) | SNAPSHOT | active_maintainers | The headline for "how many maintainers does X have" |
@@ -179,7 +182,8 @@ DEPTH depends on the domain, because the two families reach a subtree
 differently:
 
 - The contribution metrics (contributors, contributions, contributions_by_org,
-  contributors_by_org, contributors_by_project) walk the project hierarchy,
+  contributions_by_project, contributors_by_org, contributors_by_project) walk
+  the project hierarchy,
   so with subprojects separate or combined they cover a named node's tree
   AT ANY DEPTH within its foundation — grandchildren included. In
   contributors_by_project with subprojects=separate the rows are the projects

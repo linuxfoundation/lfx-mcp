@@ -227,11 +227,11 @@ floor — present "attributed registrations/enrollments" and say so.
 15. STANDARD METRIC CALLS take uniform parameters — metric, project +
 subprojects (excluded|separate|combined, default combined), org + subsidiaries
 (excluded|separate|combined, default excluded), since/until on FLOW metrics,
-as_of on SNAPSHOT ones, where, order_by, limit. The thirteen:
+as_of on SNAPSHOT ones, where, order_by, limit. The fourteen:
 members_and_dues_by_org, membership_tiers, new_members_by_year,
 membership_churn_by_year, contributors, contributions, contributions_by_org,
-contributors_by_org, contributors_by_project, maintainers, maintainers_by_org,
-maintainers_by_project, maintainer_roster. The switches say what a name
+contributions_by_project, contributors_by_org, contributors_by_project,
+maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster. The switches say what a name
 covers: excluded = that project or account alone, separate = it and
 everything under it one row each (the breakdown), combined = folded into one
 row (subprojects=combined folds every project column of the result). The

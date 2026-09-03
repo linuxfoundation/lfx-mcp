@@ -32,10 +32,10 @@ const standardMetricsDescription = `Run a governed standard metric: fixed metric
 
 METRICS
 Memberships: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year
-Contributions: contributors, contributions, contributions_by_org, contributors_by_org, contributors_by_project
+Contributions: contributors, contributions, contributions_by_org, contributions_by_project, contributors_by_org, contributors_by_project
 Maintainers: maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster
 
-read_lfx_standard_metrics_guidance gives what each one answers, its columns, the defaults and its caveats.
+read_lfx_standard_metrics_guidance: what each one answers, its columns, the defaults, its caveats.
 
 ALWAYS resolve names first: project slugs from search_projects, organization names from search_b2b_orgs. A name they returned this session can be reused; never pass one that has not come back from them.
 
@@ -48,7 +48,7 @@ subsidiaries  excluded | separate | combined. Default excluded = that account on
 since, until  yyyy-mm-dd. FLOW metrics only. Omitted: contribution metrics read the trailing 365 days, the rest all time.
 as_of         yyyy-mm-dd. SNAPSHOT metrics only. Omitted = today.
 order_by      one of the metric's result columns; - prefix = descending.
-limit         max rows, 1..500. Omitted returns every row.
+limit         1..500. Omitted = every row.
 
 There is no free filter: a slice these cannot express is an explore + query question. A parameter the metric cannot honour returns an error naming the rule and the fix. Results carry compiled_sql and an applied block: the scope and window actually used.
 
@@ -83,7 +83,7 @@ func RegisterStandardMetrics(server *mcp.Server) {
 // value: omitted means every row, and 0 rows is not a question anyone asks,
 // so the lens rejects it rather than silently reading it as "no limit".
 type StandardMetricsArgs struct {
-	Metric       string `json:"metric" jsonschema:"Required. One of: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year, contributors, contributions, contributions_by_org, contributors_by_org, contributors_by_project, maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster. Each metric's metrics and grouping are fixed - there are no metrics/group_by parameters; slice it with project, org, their subprojects/subsidiaries switches, since/until or as_of, and where. FLOW metrics take since/until on their time axis; SNAPSHOT metrics take as_of. read_lfx_standard_metrics_guidance lists what each one answers, its result columns and its caveats."`
+	Metric       string `json:"metric" jsonschema:"Required. One of: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year, contributors, contributions, contributions_by_org, contributions_by_project, contributors_by_org, contributors_by_project, maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster. Each metric's metrics and grouping are fixed - there are no metrics/group_by parameters; slice it with project, org, their subprojects/subsidiaries switches, since/until or as_of, and where. FLOW metrics take since/until on their time axis; SNAPSHOT metrics take as_of. read_lfx_standard_metrics_guidance lists what each one answers, its result columns and its caveats."`
 	Project      string `json:"project,omitempty" jsonschema:"Optional project scope: ONE slug from search_projects, of a project or of a foundation (e.g. cncf, k8s). Stored slugs are not everyday names - resolve it, never guess it."`
 	Subprojects  string `json:"subprojects,omitempty" jsonschema:"What happens to the projects under project: combined (default) = the project plus everything under it folded into ONE figure (drops every project column the metric groups by); separate = the project plus everything under it, one row each, for a breakdown; excluded = that project's own bucket only."`
 	Org          string `json:"org,omitempty" jsonschema:"Optional organization scope: ONE legal name from search_b2b_orgs, in its stored spelling (e.g. Red Hat LLC). Resolve it, never guess it."`

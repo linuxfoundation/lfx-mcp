@@ -57,6 +57,7 @@ var standardMetricNames = []string{
 	"contributors",
 	"contributions",
 	"contributions_by_org",
+	"contributions_by_project",
 	"contributors_by_org",
 	"contributors_by_project",
 	"maintainers",
@@ -91,7 +92,7 @@ func TestStandardMetricsDescription_FitsSchemaBudget(t *testing.T) {
 func TestStandardMetricsDescription_ListsTheInventoryByDomain(t *testing.T) {
 	for _, want := range []string{
 		"Memberships: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year",
-		"Contributions: contributors, contributions, contributions_by_org, contributors_by_org, contributors_by_project",
+		"Contributions: contributors, contributions, contributions_by_org, contributions_by_project, contributors_by_org, contributors_by_project",
 		"Maintainers: maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster",
 	} {
 		if !strings.Contains(standardMetricsDescription, want) {
@@ -177,7 +178,7 @@ func TestStandardMetricsSurface_NamesNoWarehouseRecipe(t *testing.T) {
 		}
 	}
 	// The events and training recipes stay callable through the lens
-	// registry, and unnamed here: only the thirteen advertised names route.
+	// registry, and unnamed here: only the fourteen advertised names route.
 	for _, unadvertised := range []string{"event_registrations", "training_enrollments"} {
 		if strings.Contains(standardMetricsDescription, unadvertised) {
 			t.Errorf("tool description names the unadvertised recipe family %q", unadvertised)

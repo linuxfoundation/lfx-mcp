@@ -88,7 +88,8 @@ including Red Hat".
 
 ONE HOP: the parent link is a single hop, so a combined figure for a top
 parent covers its DIRECT subsidiaries but not their own acquisitions -
-disclose that next to the number. Headcount metrics (contributors,
+disclose that next to the number, or ask query_lfx_lens for the whole chain
+at any depth and label that slide as generated SQL. Headcount metrics (contributors,
 maintainers) are not additive across accounts: take the parent figure from
 subsidiaries=combined, never from summing rows, and for the maintainer
 metrics - which have no parent-company lens - say no combined figure is

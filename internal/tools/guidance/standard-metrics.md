@@ -155,7 +155,9 @@ is another account under the same parent. So:
 ONE HOP: the parent link is a single hop, so a combined figure for a top
 parent covers its DIRECT subsidiaries but not their own acquisitions — an
 account that rolls up to Red Hat LLC is not folded into IBM. Disclose that
-next to any combined figure.
+next to any combined figure. When the question needs the whole chain at any
+depth, ask query_lfx_lens, which walks the account hierarchy recursively, and
+label that figure as generated SQL.
 
 STRAY SAME-COMPANY ACCOUNTS: a company can also hold accounts that are their
 own rollup parent — regional and research arms spelled with the company's

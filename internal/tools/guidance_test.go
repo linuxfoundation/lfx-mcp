@@ -372,6 +372,7 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"the maintainer metrics\nare the exception",
 		"ONE HOP",
 		"not their own acquisitions",
+		"ask query_lfx_lens, which walks the account hierarchy recursively",
 		"STRAY SAME-COMPANY ACCOUNTS",
 		"never sum their rows into a parent figure",
 		// projects: how deep each family reaches, and that reaching the whole

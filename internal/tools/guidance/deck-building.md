@@ -47,19 +47,21 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
 ## Deck lane → recipe mapping
 
 - Memberships, tiers, dues, ranks per organization →
-  members_and_dues_by_org, membership_tiers, new_members_by_year,
-  membership_churn_by_year. Membership counts are deduplicated; dues are the
+  memberships by=org, memberships by=tier, new_members by=year,
+  membership_churn by=year; the headline count is memberships by=total.
+  Membership counts are deduplicated; dues are the
   list price on active terms, on a different grain from the count.
 - One-figure headlines ("how many contributors / maintainers does X have")
-  → contributors, contributions, maintainers.
+  → contributors, contributions, maintainers, memberships, each by=total
+  (the default).
 - "Top contributors" unqualified → individuals by contribution volume,
   recipe 10 of read_lfx_semantic_layer_guidance (ad hoc); offer the
   organization and project leaderboards below as the follow-ups.
-- Contributor and maintainer leaderboards → contributions_by_org (volume),
-  contributors_by_org (headcount), contributions_by_project,
-  contributors_by_project (a company's projects: add org to either),
-  maintainers_by_org, maintainers_by_project. Named maintainers per project →
-  maintainer_roster (personal names: use it only where naming individuals is
+- Contributor and maintainer leaderboards → contributions by=org (volume),
+  contributors by=org (headcount), contributions by=project,
+  contributors by=project (a company's projects: add org to either),
+  maintainers by=org, maintainers by=project. Named maintainers per project →
+  maintainers by=maintainer (personal names: use it only where naming individuals is
   appropriate).
 - Event registrations, training enrollments and sponsorships → no standard
   metric: compose them with explore + query (recipe 14 in
@@ -70,9 +72,10 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   total_sponsorship_revenue (USD) / total_sponsorship_count, filtered
   sponsorship__sponsorship_tier_type = 'package_tier' for package-only
   revenue; group account__account_name or the rollup for sponsor rankings.
-- Maintainer × contribution joins (top maintainers by contributions,
-  maintainer share of work) → query_lfx_lens: the semantic layer cannot
-  join maintainers to activity at person grain.
+- Maintainer × contribution figures (contributions made by maintainers per
+  project or organization, maintainer share of work) → maintainer_contributions
+  by=project or by=org, over contributions for the same scope. Only "top
+  maintainers by contributions" as named PEOPLE is a query_lfx_lens question.
 
 The inventory in read_lfx_standard_metrics_guidance is the routing surface.
 

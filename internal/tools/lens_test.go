@@ -416,13 +416,14 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 			tools: []*mcp.Tool{listStandardMetricsTool(t)},
 			tokens: []token{
 				{"read_lfx_standard_metrics_guidance", "the standard metric inventory is only reachable if the tool routes the model to it"},
-				{"members_and_dues_by_org", "standard metric names cannot be guessed, and the inventory reaches the model only here"},
+				{"memberships", "standard metric names cannot be guessed, and the inventory reaches the model only here"},
 				// The domain grouping is what tells a caller whether this
 				// tool covers its question at all, so each domain line is
 				// pinned by name.
-				{"Memberships: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year", "the membership inventory reaches the model only here"},
-				{"Contributions: contributors, contributions, contributions_by_org, contributions_by_project, contributors_by_org, contributors_by_project", "the contribution inventory reaches the model only here"},
-				{"Maintainers: maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster", "the maintainer inventory reaches the model only here"},
+				{"memberships: total | org | tier", "the membership inventory and its groupings reach the model only here"},
+				{"contributors: total | org | project", "the contribution inventory and its groupings reach the model only here"},
+				{"maintainers: total | org | project | maintainer", "the maintainer inventory and its groupings reach the model only here"},
+				{"maintainer_contributions: total | org | project", "the maintainer-contribution inventory reaches the model only here"},
 				{"search_projects", "project takes the stored slug; an everyday name silently misses"},
 				{"search_b2b_orgs", "org takes the stored legal name; a short name silently misses"},
 				{"subprojects", "what a project name covers is a choice the caller has to be told about"},

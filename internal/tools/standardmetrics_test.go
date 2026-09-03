@@ -41,30 +41,34 @@ const standardMetricsDescriptionCeiling = 1950
 // standardMetricParameters is the whole contract; anything else is not a parameter of
 // this tool.
 var standardMetricParameters = []string{
-	"metric", "project", "subprojects", "org", "subsidiaries",
+	"metric", "by", "project", "subprojects", "org", "subsidiaries",
 	"since", "until", "as_of", "order_by", "limit",
 }
 
 // standardMetricNames is the whole inventory, in the order the guidance lists
-// it: the lens registry holds exactly these recipes, so this list is what the
-// routing surface must name — no more, and none of them missing.
+// it: the lens registry exposes exactly these seven metric families (each with
+// its own groupings under by), so this list is what the routing surface must
+// name — no more, and none of them missing.
 var standardMetricNames = []string{
-	"members_and_dues_by_org",
-	"membership_tiers",
-	"new_members_by_year",
-	"membership_churn_by_year",
+	"memberships",
+	"new_members",
+	"membership_churn",
 	"contributors",
 	"contributions",
-	"contributions_by_org",
-	"contributions_by_project",
-	"contributors_by_org",
-	"contributors_by_project",
 	"maintainers",
-	"maintainers_by_org",
-	"maintainers_by_project",
-	"maintainer_roster",
-	"maintainer_contributions_by_project",
-	"maintainer_contributions_by_org",
+	"maintainer_contributions",
+}
+
+// standardMetricGroupings is each family's groupings in the order the lens
+// offers them; the first is the default the lens applies when by is omitted.
+var standardMetricGroupings = map[string]string{
+	"memberships":              "total | org | tier",
+	"new_members":              "year",
+	"membership_churn":         "year",
+	"contributors":             "total | org | project",
+	"contributions":            "total | org | project",
+	"maintainers":              "total | org | project | maintainer",
+	"maintainer_contributions": "total | org | project",
 }
 
 // TestStandardMetricsDescription_FitsSchemaBudget holds the tool to the same budget as
@@ -91,11 +95,8 @@ func TestStandardMetricsDescription_FitsSchemaBudget(t *testing.T) {
 // whether loading the guidance is worth it at all. The grouping sits near the
 // top of the description so it survives schema compaction.
 func TestStandardMetricsDescription_ListsTheInventoryByDomain(t *testing.T) {
-	for _, want := range []string{
-		"Memberships: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year",
-		"Contributions: contributors, contributions, contributions_by_org, contributions_by_project, contributors_by_org, contributors_by_project",
-		"Maintainers: maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster, maintainer_contributions_by_project, maintainer_contributions_by_org",
-	} {
+	for _, name := range standardMetricNames {
+		want := name + ": " + standardMetricGroupings[name] + "\n"
 		if !strings.Contains(standardMetricsDescription, want) {
 			t.Errorf("description missing inventory line %q", want)
 		}
@@ -189,7 +190,9 @@ func TestStandardMetricsSurface_NamesNoWarehouseRecipe(t *testing.T) {
 			t.Errorf("standard metric guidance names the removed recipe family %q", gone)
 		}
 	}
-	for _, field := range []string{"SavedQuery", "Foundation", "By", "Where"} {
+	// (By is back with a new meaning - the grouping a family offers - so it
+	// is not in this list.)
+	for _, field := range []string{"SavedQuery", "Foundation", "Where"} {
 		if _, ok := reflect.TypeOf(StandardMetricsArgs{}).FieldByName(field); ok {
 			t.Errorf("StandardMetricsArgs still carries %s; it is not part of the contract", field)
 		}
@@ -248,7 +251,8 @@ func TestStandardMetrics_SendsTheArgumentsAsGiven(t *testing.T) {
 	captured := setupLensTest(t)
 
 	res, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{
-		Metric:       "contributors_by_org",
+		Metric:       "contributors",
+		By:           "org",
 		Project:      "cncf",
 		Subprojects:  "excluded",
 		Org:          "International Business Machines Corporation",
@@ -268,7 +272,7 @@ func TestStandardMetrics_SendsTheArgumentsAsGiven(t *testing.T) {
 		t.Errorf("unexpected request: %s %s", captured.Method, captured.Path)
 	}
 
-	want := `{"metric":"contributors_by_org","project":"cncf","subprojects":"excluded",` +
+	want := `{"metric":"contributors","by":"org","project":"cncf","subprojects":"excluded",` +
 		`"org":"International Business Machines Corporation","subsidiaries":"combined",` +
 		`"since":"2025-09-01","until":"2026-09-01",` +
 		`"order_by":["-total_contributors"],"limit":10}`
@@ -284,7 +288,8 @@ func TestStandardMetrics_SendsOrderByAsAList(t *testing.T) {
 	captured := setupLensTest(t)
 
 	_, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{
-		Metric:  "contributors_by_org",
+		Metric:  "contributors",
+		By:      "org",
 		OrderBy: "-total_contributors, account",
 	})
 	if err != nil {
@@ -305,21 +310,22 @@ func TestStandardMetrics_OmitsUnsetArguments(t *testing.T) {
 	captured := setupLensTest(t)
 
 	if _, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{
-		Metric: "maintainer_roster",
+		Metric: "maintainers",
+		By:     "maintainer",
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got, want := string(captured.Body), `{"metric":"maintainer_roster"}`; got != want {
+	if got, want := string(captured.Body), `{"metric":"maintainers","by":"maintainer"}`; got != want {
 		t.Errorf("request body = %s, want %s", got, want)
 	}
 
 	if _, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{
-		Metric: "maintainer_roster",
+		Metric: "maintainers",
 		Limit:  metricLimit(0),
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got, want := string(captured.Body), `{"metric":"maintainer_roster","limit":0}`; got != want {
+	if got, want := string(captured.Body), `{"metric":"maintainers","limit":0}`; got != want {
 		t.Errorf("request body = %s, want %s", got, want)
 	}
 }
@@ -329,7 +335,7 @@ func TestStandardMetrics_OmitsUnsetArguments(t *testing.T) {
 func TestStandardMetrics_ReturnsTheLensBody(t *testing.T) {
 	setupLensResponseTest(t, `{"columns":["account","parent_org","total_contributors"],"data":[{"account":"Red Hat LLC","parent_org":"International Business Machines Corporation","total_contributors":310}],"compiled_sql":"SELECT 1 WHERE x >= 2"}`)
 
-	res, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{Metric: "contributors_by_org"})
+	res, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{Metric: "contributors", By: "org"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -355,11 +361,11 @@ func TestStandardMetrics_ReturnsTheLensBody(t *testing.T) {
 // Lens rejections ARE the contract: each names the rule the call broke and
 // the fix, so the caller reads that message and not a wrapper invented here.
 func TestStandardMetrics_PassesLensRejectionsThrough(t *testing.T) {
-	rejection := "members_and_dues_by_org is a SNAPSHOT metric: it reports the state on a date, so since/until do not apply. Use as_of, or pick a FLOW metric."
+	rejection := "memberships is a SNAPSHOT metric: it reports the state on a date, so since/until do not apply. Use as_of, or pick a FLOW metric."
 	setupLensErrorTest(t, http.StatusBadRequest, `{"detail":`+mustJSONString(t, rejection)+`}`)
 
 	res, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{
-		Metric: "members_and_dues_by_org",
+		Metric: "memberships",
 		Since:  "2025-01-01",
 	})
 	if err != nil {
@@ -378,7 +384,7 @@ func TestStandardMetrics_PassesLensRejectionsThrough(t *testing.T) {
 func TestStandardMetrics_PassesUnstructuredErrorsThrough(t *testing.T) {
 	setupLensErrorTest(t, http.StatusBadGateway, "upstream timed out")
 
-	res, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{Metric: "contributors_by_org"})
+	res, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{Metric: "contributors", By: "org"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

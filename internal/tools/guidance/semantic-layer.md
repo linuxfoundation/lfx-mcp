@@ -11,7 +11,7 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
 
 - explore_lfx_semantic_layer discovers metrics, dimensions and stored values; query_lfx_semantic_layer runs the query. Explore first.
 - query_lfx_standard_metrics answers common questions with governed metrics
-  named in plain words (contributors_by_org, members_and_dues_by_org...). When
+  named in plain words (contributors by=org, memberships by=tier...). When
   one matches, PREFER it over the explore+query flow: it also reaches a
   company's subsidiaries and a project's tree at ANY depth, which this layer
   does not (see REACH under Scope). Inventory:
@@ -101,8 +101,10 @@ dimension by what the question names:
   completely; project__parent_project_slug covers a node below foundation
   level ONE level down (its direct children); only the activity spine
   (activity_project_id__project_spine_slug) reaches any depth, and only on
-  activities. When the question means the whole company or the whole
-  subtree, that is a standard metric (subsidiaries / subprojects separate or
+  activities (contributors, contributions), so a subproject's whole subtree
+  is in reach for contribution questions but NOT for memberships,
+  maintainers or health. When the question means the whole company or the
+  whole subtree, that is a standard metric (subsidiaries / subprojects separate or
   combined walk to the bottom on every recipe) or, for a shape no standard
   metric has, query_lfx_lens. Use this layer's one-hop and one-level
   dimensions when the question asks exactly for direct subsidiaries or
@@ -197,9 +199,9 @@ code_contribution_activities by activity_project_id__member_display_name
 (+ organization_name), order by the metric descending, spine-scoped, trailing
 365 days. Display names are not identity keys — for identity-stable answers
 use lens (member_id); say which. Offer the governed readings as follow-ups:
-organizations by volume (contributions_by_org) or headcount
-(contributors_by_org), projects by volume (contributions_by_project) or
-headcount (contributors_by_project).
+organizations by volume (contributions by=org) or headcount
+(contributors by=org), projects by volume (contributions by=project) or
+headcount (contributors by=project).
 
 11. MAINTAINERS. One project: maintainer_key__project_slug ('k8s' returns the
 real roster; cm_project_grandparents_slug = 'k8s' returns ZERO — the cm_*
@@ -215,8 +217,8 @@ since/until on start_date is meaningless, readings before tracking began run
 high, and a trend is one as-of reading per period. Maintainer×contribution
 figures are not in this layer: contributions made by maintainers per project
 or per organization, and the maintainer share of work, are the standard
-metrics maintainer_contributions_by_project / _by_org (over contributions
-for the same scope); "top maintainers by contributions" as PEOPLE is a
+metric maintainer_contributions (by=project or by=org; the share is over
+contributions for the same scope); "top maintainers by contributions" as PEOPLE is a
 person-grain join only query_lfx_lens can make.
 
 12. ROSTERS AND MEETINGS. search_committees → search_committee_members (paginate;
@@ -250,15 +252,16 @@ enrollments carry no account and land in the NULL bucket, and a share of
 registrations has no account either, so every org-scoped figure here is a
 floor — present "attributed registrations/enrollments" and say so.
 
-15. STANDARD METRIC CALLS take uniform parameters — metric, project +
+15. STANDARD METRIC CALLS take uniform parameters — metric, by, project +
 subprojects (excluded|separate|combined, default combined), org + subsidiaries
 (excluded|separate|combined, default excluded), since/until on FLOW metrics,
-as_of on SNAPSHOT ones, order_by, limit. The sixteen:
-members_and_dues_by_org, membership_tiers, new_members_by_year,
-membership_churn_by_year, contributors, contributions, contributions_by_org,
-contributions_by_project, contributors_by_org, contributors_by_project,
-maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster,
-maintainer_contributions_by_project, maintainer_contributions_by_org. The
+as_of on SNAPSHOT ones, order_by, limit. The seven, with their groupings
+(by): memberships (total | org | tier), new_members (year), membership_churn
+(year), contributors (total | org | project), contributions (total | org |
+project), maintainers (total | org | project | maintainer),
+maintainer_contributions (total | org | project); by left out is the first
+listed, and the scope supplies the other axis (by=project with org = that
+company's projects; by=org with project = that project's companies). The
 switches say what a name covers: excluded = that project or account alone,
 separate = it and everything under it one row each (the breakdown), combined
 = folded into one row (subprojects=combined folds every project column of

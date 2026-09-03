@@ -2,8 +2,8 @@
 
 Read this before your first query_lfx_standard_metrics call. A standard
 metric is a governed recipe: its metrics, its grouping and its built-in
-filters are fixed, and a caller chooses only the slice, so the same question
-re-run gives the same figure. When one matches the question, prefer it over
+filters are fixed, and a caller chooses only the grouping (by) and the
+slice, so the same question re-run gives the same figure. When one matches the question, prefer it over
 the explore+query flow, and never rewrite it as an ad-hoc query just to sort,
 filter or scope it — order_by and the scope parameters do that on the
 governed recipe. A standard metric reaches a project's tree and a company's
@@ -24,20 +24,23 @@ so a guess reads exactly like missing data.
 
 Answer four questions, then call once.
 
-1. WHICH METRIC? Pick from the inventory below by what it answers. A
-   one-figure question takes a scope total (contributors, contributions,
-   maintainers); a "which ... most" or "per ..." question takes a *_by_*
-   metric. Both scope parameters combine: "which CNCF projects does IBM
-   work on" is contributions_by_project with project=cncf, org=IBM,
-   subprojects=separate — no ad-hoc query needed.
+1. WHICH METRIC, GROUPED HOW? Pick the metric from the inventory below by
+   what it answers, then its grouping with `by`: a one-figure question is
+   by=total; a "which ... most" or "per ..." question is by=org, by=project,
+   by=tier or by=year, as the metric offers; by=maintainer is the roster by
+   name. Left out, by is the metric's first grouping. The scope supplies the
+   other axis, so both parameters combine: "which CNCF projects does IBM
+   work on" is contributions by=project with project=cncf, org=IBM,
+   subprojects=separate, and "which companies contribute to Kubernetes" is
+   contributions by=org with project=k8s — no ad-hoc query needed.
    "TOP CONTRIBUTORS" with nothing more said means INDIVIDUALS ranked by
    contribution volume: no standard metric ranks people, so run recipe 10
    of read_lfx_semantic_layer_guidance (ad hoc, labelled as such) without
    asking which reading was meant. The other common readings each have a
    governed metric — name them as follow-ups, do not ask first: top
-   organizations by volume = contributions_by_org, by headcount =
-   contributors_by_org; top projects by volume = contributions_by_project,
-   by headcount = contributors_by_project.
+   organizations by volume = contributions by=org, by headcount =
+   contributors by=org; top projects by volume = contributions by=project,
+   by headcount = contributors by=project.
 2. WHICH SCOPE? project, org, both, or neither for an LF-wide figure.
 3. WHAT DOES THE NAME COVER? Two switches, and their defaults differ on
    purpose — a subsidiary is a different company ("Red Hat" means Red Hat),
@@ -69,12 +72,11 @@ how the rows COME BACK.
 Reading the tables:
 
 - combined and separate read the SAME rows; only the shape differs. On a
-  metric with no project column (the scope totals, every *_by_org metric)
+  reading with no project column (by=total, by=org, by=tier, by=year)
   subprojects=combined and subprojects=separate return the same result, and
   the switch only decides whether the tree or the own bucket is covered.
 - subprojects=combined folds every project column of the result away, so on
-  contributors_by_project, maintainers_by_project and maintainer_roster it
-  turns the table into one row. That is what the default does: a project
+  by=project and by=maintainer it turns the table into one row. That is what the default does: a project
   name alone is ONE figure for its whole tree.
 - MOST QUESTIONS WANT BOTH. "How is CNCF doing" wants the CNCF figure and the
   per-project table; "IBM's contribution" wants IBM's figure and the parts.
@@ -83,7 +85,7 @@ Reading the tables:
 - Without org, subsidiaries=combined gives one row per parent organization —
   a parent-company leaderboard, each company resolved to the top of its
   chain; subsidiaries=separate lists the accounts with that top parent
-  alongside. maintainers_by_org carries no parent column, so there it is the
+  alongside. maintainers by=org carries no parent column, so there it is the
   one distinct total; a company's maintainers are org + subsidiaries=combined.
 - excluded is for "X itself", "excluding subprojects", "the umbrella's own
   repos". Never for a plain question.
@@ -94,7 +96,8 @@ A plain question gets the default reading without any parameter beyond the
 name: the whole project tree as one figure, that one account, and on the
 contribution metrics the trailing 365 days. The lens applies those defaults
 itself when a parameter is omitted, and every result carries an `applied`
-block — metric, project, subprojects, org, subsidiaries, since, until, as_of,
+block — metric, by, project, subprojects, org, subsidiaries, since, until,
+as_of,
 `defaulted`, the list of parameters the lens chose, and `engine`. Read it and
 state what it says: "distinct code contributors across the CNCF project tree,
 last 12 months", not "CNCF contributors". `engine` is provenance for you
@@ -121,8 +124,8 @@ WHAT YOU CAN ORDER BY: exactly the Result columns the inventory lists for
 that metric — its metric name and its grouping columns — minus any column
 the call folds away: under the default subprojects=combined the project
 columns are gone, and under subsidiaries=combined the org columns are, so a
-top-N per project needs subprojects=separate first. A scope total has only
-its metric to order by. Anything else is rejected, and the message lists the
+top-N per project needs subprojects=separate first. A by=total reading has
+only its metric to order by. Anything else is rejected, and the message lists the
 orderable columns. limit runs 1..500 and, omitted, returns EVERY row —
 rosters run long, so set one unless you need the complete set.
 
@@ -130,39 +133,41 @@ rosters run long, so set one unless you need the complete set.
 
 Result columns are given in the vocabulary the results come back in.
 
-| Metric | What it answers | Shape · time axis | Result columns | Caveat |
-|---|---|---|---|---|
-| members_and_dues_by_org | Current memberships and their list-price dues per organization | SNAPSHOT | account, parent_org, current_membership_count, current_membership_revenue | The two figures sit on different grains — never divide one by the other |
-| membership_tiers | Current memberships and dues per membership tier | SNAPSHOT | tier, current_membership_count, current_membership_revenue | Tier literals differ per foundation, so scope with a foundation slug first |
-| new_members_by_year | Memberships sold as new business, per year of installation | FLOW · install date | year, new_membership_count | A lapsed account that rejoins counts again; the current year is year-to-date |
-| membership_churn_by_year | Memberships that ended without renewal, per year of churn | FLOW · churn date | year, churned_membership_count | The churn date is the day AFTER the term ended, so a term ending on 31 December counts in the following year |
-| contributors | Distinct code contributors over the scope, ONE figure | FLOW · activity date | total_contributors | The headline for "how many contributors does X have"; trailing 365 days unless since is given |
-| contributions | Code contribution volume over the scope, ONE figure | FLOW · activity date | code_contribution_activities | Additive; bots excluded; trailing 365 days unless since is given |
-| contributions_by_org | Code contribution volume per organization | FLOW · activity date | account, parent_org, code_contribution_activities | Additive; bots excluded; the NULL account row is unattributed work |
-| contributions_by_project | Code contribution volume per project | FLOW · activity date | project, project_name, code_contribution_activities | Additive; bots excluded; with org it is "which projects does this company work on"; the default folds it to one row — subprojects=separate for the table |
-| contributors_by_org | Distinct code contributors per organization | FLOW · activity date | account, parent_org, total_contributors | A distinct-person count: never sum the rows |
-| contributors_by_project | Distinct code contributors per project | FLOW · activity date | project, project_name, total_contributors | A distinct-person count: never sum the rows, across projects least of all; the default folds it to one row — subprojects=separate for the table |
-| maintainers | Active maintainers over the scope, ONE figure (LF projects only) | SNAPSHOT | active_maintainers | The headline for "how many maintainers does X have" |
-| maintainers_by_org | Active maintainers per employer, LF projects only | SNAPSHOT | account, active_maintainers | A distinct-person count; the NULL row is maintainers with no resolved employer; subsidiaries=combined folds a company's maintainers into one distinct headcount |
-| maintainers_by_project | Active maintainers per project, LF projects only | SNAPSHOT | foundation, project, project_name, active_maintainers | A distinct-person count; a person maintaining two projects counts once in each; subprojects=separate for the table |
-| maintainer_roster | Active maintainers by name, employer and role, per project (LF projects only) | SNAPSHOT | project, project_name, maintainer, account, role, active_maintainers | One row per person, project, employer and role; the metric column reads 1 on every row; subprojects=separate keeps the project on each row |
-| maintainer_contributions_by_project | Code contributions made by active maintainers, per project | FLOW · activity date | project, project_name, maintainer_contributions, contributing_maintainers | Maintainership is as of the build (current roster of the activity's project), the contributions are in the window; maintainer_contributions is additive, contributing_maintainers is a distinct-person count; the default folds it to one row — subprojects=separate for the table |
-| maintainer_contributions_by_org | Code contributions made by active maintainers, per organization | FLOW · activity date | account, parent_org, maintainer_contributions, contributing_maintainers | Same definition per employer account; the NULL row is unattributed work; "maintainer share of work" is this figure over contributions for the same scope and window |
+| Metric | by | What it answers | Shape · time axis | Result columns | Caveat |
+|---|---|---|---|---|---|
+| memberships | total | Current memberships and their list-price dues over the scope, ONE figure | SNAPSHOT | current_membership_count, current_membership_revenue | The headline for "how many members does X have"; memberships attach at foundation level; the two figures sit on different grains — never divide one by the other |
+| memberships | org | Current memberships and their list-price dues per organization | SNAPSHOT | account, parent_org, current_membership_count, current_membership_revenue | The two figures sit on different grains — never divide one by the other |
+| memberships | tier | Current memberships and dues per membership tier | SNAPSHOT | tier, current_membership_count, current_membership_revenue | Tier literals differ per foundation, so scope with a foundation slug first |
+| new_members | year | Memberships sold as new business, per year of installation | FLOW · install date | year, new_membership_count | A lapsed account that rejoins counts again; the current year is year-to-date |
+| membership_churn | year | Memberships that ended without renewal, per year of churn | FLOW · churn date | year, churned_membership_count | The churn date is the day AFTER the term ended, so a term ending on 31 December counts in the following year |
+| contributors | total | Distinct code contributors over the scope, ONE figure | FLOW · activity date | total_contributors | The headline for "how many contributors does X have"; trailing 365 days unless since is given |
+| contributors | org | Distinct code contributors per organization | FLOW · activity date | account, parent_org, total_contributors | A distinct-person count: never sum the rows |
+| contributors | project | Distinct code contributors per project | FLOW · activity date | project, project_name, total_contributors | A distinct-person count: never sum the rows, across projects least of all; the default folds it to one row — subprojects=separate for the table |
+| contributions | total | Code contribution volume over the scope, ONE figure | FLOW · activity date | code_contribution_activities | Additive; bots excluded; trailing 365 days unless since is given |
+| contributions | org | Code contribution volume per organization | FLOW · activity date | account, parent_org, code_contribution_activities | Additive; bots excluded; the NULL account row is unattributed work |
+| contributions | project | Code contribution volume per project | FLOW · activity date | project, project_name, code_contribution_activities | Additive; bots excluded; with org it is "which projects does this company work on"; the default folds it to one row — subprojects=separate for the table |
+| maintainers | total | Active maintainers over the scope, ONE figure (LF projects only) | SNAPSHOT | active_maintainers | The headline for "how many maintainers does X have" |
+| maintainers | org | Active maintainers per employer, LF projects only | SNAPSHOT | account, active_maintainers | A distinct-person count; the NULL row is maintainers with no resolved employer; subsidiaries=combined folds a company's maintainers into one distinct headcount |
+| maintainers | project | Active maintainers per project, LF projects only | SNAPSHOT | foundation, project, project_name, active_maintainers | A distinct-person count; a person maintaining two projects counts once in each; subprojects=separate for the table |
+| maintainers | maintainer | Active maintainers by name, employer and role, per project (LF projects only) | SNAPSHOT | project, project_name, maintainer, account, role, active_maintainers | One row per person, project, employer and role; the metric column reads 1 on every row; subprojects=separate keeps the project on each row |
+| maintainer_contributions | total | Code contributions made by active maintainers over the scope, ONE figure | FLOW · activity date | maintainer_contributions, contributing_maintainers | Maintainership is as of the build (current roster of the activity's project), the contributions are in the window; maintainer_contributions is additive, contributing_maintainers is a distinct-person count |
+| maintainer_contributions | org | Code contributions made by active maintainers, per organization | FLOW · activity date | account, parent_org, maintainer_contributions, contributing_maintainers | Same definition per employer account; the NULL row is unattributed work; "maintainer share of work" is this figure over contributions for the same scope and window |
+| maintainer_contributions | project | Code contributions made by active maintainers, per project | FLOW · activity date | project, project_name, maintainer_contributions, contributing_maintainers | Same definition per project; the default folds it to one row — subprojects=separate for the table |
 
 The LF-project filter is built into every maintainer headcount metric: the
 maintainers model also holds maintainers of non-LF projects, and they carry a
-project slug too, so nothing here needs to exclude them by hand. The two
-maintainer_contributions metrics count a contribution when its author is on
+project slug too, so nothing here needs to exclude them by hand.
+maintainer_contributions counts a contribution when its author is on
 the CURRENT maintainer roster of the project the activity belongs to — "top
 maintainers by contributions" as PEOPLE is still a query_lfx_lens question.
 
 ## Organizations: account and parent_org
 
-Every *_by_org metric names its organization column `account`: the account
+Every by=org reading names its organization column `account`: the account
 that holds the record, as Salesforce spells it. Most carry a second column,
 `parent_org`: with an org named it is the account's direct parent; without
 one (a parent leaderboard) it is the top of the account's chain.
-maintainers_by_org returns `account` alone. Red Hat LLC is an account whose
+maintainers by=org returns `account` alone. Red Hat LLC is an account whose
 parent is International Business Machines Corporation, and IBM's own direct
 business is another account under the same parent. So:
 
@@ -202,12 +207,12 @@ umbrella node — you are not asked to know which.
 DEPTH is the same on every metric: with subprojects separate or combined a
 standard metric covers the named node's tree AT ANY DEPTH within its
 foundation — grandchildren included — on the membership and maintainer
-metrics as much as on the contribution ones. In contributors_by_project
+metrics as much as on the contribution ones. In contributors by=project
 with subprojects=separate the rows are the projects that carry the activity,
 and the named node's own bucket is one of them, so the table covers the whole
 subtree with nothing missing. The rows are still distinct people per project
-and never sum to a subtree total — take that from the default (combined) or
-from contributors. (The explore+query flow is shallower: its conformed
+and never sum to a subtree total — take that from by=total, or from
+by=project under the default subprojects=combined. (The explore+query flow is shallower: its conformed
 project entity reaches a foundation completely but a node below foundation
 level only to its direct children; that is a reason to prefer the standard
 metric, not something to caption.)
@@ -237,7 +242,7 @@ offer the breakdown or another window.
 
 - Start from the `applied` block: it is the scope and window that ran, and
   the sentence under the figure comes from it.
-- *_by_org rows come per account with the parent alongside: read account
+- by=org rows come per account with the parent alongside: read account
   rankings straight off the rows, and take parent figures from
   subsidiaries=combined rather than from a client-side sum.
 - maintainer_contributions rows: maintainership is the roster as of the
@@ -252,7 +257,7 @@ offer the breakdown or another window.
   distinct project-account pairs with an active term, and the revenue is the
   LIST PRICE of the active membership assets, not the dues actually billed.
   Present them side by side, never as a ratio.
-- maintainer_roster rows are NAMES, not identities: two maintainers who share
+- maintainers by=maintainer rows are NAMES, not identities: two maintainers who share
   a name are two rows that read as one person, and the same person appears
   once per project, employer and role. `maintainer` is a personal name —
   present it only where naming individuals is appropriate, and never as a
@@ -280,7 +285,8 @@ offer the breakdown or another window.
 Each rejection names the rule and the fix; correct the call rather than
 retrying it unchanged.
 
-- unknown metric: the message lists the valid names.
+- unknown metric, or a `by` the metric does not offer: the message lists
+  the valid names or groupings.
 - since/until on a SNAPSHOT metric, as_of on a FLOW metric, or an as_of
   other than today.
 - an org that matches no account (separate or combined): the name was not

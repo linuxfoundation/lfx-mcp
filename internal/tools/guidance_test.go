@@ -89,7 +89,7 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 	for _, want := range []string{
 		// windows and membership parity
 		"trailing 12 months",
-		"membership counts as of a PAST date or by year",
+		"membership counts as of a PAST date or by\n  year",
 		"no metric, dimension or\ncolumn names, keys, SQL or tool names",
 		"asset_id__end_date",
 		"current_membership_count",
@@ -211,7 +211,10 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		// standard metric calls
 		"STANDARD METRIC CALLS take uniform parameters",
 		"this means INDIVIDUALS by contribution volume — run it, do not ask",
-		"16. WHAT GOES IN THE ANSWER",
+		"16. SOCIAL LISTENING lives here",
+		"stored as 'Twitter', not 'X'",
+		"no filter means ALL of LF",
+		"17. WHAT GOES IN THE ANSWER",
 		"There is no free filter on a standard metric",
 		"default combined",
 		"default excluded",

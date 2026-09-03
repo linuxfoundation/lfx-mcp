@@ -16,11 +16,11 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   company's subsidiaries and a project's tree at ANY depth, which this layer
   does not (see REACH under Scope). Inventory:
   read_lfx_standard_metrics_guidance.
-- query_lfx_lens (text-to-SQL): social listening, cross-domain joins,
-  membership counts as of a PAST date or by year (memberships is a
-  today-only snapshot), and any-depth hierarchy questions no standard
-  metric expresses — label its answers as generated SQL. People rankings
-  (top contributors, top maintainers) are standard metrics, not lens
+- query_lfx_lens (text-to-SQL): membership counts as of a PAST date or by
+  year (memberships is a today-only snapshot), cross-domain joins, and
+  any-depth hierarchy questions no standard metric expresses — label its
+  answers as generated SQL. Social listening aggregates (recipe 16) and
+  people rankings (top contributors, top maintainers) are not lens
   questions.
 - Committee/board/ambassador rosters: committee tools. Meeting lists and one
   meeting's details: meeting tools. Meeting ATTENDANCE aggregates are in this
@@ -306,7 +306,29 @@ There is no free filter on a standard metric: a slice the switches and the
 window cannot express is an explore + query question, and its answer is
 labelled ad hoc.
 
-16. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
+16. SOCIAL LISTENING lives here: mentions of a project across social and web
+platforms, one row per mention. METRICS: social_listening_mentions,
+social_listening_positive_mentions and social_listening_negative_mentions
+(the rest are neutral), social_listening_unique_authors, and reach as
+social_listening_total_author_followers (the authors' follower counts summed;
+NULL for older records and platforms without follower data, so a floor) and
+social_listening_avg_author_followers. SCOPE: mention_key__project_slug is
+the project a mention resolved to — a leaf's own mentions, no subtree;
+project__foundation_slug covers a foundation, project__parent_project_slug
+one level. Never let scope default: no filter means ALL of LF, and a
+foundation filter nobody asked for is a silent undercount — say which scope
+ran. SLICES: mention_key__social_network (stored as 'Twitter', not 'X';
+'Reddit', 'Bluesky', 'News', 'Podcasts', 'DEV', 'Hacker News', 'LinkedIn',
+'YouTube', 'Github', 'TikTok' — copy from get_dimension_values),
+mention_key__sentiment ('positive' | 'neutral' | 'negative'),
+mention_key__language, mention_key__keyword, metric_time (mention time) for
+trends. SHARE OF VOICE: mentions by project__foundation_slug or
+mention_key__project_slug over one window, shares computed from the rows.
+The feed is young — group by metric_time__year before comparing years.
+Free-text feeds (titles, bodies, URLs, per-author lists) are not metrics;
+they are the one social question that still goes to query_lfx_lens.
+
+17. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
 is the figure, one line on what it covers, and only the caveats that change
 how that figure is read, in the reader's words: no metric, dimension or
 column names, keys, SQL or tool names unless asked how it was made. Grain,
@@ -322,6 +344,11 @@ Top CNCF member orgs by dues:
 Kubernetes contributor trend by month:
   metrics=total_contributors group_by=metric_time__month
   where={{ Dimension('activity_project_id__project_slug') }} = 'k8s' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-03-01'
+
+Kubernetes mentions by network this year (recipe 16):
+  metrics=social_listening_mentions,social_listening_positive_mentions,social_listening_negative_mentions
+  group_by=mention_key__social_network order_by=-social_listening_mentions
+  where={{ Dimension('mention_key__project_slug') }} = 'k8s' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-01-01'
 
 Org share of PyTorch code activity (recipe 2):
   metrics=code_contribution_activities group_by=activity_project_id__organization_name

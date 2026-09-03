@@ -251,7 +251,8 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		"search_b2b_orgs",
 		// Routing to the neighbours.
 		"query_lfx_semantic_layer",
-		"social listening, past-date membership counts, cross-domain joins",
+		"past-date membership counts, cross-domain joins",
+		"social listening (mentions, sentiment, reach)",
 		"Board/committee/ambassador rosters: committee tools",
 		"Start here unless exact names are known",
 	} {
@@ -822,7 +823,7 @@ func TestQueryLFXLensDoesNotClaimMemberships(t *testing.T) {
 	if strings.Contains(input, "Always use for memberships") {
 		t.Errorf("query_lfx_lens input schema still claims memberships: %q", input)
 	}
-	if !strings.Contains(input, "membership, event, education and health questions belong to the semantic layer") {
+	if !strings.Contains(input, "membership, event, education, health and social listening questions belong to the semantic layer") {
 		t.Errorf("query_lfx_lens input schema should redirect memberships: %q", input)
 	}
 }

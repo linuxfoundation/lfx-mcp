@@ -819,13 +819,9 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	// name per audience so a deployment enables exactly the guidance its
 	// callers need. The semantic layer guidance is in defaultTools because
 	// the explore/query/lens descriptions route models to it; the standard
-	// metrics and deck building guidance ship alongside the standard metrics
-	// tool by name.
+	// metrics guidance ships alongside the standard metrics tool by name.
 	if enabledTools["read_lfx_semantic_layer_guidance"] && canRead && isStaff {
 		tools.RegisterSemanticLayerGuidance(server)
-	}
-	if enabledTools["read_lfx_deck_building_guidance"] && canRead && isStaff {
-		tools.RegisterDeckBuildingGuidance(server)
 	}
 	if enabledTools["read_lfx_standard_metrics_guidance"] && canRead && isStaff {
 		tools.RegisterStandardMetricsGuidance(server)

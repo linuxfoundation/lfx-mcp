@@ -142,13 +142,12 @@ func TestStandardMetricsDescription_CarriesTheContract(t *testing.T) {
 		"as_of",
 		"No free filter",
 		"order_by",
-		"1..500",
+		"Omitted = every row",
 		"yyyy-mm-dd",
 		"FLOW",
 		"SNAPSHOT",
 		"Errors name the fix",
 		"compiled_sql",
-		"read_lfx_deck_building_guidance",
 	} {
 		if !strings.Contains(standardMetricsDescription, want) {
 			t.Errorf("description missing contract fragment %q", want)
@@ -168,7 +167,6 @@ func TestStandardMetricsSurface_NamesNoWarehouseRecipe(t *testing.T) {
 		"metric parameter":         schemaPropertyDescription(t, tool, "metric"),
 		"standard metric guidance": standardMetricsGuidance,
 		"semantic layer guidance":  semanticLayerGuidance,
-		"deck building guidance":   deckBuildingGuidance,
 	}
 	dbtName := regexp.MustCompile(`\bkpi_[a-z0-9_]+`)
 	for where, text := range surface {

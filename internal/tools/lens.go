@@ -170,7 +170,7 @@ const querySemanticLayerDescription = `Run governed LFX Semantic Layer metric qu
 
 If you have not read read_lfx_semantic_layer_guidance yet this session, read it BEFORE querying; one read also covers explore. If a query_lfx_standard_metrics recipe matches the question, prefer it.
 
-SYNTAX: metrics (required), CSV. group_by: dimension qualified_names copied from explore; add metric_time__year (or __quarter, __month) for trends. where is MetricFlow: {{ Dimension('country__lf_region') }} = 'Europe'; {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'; dates yyyy-mm-dd. limit ceiling 500.
+SYNTAX: metrics (required), CSV. group_by: dimension qualified_names copied from explore; add metric_time__year (or __quarter, __month) for trends. where is MetricFlow: {{ Dimension('country__lf_region') }} = 'Europe'; {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'; dates yyyy-mm-dd. limit optional.
 
 SCOPE lives in where (no project parameter). Foundation: {{ Dimension('project__foundation_slug') }} = '<slug>' (resolve via search_projects); NEVER scope a foundation with project_slug - its catch-all bucket, a silent undercount. Org/account filters take FULL LEGAL names - search_b2b_orgs first.
 
@@ -251,7 +251,7 @@ type QuerySemanticLayerArgs struct {
 	GroupBy string `json:"group_by,omitempty" jsonschema:"Comma-separated dimension qualified_names, copied verbatim from explore_lfx_semantic_layer — they are entity__field and the prefix differs per metric. Group by a name dimension for a ranked list of organizations, people or projects; add metric_time__year (or __quarter, __month, __week, __day) for a trend."`
 	Where   string `json:"where,omitempty" jsonschema:"MetricFlow filter; this clause does the actual data filtering. Categorical: {{ Dimension('country__lf_region') }} = 'Europe'. Time: {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'. Dates are yyyy-mm-dd."`
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields. Each must also appear in group_by or metrics. Prefix with - for descending, e.g. -current_membership_revenue. In combined-metric results NULL rows sort first on a descending metric - re-sort client-side before reading a top-N."`
-	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum rows to return, ceiling 500. Use 10-20 for top-N questions and 50-100 for full breakdowns. Omitting it returns EVERY row - set a limit unless you need the complete set."`
+	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum rows to return. Use 10-20 for top-N questions and 50-100 for full breakdowns. Omitting it returns EVERY row - set a limit unless you need the complete set."`
 }
 
 func handleExploreSemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args ExploreSemanticLayerArgs) (*mcp.CallToolResult, any, error) {
@@ -366,13 +366,6 @@ func handleQuerySemanticLayer(ctx context.Context, _ *mcp.CallToolRequest, args 
 	if len(metrics) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: "Error: metrics is required. Use explore_lfx_semantic_layer with action=list_metrics to find metric names."}},
-			IsError: true,
-		}, nil, nil
-	}
-
-	if args.Limit > 500 {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "Error: limit must be 500 or less"}},
 			IsError: true,
 		}, nil, nil
 	}

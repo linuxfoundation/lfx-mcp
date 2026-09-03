@@ -15,7 +15,7 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   one matches, PREFER it over the explore+query flow: it also reaches a
   company's subsidiaries and a project's tree at ANY depth, which this layer
   does not (see REACH under Scope). Inventory:
-  read_lfx_standard_metrics_guidance. Decks: read_lfx_deck_building_guidance.
+  read_lfx_standard_metrics_guidance.
 - query_lfx_lens (text-to-SQL): social listening, cross-domain joins,
   membership counts as of a PAST date or by year (memberships is a
   today-only snapshot), and any-depth hierarchy questions no standard
@@ -47,7 +47,7 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   where     one MetricFlow expression, dates yyyy-mm-dd:
             {{ Dimension('country__lf_region') }} = 'Europe' AND {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'
   order_by  '-metric' descending — NULL rows sort FIRST; re-sort client-side
-  limit     ceiling 500 (10-20 top-N, 50-100 breakdowns); omitted = EVERY row,
+  limit     optional (10-20 top-N, 50-100 breakdowns); omitted = EVERY row,
             and full rosters run to thousands — set one unless you need them all
 
 Multiple metrics outer-join on their shared dimensions (the only valid group_by
@@ -147,8 +147,7 @@ governed real-organization filter (no need to hand-exclude NULL rows and
 'Individual - No Account') — and report the unattributed share (roughly 40-70%)
 separately. Account-attributed rows are a SUPERSET of is_org_contribution; the
 difference is exactly the Individual placeholder accounts, so a numerator
-filtered on an account rollup sits inside this base. The 500-row cap makes
-exact percentiles over big pools unretrievable.
+filtered on an account rollup sits inside this base.
 
 3. ORG HEADCOUNTS run 2-4x below externally published counts (volumes reconcile
 to ~1-4%). State the caveat.

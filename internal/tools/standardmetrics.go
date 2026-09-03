@@ -53,11 +53,9 @@ subsidiaries  excluded | separate | combined. Default excluded = that account on
 since, until  yyyy-mm-dd. FLOW metrics only. Omitted: contribution metrics read the trailing 365 days, the rest all time.
 as_of         yyyy-mm-dd. SNAPSHOT metrics only. Omitted = today.
 order_by      a result column; - prefix = descending.
-limit         1..500. Omitted = every row.
+limit         optional. Omitted = every row.
 
-No free filter: a slice these cannot express is an explore + query question. Errors name the fix. Results carry compiled_sql and an applied block (scope and window used).
-
-Decks: also read read_lfx_deck_building_guidance.`
+No free filter: a slice these cannot express is an explore + query question. Errors name the fix. Results carry compiled_sql and an applied block (scope and window used).`
 
 // RegisterStandardMetrics registers the query_lfx_standard_metrics tool.
 func RegisterStandardMetrics(server *mcp.Server) {
@@ -98,7 +96,7 @@ type StandardMetricsArgs struct {
 	Until        string `json:"until,omitempty" jsonschema:"Optional window end, yyyy-mm-dd, on the metric's own time axis. FLOW metrics only. Omitted = no upper bound."`
 	AsOf         string `json:"as_of,omitempty" jsonschema:"Optional as-of date, yyyy-mm-dd, for SNAPSHOT metrics. Only today's date is available until as-of history exists; omitted = today. A membership count as of a past date or by year is a query_lfx_lens question."`
 	OrderBy      string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields, prefix with - for descending, e.g. -total_contributors. Only the metric's own result columns, as listed in read_lfx_standard_metrics_guidance: its metric name(s) plus its grouping columns (account, parent_org, project, foundation, year...). A column the call folds away (project columns under subprojects=combined, org columns under subsidiaries=combined) cannot be ordered on."`
-	Limit        *int   `json:"limit,omitempty" jsonschema:"Maximum rows to return, 1..500. Use 10-20 for top-N questions. Omitting it returns EVERY row - set a limit unless you need the complete set."`
+	Limit        *int   `json:"limit,omitempty" jsonschema:"Maximum rows to return. Use 10-20 for top-N questions. Omitting it returns EVERY row - set a limit unless you need the complete set."`
 }
 
 // standardMetricRequest is the body of a standard-metric call. It mirrors

@@ -102,7 +102,6 @@ var staffOnlyTools = []string{
 	"query_lfx_standard_metrics",
 	"read_lfx_semantic_layer_guidance",
 	"read_lfx_standard_metrics_guidance",
-	"read_lfx_deck_building_guidance",
 }
 
 // listedTools is the tools/list a caller holding token sees from a server

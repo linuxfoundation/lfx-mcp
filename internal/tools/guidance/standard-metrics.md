@@ -137,7 +137,7 @@ the call folds away: under the default subprojects=combined the project
 columns are gone, and under subsidiaries=combined the org columns are, so a
 top-N per project needs subprojects=separate first. A by=total reading has
 only its metric to order by. Anything else is rejected, and the message lists the
-orderable columns. limit runs 1..500 and, omitted, returns EVERY row —
+orderable columns. limit is optional and, omitted, returns EVERY row —
 rosters run long, so set one unless you need the complete set.
 
 ## Inventory
@@ -308,8 +308,6 @@ retrying it unchanged.
 - an org that matches no account (separate or combined): the name was not
   the stored legal name — resolve it with search_b2b_orgs.
 - an unknown subprojects/subsidiaries value, a date that is not yyyy-mm-dd,
-  or a limit outside 1..500.
+  or a limit below 1.
 - an order_by field that is not one of the result columns: the message lists
   the columns you can order by.
-
-Building a deck or briefing? Also read read_lfx_deck_building_guidance.

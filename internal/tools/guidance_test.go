@@ -24,7 +24,6 @@ import (
 func TestGuidanceDescriptions_ShortAndFunctional(t *testing.T) {
 	for name, desc := range map[string]string{
 		"read_lfx_semantic_layer_guidance":   semanticLayerGuidanceDescription,
-		"read_lfx_deck_building_guidance":    deckBuildingGuidanceDescription,
 		"read_lfx_standard_metrics_guidance": standardMetricsGuidanceDescription,
 	} {
 		if got := len(desc); got > 400 {
@@ -52,7 +51,6 @@ func TestGuidanceTools_RegisterReadOnly(t *testing.T) {
 		register func(*mcp.Server)
 	}{
 		{"read_lfx_semantic_layer_guidance", RegisterSemanticLayerGuidance},
-		{"read_lfx_deck_building_guidance", RegisterDeckBuildingGuidance},
 		{"read_lfx_standard_metrics_guidance", RegisterStandardMetricsGuidance},
 	} {
 		tool := listRegisteredTool(t, tc.name, tc.register)
@@ -71,13 +69,6 @@ func TestGuidanceHandlers_ReturnTheDocuments(t *testing.T) {
 	}
 	if got := resultText(t, res); got != semanticLayerGuidance || len(got) < 5000 {
 		t.Errorf("semantic layer guidance result is not the embedded document (len %d)", len(got))
-	}
-	res, _, err = handleDeckBuildingGuidance(context.Background(), nil, GuidanceArgs{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got := resultText(t, res); got != deckBuildingGuidance || len(got) < 2000 {
-		t.Errorf("deck building guidance result is not the embedded document (len %d)", len(got))
 	}
 	res, _, err = handleStandardMetricsGuidance(context.Background(), nil, GuidanceArgs{})
 	if err != nil {
@@ -124,7 +115,7 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		// syntax
 		"metric_time__year",
 		"yyyy-mm-dd",
-		"ceiling 500",
+		"omitted = EVERY row",
 		// value discovery
 		"'Asia Pacific'",
 		"Viet Nam",
@@ -235,69 +226,9 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"PEOPLE is maintainer_contributions by=maintainer",
 		"query_lfx_standard_metrics",
 		"PREFER it over the",
-		"read_lfx_deck_building_guidance",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("semantic layer guidance missing %q", want)
-		}
-	}
-}
-
-// TestDeckBuildingGuidanceContent pins the deck workflow: standard metric recipes
-// first, the pair-grain reading contract, rollup direction, and the honest
-// out-of-scope list.
-func TestDeckBuildingGuidanceContent(t *testing.T) {
-	text := deckBuildingGuidance
-	for _, want := range []string{
-		"read_lfx_semantic_layer_guidance",
-		"Membership counts as of a past date, or at year end by year",
-		"query_lfx_standard_metrics",
-		"memberships by=org",
-		"contributors by=org",
-		"maintainers by=project",
-		"maintainers by=maintainer",
-		"maintainer_contributions\n  by=project or by=org",
-		"There is no free filter on a standard metric",
-		"an order_by on the result columns",
-		"read_lfx_standard_metrics_guidance",
-		// resolve-first, the two switches, and the one-hop disclosure
-		"ALWAYS resolve names first",
-		"never put a guessed slug",
-		"subprojects\n  (excluded|separate|combined, default combined)",
-		"subsidiaries\n  (excluded|separate|combined, default excluded)",
-		"DEFAULTS are the headline reading",
-		"the headline AND the breakdown",
-		"applied block",
-		"→ contributors, contributions, maintainers",
-
-		"ANY DEPTH: combined walks the account hierarchy to the bottom",
-		"separate lists the parts",
-		"combined returns the single folded row",
-		"never from\nsumming rows",
-		"\"Top contributors\" unqualified → individuals by contribution volume",
-		"Caveats go on a slide only when they change how that slide's figure is\n  read",
-		"The maintainer metrics take subsidiaries too",
-		"subprojects=combined folds every\n  project column of the result",
-		// depth, and the accounts a rollup never folds in
-		"every standard metric covers a named node's tree at any depth",
-		"a company's subsidiaries at any depth - nothing\n  to caption",
-		"STRAY SAME-COMPANY ACCOUNTS",
-		// events, training and sponsorships have no standard metric
-		"no standard\n  metric: compose them with explore + query",
-		"Do not reconcile figures against other dashboards or pages",
-		"offer the breakdown and another window",
-		"PCC-style reporting as the reconciliation surface",
-		"Meeting attendance by company",
-		"total_sponsorship_revenue",
-		"'package_tier'",
-		"definitional delta",
-		"Be honest about what each figure represents",
-		"in the audience's words",
-		"label the\nresult as generated SQL",
-		"as named PEOPLE → maintainer_contributions\n  by=maintainer",
-	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("deck building guidance missing %q", want)
 		}
 	}
 }
@@ -357,7 +288,7 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		// how to call
 		"There is no free-form filter",
 		"labelled as such",
-		"1..500",
+		"omitted, returns EVERY row",
 		"order_by takes the result columns as they come back",
 		"WHAT YOU CAN ORDER BY",
 		"minus any column\nthe call folds away",
@@ -428,7 +359,6 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"the message lists\n  the valid names or groupings",
 		"an org that matches no account",
 		"an order_by field that is not one of the result columns",
-		"read_lfx_deck_building_guidance",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("standard metric guidance missing %q", want)
@@ -443,7 +373,6 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 func TestGuidanceNamesNoOtherSurface(t *testing.T) {
 	for name, text := range map[string]string{
 		"semantic layer guidance":  semanticLayerGuidance,
-		"deck building guidance":   deckBuildingGuidance,
 		"standard metric guidance": standardMetricsGuidance,
 		"tool description":         standardMetricsDescription,
 	} {

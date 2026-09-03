@@ -171,8 +171,8 @@ func TestSemanticLayer_GetDimensionsWithoutProjectSlug(t *testing.T) {
 	}
 }
 
-func TestSemanticLayer_LimitTooLarge(t *testing.T) {
-	setupLensTest(t)
+func TestSemanticLayer_LimitPassesThrough(t *testing.T) {
+	captured := setupLensTest(t)
 
 	res, _, err := handleQuerySemanticLayer(context.Background(), &mcp.CallToolRequest{}, QuerySemanticLayerArgs{
 		Metrics: "active_maintainers",
@@ -181,8 +181,11 @@ func TestSemanticLayer_LimitTooLarge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !res.IsError || resultText(t, res) != "Error: limit must be 500 or less" {
-		t.Errorf("expected limit error, got: %q (IsError=%v)", resultText(t, res), res.IsError)
+	if res.IsError {
+		t.Errorf("a limit above 500 is no longer rejected here; got: %q", resultText(t, res))
+	}
+	if captured.Path != "/lfx-lens/semantic-layer/query" {
+		t.Errorf("the request did not reach the lens query route: %s", captured.Path)
 	}
 }
 
@@ -275,7 +278,7 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 		"Dimension(",
 		"TimeDimension(",
 		"yyyy-mm-dd",
-		"ceiling 500",
+		"limit optional",
 		"metric_time__year",
 		// The deadliest scope trap, stated even before the guidance is read.
 		"project__foundation_slug",
@@ -399,7 +402,7 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 				{"Dimension(", "categorical filter syntax is unguessable"},
 				{"TimeDimension(", "time filter syntax is unguessable"},
 				{"yyyy-mm-dd", "date format silently returns wrong rows if guessed"},
-				{"ceiling 500", "over-limit requests are rejected outright"},
+				{"limit optional", "an omitted limit returns the complete set"},
 				{"metric_time__year", "the only way to build a trend"},
 				{"entity__field", "dimension names cannot be assembled by hand"},
 				{"outer-joined", "explains NULLs in cross-domain results"},
@@ -433,7 +436,7 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 				{"trailing 365 days", "the contribution window default is applied silently otherwise"},
 				{"applied block", "the response says which defaults ran; the model must know to read it"},
 				{"yyyy-mm-dd", "date format silently returns wrong rows if guessed"},
-				{"1..500", "over-limit requests are rejected outright"},
+				{"Omitted = every row", "an omitted limit returns the complete set"},
 				{"FLOW", "since/until on the wrong shape is rejected, not silently ignored"},
 				{"SNAPSHOT", "as_of on the wrong shape is rejected, not silently ignored"},
 			},

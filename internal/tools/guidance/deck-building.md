@@ -55,8 +55,8 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   Membership counts are deduplicated; dues are the
   list price on active terms, on a different grain from the count.
 - One-figure headlines ("how many contributors / maintainers does X have")
-  → contributors, contributions, maintainers, memberships, each by=total
-  (the default).
+  → contributors, contributions, maintainers, maintainer_contributions,
+  memberships, each by=total (the default).
 - "Top contributors" unqualified → individuals by contribution volume:
   contributions by=contributor, order_by=-code_contribution_activities,
   limit 10-20 (personal names); offer the organization and project

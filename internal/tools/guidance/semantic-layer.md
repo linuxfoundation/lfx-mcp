@@ -60,10 +60,10 @@ dimension by what the question names:
   undercount on activities.
 - A SINGLE PROJECT (k8s, pytorch...): activity_project_id__project_slug — the
   per-project surface (__project_slug and __segment_slug), whose DEFINITION
-  mirrors the Insights default (code contributions, bots excluded). Do NOT
-  reconcile figures against Insights pages or collections: they differ by repo
-  registration, member cleaning and curated collections; PCC-style reporting is
-  the reconciliation surface. For leaf projects the spine slug returns identical
+  is code contributions, bots excluded. Do NOT reconcile figures against other
+  dashboards or pages: they differ by repo registration, member cleaning and
+  curated lists; say what this figure covers, and PCC-style reporting is the
+  reconciliation surface. For leaf projects the spine slug returns identical
   counts; for umbrella nodes project_slug is only the node's own bucket.
 - SUBTREES AND HIERARCHY WALKS (umbrella nodes, "foundation to its projects"):
   activity_project_id__project_spine_slug — identical totals to foundation_slug
@@ -116,7 +116,7 @@ spelling and scope first; only then report absence.
 
 ## Worked recipes
 
-1. BOTS. Bot exclusion is the Insights default, built into contributor and activity
+1. BOTS. Bot exclusion is the default, built into contributor and activity
 metrics (code volumes read roughly 1.8x higher with bots); bot_activities
 (member_is_bot) is the explicit bot view.
 
@@ -235,7 +235,7 @@ maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster. The 
 covers: excluded = that project or account alone, separate = it and
 everything under it one row each (the breakdown), combined = folded into one
 row (subprojects=combined folds every project column of the result). The
-DEFAULTS are the Insights reading: a project name alone is its whole tree as
+DEFAULTS are the plain reading: a project name alone is its whole tree as
 ONE figure, an organization name alone is that account, and a contribution
 metric with no since is the trailing 365 days; every result carries an
 applied block saying which scope and window ran. A briefing usually wants the

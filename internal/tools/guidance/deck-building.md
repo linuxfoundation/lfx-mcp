@@ -108,12 +108,11 @@ and the count excluding quasi-associate tiers). State the definitional delta
 next to the figure; do not force numbers to match and do not silently
 substitute one for the other.
 
-Do not reconcile figures against Insights pages or collections either: those
-surfaces differ by repo registration, member cleaning and curated
-collections, so a mismatch is construction, not error. PCC-style reporting is
-the reconciliation surface. If a reader holds an Insights foundation figure
-next to yours, the one-line contrast is: LFX counts every project in the
-CNCF tree; Insights counts the CNCF collection as curated on the site.
+Do not reconcile figures against other dashboards or pages either: those
+surfaces differ by repo registration, member cleaning and curated lists, so a
+mismatch is construction, not error. Caption the figure with exactly what it
+covers (from the applied block), offer the breakdown and another window, and
+leave PCC-style reporting as the reconciliation surface.
 
 ## Outside the semantic layer's scope
 

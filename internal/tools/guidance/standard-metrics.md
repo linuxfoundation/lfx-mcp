@@ -77,7 +77,7 @@ Reading the tables:
 
 ## Defaults and the applied block
 
-A plain question gets the Insights reading without any parameter beyond the
+A plain question gets the default reading without any parameter beyond the
 name: the whole project tree as one figure, that one account, and on the
 contribution metrics the trailing 365 days. The lens applies those defaults
 itself when a parameter is omitted, and every result carries an `applied`
@@ -91,11 +91,10 @@ pass since for any other period, and an explicit early since (2000-01-01)
 for all time. The membership metrics are a history and read all time by
 default; the maintainer metrics are snapshots and take no window.
 
-If a reader compares the figure with an Insights foundation page, the
-one-line contrast is: LFX counts every project in the CNCF tree; Insights
-counts the CNCF collection as curated on the site. Same definition of a
-contributor, same window, different project list — disclose it, never
-reconcile to it.
+Then offer what a reader most often wants next: the breakdown
+(subprojects=separate or subsidiaries=separate) and a different window. Do
+not compare the figure with a number from another dashboard or page; say
+what this one covers and leave it there.
 
 There is no free-form filter. A slice the switches and the window cannot
 express (one membership tier, one maintainer role, one country) is an

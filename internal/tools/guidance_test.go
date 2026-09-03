@@ -193,10 +193,10 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"enrollment_id__course_name",
 		"enrollment_id__product_type",
 		"every org-scoped figure here is a\nfloor",
-		// Insights is a definitional mirror, never a reconciliation target
-		"mirrors the Insights default (code contributions, bots excluded)",
-		"Do NOT\n  reconcile figures against Insights pages or collections",
-		"PCC-style reporting is\n  the reconciliation surface",
+		// other surfaces are never a reconciliation target
+		"is code contributions, bots excluded",
+		"Do NOT reconcile figures against other\n  dashboards or pages",
+		"PCC-style reporting is the\n  reconciliation surface",
 		// worked examples stay live-verified
 		"## Worked examples (verified live)",
 		// resolve-first: a guessed slug or account name is a silent wrong answer
@@ -218,7 +218,7 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"default excluded",
 		"contributors, contributions, contributions_by_org",
 		"maintainers, maintainers_by_org",
-		"DEFAULTS are the Insights reading",
+		"DEFAULTS are the plain reading",
 		"applied block",
 		"maintainers_by_project, maintainer_roster",
 		"contribution metrics cover a named node's tree at ANY depth",
@@ -258,7 +258,7 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"the headline AND the breakdown",
 		"applied block",
 		"→ contributors, contributions, maintainers",
-		"LFX counts every project in the\nCNCF tree",
+
 		"ONE HOP",
 		"separate lists the parts",
 		"combined returns the single folded row",
@@ -271,8 +271,9 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 		"STRAY SAME-COMPANY ACCOUNTS",
 		// events, training and sponsorships have no advertised standard metric
 		"no advertised\n  standard metric: compose them with explore + query",
-		"Do not reconcile figures against Insights pages or collections",
-		"PCC-style reporting is\nthe reconciliation surface",
+		"Do not reconcile figures against other dashboards or pages",
+		"offer the breakdown and another window",
+		"PCC-style reporting as the reconciliation surface",
 		"Meeting attendance by company",
 		"total_sponsorship_revenue",
 		"'package_tier'",
@@ -315,8 +316,8 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"## Defaults and the applied block",
 		"trailing 365 days",
 		"`defaulted`, the list of parameters the lens chose",
-		"LFX counts every project in the CNCF tree",
-		"disclose it, never\nreconcile to it",
+		"offer what a reader most often wants next",
+		"Do\nnot compare the figure with a number from another dashboard",
 		// scope totals
 		"| contributors | Distinct code contributors over the scope, ONE figure",
 		"| contributions | Code contribution volume over the scope, ONE figure",
@@ -399,6 +400,23 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("standard metric guidance missing %q", want)
+		}
+	}
+}
+
+// TestGuidanceNamesNoOtherSurface pins a product decision: the guidance
+// describes exactly what a figure covers and offers the breakdown or another
+// window, and never sends the model to compare with, or explain away, a
+// number on another LFX surface by name.
+func TestGuidanceNamesNoOtherSurface(t *testing.T) {
+	for name, text := range map[string]string{
+		"semantic layer guidance":  semanticLayerGuidance,
+		"deck building guidance":   deckBuildingGuidance,
+		"standard metric guidance": standardMetricsGuidance,
+		"tool description":         standardMetricsDescription,
+	} {
+		if strings.Contains(text, "Insights") {
+			t.Errorf("%s names Insights; describe what the figure covers instead", name)
 		}
 	}
 }

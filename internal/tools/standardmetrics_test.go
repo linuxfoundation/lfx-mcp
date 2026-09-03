@@ -45,10 +45,9 @@ var standardMetricParameters = []string{
 	"since", "until", "as_of", "order_by", "limit",
 }
 
-// standardMetricNames is the advertised inventory, in the order the guidance
-// lists it. The lens registry holds further recipes that stay callable and
-// unadvertised, so this list is what the routing surface must name — no more,
-// and none of them missing.
+// standardMetricNames is the whole inventory, in the order the guidance lists
+// it: the lens registry holds exactly these recipes, so this list is what the
+// routing surface must name — no more, and none of them missing.
 var standardMetricNames = []string{
 	"members_and_dues_by_org",
 	"membership_tiers",
@@ -64,6 +63,8 @@ var standardMetricNames = []string{
 	"maintainers_by_org",
 	"maintainers_by_project",
 	"maintainer_roster",
+	"maintainer_contributions_by_project",
+	"maintainer_contributions_by_org",
 }
 
 // TestStandardMetricsDescription_FitsSchemaBudget holds the tool to the same budget as
@@ -93,7 +94,7 @@ func TestStandardMetricsDescription_ListsTheInventoryByDomain(t *testing.T) {
 	for _, want := range []string{
 		"Memberships: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year",
 		"Contributions: contributors, contributions, contributions_by_org, contributions_by_project, contributors_by_org, contributors_by_project",
-		"Maintainers: maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster",
+		"Maintainers: maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster, maintainer_contributions_by_project, maintainer_contributions_by_org",
 	} {
 		if !strings.Contains(standardMetricsDescription, want) {
 			t.Errorf("description missing inventory line %q", want)
@@ -124,7 +125,7 @@ func TestStandardMetricsDescription_CarriesTheContract(t *testing.T) {
 		"ALWAYS resolve names first",
 		"search_projects",
 		"search_b2b_orgs",
-		"never pass one that has not come back from them",
+		"never pass a name they have not returned",
 		"metric ",
 		"project ",
 		"subprojects",
@@ -136,13 +137,13 @@ func TestStandardMetricsDescription_CarriesTheContract(t *testing.T) {
 		"trailing 365 days",
 		"applied block",
 		"as_of",
-		"no free filter",
+		"No free filter",
 		"order_by",
 		"1..500",
 		"yyyy-mm-dd",
 		"FLOW",
 		"SNAPSHOT",
-		"naming the rule and the fix",
+		"naming the fix",
 		"compiled_sql",
 		"read_lfx_deck_building_guidance",
 	} {
@@ -177,14 +178,15 @@ func TestStandardMetricsSurface_NamesNoWarehouseRecipe(t *testing.T) {
 			}
 		}
 	}
-	// The events and training recipes stay callable through the lens
-	// registry, and unnamed here: only the fourteen advertised names route.
-	for _, unadvertised := range []string{"event_registrations", "training_enrollments"} {
-		if strings.Contains(standardMetricsDescription, unadvertised) {
-			t.Errorf("tool description names the unadvertised recipe family %q", unadvertised)
+	// The events and training recipes left the lens registry; they are
+	// composed ad hoc through the semantic-layer guidance and named nowhere
+	// as standard metrics.
+	for _, gone := range []string{"event_registrations", "training_enrollments"} {
+		if strings.Contains(standardMetricsDescription, gone) {
+			t.Errorf("tool description names the removed recipe family %q", gone)
 		}
-		if strings.Contains(standardMetricsGuidance, unadvertised) {
-			t.Errorf("standard metric guidance names the unadvertised recipe family %q", unadvertised)
+		if strings.Contains(standardMetricsGuidance, gone) {
+			t.Errorf("standard metric guidance names the removed recipe family %q", gone)
 		}
 	}
 	for _, field := range []string{"SavedQuery", "Foundation", "By", "Where"} {

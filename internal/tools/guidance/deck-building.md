@@ -26,8 +26,8 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   metrics, as_of on SNAPSHOT ones, an order_by on the result columns (-
   prefix for descending), and a limit. subprojects=combined folds every
   project column of the result; a per-project slide needs
-  subprojects=separate. The maintainer metrics have no parent-company lens,
-  so subsidiaries must be excluded there - name one employer with org.
+  subprojects=separate. The maintainer metrics take subsidiaries too: a
+  company's maintainers as one distinct headcount is subsidiaries=combined.
 - DEFAULTS are the headline reading: a project name alone is its whole tree
   as one figure, an organization name alone is that account, and a
   contribution metric with no since is the trailing 365 days. Most slides
@@ -35,10 +35,11 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   subprojects=separate or subsidiaries=separate. Every result carries an
   applied block saying which scope and window ran; the caption under the
   figure comes from it.
-- DEPTH: the contribution metrics cover a named node's tree at any depth
-  within its foundation; the membership and maintainer metrics cover a
-  foundation completely but reach an umbrella below foundation level only to
-  its direct children - say so on a slide scoped to such an umbrella.
+- DEPTH: every standard metric covers a named node's tree at any depth
+  within its foundation and a company's subsidiaries at any depth - nothing
+  to caption. Only an explore + query slide is shallower (one hop on
+  accounts, one level below a project), so keep hierarchy slides on the
+  standard metrics.
 - There is no free filter on a standard metric. A slide that needs one
   (a single tier, a single role) is an explore + query slide, labelled ad
   hoc.
@@ -60,8 +61,8 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   maintainers_by_org, maintainers_by_project. Named maintainers per project →
   maintainer_roster (personal names: use it only where naming individuals is
   appropriate).
-- Event registrations, training enrollments and sponsorships → no advertised
-  standard metric: compose them with explore + query (recipe 14 in
+- Event registrations, training enrollments and sponsorships → no standard
+  metric: compose them with explore + query (recipe 14 in
   read_lfx_semantic_layer_guidance) and label them as ad-hoc figures.
   Registrations count rows, not unique people - present "registrations", not
   "attendees"; edX enrollments carry no organization, so an org-scoped
@@ -89,14 +90,13 @@ means. org alone, with the default subsidiaries=excluded, is that company by
 itself - which is the right call for "Red Hat", and the wrong one for "IBM
 including Red Hat".
 
-ONE HOP: the parent link is a single hop, so a combined figure for a top
-parent covers its DIRECT subsidiaries but not their own acquisitions -
-disclose that next to the number, or ask query_lfx_lens for the whole chain
-at any depth and label that slide as generated SQL. Headcount metrics (contributors,
-maintainers) are not additive across accounts: take the parent figure from
-subsidiaries=combined, never from summing rows, and for the maintainer
-metrics - which have no parent-company lens - say no combined figure is
-available.
+ANY DEPTH: combined walks the account hierarchy to the bottom, so a top
+parent's figure covers its subsidiaries' own acquisitions as well; a slide
+that wants DIRECT subsidiaries alone is an explore + query slide on
+account__account_rollup_name, labelled as such. Headcount metrics
+(contributors, maintainers, contributing_maintainers) are not additive across
+accounts: take the parent figure from subsidiaries=combined, never from
+summing rows.
 
 STRAY SAME-COMPANY ACCOUNTS: a company can hold accounts that are their own
 rollup parent (regional and research arms spelled with its name), and those

@@ -12,11 +12,14 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
 - explore_lfx_semantic_layer discovers metrics, dimensions and stored values; query_lfx_semantic_layer runs the query. Explore first.
 - query_lfx_standard_metrics answers common questions with governed metrics
   named in plain words (contributors_by_org, members_and_dues_by_org...). When
-  one matches, PREFER it over the explore+query flow. Inventory:
+  one matches, PREFER it over the explore+query flow: it also reaches a
+  company's subsidiaries and a project's tree at ANY depth, which this layer
+  does not (see REACH under Scope). Inventory:
   read_lfx_standard_metrics_guidance. Decks: read_lfx_deck_building_guidance.
-- query_lfx_lens (text-to-SQL): only maintainer×contribution joins ("top
-  maintainers by contributions", maintainer share of work), social listening, and
-  questions no metric family expresses — label its answers as generated SQL.
+- query_lfx_lens (text-to-SQL): person-grain maintainer rankings ("top
+  maintainers by contributions"), social listening, any-depth hierarchy
+  questions no standard metric expresses, and questions no metric family
+  expresses — label its answers as generated SQL.
 - Committee/board/ambassador rosters: committee tools. Meetings: meeting tools.
   Neither is in this layer or lens's lane (recipe 12).
 
@@ -91,6 +94,19 @@ dimension by what the question names:
 - Twins exist (risc-v-international/riscv, cff/cloud-foundry,
   opensearch-foundation/opensearch-project): low total → group by the slug.
   Compare entities with IN (...) + group_by; never total across spine groups.
+- REACH — how deep this layer's own dimensions go, and where to go instead:
+  ACCOUNTS: account__account_rollup_name is ONE hop (an account's direct
+  parent), so filtering or grouping on it covers a company's DIRECT
+  subsidiaries only. PROJECTS: project__foundation_slug covers a foundation
+  completely; project__parent_project_slug covers a node below foundation
+  level ONE level down (its direct children); only the activity spine
+  (activity_project_id__project_spine_slug) reaches any depth, and only on
+  activities. When the question means the whole company or the whole
+  subtree, that is a standard metric (subsidiaries / subprojects separate or
+  combined walk to the bottom on every recipe) or, for a shape no standard
+  metric has, query_lfx_lens. Use this layer's one-hop and one-level
+  dimensions when the question asks exactly for direct subsidiaries or
+  direct children, and say so in the answer only then.
 
 ## Windows
 
@@ -156,9 +172,11 @@ present those separately rather than as part of it. Additive metrics (dues,
 volumes) may be summed across accounts sharing a rollup; headcounts may NOT —
 re-read them at rollup grain. No rollup dimension → sum named sub-entities
 and list them. ONE HOP: the parent link is a single hop, so an "including
-subsidiaries" figure for a top parent covers its DIRECT subsidiaries but not
-their own acquisitions (an account rolling up to Red Hat LLC is not folded
-into IBM) — disclose that next to any combined figure. On ACTIVITIES the
+subsidiaries" figure built here covers a top parent's DIRECT subsidiaries but
+not their own acquisitions (an account rolling up to Red Hat LLC is not
+folded into IBM) — for the whole company at any depth use the standard
+metric (subsidiaries=combined), and build it here only when the question
+asks for direct subsidiaries alone. On ACTIVITIES the
 account is already resolved to the parent account FOR THAT PROJECT before the
 rollup applies, so a contribution row's Salesforce account can differ from the
 account on the source record; organization_name stays the crowd.dev spelling
@@ -194,9 +212,12 @@ built in. Active = no end date; start_date has a
 2000-01-01 sentinel — never trend on it. As of date D: total_maintainers where
 maintainer_key__start_date <= 'D' AND (end_date IS NULL OR end_date >= 'D');
 since/until on start_date is meaningless, readings before tracking began run
-high, and a trend is one as-of reading per period. Maintainer-by-contribution
-questions ("top maintainers by contributions", maintainer share of work) are person-grain
-joins this layer cannot express: use query_lfx_lens.
+high, and a trend is one as-of reading per period. Maintainer×contribution
+figures are not in this layer: contributions made by maintainers per project
+or per organization, and the maintainer share of work, are the standard
+metrics maintainer_contributions_by_project / _by_org (over contributions
+for the same scope); "top maintainers by contributions" as PEOPLE is a
+person-grain join only query_lfx_lens can make.
 
 12. ROSTERS AND MEETINGS. search_committees → search_committee_members (paginate;
 group-mode names: search_groups/search_group_members). Never infer a roster from
@@ -207,8 +228,8 @@ best effort and disclose there is no canonical way to compute it.
 
 13. REGIONS. country__* follows the person; organization_lf_region etc. follow the org's HQ.
 
-14. EVENTS/TRAINING/SPONSORSHIPS BY ORG. No advertised standard metric covers
-these — compose them here. METRICS: total_registrations counts ACCEPTED registrations
+14. EVENTS/TRAINING/SPONSORSHIPS BY ORG. No standard metric covers these —
+compose them here. METRICS: total_registrations counts ACCEPTED registrations
 only; total_enrollments counts enrollment records only (the source table is
 mostly other lifecycle events, and the metric filters them out) — neither
 needs a status filter of your own. Sponsorships: total_sponsorship_revenue
@@ -232,27 +253,27 @@ floor — present "attributed registrations/enrollments" and say so.
 15. STANDARD METRIC CALLS take uniform parameters — metric, project +
 subprojects (excluded|separate|combined, default combined), org + subsidiaries
 (excluded|separate|combined, default excluded), since/until on FLOW metrics,
-as_of on SNAPSHOT ones, where, order_by, limit. The fourteen:
+as_of on SNAPSHOT ones, order_by, limit. The sixteen:
 members_and_dues_by_org, membership_tiers, new_members_by_year,
 membership_churn_by_year, contributors, contributions, contributions_by_org,
 contributions_by_project, contributors_by_org, contributors_by_project,
-maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster. The switches say what a name
-covers: excluded = that project or account alone, separate = it and
-everything under it one row each (the breakdown), combined = folded into one
-row (subprojects=combined folds every project column of the result). The
-DEFAULTS are the plain reading: a project name alone is its whole tree as
-ONE figure, an organization name alone is that account, and a contribution
-metric with no since is the trailing 365 days; every result carries an
-applied block saying which scope and window ran. A briefing usually wants the
-headline and the breakdown — two calls. DEPTH: the
-contribution metrics cover a named node's tree at ANY depth within its
-foundation; the membership and maintainer metrics cover a foundation
-completely but reach an umbrella below foundation level only to its DIRECT
-children. Results come back in the same words (account, parent_org, project,
-foundation, year), and order_by takes them. The maintainer metrics have no
-parent-company lens, so subsidiaries must be excluded there. There is no
-free filter on a standard metric: a slice the switches and the window cannot
-express is an explore + query question, and its answer is labelled ad hoc.
+maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster,
+maintainer_contributions_by_project, maintainer_contributions_by_org. The
+switches say what a name covers: excluded = that project or account alone,
+separate = it and everything under it one row each (the breakdown), combined
+= folded into one row (subprojects=combined folds every project column of
+the result). The DEFAULTS are the plain reading: a project name alone is its
+whole tree as ONE figure, an organization name alone is that account, and a
+contribution metric with no since is the trailing 365 days; every result
+carries an applied block saying which scope and window ran. A briefing
+usually wants the headline and the breakdown — two calls. DEPTH: on every
+standard metric, separate and combined cover a named node's tree and a
+company's subsidiaries at ANY depth — deeper than this layer's own
+dimensions reach (REACH, above). Results come back in the same words
+(account, parent_org, project, foundation, year), and order_by takes them.
+There is no free filter on a standard metric: a slice the switches and the
+window cannot express is an explore + query question, and its answer is
+labelled ad hoc.
 
 16. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
 is the figure, one line on what it covers, and only the caveats that change

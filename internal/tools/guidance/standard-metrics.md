@@ -5,8 +5,10 @@ metric is a governed recipe: its metrics, its grouping and its built-in
 filters are fixed, and a caller chooses only the slice, so the same question
 re-run gives the same figure. When one matches the question, prefer it over
 the explore+query flow, and never rewrite it as an ad-hoc query just to sort,
-filter or scope it — order_by, the scope parameters and where do that on the
-governed recipe.
+filter or scope it — order_by and the scope parameters do that on the
+governed recipe. A standard metric reaches a project's tree and a company's
+subsidiaries AT ANY DEPTH, which the explore+query flow does not (see
+"Organizations" and "Projects" below).
 
 ## Resolve names first — ALWAYS
 
@@ -61,8 +63,8 @@ how the rows COME BACK.
 | subsidiaries | org Y covers | rows come back |
 |---|---|---|
 | excluded (default) | the Y account only | as the metric groups them |
-| separate | Y plus every account rolling up to it | as the metric groups them, one row each: the breakdown |
-| combined | Y plus every account rolling up to it | folded into ONE row: the figure for the group |
+| separate | Y plus every subsidiary under it, any depth | as the metric groups them, one row each: the breakdown |
+| combined | Y plus every subsidiary under it, any depth | folded into ONE row: the figure for the group |
 
 Reading the tables:
 
@@ -79,7 +81,10 @@ Reading the tables:
   Make two calls: the default for the headline, then subprojects=separate or
   subsidiaries=separate for the breakdown. Never derive one from the other.
 - Without org, subsidiaries=combined gives one row per parent organization —
-  a parent-company leaderboard.
+  a parent-company leaderboard, each company resolved to the top of its
+  chain; subsidiaries=separate lists the accounts with that top parent
+  alongside. maintainers_by_org carries no parent column, so there it is the
+  one distinct total; a company's maintainers are org + subsidiaries=combined.
 - excluded is for "X itself", "excluding subprojects", "the umbrella's own
   repos". Never for a plain question.
 
@@ -89,10 +94,12 @@ A plain question gets the default reading without any parameter beyond the
 name: the whole project tree as one figure, that one account, and on the
 contribution metrics the trailing 365 days. The lens applies those defaults
 itself when a parameter is omitted, and every result carries an `applied`
-block — metric, project, subprojects, org, subsidiaries, since, until, as_of
-and `defaulted`, the list of parameters the lens chose. Read it and state
-what it says: "distinct code contributors across the CNCF project tree, last
-12 months", not "CNCF contributors".
+block — metric, project, subprojects, org, subsidiaries, since, until, as_of,
+`defaulted`, the list of parameters the lens chose, and `engine`. Read it and
+state what it says: "distinct code contributors across the CNCF project tree,
+last 12 months", not "CNCF contributors". `engine` is provenance for you
+(semantic_layer, or warehouse when the scope needed the lens's predefined
+statement); it never goes in an answer.
 
 Windows: since omitted on a contribution metric is the trailing 365 days;
 pass since for any other period, and an explicit early since (2000-01-01)
@@ -136,36 +143,42 @@ Result columns are given in the vocabulary the results come back in.
 | contributors_by_org | Distinct code contributors per organization | FLOW · activity date | account, parent_org, total_contributors | A distinct-person count: never sum the rows |
 | contributors_by_project | Distinct code contributors per project | FLOW · activity date | project, project_name, total_contributors | A distinct-person count: never sum the rows, across projects least of all; the default folds it to one row — subprojects=separate for the table |
 | maintainers | Active maintainers over the scope, ONE figure (LF projects only) | SNAPSHOT | active_maintainers | The headline for "how many maintainers does X have" |
-| maintainers_by_org | Active maintainers per employer, LF projects only | SNAPSHOT | account, active_maintainers | A distinct-person count; the NULL row is maintainers with no resolved employer; no parent-company lens, so subsidiaries must be excluded |
+| maintainers_by_org | Active maintainers per employer, LF projects only | SNAPSHOT | account, active_maintainers | A distinct-person count; the NULL row is maintainers with no resolved employer; subsidiaries=combined folds a company's maintainers into one distinct headcount |
 | maintainers_by_project | Active maintainers per project, LF projects only | SNAPSHOT | foundation, project, project_name, active_maintainers | A distinct-person count; a person maintaining two projects counts once in each; subprojects=separate for the table |
 | maintainer_roster | Active maintainers by name, employer and role, per project (LF projects only) | SNAPSHOT | project, project_name, maintainer, account, role, active_maintainers | One row per person, project, employer and role; the metric column reads 1 on every row; subprojects=separate keeps the project on each row |
+| maintainer_contributions_by_project | Code contributions made by active maintainers, per project | FLOW · activity date | project, project_name, maintainer_contributions, contributing_maintainers | Maintainership is as of the build (current roster of the activity's project), the contributions are in the window; maintainer_contributions is additive, contributing_maintainers is a distinct-person count; the default folds it to one row — subprojects=separate for the table |
+| maintainer_contributions_by_org | Code contributions made by active maintainers, per organization | FLOW · activity date | account, parent_org, maintainer_contributions, contributing_maintainers | Same definition per employer account; the NULL row is unattributed work; "maintainer share of work" is this figure over contributions for the same scope and window |
 
-The LF-project filter is built into every maintainer metric: the maintainers
-model also holds maintainers of non-LF projects, and they carry a project
-slug too, so nothing here needs to exclude them by hand.
+The LF-project filter is built into every maintainer headcount metric: the
+maintainers model also holds maintainers of non-LF projects, and they carry a
+project slug too, so nothing here needs to exclude them by hand. The two
+maintainer_contributions metrics count a contribution when its author is on
+the CURRENT maintainer roster of the project the activity belongs to — "top
+maintainers by contributions" as PEOPLE is still a query_lfx_lens question.
 
 ## Organizations: account and parent_org
 
 Every *_by_org metric names its organization column `account`: the account
 that holds the record, as Salesforce spells it. Most carry a second column,
-`parent_org`, the company that account rolls up to (the maintainer metrics
-are the exception — they have no parent lens, so maintainers_by_org returns
-`account` alone). Red Hat LLC is an account whose parent_org is
-International Business Machines Corporation, and IBM's own direct business
-is another account under the same parent. So:
+`parent_org`: with an org named it is the account's direct parent; without
+one (a parent leaderboard) it is the top of the account's chain.
+maintainers_by_org returns `account` alone. Red Hat LLC is an account whose
+parent is International Business Machines Corporation, and IBM's own direct
+business is another account under the same parent. So:
 
 - org = 'Red Hat LLC' (subsidiaries excluded) → Red Hat's own rows.
 - org = 'Red Hat LLC', subsidiaries separate → Red Hat plus every account
-  that rolls up to it, one row each.
+  under it, one row each.
 - org = 'International Business Machines Corporation', subsidiaries combined
-  → one row, IBM with Red Hat and its other subsidiaries folded in.
+  → one row, IBM with Red Hat, Red Hat's own acquisitions and every other
+  subsidiary folded in.
 
-ONE HOP: the parent link is a single hop, so a combined figure for a top
-parent covers its DIRECT subsidiaries but not their own acquisitions — an
-account that rolls up to Red Hat LLC is not folded into IBM. Disclose that
-next to any combined figure. When the question needs the whole chain at any
-depth, ask query_lfx_lens, which walks the account hierarchy recursively, and
-label that figure as generated SQL.
+ANY DEPTH: separate and combined walk the account hierarchy to the bottom,
+so a combined figure for a top parent covers its subsidiaries' acquisitions
+too, and a parent leaderboard folds each chain into its top company. There is
+nothing to disclose about depth on these figures. Only if a question asks for
+DIRECT subsidiaries alone is that a different reading: explore + query with
+account__account_rollup_name, which is that one hop, labelled ad hoc.
 
 STRAY SAME-COMPANY ACCOUNTS: a company can also hold accounts that are their
 own rollup parent — regional and research arms spelled with the company's
@@ -174,10 +187,9 @@ search_b2b_orgs for the company's name and check for such accounts; if there
 are any, name them next to the figure or add them to it deliberately, and say
 which you did.
 
-Headcount metrics (contributors, maintainers) are not additive across
-accounts: never sum their rows into a parent figure — ask for the combined
-row instead. The maintainer metrics have no parent-company lens, so they
-have no combined row at all; say so rather than summing.
+Headcount metrics (contributors, maintainers, contributing_maintainers) are
+not additive across accounts: never sum their rows into a parent figure — ask
+for the combined row instead, on the maintainer metrics too.
 
 The full account-vs-rollup doctrine (the acronym trap, the NULL row) is in
 read_lfx_semantic_layer_guidance.
@@ -187,23 +199,18 @@ read_lfx_semantic_layer_guidance.
 project takes ONE slug, and that slug may name a project, a foundation or an
 umbrella node — you are not asked to know which.
 
-DEPTH depends on the domain, because the two families reach a subtree
-differently:
-
-- The contribution metrics (contributors, contributions, contributions_by_org,
-  contributions_by_project, contributors_by_org, contributors_by_project) walk
-  the project hierarchy,
-  so with subprojects separate or combined they cover a named node's tree
-  AT ANY DEPTH within its foundation — grandchildren included. In
-  contributors_by_project with subprojects=separate the rows are the projects
-  that carry the activity, and the named node's own bucket is one of them, so
-  the table covers the whole subtree with nothing missing. The rows are still
-  distinct people per project and never sum to a subtree total — take that
-  from the default (combined) or from contributors.
-- The membership and maintainer metrics reach a FOUNDATION completely, but an
-  umbrella node BELOW foundation level reaches its direct children only, so a
-  grandchild's rows are missing from an umbrella subtree. Say so when the node
-  you scoped is an umbrella below foundation level.
+DEPTH is the same on every metric: with subprojects separate or combined a
+standard metric covers the named node's tree AT ANY DEPTH within its
+foundation — grandchildren included — on the membership and maintainer
+metrics as much as on the contribution ones. In contributors_by_project
+with subprojects=separate the rows are the projects that carry the activity,
+and the named node's own bucket is one of them, so the table covers the whole
+subtree with nothing missing. The rows are still distinct people per project
+and never sum to a subtree total — take that from the default (combined) or
+from contributors. (The explore+query flow is shallower: its conformed
+project entity reaches a foundation completely but a node below foundation
+level only to its direct children; that is a reason to prefer the standard
+metric, not something to caption.)
 
 subprojects=excluded is the node's own bucket alone, which for a foundation
 is its catch-all bucket, not the foundation's projects.
@@ -220,10 +227,11 @@ Everything in this document is working knowledge: it shapes the call and
 how you read the result. The ANSWER carries the figure, one line on what it
 covers (from the applied block), and only the caveats that change how THIS
 figure is read — a NULL row in the table, a distinct count that must not be
-summed, a one-hop parent on a combined figure, a partial year. Keep the rest
-in context: vocabulary differences, grains, timezone edges, identity keys
-and the like are said only when they answer the question asked or would
-change the reader's conclusion. Then offer the breakdown or another window.
+summed, a partial year, maintainership read as of today. Keep the rest in
+context: vocabulary differences, grains, timezone edges, identity keys,
+which engine ran and how deep a hierarchy was walked are said only when they
+answer the question asked or would change the reader's conclusion. Then
+offer the breakdown or another window.
 
 ## Reading results
 
@@ -232,6 +240,11 @@ change the reader's conclusion. Then offer the breakdown or another window.
 - *_by_org rows come per account with the parent alongside: read account
   rankings straight off the rows, and take parent figures from
   subsidiaries=combined rather than from a client-side sum.
+- maintainer_contributions rows: maintainership is the roster as of the
+  build, the contributions are the window's — a person who became a
+  maintainer last month carries their whole year. "Share of work" is
+  maintainer_contributions over contributions for the same scope and window,
+  two calls.
 - The NULL account row is unattributed work, and the NULL employer row is a
   maintainer whose employer was not resolved — never an organization, never
   folded into a parent. Report them as unattributed.
@@ -270,10 +283,8 @@ retrying it unchanged.
 - unknown metric: the message lists the valid names.
 - since/until on a SNAPSHOT metric, as_of on a FLOW metric, or an as_of
   other than today.
-- subsidiaries other than excluded on a metric with no parent-company lens
-  (maintainers, maintainers_by_org, maintainers_by_project,
-  maintainer_roster): name one employer with org and present the figure as
-  per-account, not per parent.
+- an org that matches no account (separate or combined): the name was not
+  the stored legal name — resolve it with search_b2b_orgs.
 - an unknown subprojects/subsidiaries value, a date that is not yyyy-mm-dd,
   or a limit outside 1..500.
 - an order_by field that is not one of the result columns: the message lists

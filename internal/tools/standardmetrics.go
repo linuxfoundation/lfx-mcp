@@ -33,24 +33,24 @@ const standardMetricsDescription = `Run a governed standard metric: fixed metric
 METRICS
 Memberships: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year
 Contributions: contributors, contributions, contributions_by_org, contributions_by_project, contributors_by_org, contributors_by_project
-Maintainers: maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster
+Maintainers: maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster, maintainer_contributions_by_project, maintainer_contributions_by_org
 
 read_lfx_standard_metrics_guidance: what each one answers, its columns, the defaults, its caveats.
 
-ALWAYS resolve names first: project slugs from search_projects, organization names from search_b2b_orgs. A name they returned this session can be reused; never pass one that has not come back from them.
+ALWAYS resolve names first: project slugs from search_projects, organization names from search_b2b_orgs; never pass a name they have not returned.
 
 PARAMETERS
 metric        required. One of the names above.
 project       slug of ONE project or foundation.
 subprojects   excluded | separate | combined. Default combined = the project and everything under it as ONE figure; separate = the breakdown, one row each; excluded = its own bucket only.
 org           legal name of ONE organization.
-subsidiaries  excluded | separate | combined. Default excluded = that account only; separate = it plus every account rolling up to it, one row each; combined = those folded into one.
+subsidiaries  excluded | separate | combined. Default excluded = that account only; separate = it plus every subsidiary at any depth, one row each; combined = those folded into one.
 since, until  yyyy-mm-dd. FLOW metrics only. Omitted: contribution metrics read the trailing 365 days, the rest all time.
 as_of         yyyy-mm-dd. SNAPSHOT metrics only. Omitted = today.
 order_by      one of the metric's result columns; - prefix = descending.
 limit         1..500. Omitted = every row.
 
-There is no free filter: a slice these cannot express is an explore + query question. A parameter the metric cannot honour returns an error naming the rule and the fix. Results carry compiled_sql and an applied block: the scope and window actually used.
+No free filter: a slice these cannot express is an explore + query question. A parameter the metric cannot honour returns an error naming the fix. Results carry compiled_sql and an applied block: the scope and window used.
 
 Deck or briefing? Also read read_lfx_deck_building_guidance.`
 
@@ -83,11 +83,11 @@ func RegisterStandardMetrics(server *mcp.Server) {
 // value: omitted means every row, and 0 rows is not a question anyone asks,
 // so the lens rejects it rather than silently reading it as "no limit".
 type StandardMetricsArgs struct {
-	Metric       string `json:"metric" jsonschema:"Required. One of: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year, contributors, contributions, contributions_by_org, contributions_by_project, contributors_by_org, contributors_by_project, maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster. Each metric's metrics and grouping are fixed - there are no metrics/group_by parameters; slice it with project, org, their subprojects/subsidiaries switches, since/until or as_of, and where. FLOW metrics take since/until on their time axis; SNAPSHOT metrics take as_of. read_lfx_standard_metrics_guidance lists what each one answers, its result columns and its caveats."`
+	Metric       string `json:"metric" jsonschema:"Required. One of: members_and_dues_by_org, membership_tiers, new_members_by_year, membership_churn_by_year, contributors, contributions, contributions_by_org, contributions_by_project, contributors_by_org, contributors_by_project, maintainers, maintainers_by_org, maintainers_by_project, maintainer_roster, maintainer_contributions_by_project, maintainer_contributions_by_org. Each metric's metrics and grouping are fixed - there are no metrics/group_by parameters; slice it with project, org, their subprojects/subsidiaries switches, since/until or as_of, and where. FLOW metrics take since/until on their time axis; SNAPSHOT metrics take as_of. read_lfx_standard_metrics_guidance lists what each one answers, its result columns and its caveats."`
 	Project      string `json:"project,omitempty" jsonschema:"Optional project scope: ONE slug from search_projects, of a project or of a foundation (e.g. cncf, k8s). Stored slugs are not everyday names - resolve it, never guess it."`
 	Subprojects  string `json:"subprojects,omitempty" jsonschema:"What happens to the projects under project: combined (default) = the project plus everything under it folded into ONE figure (drops every project column the metric groups by); separate = the project plus everything under it, one row each, for a breakdown; excluded = that project's own bucket only."`
 	Org          string `json:"org,omitempty" jsonschema:"Optional organization scope: ONE legal name from search_b2b_orgs, in its stored spelling (e.g. Red Hat LLC). Resolve it, never guess it."`
-	Subsidiaries string `json:"subsidiaries,omitempty" jsonschema:"What happens to the accounts that roll up to org: excluded (default) = that account only; separate = the account plus every account rolling up to it, one row each; combined = the account plus those accounts folded into one row. Without org, combined returns one row per parent organization. The parent link is one hop, so a combined figure covers direct subsidiaries, not their own acquisitions - disclose that next to it."`
+	Subsidiaries string `json:"subsidiaries,omitempty" jsonschema:"What happens to the accounts under org: excluded (default) = that account only; separate = the account plus every subsidiary at any depth, one row each; combined = the account plus those folded into one row. Without org, combined returns one row per parent organization, resolved to the top of each chain."`
 	Since        string `json:"since,omitempty" jsonschema:"Optional window start, yyyy-mm-dd, on the metric's own time axis. FLOW metrics only. Omitted: the contribution metrics read the trailing 365 days, every other metric all time; the response's applied block says which window ran."`
 	Until        string `json:"until,omitempty" jsonschema:"Optional window end, yyyy-mm-dd, on the metric's own time axis. FLOW metrics only. Omitted = no upper bound."`
 	AsOf         string `json:"as_of,omitempty" jsonschema:"Optional as-of date, yyyy-mm-dd, for SNAPSHOT metrics. Only today's date is available until as-of history exists; omitted = today."`

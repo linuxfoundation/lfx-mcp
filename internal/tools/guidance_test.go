@@ -343,6 +343,7 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"one row per parent organization",
 		// the shape rule
 		"A FLOW metric takes since/until",
+		"SNAPSHOT: memberships and maintainers",
 		"a SNAPSHOT metric takes as_of",
 		"folds every project column of the result away",
 		"one call per period",

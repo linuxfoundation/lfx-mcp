@@ -49,8 +49,12 @@ Answer four questions, then call once.
    - subsidiaries: excluded | separate | combined, DEFAULT excluded.
 4. WHICH TIME? A FLOW metric takes since/until (yyyy-mm-dd) on its own time
    axis; a SNAPSHOT metric takes as_of, and today is the only as_of
-   available. A trend on a SNAPSHOT metric is one call per period once
-   history exists — label such readings as snapshots.
+   available. SNAPSHOT: memberships and maintainers — "members since 2024"
+   is not a question they answer; use new_members for arrivals. FLOW:
+   new_members (install date), membership_churn (churn date), contributors,
+   contributions and maintainer_contributions (activity date). A trend on a
+   SNAPSHOT metric is one call per period once history exists — label such
+   readings as snapshots.
 
 ## The switches, row by row
 

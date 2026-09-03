@@ -59,16 +59,18 @@ var standardMetricNames = []string{
 	"maintainer_contributions",
 }
 
-// standardMetricGroupings is each family's groupings in the order the lens
-// offers them; the first is the default the lens applies when by is omitted.
+// standardMetricGroupings is each family's shape and groupings as the
+// description lists them: the shape says which time parameter applies, and
+// the groupings come in the order the lens offers them, the first being the
+// default the lens applies when by is omitted.
 var standardMetricGroupings = map[string]string{
-	"memberships":              "total | org | tier",
-	"new_members":              "year",
-	"membership_churn":         "year",
-	"contributors":             "total | org | project",
-	"contributions":            "total | org | project",
-	"maintainers":              "total | org | project | maintainer",
-	"maintainer_contributions": "total | org | project",
+	"memberships":              "(SNAPSHOT): total | org | tier",
+	"new_members":              "(FLOW, install date): year",
+	"membership_churn":         "(FLOW, churn date): year",
+	"contributors":             "(FLOW): total | org | project",
+	"contributions":            "(FLOW): total | org | project",
+	"maintainers":              "(SNAPSHOT): total | org | project | maintainer",
+	"maintainer_contributions": "(FLOW): total | org | project",
 }
 
 // TestStandardMetricsDescription_FitsSchemaBudget holds the tool to the same budget as
@@ -96,7 +98,7 @@ func TestStandardMetricsDescription_FitsSchemaBudget(t *testing.T) {
 // top of the description so it survives schema compaction.
 func TestStandardMetricsDescription_ListsTheInventoryByDomain(t *testing.T) {
 	for _, name := range standardMetricNames {
-		want := name + ": " + standardMetricGroupings[name] + "\n"
+		want := name + " " + standardMetricGroupings[name] + "\n"
 		if !strings.Contains(standardMetricsDescription, want) {
 			t.Errorf("description missing inventory line %q", want)
 		}
@@ -144,7 +146,7 @@ func TestStandardMetricsDescription_CarriesTheContract(t *testing.T) {
 		"yyyy-mm-dd",
 		"FLOW",
 		"SNAPSHOT",
-		"naming the fix",
+		"Errors name the fix",
 		"compiled_sql",
 		"read_lfx_deck_building_guidance",
 	} {

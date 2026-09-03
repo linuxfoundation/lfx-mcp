@@ -31,17 +31,17 @@ import (
 const standardMetricsDescription = `Run a governed standard metric: fixed metrics and grouping, so the same question re-run gives the same figure. When one fits, prefer it over explore + query.
 
 METRICS, with the groupings each offers (by)
-memberships: total | org | tier
-new_members: year
-membership_churn: year
-contributors: total | org | project
-contributions: total | org | project
-maintainers: total | org | project | maintainer
-maintainer_contributions: total | org | project
+memberships (SNAPSHOT): total | org | tier
+new_members (FLOW, install date): year
+membership_churn (FLOW, churn date): year
+contributors (FLOW): total | org | project
+contributions (FLOW): total | org | project
+maintainers (SNAPSHOT): total | org | project | maintainer
+maintainer_contributions (FLOW): total | org | project
 
-read_lfx_standard_metrics_guidance: what each one answers, its columns, the defaults, its caveats.
+read_lfx_standard_metrics_guidance: what each answers, columns, defaults, caveats.
 
-ALWAYS resolve names first: project slugs from search_projects, organization names from search_b2b_orgs; never pass a name they have not returned.
+ALWAYS resolve names first: project slugs from search_projects, org names from search_b2b_orgs; never pass a name they have not returned.
 
 PARAMETERS
 metric        required. One of the names above.
@@ -52,12 +52,12 @@ org           legal name of ONE organization.
 subsidiaries  excluded | separate | combined. Default excluded = that account only; separate = it plus every subsidiary at any depth, one row each; combined = those folded into one.
 since, until  yyyy-mm-dd. FLOW metrics only. Omitted: contribution metrics read the trailing 365 days, the rest all time.
 as_of         yyyy-mm-dd. SNAPSHOT metrics only. Omitted = today.
-order_by      one of the metric's result columns; - prefix = descending.
+order_by      a result column; - prefix = descending.
 limit         1..500. Omitted = every row.
 
-No free filter: a slice these cannot express is an explore + query question. A parameter the metric cannot honour returns an error naming the fix. Results carry compiled_sql and an applied block: the scope and window used.
+No free filter: a slice these cannot express is an explore + query question. Errors name the fix. Results carry compiled_sql and an applied block (the scope and window used).
 
-Deck or briefing? Also read read_lfx_deck_building_guidance.`
+Decks and briefings: also read read_lfx_deck_building_guidance.`
 
 // RegisterStandardMetrics registers the query_lfx_standard_metrics tool.
 func RegisterStandardMetrics(server *mcp.Server) {

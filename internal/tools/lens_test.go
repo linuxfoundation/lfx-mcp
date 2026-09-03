@@ -420,10 +420,10 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 				// The domain grouping is what tells a caller whether this
 				// tool covers its question at all, so each domain line is
 				// pinned by name.
-				{"memberships: total | org | tier", "the membership inventory and its groupings reach the model only here"},
-				{"contributors: total | org | project", "the contribution inventory and its groupings reach the model only here"},
-				{"maintainers: total | org | project | maintainer", "the maintainer inventory and its groupings reach the model only here"},
-				{"maintainer_contributions: total | org | project", "the maintainer-contribution inventory reaches the model only here"},
+				{"memberships (SNAPSHOT): total | org | tier", "the membership inventory, its shape and its groupings reach the model only here"},
+				{"contributors (FLOW): total | org | project", "the contribution inventory, its shape and its groupings reach the model only here"},
+				{"maintainers (SNAPSHOT): total | org | project | maintainer", "the maintainer inventory, its shape and its groupings reach the model only here"},
+				{"maintainer_contributions (FLOW): total | org | project", "the maintainer-contribution inventory reaches the model only here"},
 				{"search_projects", "project takes the stored slug; an everyday name silently misses"},
 				{"search_b2b_orgs", "org takes the stored legal name; a short name silently misses"},
 				{"subprojects", "what a project name covers is a choice the caller has to be told about"},

@@ -279,7 +279,10 @@ as_of on SNAPSHOT ones, order_by, limit. The seven, with their groupings
 project), maintainers (total | org | project | maintainer),
 maintainer_contributions (total | org | project); by left out is the first
 listed, and the scope supplies the other axis (by=project with org = that
-company's projects; by=org with project = that project's companies). The
+company's projects; by=org with project = that project's companies).
+SNAPSHOT (as_of, today only): memberships, maintainers. FLOW (since/until):
+new_members, membership_churn, contributors, contributions,
+maintainer_contributions. The
 switches say what a name covers: excluded = that project or account alone,
 separate = it and everything under it one row each (the breakdown), combined
 = folded into one row (subprojects=combined folds every project column of

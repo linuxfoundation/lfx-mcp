@@ -248,7 +248,7 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		"search_b2b_orgs",
 		// Routing to the neighbours.
 		"query_lfx_semantic_layer",
-		"social listening, cross-domain joins",
+		"social listening, past-date membership counts, cross-domain joins",
 		"Board/committee/ambassador rosters: committee tools",
 		"Start here unless exact names are known",
 	} {

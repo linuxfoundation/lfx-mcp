@@ -16,10 +16,12 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   company's subsidiaries and a project's tree at ANY depth, which this layer
   does not (see REACH under Scope). Inventory:
   read_lfx_standard_metrics_guidance. Decks: read_lfx_deck_building_guidance.
-- query_lfx_lens (text-to-SQL): social listening, cross-domain joins, and
-  any-depth hierarchy questions no standard metric expresses — label its
-  answers as generated SQL. People rankings (top contributors, top
-  maintainers) are standard metrics, not lens questions.
+- query_lfx_lens (text-to-SQL): social listening, cross-domain joins,
+  membership counts as of a PAST date or by year (memberships is a
+  today-only snapshot), and any-depth hierarchy questions no standard
+  metric expresses — label its answers as generated SQL. People rankings
+  (top contributors, top maintainers) are standard metrics, not lens
+  questions.
 - Committee/board/ambassador rosters: committee tools. Meeting lists and one
   meeting's details: meeting tools. Meeting ATTENDANCE aggregates are in this
   layer (recipe 12).
@@ -285,7 +287,8 @@ maintainer_contributions (total | org | project | maintainer); by left out
 is the first
 listed, and the scope supplies the other axis (by=project with org = that
 company's projects; by=org with project = that project's companies).
-SNAPSHOT (as_of, today only): memberships, maintainers. FLOW (since/until):
+SNAPSHOT (as_of, today only; a past membership count is a query_lfx_lens
+question): memberships, maintainers. FLOW (since/until):
 new_members, membership_churn, contributors, contributions,
 maintainer_contributions. The
 switches say what a name covers: excluded = that project or account alone,

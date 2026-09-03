@@ -55,9 +55,13 @@ Answer four questions, then call once.
    available. SNAPSHOT: memberships and maintainers — "members since 2024"
    is not a question they answer; use new_members for arrivals. FLOW:
    new_members (install date), membership_churn (churn date), contributors,
-   contributions and maintainer_contributions (activity date). A trend on a
-   SNAPSHOT metric is one call per period once history exists — label such
-   readings as snapshots.
+   contributions and maintainer_contributions (activity date). A PAST
+   membership count — "how many members did CNCF have in 2024", "members at
+   year end by year" — is a query_lfx_lens question: ask it for memberships
+   whose install date is on or before the date and whose churn date is
+   after it, one row per year-end for a series, and label the answer as
+   generated SQL. Do not approximate it from new_members and
+   membership_churn. A past maintainers count has no lane yet.
 
 ## The switches, row by row
 
@@ -300,7 +304,7 @@ retrying it unchanged.
 - unknown metric, or a `by` the metric does not offer: the message lists
   the valid names or groupings.
 - since/until on a SNAPSHOT metric, as_of on a FLOW metric, or an as_of
-  other than today.
+  other than today (a past membership count is a query_lfx_lens question).
 - an org that matches no account (separate or combined): the name was not
   the stored legal name — resolve it with search_b2b_orgs.
 - an unknown subprojects/subsidiaries value, a date that is not yyyy-mm-dd,

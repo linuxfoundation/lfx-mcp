@@ -25,7 +25,8 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   (excluded|separate|combined, default excluded), since/until on FLOW
   metrics (new_members, membership_churn, contributors, contributions,
   maintainer_contributions), as_of on SNAPSHOT ones (memberships,
-  maintainers; today only), an order_by on the result columns (-
+  maintainers; today only — a members-in-2024 or members-by-year slide is
+  a query_lfx_lens question, labelled generated SQL), an order_by on the result columns (-
   prefix for descending), and a limit. subprojects=combined folds every
   project column of the result; a per-project slide needs
   subprojects=separate. The maintainer metrics take subsidiaries too: a
@@ -137,6 +138,8 @@ result as generated SQL, not a governed figure; if lens cannot answer, say
 so rather than improvising a number:
 
 - Working-group rosters and official project counts (owned by other teams).
+- Membership counts as of a past date, or at year end by year: ask for
+  memberships installed on or before the date and churning after it.
 
 ## Presentation honesty
 

@@ -98,6 +98,7 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 	for _, want := range []string{
 		// windows and membership parity
 		"trailing 12 months",
+		"membership counts as of a PAST date or by year",
 		"asset_id__end_date",
 		"current_membership_count",
 		"future-dated",
@@ -248,6 +249,7 @@ func TestDeckBuildingGuidanceContent(t *testing.T) {
 	text := deckBuildingGuidance
 	for _, want := range []string{
 		"read_lfx_semantic_layer_guidance",
+		"Membership counts as of a past date, or at year end by year",
 		"query_lfx_standard_metrics",
 		"memberships by=org",
 		"contributors by=org",
@@ -345,8 +347,9 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"A FLOW metric takes since/until",
 		"SNAPSHOT: memberships and maintainers",
 		"a SNAPSHOT metric takes as_of",
+		"membership count", "is a query_lfx_lens question",
+		"Do not approximate it from new_members",
 		"folds every project column of the result away",
-		"one call per period",
 		// how to call
 		"There is no free-form filter",
 		"labelled as such",

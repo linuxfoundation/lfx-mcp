@@ -16,10 +16,10 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   company's subsidiaries and a project's tree at ANY depth, which this layer
   does not (see REACH under Scope). Inventory:
   read_lfx_standard_metrics_guidance. Decks: read_lfx_deck_building_guidance.
-- query_lfx_lens (text-to-SQL): person-grain maintainer rankings ("top
-  maintainers by contributions"), social listening, any-depth hierarchy
-  questions no standard metric expresses, and questions no metric family
-  expresses — label its answers as generated SQL.
+- query_lfx_lens (text-to-SQL): social listening, cross-domain joins, and
+  any-depth hierarchy questions no standard metric expresses — label its
+  answers as generated SQL. People rankings (top contributors, top
+  maintainers) are standard metrics, not lens questions.
 - Committee/board/ambassador rosters: committee tools. Meeting lists and one
   meeting's details: meeting tools. Meeting ATTENDANCE aggregates are in this
   layer (recipe 12).
@@ -195,10 +195,14 @@ grouping inflates ~8-9x. Bands: Critical <20, Unsteady 20-39.
 daily snapshots; totals can read low, never inflated.
 
 10. RANKING CONTRIBUTORS BY CONTRIBUTIONS ("top contributors"). Unqualified,
-this means INDIVIDUALS by contribution volume — run it, do not ask. Group
-code_contribution_activities by activity_project_id__member_display_name
-(+ organization_name), order by the metric descending, spine-scoped, trailing
-365 days. Display names are not identity keys — for identity-stable answers
+this means INDIVIDUALS by contribution volume — run it, do not ask: the
+standard metric contributions by=contributor (order_by
+-code_contribution_activities, limit) returns people by display name with
+the account the activity resolved to, scope switches included; "top
+maintainers" is maintainer_contributions by=maintainer. Compose it here
+(code_contribution_activities by activity_project_id__member_display_name,
+spine-scoped, trailing 365 days) only for a slice the switches cannot
+express. Display names are not identity keys — for identity-stable answers
 use lens (member_id); say which. Offer the governed readings as follow-ups:
 organizations by volume (contributions by=org) or headcount
 (contributors by=org), projects by volume (contributions by=project) or
@@ -219,8 +223,8 @@ high, and a trend is one as-of reading per period. Maintainer×contribution
 figures are not in this layer: contributions made by maintainers per project
 or per organization, and the maintainer share of work, are the standard
 metric maintainer_contributions (by=project or by=org; the share is over
-contributions for the same scope); "top maintainers by contributions" as PEOPLE is a
-person-grain join only query_lfx_lens can make.
+contributions for the same scope); "top maintainers by contributions" as
+PEOPLE is maintainer_contributions by=maintainer.
 
 12. ROSTERS AND MEETINGS. search_committees → search_committee_members (paginate;
 group-mode names: search_groups/search_group_members). Never infer a roster from
@@ -276,8 +280,9 @@ subprojects (excluded|separate|combined, default combined), org + subsidiaries
 as_of on SNAPSHOT ones, order_by, limit. The seven, with their groupings
 (by): memberships (total | org | tier), new_members (year), membership_churn
 (year), contributors (total | org | project), contributions (total | org |
-project), maintainers (total | org | project | maintainer),
-maintainer_contributions (total | org | project); by left out is the first
+project | contributor), maintainers (total | org | project | maintainer),
+maintainer_contributions (total | org | project | maintainer); by left out
+is the first
 listed, and the scope supplies the other axis (by=project with org = that
 company's projects; by=org with project = that project's companies).
 SNAPSHOT (as_of, today only): memberships, maintainers. FLOW (since/until):

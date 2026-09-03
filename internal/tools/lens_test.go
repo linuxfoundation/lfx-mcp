@@ -248,7 +248,7 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 		"search_b2b_orgs",
 		// Routing to the neighbours.
 		"query_lfx_semantic_layer",
-		"person-grain maintainer rankings, social listening",
+		"social listening, cross-domain joins",
 		"Board/committee/ambassador rosters: committee tools",
 		"Start here unless exact names are known",
 	} {
@@ -423,7 +423,7 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 				{"memberships (SNAPSHOT): total | org | tier", "the membership inventory, its shape and its groupings reach the model only here"},
 				{"contributors (FLOW): total | org | project", "the contribution inventory, its shape and its groupings reach the model only here"},
 				{"maintainers (SNAPSHOT): total | org | project | maintainer", "the maintainer inventory, its shape and its groupings reach the model only here"},
-				{"maintainer_contributions (FLOW): total | org | project", "the maintainer-contribution inventory reaches the model only here"},
+				{"maintainer_contributions (FLOW): total | org | project | maintainer", "the maintainer-contribution inventory reaches the model only here"},
 				{"search_projects", "project takes the stored slug; an everyday name silently misses"},
 				{"search_b2b_orgs", "org takes the stored legal name; a short name silently misses"},
 				{"subprojects", "what a project name covers is a choice the caller has to be told about"},

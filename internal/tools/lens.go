@@ -41,7 +41,6 @@ func RegisterQueryLFXLens(server *mcp.Server) {
 		Description: `Ask natural language questions about a project's data using ad-hoc SQL generation.
 
 Use this tool ONLY for:
-- Maintainer x activity joins: contribution volumes attributed to maintainers (e.g. "top maintainers by contributions", "what share of work comes from maintainers", "is maintainer activity declining"). The semantic layer holds maintainer rosters and activity metrics but cannot join them at person grain.
 - Social listening: mentions of a project on social media and the web (X, Bluesky, Reddit, Hacker News, YouTube, LinkedIn, TikTok), sentiment, share of voice, author reach. The semantic layer has no social listening data.
 
 FALLBACK (the only other use): switch here only when the semantic layer genuinely cannot express the question - after discovery (list_metrics, get_dimensions, get_dimension_values), the read_lfx_semantic_layer_guidance recipes, and two differently-formulated queries have failed. Zero rows or an unknown-name error is a discovery failure, not a reason to switch.
@@ -61,7 +60,7 @@ Runs synchronously; wait 15-30 seconds without retrying. Returns <=200 rows; req
 // QueryLFXLensArgs defines the input for query_lfx_lens.
 type QueryLFXLensArgs struct {
 	ProjectSlug string `json:"project_slug" jsonschema:"Required default context slug from search_projects, not a scope boundary. For multiple foundations, pass one here and name the others in input; use 'tlf' for LF-wide questions."`
-	Input       string `json:"input" jsonschema:"Natural language question. Use for person-grain maintainer rankings (top maintainers by contributions), social listening (mentions/sentiment/reach) and shapes no standard metric expresses. Contributor, activity, membership, event, education and health questions belong to the semantic layer and its standard metrics - read read_lfx_semantic_layer_guidance before falling back here. Takes 15-30s. (required)"`
+	Input       string `json:"input" jsonschema:"Natural language question. Use for social listening (mentions/sentiment/reach), cross-domain joins and shapes no standard metric expresses; the standard metrics already rank people (top contributors, top maintainers). Contributor, activity, membership, event, education and health questions belong to the semantic layer and its standard metrics - read read_lfx_semantic_layer_guidance before falling back here. Takes 15-30s. (required)"`
 }
 
 type lensWorkflowAdditional struct {
@@ -164,7 +163,7 @@ ACTIONS
 - get_dimensions(metrics, search): a metric's group_by/filter surface; several metrics return only their shared dimensions
 - get_dimension_values(dimension, metrics, search): stored literals - call before filtering on any unseen value; unknowns return zero rows, not an error ('Asia Pacific' not 'APAC')
 
-Names are entity__field with per-metric prefixes - copy qualified_names, never assemble. Resolve project slugs via search_projects, org legal names via search_b2b_orgs. query_lfx_lens is ONLY for person-grain maintainer rankings, social listening, or guidance-sanctioned fallback. Board/committee/ambassador rosters: committee tools.`
+Names are entity__field with per-metric prefixes - copy qualified_names, never assemble. Resolve project slugs via search_projects, org legal names via search_b2b_orgs. query_lfx_lens is ONLY for social listening, cross-domain joins, or guidance-sanctioned fallback. Board/committee/ambassador rosters: committee tools.`
 
 const querySemanticLayerDescription = `Run governed LFX Semantic Layer metric queries: contributions, memberships, events, sponsorships, education, maintainers, health, country/region. ALWAYS explore_lfx_semantic_layer first unless exact names are known; never guess.
 

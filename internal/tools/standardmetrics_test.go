@@ -68,9 +68,9 @@ var standardMetricGroupings = map[string]string{
 	"new_members":              "(FLOW, install date): year",
 	"membership_churn":         "(FLOW, churn date): year",
 	"contributors":             "(FLOW): total | org | project",
-	"contributions":            "(FLOW): total | org | project",
+	"contributions":            "(FLOW): total | org | project | contributor",
 	"maintainers":              "(SNAPSHOT): total | org | project | maintainer",
-	"maintainer_contributions": "(FLOW): total | org | project",
+	"maintainer_contributions": "(FLOW): total | org | project | maintainer",
 }
 
 // TestStandardMetricsDescription_FitsSchemaBudget holds the tool to the same budget as

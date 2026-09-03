@@ -35,9 +35,9 @@ memberships (SNAPSHOT): total | org | tier
 new_members (FLOW, install date): year
 membership_churn (FLOW, churn date): year
 contributors (FLOW): total | org | project
-contributions (FLOW): total | org | project
+contributions (FLOW): total | org | project | contributor
 maintainers (SNAPSHOT): total | org | project | maintainer
-maintainer_contributions (FLOW): total | org | project
+maintainer_contributions (FLOW): total | org | project | maintainer
 
 read_lfx_standard_metrics_guidance: what each answers, columns, defaults, caveats.
 
@@ -45,9 +45,9 @@ ALWAYS resolve names first: project slugs from search_projects, org names from s
 
 PARAMETERS
 metric        required. One of the names above.
-by            total = ONE figure; org, project, tier, year = one row each; maintainer = the roster by name. Default = the first listed.
+by            total = ONE figure; org, project, tier, year = one row each; contributor, maintainer = people by name. Default = the first listed.
 project       slug of ONE project or foundation.
-subprojects   excluded | separate | combined. Default combined = the project and everything under it as ONE figure; separate = the breakdown, one row each; excluded = its own bucket only.
+subprojects   excluded | separate | combined. Default combined = the project and everything under it as ONE figure; separate = one row each; excluded = its own bucket only.
 org           legal name of ONE organization.
 subsidiaries  excluded | separate | combined. Default excluded = that account only; separate = it plus every subsidiary at any depth, one row each; combined = those folded into one.
 since, until  yyyy-mm-dd. FLOW metrics only. Omitted: contribution metrics read the trailing 365 days, the rest all time.
@@ -55,9 +55,9 @@ as_of         yyyy-mm-dd. SNAPSHOT metrics only. Omitted = today.
 order_by      a result column; - prefix = descending.
 limit         1..500. Omitted = every row.
 
-No free filter: a slice these cannot express is an explore + query question. Errors name the fix. Results carry compiled_sql and an applied block (the scope and window used).
+No free filter: a slice these cannot express is an explore + query question. Errors name the fix. Results carry compiled_sql and an applied block (scope and window used).
 
-Decks and briefings: also read read_lfx_deck_building_guidance.`
+Decks: also read read_lfx_deck_building_guidance.`
 
 // RegisterStandardMetrics registers the query_lfx_standard_metrics tool.
 func RegisterStandardMetrics(server *mcp.Server) {
@@ -88,8 +88,8 @@ func RegisterStandardMetrics(server *mcp.Server) {
 // value: omitted means every row, and 0 rows is not a question anyone asks,
 // so the lens rejects it rather than silently reading it as "no limit".
 type StandardMetricsArgs struct {
-	Metric       string `json:"metric" jsonschema:"Required. One of: memberships, new_members, membership_churn, contributors, contributions, maintainers, maintainer_contributions. Each is a fixed set of metrics, and by picks its grouping (total, org, project, tier, year or maintainer, as the metric offers) - there are no metrics/group_by parameters; slice it with project, org, their subprojects/subsidiaries switches, and since/until or as_of. FLOW metrics take since/until on their time axis; SNAPSHOT metrics take as_of. read_lfx_standard_metrics_guidance lists what each one answers, its result columns and its caveats."`
-	By           string `json:"by,omitempty" jsonschema:"How the figure is grouped, as the metric offers: total = ONE figure for the scope; org = one row per organization (account, with parent_org where the metric carries it); project = one row per project; tier = per membership tier; year = per year; maintainer = the roster, one row per named maintainer, project, employer and role. Omitted = the metric's first grouping (total, or year on the yearly metrics). A grouping the metric does not offer returns an error naming the valid ones."`
+	Metric       string `json:"metric" jsonschema:"Required. One of: memberships, new_members, membership_churn, contributors, contributions, maintainers, maintainer_contributions. Each is a fixed set of metrics, and by picks its grouping (total, org, project, tier, year, contributor or maintainer, as the metric offers) - there are no metrics/group_by parameters; slice it with project, org, their subprojects/subsidiaries switches, and since/until or as_of. FLOW metrics take since/until on their time axis; SNAPSHOT metrics take as_of. read_lfx_standard_metrics_guidance lists what each one answers, its result columns and its caveats."`
+	By           string `json:"by,omitempty" jsonschema:"How the figure is grouped, as the metric offers: total = ONE figure for the scope; org = one row per organization (account, with parent_org where the metric carries it); project = one row per project; tier = per membership tier; year = per year; contributor = one row per person by display name (contributions); maintainer = the roster (maintainers) or one row per maintainer by display name (maintainer_contributions). Omitted = the metric's first grouping (total, or year on the yearly metrics). A grouping the metric does not offer returns an error naming the valid ones."`
 	Project      string `json:"project,omitempty" jsonschema:"Optional project scope: ONE slug from search_projects, of a project or of a foundation (e.g. cncf, k8s). Stored slugs are not everyday names - resolve it, never guess it."`
 	Subprojects  string `json:"subprojects,omitempty" jsonschema:"What happens to the projects under project: combined (default) = the project plus everything under it folded into ONE figure (drops every project column the metric groups by); separate = the project plus everything under it, one row each, for a breakdown; excluded = that project's own bucket only."`
 	Org          string `json:"org,omitempty" jsonschema:"Optional organization scope: ONE legal name from search_b2b_orgs, in its stored spelling (e.g. Red Hat LLC). Resolve it, never guess it."`

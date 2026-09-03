@@ -56,9 +56,10 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
 - One-figure headlines ("how many contributors / maintainers does X have")
   → contributors, contributions, maintainers, memberships, each by=total
   (the default).
-- "Top contributors" unqualified → individuals by contribution volume,
-  recipe 10 of read_lfx_semantic_layer_guidance (ad hoc); offer the
-  organization and project leaderboards below as the follow-ups.
+- "Top contributors" unqualified → individuals by contribution volume:
+  contributions by=contributor, order_by=-code_contribution_activities,
+  limit 10-20 (personal names); offer the organization and project
+  leaderboards below as the follow-ups.
 - Contributor and maintainer leaderboards → contributions by=org (volume),
   contributors by=org (headcount), contributions by=project,
   contributors by=project (a company's projects: add org to either),
@@ -81,8 +82,9 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   'Individual - No Account' buckets are unattributed.
 - Maintainer × contribution figures (contributions made by maintainers per
   project or organization, maintainer share of work) → maintainer_contributions
-  by=project or by=org, over contributions for the same scope. Only "top
-  maintainers by contributions" as named PEOPLE is a query_lfx_lens question.
+  by=project or by=org, over contributions for the same scope; "top
+  maintainers by contributions" as named PEOPLE → maintainer_contributions
+  by=maintainer, with the same project and org switches.
 
 The inventory in read_lfx_standard_metrics_guidance is the routing surface.
 

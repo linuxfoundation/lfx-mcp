@@ -34,9 +34,12 @@ Answer four questions, then call once.
    subprojects=separate, and "which companies contribute to Kubernetes" is
    contributions by=org with project=k8s — no ad-hoc query needed.
    "TOP CONTRIBUTORS" with nothing more said means INDIVIDUALS ranked by
-   contribution volume: no standard metric ranks people, so run recipe 10
-   of read_lfx_semantic_layer_guidance (ad hoc, labelled as such) without
-   asking which reading was meant. The other common readings each have a
+   contribution volume: contributions by=contributor with
+   order_by=-code_contribution_activities and a limit — run it, do not ask
+   which reading was meant. "Top maintainers" likewise means
+   maintainer_contributions by=maintainer. Both take the scope switches, so
+   "top maintainers in CNCF from IBM" is project=cncf, org=<IBM's legal
+   name>, subsidiaries=combined. The other common readings each have a
    governed metric — name them as follow-ups, do not ask first: top
    organizations by volume = contributions by=org, by headcount =
    contributors by=org; top projects by volume = contributions by=project,
@@ -150,6 +153,7 @@ Result columns are given in the vocabulary the results come back in.
 | contributions | total | Code contribution volume over the scope, ONE figure | FLOW · activity date | code_contribution_activities | Additive; bots excluded; trailing 365 days unless since is given |
 | contributions | org | Code contribution volume per organization | FLOW · activity date | account, parent_org, code_contribution_activities | Additive; bots excluded; the NULL account row is unattributed work |
 | contributions | project | Code contribution volume per project | FLOW · activity date | project, project_name, code_contribution_activities | Additive; bots excluded; with org it is "which projects does this company work on"; the default folds it to one row — subprojects=separate for the table |
+| contributions | contributor | Code contribution volume per person, by display name — "top contributors" | FLOW · activity date | contributor, account, code_contribution_activities | Names are not identity keys; account is the one the activity resolved to; set order_by=-code_contribution_activities and a limit |
 | maintainers | total | Active maintainers over the scope, ONE figure (LF projects only) | SNAPSHOT | active_maintainers | The headline for "how many maintainers does X have" |
 | maintainers | org | Active maintainers per employer, LF projects only | SNAPSHOT | account, active_maintainers | A distinct-person count; the NULL row is maintainers with no resolved employer; subsidiaries=combined folds a company's maintainers into one distinct headcount |
 | maintainers | project | Active maintainers per project, LF projects only | SNAPSHOT | foundation, project, project_name, active_maintainers | A distinct-person count; a person maintaining two projects counts once in each; subprojects=separate for the table |
@@ -157,13 +161,14 @@ Result columns are given in the vocabulary the results come back in.
 | maintainer_contributions | total | Code contributions made by active maintainers over the scope, ONE figure | FLOW · activity date | maintainer_contributions, contributing_maintainers | Maintainership is as of the build (current roster of the activity's project), the contributions are in the window; maintainer_contributions is additive, contributing_maintainers is a distinct-person count |
 | maintainer_contributions | org | Code contributions made by active maintainers, per organization | FLOW · activity date | account, parent_org, maintainer_contributions, contributing_maintainers | Same definition per employer account; the NULL row is unattributed work; "maintainer share of work" is this figure over contributions for the same scope and window |
 | maintainer_contributions | project | Code contributions made by active maintainers, per project | FLOW · activity date | project, project_name, maintainer_contributions, contributing_maintainers | Same definition per project; the default folds it to one row — subprojects=separate for the table |
+| maintainer_contributions | maintainer | Code contributions made by active maintainers, per maintainer by display name — "top maintainers" | FLOW · activity date | maintainer, account, maintainer_contributions | Names are not identity keys; maintainership as of the build; set order_by=-maintainer_contributions and a limit |
 
 The LF-project filter is built into every maintainer headcount metric: the
 maintainers model also holds maintainers of non-LF projects, and they carry a
 project slug too, so nothing here needs to exclude them by hand.
 maintainer_contributions counts a contribution when its author is on
-the CURRENT maintainer roster of the project the activity belongs to — "top
-maintainers by contributions" as PEOPLE is still a query_lfx_lens question.
+the CURRENT maintainer roster of the project the activity belongs to;
+by=maintainer ranks those people by name.
 
 ## Organizations: account and parent_org
 
@@ -261,11 +266,14 @@ offer the breakdown or another window.
   distinct project-account pairs with an active term, and the revenue is the
   LIST PRICE of the active membership assets, not the dues actually billed.
   Present them side by side, never as a ratio.
-- maintainers by=maintainer rows are NAMES, not identities: two maintainers who share
-  a name are two rows that read as one person, and the same person appears
-  once per project, employer and role. `maintainer` is a personal name —
-  present it only where naming individuals is appropriate, and never as a
-  contact list.
+- maintainers by=maintainer, contributions by=contributor and
+  maintainer_contributions by=maintainer rows are NAMES, not identities: two
+  people who share a name read as one row, one person under two spellings
+  as two, and on the roster the same person appears once per project,
+  employer and role. On the two rankings `account` is the account the
+  activity resolved to, and the NULL account row is unattributed.
+  `maintainer` and `contributor` are personal names — present them only
+  where naming individuals is appropriate, and never as a contact list.
 - Activities carry a parent-resolved account: a contribution row's account is
   already resolved to the parent account for that project before parent_org
   applies, so it can differ from the account on the source record. The

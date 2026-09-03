@@ -158,8 +158,9 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"search_committee_members",
 		"Never infer a roster",
 		"search_past_meetings",
-		"not answerable with governed data today",
-		"disclose there is no canonical way",
+		"attendance\nRECORDS, not unique people",
+		"'Individual - No Account'",
+		"there is no account entity, so no rollup",
 		// events/training/sponsorships account entities and tiers
 		"account__account_name",
 		"NULL bucket",

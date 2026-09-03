@@ -72,6 +72,11 @@ explore_lfx_semantic_layer + query_lfx_semantic_layer.
   total_sponsorship_revenue (USD) / total_sponsorship_count, filtered
   sponsorship__sponsorship_tier_type = 'package_tier' for package-only
   revenue; group account__account_name or the rollup for sponsor rankings.
+- Meeting attendance by company, committee or meeting type over a period →
+  explore + query on attendees_count / invited_count (recipe 12 in
+  read_lfx_semantic_layer_guidance), labelled ad hoc: attendances, not unique
+  people; organizations are raw account names with no rollup, and the '' and
+  'Individual - No Account' buckets are unattributed.
 - Maintainer × contribution figures (contributions made by maintainers per
   project or organization, maintainer share of work) → maintainer_contributions
   by=project or by=org, over contributions for the same scope. Only "top
@@ -127,7 +132,6 @@ These have no governed lane. Try query_lfx_lens for them and label the
 result as generated SQL, not a governed figure; if lens cannot answer, say
 so rather than improvising a number:
 
-- Meeting attendance by company over a period.
 - Working-group rosters and official project counts (owned by other teams).
 
 ## Presentation honesty

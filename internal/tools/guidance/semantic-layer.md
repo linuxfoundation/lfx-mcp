@@ -20,8 +20,9 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   maintainers by contributions"), social listening, any-depth hierarchy
   questions no standard metric expresses, and questions no metric family
   expresses — label its answers as generated SQL.
-- Committee/board/ambassador rosters: committee tools. Meetings: meeting tools.
-  Neither is in this layer or lens's lane (recipe 12).
+- Committee/board/ambassador rosters: committee tools. Meeting lists and one
+  meeting's details: meeting tools. Meeting ATTENDANCE aggregates are in this
+  layer (recipe 12).
 
 ## Protocol
 
@@ -223,10 +224,27 @@ person-grain join only query_lfx_lens can make.
 
 12. ROSTERS AND MEETINGS. search_committees → search_committee_members (paginate;
 group-mode names: search_groups/search_group_members). Never infer a roster from
-membership or event data. Meetings: search_meetings and search_past_meetings.
-Aggregations those tools cannot express (e.g. meeting attendance by company over
-a period) are not answerable with governed data today: try query_lfx_lens as a
-best effort and disclose there is no canonical way to compute it.
+membership or event data. Meeting LISTS and one meeting's details:
+search_meetings and search_past_meetings. Meeting ATTENDANCE aggregates
+(attendance by company, committee or meeting type, over a period) are in this
+layer, on the meeting attendance model: attendees_count (attendance records
+where the invitee attended), invited_count (invited records),
+unverified_attendee_count; time axis metric_time = the meeting date. GRAIN: one
+row per invitee per meeting occurrence, so attendees_count is attendance
+RECORDS, not unique people — one person at ten meetings counts ten; say
+"attendances", never "attendees", and attendance rate is attendees_count over
+invited_count on the same slice (walk-ins attend uninvited, so the rate can
+exceed 1 on a small slice). SLICES: primary_key__meeting_type (carries both a
+'None' literal and NULL — both are untyped), primary_key__committee_type,
+primary_key__committee_name, primary_key__meeting_name, primary_key__invitee_role,
+primary_key__invitee_voting_status. PROJECTS through the conformed entity:
+project__foundation_slug for a foundation, project__slug for one project,
+project__parent_project_slug one level down. ORGANIZATIONS:
+primary_key__account_name is the invitee's account as the source spelled it —
+there is no account entity, so no rollup, no subsidiaries, and recipe 6's
+acronym trap applies; two buckets are not companies: '' (no account) and
+'Individual - No Account' — report both as unattributed. No standard metric
+covers meetings: compose them here and label the figure ad hoc.
 
 13. REGIONS. country__* follows the person; organization_lf_region etc. follow the org's HQ.
 

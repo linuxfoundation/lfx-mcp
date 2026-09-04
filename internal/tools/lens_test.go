@@ -6,10 +6,12 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -37,6 +39,12 @@ type capturedLensRequest struct {
 // lensConfig is a package-level global.
 func setupLensTest(t *testing.T) *capturedLensRequest {
 	t.Helper()
+	return setupLensTestResponding(t, `{"ok": true}`)
+}
+
+// setupLensTestResponding is setupLensTest with a chosen JSON response body.
+func setupLensTestResponding(t *testing.T, response string) *capturedLensRequest {
+	t.Helper()
 
 	captured := &capturedLensRequest{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +55,7 @@ func setupLensTest(t *testing.T) *capturedLensRequest {
 		captured.Body = body
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok": true}`))
+		_, _ = w.Write([]byte(response))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -599,6 +607,77 @@ func schemaPropertyDescription(t *testing.T, tool *mcp.Tool, property string) st
 	return prop.Description
 }
 
+// schemaPropertyType returns the JSON-schema type of one input property. The
+// SDK emits an optional slice as type ["null","array"]; the non-null member is
+// what a client reads, so that is what this returns.
+func schemaPropertyType(t *testing.T, tool *mcp.Tool, property string) string {
+	t.Helper()
+	return schemaProperty(t, tool, property).Type.nonNull()
+}
+
+// schemaArrayItemType returns the item type of an array-typed input property.
+func schemaArrayItemType(t *testing.T, tool *mcp.Tool, property string) string {
+	t.Helper()
+	prop := schemaProperty(t, tool, property)
+	if prop.Items == nil {
+		t.Fatalf("input schema property %q has no items", property)
+	}
+	return prop.Items.Type.nonNull()
+}
+
+// schemaType accepts both the scalar ("string") and list (["null","array"])
+// spellings of a JSON-schema type.
+type schemaType []string
+
+func (st *schemaType) UnmarshalJSON(b []byte) error {
+	var one string
+	if err := json.Unmarshal(b, &one); err == nil {
+		*st = schemaType{one}
+		return nil
+	}
+	var many []string
+	if err := json.Unmarshal(b, &many); err != nil {
+		return err
+	}
+	*st = schemaType(many)
+	return nil
+}
+
+func (st schemaType) nonNull() string {
+	for _, v := range st {
+		if v != "null" {
+			return v
+		}
+	}
+	return ""
+}
+
+type schemaPropertyShape struct {
+	Type  schemaType `json:"type"`
+	Items *struct {
+		Type schemaType `json:"type"`
+	} `json:"items"`
+}
+
+func schemaProperty(t *testing.T, tool *mcp.Tool, property string) schemaPropertyShape {
+	t.Helper()
+	raw, err := json.Marshal(tool.InputSchema)
+	if err != nil {
+		t.Fatalf("failed to marshal input schema: %v", err)
+	}
+	var schema struct {
+		Properties map[string]schemaPropertyShape `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatalf("failed to parse input schema: %v", err)
+	}
+	prop, ok := schema.Properties[property]
+	if !ok {
+		t.Fatalf("input schema has no %q property", property)
+	}
+	return prop
+}
+
 func TestRegisterSemanticLayer_Schema(t *testing.T) {
 	explore := listExploreTool(t)
 	query := listQueryTool(t)
@@ -734,8 +813,8 @@ func TestQueryLFXLens_StdioNilExtraUsesAnonymous(t *testing.T) {
 	captured := setupLensTest(t)
 
 	res, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
-		ProjectSlug: "cncf",
-		Input:       "how many contributors last year?",
+		ProjectSlugs: []string{"cncf"},
+		Input:        "how many contributors last year?",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -748,19 +827,24 @@ func TestQueryLFXLens_StdioNilExtraUsesAnonymous(t *testing.T) {
 	}
 }
 
-// TestQueryLFXLensScopeIsContextNotBoundary pins the staff-only cross-project
-// contract. project_slug remains required as a default context for the Lens
-// workflow, but it must not be described as an authorization or scope boundary.
-func TestQueryLFXLensScopeIsContextNotBoundary(t *testing.T) {
+// TestQueryLFXLensScopeIsOptionalAndExplicit pins the scope contract that
+// replaced the required "default context" slug. That parameter, documented as
+// "not a scope boundary" with 'tlf' recommended for LF-wide questions, was
+// read by the lens agent as its compulsory scope: an LF-wide country count
+// became the 'tlf' bucket's 96 countries instead of 140. project_slugs is now
+// optional; omitted means no project or foundation filter at all, several
+// slugs are one OR'd scope, unknown slugs are rejected, and nothing here names
+// tlf.
+func TestQueryLFXLensScopeIsOptionalAndExplicit(t *testing.T) {
 	tool := listRegisteredTool(t, "query_lfx_lens", RegisterQueryLFXLens)
 
 	for _, want := range []string{
-		"project_slug is required default context, NOT a scope boundary",
-		"Find it via search_projects",
-		"For multiple foundations",
-		"name the others in input",
-		"LF-wide",
-		"project_slug='tlf'",
+		"project_slugs is optional",
+		"Omit it for LF-wide",
+		"no project or foundation filter",
+		"several slugs are combined",
+		"Unknown slugs are rejected",
+		"Every answer opens with the scope it ran with",
 		// Lens generates its own SQL and picks arbitrary windows when the
 		// question leaves them open — the description must carry the default
 		// window convention and require concrete dates in the question.
@@ -777,23 +861,257 @@ func TestQueryLFXLensScopeIsContextNotBoundary(t *testing.T) {
 	}
 
 	required := schemaRequired(t, tool)
-	for _, want := range []string{"project_slug", "input"} {
-		if !contains(required, want) {
-			t.Errorf("query_lfx_lens required = %v; expected %s to remain compulsory", required, want)
+	if len(required) != 1 || required[0] != "input" {
+		t.Errorf("query_lfx_lens required = %v; want exactly [input]", required)
+	}
+	if contains(schemaProperties(t, tool), "project_slug") {
+		t.Error("query_lfx_lens still exposes project_slug; a stale client must get a schema error, not a silent rescope")
+	}
+	if !contains(schemaProperties(t, tool), "project_slugs") {
+		t.Fatal("query_lfx_lens schema lacks project_slugs")
+	}
+	if got := schemaPropertyType(t, tool, "project_slugs"); got != "array" {
+		t.Errorf("project_slugs type = %q; want array", got)
+	}
+	if got := schemaArrayItemType(t, tool, "project_slugs"); got != "string" {
+		t.Errorf("project_slugs items type = %q; want string", got)
+	}
+
+	slugs := schemaPropertyDescription(t, tool, "project_slugs")
+	for _, want := range []string{
+		"Optional",
+		"Exact project slugs from search_projects",
+		"Omit for LF-wide questions",
+		"no project or foundation filter is applied",
+		"combined (OR)",
+		"Unknown slugs are rejected",
+	} {
+		if !strings.Contains(slugs, want) {
+			t.Errorf("project_slugs schema description missing %q: %q", want, slugs)
 		}
 	}
 
-	slug := schemaPropertyDescription(t, tool, "project_slug")
-	for _, want := range []string{
-		"Required default context slug",
-		"not a scope boundary",
-		"name the others in input",
-		"'tlf' for LF-wide questions",
+	input := schemaPropertyDescription(t, tool, "input")
+	for name, text := range map[string]string{
+		"description":   tool.Description,
+		"project_slugs": slugs,
+		"input":         input,
 	} {
-		if !strings.Contains(slug, want) {
-			t.Errorf("project_slug schema description missing %q: %q", want, slug)
+		for _, unwanted := range []string{"tlf", "default context", "scope boundary", "project_slug="} {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("query_lfx_lens %s still carries %q", name, unwanted)
+			}
 		}
 	}
+}
+
+// TestQueryLFXLensNoSlugsSendsAnEmptyList: LF-wide is an explicit empty list
+// in additional_data, never an absent key the lens might fill with a default.
+func TestQueryLFXLensNoSlugsSendsAnEmptyList(t *testing.T) {
+	captured := setupLensTest(t)
+
+	res, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+		Input: "How many countries have active member organisations?",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error result: %s", resultText(t, res))
+	}
+
+	additional := lensAdditionalData(t, captured)
+	if additional != `{"project_slugs":[]}` {
+		t.Errorf("additional_data = %s; want {\"project_slugs\":[]}", additional)
+	}
+	if strings.Contains(additional, "foundation") || strings.Contains(additional, "tlf") {
+		t.Errorf("additional_data still carries the legacy foundation shape or tlf: %s", additional)
+	}
+}
+
+// TestQueryLFXLensNormalisesTheSlugList: whitespace trimmed, empties dropped,
+// duplicates removed, order kept, case untouched (stored slugs are exact).
+func TestQueryLFXLensNormalisesTheSlugList(t *testing.T) {
+	captured := setupLensTest(t)
+
+	_, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+		ProjectSlugs: []string{" c2pa ", "", "c2pa-fund", "c2pa", "  ", "CNCF"},
+		Input:        "How many active memberships does C2PA have?",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := lensAdditionalData(t, captured); got != `{"project_slugs":["c2pa","c2pa-fund","CNCF"]}` {
+		t.Errorf("additional_data = %s", got)
+	}
+}
+
+func TestQueryLFXLensSixSlugsPassThrough(t *testing.T) {
+	captured := setupLensTest(t)
+
+	slugs := []string{"cncf", "lf-ai-foundation", "openssf", "lfedge", "lfenergy", "openjs"}
+	if _, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+		ProjectSlugs: slugs,
+		Input:        "How many active memberships does each have?",
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var got lensWorkflowAdditional
+	if err := json.Unmarshal([]byte(lensAdditionalData(t, captured)), &got); err != nil {
+		t.Fatalf("additional_data is not JSON: %v", err)
+	}
+	if strings.Join(got.ProjectSlugs, ",") != strings.Join(slugs, ",") {
+		t.Errorf("project_slugs = %v; want %v", got.ProjectSlugs, slugs)
+	}
+}
+
+func TestQueryLFXLensRequiresInputOnly(t *testing.T) {
+	setupLensTest(t)
+
+	if _, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+		ProjectSlugs: []string{"cncf"},
+		Input:        "   ",
+	}); err == nil || !strings.Contains(err.Error(), "input is required") {
+		t.Errorf("expected an input-required error, got %v", err)
+	}
+}
+
+// TestQueryLFXLensUnknownSlugIsAnError: the lens completes the run (status
+// COMPLETED) with the rejection as its whole content and no query executed.
+// That must reach the caller as an error with the lens text unchanged, not as
+// an answer.
+func TestQueryLFXLensUnknownSlugIsAnError(t *testing.T) {
+	const rejection = "Unknown project slug(s): no-such-slug-xyz. Pass exact slugs from search_projects, or omit project_slugs for an LF-wide answer."
+	setupLensTestResponding(t, `{"content":`+strconv.Quote(rejection)+`,"status":"COMPLETED","session_id":"s"}`)
+
+	res, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+		ProjectSlugs: []string{"c2pa", "no-such-slug-xyz"},
+		Input:        "How many active memberships does C2PA have?",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected an IsError result for an unknown slug")
+	}
+	if got := resultText(t, res); got != rejection {
+		t.Errorf("rejection text changed:\n got: %q\nwant: %q", got, rejection)
+	}
+}
+
+// The other two rejections the lens can return are errors too, and a caller
+// can tell them apart by their opener.
+func TestQueryLFXLensOtherRejectionsAreErrors(t *testing.T) {
+	for _, rejection := range []string{
+		"Invalid project_slugs: at most 25 slugs per call (30 given). Pass a list of exact slugs from search_projects, or omit project_slugs for an LF-wide answer.",
+		"Project scope could not be resolved: the warehouse lookup failed (OperationalError). The slugs may be correct; retry, or omit project_slugs for an LF-wide answer.",
+	} {
+		setupLensTestResponding(t, `{"content":`+strconv.Quote(rejection)+`,"status":"COMPLETED","session_id":"s"}`)
+
+		res, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+			ProjectSlugs: []string{"cncf"},
+			Input:        "How many members do we have?",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !res.IsError {
+			t.Errorf("expected IsError for %q", rejection[:30])
+		}
+		if got := resultText(t, res); got != rejection {
+			t.Errorf("rejection text changed: %q", got)
+		}
+	}
+}
+
+// Oversized or malformed lists are argument errors here, before the lens is
+// called, and the offending value is not echoed back.
+func TestQueryLFXLensRejectsOversizedSlugLists(t *testing.T) {
+	captured := setupLensTest(t)
+
+	tooMany := make([]string, 0, maxLensProjectSlugs+1)
+	for i := 0; i <= maxLensProjectSlugs; i++ {
+		tooMany = append(tooMany, fmt.Sprintf("slug-%d", i))
+	}
+	cases := map[string][]string{
+		"too many":      tooMany,
+		"too long":      {strings.Repeat("x", maxLensSlugLength+1)},
+		"control chars": {"cncf\nDROP"},
+		"tab in slug":   {"cn\tcf"},
+	}
+	for name, slugs := range cases {
+		_, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+			ProjectSlugs: slugs,
+			Input:        "How many members?",
+		})
+		if err == nil || !strings.HasPrefix(err.Error(), "project_slugs:") {
+			t.Errorf("%s: expected a project_slugs argument error, got %v", name, err)
+		}
+		if strings.Contains(err.Error(), "xxxx") || strings.Contains(err.Error(), "DROP") {
+			t.Errorf("%s: error echoes the offending value: %q", name, err)
+		}
+		if captured.Body != nil {
+			t.Errorf("%s: the lens was called with an invalid list", name)
+		}
+	}
+
+	// exactly the cap, with duplicates that collapse under it, is fine
+	atCap := make([]string, 0, maxLensProjectSlugs+2)
+	for i := 0; i < maxLensProjectSlugs; i++ {
+		atCap = append(atCap, fmt.Sprintf("slug-%d", i))
+	}
+	atCap = append(atCap, "slug-0", " slug-1 ")
+	if _, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+		ProjectSlugs: atCap,
+		Input:        "How many members?",
+	}); err != nil {
+		t.Errorf("a list at the cap must pass, got %v", err)
+	}
+}
+
+// A normal completed answer, scope line and all, is not an error.
+func TestQueryLFXLensCompletedAnswerIsNotAnError(t *testing.T) {
+	const answer = "**scope**: LF-wide — no project filter applied.\n\n### Countries\n| N |\n| --- |\n| 140 |"
+	setupLensTestResponding(t, `{"content":`+strconv.Quote(answer)+`,"status":"COMPLETED","session_id":"s"}`)
+
+	res, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+		Input: "How many countries have active member organisations?",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error result: %s", resultText(t, res))
+	}
+	if got := resultText(t, res); got != answer {
+		t.Errorf("answer changed: %q", got)
+	}
+}
+
+// lensAdditionalData returns the additional_data multipart field of the
+// captured workflow request.
+func lensAdditionalData(t *testing.T, captured *capturedLensRequest) string {
+	t.Helper()
+	body := string(captured.Body)
+	marker := "name=\"additional_data\""
+	i := strings.Index(body, marker)
+	if i < 0 {
+		t.Fatalf("no additional_data field in body: %s", body)
+	}
+	rest := body[i+len(marker):]
+	// Skip the header/body separator, then read to the next boundary.
+	sep := strings.Index(rest, "\r\n\r\n")
+	if sep < 0 {
+		t.Fatalf("additional_data field has no header/body separator: %s", body)
+	}
+	rest = rest[sep+4:]
+	end := strings.Index(rest, "\r\n--")
+	if end < 0 {
+		t.Fatalf("unterminated additional_data field: %s", body)
+	}
+	return rest[:end]
 }
 
 // TestQueryLFXLensDoesNotClaimMemberships guards the other half of the routing

@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/serviceapi"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -47,7 +48,7 @@ FALLBACK (the only other use): switch here only when the semantic layer genuinel
 
 Everything else - contributors, activities, memberships, events and sponsorships, registrations, education, maintainer rosters/counts/names, health, social listening (mentions, sentiment, reach) - belongs to explore_lfx_semantic_layer + query_lfx_semantic_layer. Committee/board rosters: the committee tools.
 
-project_slug is required default context, NOT a scope boundary. Find it via search_projects. For multiple foundations, pass one slug and name the others in input. LF-wide: use project_slug='tlf'.
+project_slugs is optional. Omit it for LF-wide questions: no project or foundation filter is applied. Pass exact slugs from search_projects to scope to them; several slugs are combined, so a JDF series plus its -fund parent, or a multi-foundation comparison, is one call. Unknown slugs are rejected. Every answer opens with the scope it ran with.
 
 Runs synchronously; wait 15-30 seconds without retrying. Returns <=200 rows; request explicit pagination ("page 2", or stable ORDER BY with LIMIT/OFFSET). Windows: default trailing 12 months; state concrete yyyy-mm-dd dates or the SQL picks its own.`,
 		Annotations: &mcp.ToolAnnotations{
@@ -58,18 +59,48 @@ Runs synchronously; wait 15-30 seconds without retrying. Returns <=200 rows; req
 }
 
 // QueryLFXLensArgs defines the input for query_lfx_lens.
+//
+// project_slugs is an optional list, not a required default: a required
+// "context" slug documented as "not a scope boundary" was read by the lens
+// agent as its compulsory scope, so LF-wide questions silently became one
+// bucket's figures (the 'tlf' catch-all is about a quarter of memberships, not
+// the LF root). With no slugs the lens applies no project or foundation filter
+// at all; with slugs it scopes to exactly those, OR'd; unknown slugs are
+// rejected by name resolution before any query runs. The old project_slug
+// field is gone rather than mapped: a stale client sending it gets a visible
+// schema error instead of a silently rescoped answer.
 type QueryLFXLensArgs struct {
-	ProjectSlug string `json:"project_slug" jsonschema:"Required default context slug from search_projects, not a scope boundary. For multiple foundations, pass one here and name the others in input; use 'tlf' for LF-wide questions."`
-	Input       string `json:"input" jsonschema:"Natural language question. Use for past-date or by-year membership counts, cross-domain joins and shapes no standard metric expresses; the standard metrics already rank people (top contributors, top maintainers). Contributor, activity, membership, event, education, health and social listening questions belong to the semantic layer and its standard metrics - read read_lfx_semantic_layer_guidance before falling back here. Takes 15-30s. (required)"`
+	ProjectSlugs []string `json:"project_slugs,omitempty" jsonschema:"Optional. Exact project slugs from search_projects. Omit for LF-wide questions: no project or foundation filter is applied. Several slugs are combined (OR): a JDF series plus its -fund parent, or several foundations to compare, is one call. Unknown slugs are rejected before any query runs."`
+	Input        string   `json:"input" jsonschema:"Natural language question. Use for past-date or by-year membership counts, cross-domain joins and shapes no standard metric expresses; the standard metrics already rank people (top contributors, top maintainers). Contributor, activity, membership, event, education, health and social listening questions belong to the semantic layer and its standard metrics - read read_lfx_semantic_layer_guidance before falling back here. Takes 15-30s. (required)"`
 }
 
+// lensWorkflowAdditional is the additional_data the lens MCP workflow reads.
+// project_slugs is always present — [] for LF-wide — so the lens never has to
+// guess whether an absent key means "no scope" or "old client".
 type lensWorkflowAdditional struct {
-	Foundation lensFoundation `json:"foundation"`
+	ProjectSlugs []string `json:"project_slugs"`
 }
 
-type lensFoundation struct {
-	Slug string `json:"slug"`
+// lensRejectionPrefixes open the lens's scope rejections: a slug with no
+// PROJECT_SPINE row, a malformed list, or a failed warehouse lookup. The lens
+// completes such a run (status COMPLETED) with the rejection as its whole
+// content — no agent ran, no query executed — so the prefix is how this side
+// tells a rejection from an answer. Kept as three so a caller can tell "your
+// slug is wrong" from "the warehouse was down; retry". Pinned by tests on both
+// sides (lfx-lens resolve_lfx_lens_mcp_scope.REJECTION_PREFIXES).
+var lensRejectionPrefixes = []string{
+	"Unknown project slug",
+	"Invalid project_slugs",
+	"Project scope could not be resolved",
 }
+
+// Bounds on project_slugs, applied here so an oversized list never reaches
+// the lens: every slug costs it warehouse work. The largest legitimate scope
+// is a handful of foundations to compare. The lens enforces the same limits.
+const (
+	maxLensProjectSlugs = 25
+	maxLensSlugLength   = 128
+)
 
 type lensQueryResponse struct {
 	Content    string `json:"content,omitempty"`
@@ -86,8 +117,13 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 		return nil, nil, fmt.Errorf("LFX Lens tools not configured")
 	}
 
-	if args.ProjectSlug == "" || args.Input == "" {
-		return nil, nil, fmt.Errorf("project_slug and input are required")
+	if strings.TrimSpace(args.Input) == "" {
+		return nil, nil, fmt.Errorf("input is required")
+	}
+
+	slugs, err := normalizeSlugs(args.ProjectSlugs)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	userID := AnonymousUserID
@@ -98,7 +134,7 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 	sessionID := userID + "-" + time.Now().UTC().Format("2006-01-02T15:04:05Z")
 
 	additionalData, err := json.Marshal(lensWorkflowAdditional{
-		Foundation: lensFoundation{Slug: args.ProjectSlug},
+		ProjectSlugs: slugs,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal additional_data: %w", err)
@@ -132,9 +168,65 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 		}, nil, nil
 	}
 
+	// A scope rejection is not an answer: the lens stopped before the agent
+	// ran and no query executed. Surface it as an error, text unchanged, so
+	// the caller re-resolves the slug (or retries) instead of reading the
+	// message as data.
+	if isLensRejection(resp.Content) {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: resp.Content}},
+			IsError: true,
+		}, nil, nil
+	}
+
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: resp.Content}},
 	}, nil, nil
+}
+
+// isLensRejection reports whether lens content is a scope rejection rather
+// than an answer. Real answers open with "**scope**:", so a prefix match on
+// the rejection openers cannot mistake one for the other.
+func isLensRejection(content string) bool {
+	trimmed := strings.TrimSpace(content)
+	for _, prefix := range lensRejectionPrefixes {
+		if strings.HasPrefix(trimmed, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeSlugs trims, drops empties and de-duplicates preserving order. No
+// case folding and no fuzzy matching: stored slugs are exact and
+// search_projects is the resolver. Always returns a non-nil slice so the JSON
+// carries [] rather than null. An over-long list, an over-long slug or a slug
+// with control characters is an argument error; the offending value is not
+// echoed.
+func normalizeSlugs(slugs []string) ([]string, error) {
+	out := make([]string, 0, len(slugs))
+	seen := make(map[string]struct{}, len(slugs))
+	for _, s := range slugs {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if len(s) > maxLensSlugLength {
+			return nil, fmt.Errorf("project_slugs: a slug exceeds %d bytes", maxLensSlugLength)
+		}
+		if strings.ContainsFunc(s, unicode.IsControl) {
+			return nil, fmt.Errorf("project_slugs: a slug contains control characters")
+		}
+		if _, dup := seen[s]; dup {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	if len(out) > maxLensProjectSlugs {
+		return nil, fmt.Errorf("project_slugs: at most %d slugs per call (%d given)", maxLensProjectSlugs, len(out))
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -420,26 +420,18 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 			tools: []*mcp.Tool{listStandardMetricsTool(t)},
 			tokens: []token{
 				{"read_lfx_standard_metrics_guidance", "the standard metric inventory is only reachable if the tool routes the model to it"},
-				{"memberships", "standard metric names cannot be guessed, and the inventory reaches the model only here"},
-				// The domain grouping is what tells a caller whether this
-				// tool covers its question at all, so each domain line is
-				// pinned by name.
-				{"memberships (SNAPSHOT): total | org | tier", "the membership inventory, its shape and its groupings reach the model only here"},
-				{"contributors (FLOW): total | org | project", "the contribution inventory, its shape and its groupings reach the model only here"},
-				{"maintainers (SNAPSHOT): total | org | project | maintainer", "the maintainer inventory, its shape and its groupings reach the model only here"},
-				{"maintainer_contributions (FLOW): total | org | project | maintainer", "the maintainer-contribution inventory reaches the model only here"},
+				{"BEFORE the first call", "the guidance defines every grouping, switch and default; the description only routes to it"},
+				// The family names tell a caller whether this tool covers
+				// its question at all, so the whole inventory is pinned:
+				// on the description AND on the required metric parameter.
+				{"STANDARD METRICS memberships, new_members, membership_churn, contributors, contributions, contributing_organizations, participants, maintainers, maintainer_contributions, project_health, software_value, event_registrations, event_sponsorships, speakers, training_enrollments, certifications, social_mentions, social_reach.", "the family inventory reaches the model only here"},
 				{"search_projects", "project takes the stored slug; an everyday name silently misses"},
 				{"search_b2b_orgs", "org takes the stored legal name; a short name silently misses"},
-				{"subprojects", "what a project name covers is a choice the caller has to be told about"},
-				{"subsidiaries", "what an organization name covers is a choice the caller has to be told about"},
-				{"Default combined", "the subprojects default folds the tree into one figure"},
-				{"Default excluded", "the subsidiaries default changes which rows come back"},
-				{"trailing 365 days", "the contribution window default is applied silently otherwise"},
-				{"applied block", "the response says which defaults ran; the model must know to read it"},
-				{"yyyy-mm-dd", "date format silently returns wrong rows if guessed"},
-				{"Omitted = every row", "an omitted limit returns the complete set"},
-				{"FLOW", "since/until on the wrong shape is rejected, not silently ignored"},
-				{"SNAPSHOT", "as_of on the wrong shape is rejected, not silently ignored"},
+				{"never pass a name they have not returned", "a guessed literal is a confident wrong answer, not an error"},
+				{"start_date, end_date and period", "the three date parameters replace since/until/as_of; a caller on the old contract must learn the new words here"},
+				{"WINDOW", "the two kinds decide what end_date means; the model must know there are two"},
+				{"AT-DATE", "the two kinds decide what end_date means; the model must know there are two"},
+				{"state on end_date", "an at-date family reports a state, not a count between dates"},
 			},
 		},
 	} {

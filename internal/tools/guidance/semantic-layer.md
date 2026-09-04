@@ -16,12 +16,11 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   company's subsidiaries and a project's tree at ANY depth, which this layer
   does not (see REACH under Scope). Inventory:
   read_lfx_standard_metrics_guidance.
-- query_lfx_lens (text-to-SQL): membership counts as of a PAST date or by
-  year (memberships is a today-only snapshot), cross-domain joins, and
-  any-depth hierarchy questions no standard metric expresses — label its
-  answers as generated SQL. Social listening aggregates (recipe 16) and
-  people rankings (top contributors, top maintainers) are not lens
-  questions.
+- query_lfx_lens (text-to-SQL): cross-domain joins and hierarchy questions no
+  standard metric expresses — label its answers as generated SQL. Membership
+  counts as of a past date or by year, social listening aggregates, event,
+  training and health figures, and people rankings (top contributors, top
+  maintainers) are standard metrics, not lens questions.
 - Committee/board/ambassador rosters: committee tools. Meeting lists and one
   meeting's details: meeting tools. Meeting ATTENDANCE aggregates are in this
   layer (recipe 12).
@@ -253,57 +252,65 @@ covers meetings: compose them here and label the figure ad hoc.
 
 13. REGIONS. country__* follows the person; organization_lf_region etc. follow the org's HQ.
 
-14. EVENTS/TRAINING/SPONSORSHIPS BY ORG. No standard metric covers these —
-compose them here. METRICS: total_registrations counts ACCEPTED registrations
-only; total_enrollments counts enrollment records only (the source table is
-mostly other lifecycle events, and the metric filters them out) — neither
-needs a status filter of your own. Sponsorships: total_sponsorship_revenue
-(USD) and total_sponsorship_count include ALL tier types — filter
-sponsorship__sponsorship_tier_type = 'package_tier' for package-only figures
-('a_la_carte' and 'billing_adjustment' are the others). ACCOUNT LENS: the
-account entity spans all three — group or filter account__account_name, or
-account__account_rollup_name for the parent (recipe 6). ATTACHMENT: all three
-attach at foundation level, so scope them with project__foundation_slug; a
-leaf project's own slug returns NOTHING, which is the attachment, not missing
-data. TIME AXES: registrations carry two — registration_id__event_start_date,
-where a window means "events in the window", and metric_time, the sign-up
+14. EVENTS/TRAINING/SPONSORSHIPS. The standard metrics event_registrations,
+event_sponsorships, speakers, training_enrollments and certifications cover
+the common readings (by total, event, org, course) — prefer them. Compose
+here only for a slice they lack. METRICS: total_registrations counts
+ACCEPTED registrations only; total_enrollments counts enrollment records only
+(the source table is mostly other lifecycle events, and the metric filters
+them out) — neither needs a status filter of your own. Sponsorships:
+total_sponsorship_revenue (USD) and total_sponsorship_count include ALL tier
+types — filter sponsorship__sponsorship_tier_type = 'package_tier' for
+package-only figures ('a_la_carte' and 'billing_adjustment' are the others).
+ACCOUNT LENS: the account entity spans registrations, sponsorships and
+enrollments — group or filter account__account_name, or
+account__account_rollup_name for the parent (recipe 6); speakers carry no
+account entity. ATTACHMENT: all three attach at foundation level, so
+scope them with project__foundation_slug; a leaf project's own slug returns NOTHING,
+which is the attachment, not missing data. TIME AXES: registrations
+carry two — registration_id__event_start_date, where a window means "events
+in the window" (what the standard metric uses), and metric_time, the sign-up
 date; pick the one the question means and say which. Enrollments use
-metric_time. PER EVENT: total_registrations by event_id__event_name +
-registration_id__event_start_date__year. PER COURSE: total_enrollments by
-enrollment_id__course_name + enrollment_id__product_type. FLOORS: edX
+metric_time. PER EVENT ad hoc: total_registrations by event_id__event_name +
+registration_id__event_start_date__year. PER COURSE ad hoc: total_enrollments
+by enrollment_id__course_name + enrollment_id__product_type. FLOORS: edX
 enrollments carry no account and land in the NULL bucket, and a share of
 registrations has no account either, so every org-scoped figure here is a
 floor — present "attributed registrations/enrollments" and say so.
 
-15. STANDARD METRIC CALLS take uniform parameters — metric, by, project +
-subprojects (excluded|separate|combined, default combined), org + subsidiaries
-(excluded|separate|combined, default excluded), since/until on FLOW metrics,
-as_of on SNAPSHOT ones, order_by, limit. The seven, with their groupings
-(by): memberships (total | org | tier), new_members (year), membership_churn
-(year), contributors (total | org | project), contributions (total | org |
-project | contributor), maintainers (total | org | project | maintainer),
-maintainer_contributions (total | org | project | maintainer); by left out
-is the first
-listed, and the scope supplies the other axis (by=project with org = that
-company's projects; by=org with project = that project's companies).
-SNAPSHOT (as_of, today only; a past membership count is a query_lfx_lens
-question): memberships, maintainers. FLOW (since/until):
-new_members, membership_churn, contributors, contributions,
-maintainer_contributions. The
-switches say what a name covers: excluded = that project or account alone,
-separate = it and everything under it one row each (the breakdown), combined
-= folded into one row (subprojects=combined folds every project column of
-the result). The DEFAULTS are the plain reading: a project name alone is its
-whole tree as ONE figure, an organization name alone is that account, and a
-contribution metric with no since is the trailing 365 days; every result
-carries an applied block saying which scope and window ran. A briefing
-usually wants the headline and the breakdown — two calls. DEPTH: on every
-standard metric, separate and combined cover a named node's tree and a
-company's subsidiaries at ANY depth — deeper than this layer's own
-dimensions reach (REACH, above). Results come back in the same words
-(account, parent_org, project, foundation, year), and order_by takes them.
-There is no free filter on a standard metric: a slice the switches and the
-window cannot express is an explore + query question, and its answer is
+15. STANDARD METRIC CALLS take uniform parameters on every family — metric,
+by, project + subprojects (excluded|separate|combined, default combined), org
++ subsidiaries (excluded|separate|combined, default excluded), start_date,
+end_date, period (day|week|month|quarter|year), order_by, limit; there is no
+since, until or as_of. The families: memberships, new_members,
+membership_churn, contributors, contributions, contributing_organizations,
+participants, maintainers, maintainer_contributions, project_health,
+software_value, event_registrations, event_sponsorships, speakers,
+training_enrollments, certifications, social_mentions, social_reach; their
+groupings (by) are in read_lfx_standard_metrics_guidance. by left out is the
+first listed, and the scope supplies the other axis (by=project with org =
+that company's projects; by=org with project = that project's companies).
+Two kinds: a WINDOW family counts between start_date and end_date, and period
+adds one row per period; an AT-DATE family (memberships, maintainers,
+project_health, software_value) reports the state on end_date, and with
+period the state at each period end — "members at the end of 2022" and
+"members at each year end" are memberships with end_date, or with start_date
++ period=year; no lens call needed. Every date is a UTC calendar day;
+end_date defaults to today. The switches say what a name covers: excluded =
+that project or account alone, separate = it and everything under it one row
+each (the breakdown), combined = folded into one row (subprojects=combined
+folds every project column of the result). The
+DEFAULTS are the plain reading: a project name alone is its whole tree as ONE figure, an
+organization name alone is that account, and an activity family with no
+start_date is the trailing 365 days; every result carries an applied block
+saying which scope, dates and definition ran. A briefing usually wants the
+headline and the breakdown — two calls. DEPTH: on every standard metric,
+separate and combined cover a named node's tree and a company's subsidiaries
+at ANY depth — deeper than this layer's own dimensions reach (REACH, above).
+Results come back in the same words (account, parent_org, project,
+foundation, period), and order_by takes them.
+There is no free filter on a standard metric: a slice the switches, the dates and
+the period cannot express is an explore + query question, and its answer is
 labelled ad hoc.
 
 16. SOCIAL LISTENING lives here: mentions of a project across social and web

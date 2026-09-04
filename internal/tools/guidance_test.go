@@ -5,6 +5,7 @@ package tools
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -79,292 +80,188 @@ func TestGuidanceHandlers_ReturnTheDocuments(t *testing.T) {
 	}
 }
 
-// TestSemanticLayerGuidanceContent pins the doctrine: every recipe verified
-// against the live layer during the August 2026 evals, plus the failure
-// modes the 2026-08-31 post-deploy eval rounds surfaced (rollup direction,
-// person-grain rankings, events/training account dimensions, LF-wide scope,
-// one-hop standard metric recipe filters).
-func TestSemanticLayerGuidanceContent(t *testing.T) {
-	text := semanticLayerGuidance
-	for _, want := range []string{
-		// windows and membership parity
-		"trailing 12 months",
-		"membership counts as of a PAST date or by\n  year",
-		"no metric, dimension or\ncolumn names, keys, SQL or tool names",
-		"asset_id__end_date",
-		"current_membership_count",
-		"future-dated",
-		// scoping and hierarchy
-		"project__foundation_slug",
-		"spine_hierarchy_level = 2",
-		"risc-v-international/riscv",
-		"There is no separate project parameter",
-		"conformed lens",
-		"asset_id__project_slug",
-		"carry the conformed project entity",
-		"event_id__project_name",
-		"maintainer_key__project_slug",
-		"returns ZERO",
-		"health_metric_key__foundation_slug",
-		"counts only, never sums",
-		"__segment_slug",
-		"PCC-style foundation rollups",
-		`"Direct children of X"`,
-		// LF-wide scope ambiguity (round-2 eval divergence)
-		"'tlf' slug is the umbrella",
-		// syntax
-		"metric_time__year",
-		"yyyy-mm-dd",
-		"omitted = EVERY row",
-		// value discovery
-		"'Asia Pacific'",
-		"Viet Nam",
-		"asset_id__billing_country",
-		"zero rows",
-		// bots
-		"member_is_bot",
-		"bot_activities",
-		"roughly 1.8x",
-		// org shares and headcounts
-		"org-ATTRIBUTED",
-		"Individual - No Account",
-		"2-4x",
-		// name discovery and rollups
-		"International Business Machines Corporation",
-		"Red Hat LLC",
-		"account__account_rollup_name",
-		"subsidiaries INTO parents",
-		// tiers, health, value
-		"Premier Membership",
-		"Critical <20, Unsteady",
-		"total_software_value",
-		"COCOMO",
-		// populations, maintainers, regions, person grain
-		"total_contributors_with_collaboration",
-		"2000-01-01 sentinel",
-		"maintainer_key__is_lf_project",
-		"organization_lf_region",
-		"activity_project_id__member_display_name",
-		"not identity keys",
-		// governance and meetings routing
-		"search_committees",
-		"search_committee_members",
-		"Never infer a roster",
-		"search_past_meetings",
-		"attendance\nRECORDS, not unique people",
-		"'Individual - No Account'",
-		"there is no account entity, so no rollup",
-		// events/training/sponsorships account entities and tiers
-		"account__account_name",
-		"NULL bucket",
-		"sponsorship__sponsorship_tier_type",
-		"'package_tier'",
-		// governed org-attribution filter, and the account-attributed superset
-		"activity_project_id__is_org_contribution = true",
-		"SUPERSET of is_org_contribution",
-		// account vs rollup doctrine, in full, once
-		"is its parent",
-		"returns only what rolls up to THAT subsidiary",
-		"Red Hat LLC is itself a rollup parent",
-		"Always filter the TOP\nparent",
-		"value-searching 'IBM' finds",
-		"their OWN rollup",
-		"headcounts may NOT",
-		// the fuzzy did-you-mean trap
-		"get_dimensions(search=) is authoritative",
-		// as-of maintainers
-		"As of date D: total_maintainers where",
-		"one as-of reading per period",
-		// events/training/sponsorships have no standard metric, so the
-		// ad-hoc shape of each cut lives here in full
-		"ACCEPTED registrations",
-		"enrollment records only",
-		"scope them with project__foundation_slug",
-		"leaf project's own slug returns NOTHING",
-		"registration_id__event_start_date",
-		"and metric_time, the sign-up\ndate",
-		"event_id__event_name",
-		"enrollment_id__course_name",
-		"enrollment_id__product_type",
-		"every org-scoped figure here is a\nfloor",
-		// other surfaces are never a reconciliation target
-		"is code contributions, bots excluded",
-		"Do NOT reconcile figures against other\n  dashboards or pages",
-		"PCC-style reporting is the\n  reconciliation surface",
-		// worked examples stay live-verified
-		"## Worked examples (verified live)",
-		// resolve-first: a guessed slug or account name is a silent wrong answer
-		"ALWAYS resolve names first",
-		"has not come back from them",
-		// the layer's own reach is one hop / one level, and it says so, with
-		// the standard metrics as the any-depth route
-		"REACH — how deep this layer's own dimensions go",
-		"ONE HOP",
-		"not their own acquisitions",
-		"for the whole company at any depth use the standard\nmetric",
-		"already resolved to the parent account FOR THAT PROJECT",
-		// where each domain attaches
-		"ATTACHMENT LEVELS",
-		"legitimately\n  near-empty",
-		// windows cut on Pacific days, layer-wide
-		"Day boundaries are US-Pacific",
-		// standard metric calls
-		"STANDARD METRIC CALLS take uniform parameters",
-		"this means INDIVIDUALS by contribution volume — run it, do not ask",
-		"16. SOCIAL LISTENING lives here",
-		"stored as 'Twitter', not 'X'",
-		"no filter means ALL of LF",
-		"17. WHAT GOES IN THE ANSWER",
-		"There is no free filter on a standard metric",
-		"default combined",
-		"default excluded",
-		"contributors (total | org | project)",
-		"maintainers (total | org | project | maintainer)",
-		"DEFAULTS are the plain reading",
-		"applied block",
-		"maintainer_contributions (total | org | project | maintainer)",
-		"The seven, with their groupings",
-		"separate and combined cover a named node's tree and a\ncompany's subsidiaries at ANY depth",
-		"maintainer_contributions (by=project or by=org",
-		"PEOPLE is maintainer_contributions by=maintainer",
-		"query_lfx_standard_metrics",
-		"PREFER it over the",
-	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("semantic layer guidance missing %q", want)
-		}
-	}
-}
-
-// TestStandardMetricsGuidanceContent pins the contract that only lives here: resolve
-// names before calling, the two switches and their opposite defaults, the
-// inventory with what each standard metric answers and the columns it returns, the
-// account/parent_org reading with its one-hop limit, where each domain
-// attaches, and the rejections.
+// TestStandardMetricsGuidanceContent pins what the standard-metric guidance
+// must say: resolve names before calling, the contract table with the three
+// date parameters and the removed ones, the two kinds with their examples,
+// the defaults and the applied block, the two switches and their opposite
+// defaults, the inventory with every family and grouping, the exact-literal
+// rules and what a guard's candidates mean, how to read results, the worked
+// calls and the rejections. No absolute figure anywhere (a figure in the
+// guidance goes stale and gets quoted), and function, not rationale.
 func TestStandardMetricsGuidanceContent(t *testing.T) {
 	text := standardMetricsGuidance
 	for _, want := range []string{
 		// resolve names first, always
-		"Resolve names first — ALWAYS",
+		"## Resolve names first — ALWAYS",
 		"search_projects",
 		"search_b2b_orgs",
 		"has\nnot come back from them",
-		"zero rows, not an error",
-		// the two switches and their opposite defaults
+		"never a zero",
+		"never pass the everyday name again",
+		// the contract table and the removed parameters
+		"## The contract",
+		"| start_date | yyyy-mm-dd, a UTC calendar day | the family's window (below) |",
+		"| end_date | yyyy-mm-dd, a UTC calendar day | today (UTC) |",
+		"| period | day, week, month, quarter or year: one row per period | none = one figure |",
+		"There is no since, until or as_of",
+		"rejected with\nthe word to use instead",
+		"There is no free-form filter",
+		// the four questions
+		"\"TOP CONTRIBUTORS\" with nothing\n   more said means INDIVIDUALS",
+		"run it, do not ask which reading was meant",
 		"subprojects: excluded | separate | combined, DEFAULT combined",
 		"subsidiaries: excluded | separate | combined, DEFAULT excluded",
-		"\"TOP CONTRIBUTORS\" with nothing more said means INDIVIDUALS",
-		"do not ask\n   which reading was meant",
-		"## What goes in the answer",
-		"only the caveats that change how THIS\nfigure is read",
-		"in the reader's\nwords",
-		"Column names, keys, engines, SQL and the other tools stay\nout",
-		"Keep the rest in\ncontext",
+		"a subsidiary is a different company",
+		"a subproject is part of its project",
+		"rejects org",
+		// the two kinds
+		"A WINDOW family counts what happened between start_date and end_date\n     inclusive",
+		"An AT-DATE family reports the state on end_date",
+		"partial_last_period",
+		"the state on a single day is end_date alone",
+		"## The two kinds, with examples",
+		"end_date=2022-12-31. Any day but today is read date-based",
+		"reads a few percent above the status-based current count",
+		"start_date=2020-01-01, end_date=2025-12-31, period=year",
+		"people on TODAY's\n  roster with a code contribution in each year",
+		"The roster itself has no\n  honest history",
+		"the snapshot history is days\n  deep",
+		// defaults and the applied block
+		"## Defaults and the applied block",
+		"end_date defaults to today (UTC)",
+		"includes_future_dated",
+		"the trailing 365 days before end_date",
+		"all history on new_members and\nmembership_churn",
+		"the trailing year on any day or week series",
+		"runs from\nthe first row of data",
+		"timezone (always UTC)",
+		"definition (one sentence",
+		"defaulted (the list of parameters the lens\nchose)",
+		"truncated (limit cut\nrows off)",
+		"`engine` is provenance for\nyou and never goes in an answer",
+		"Do not compare the figure\nwith a number from another dashboard",
+		// the switches
 		"## The switches, row by row",
 		"| combined (default) | X plus everything under it, any depth | folded into ONE row",
-		"| separate | X plus everything under it, any depth | as the metric groups them, one row each: the breakdown",
+		"| separate | X plus everything under it, any depth | as the metric groups them, one row each: the breakdown |",
 		"| excluded | X's own bucket only, nothing under it |",
 		"| excluded (default) | the Y account only |",
 		"| combined | Y plus every subsidiary under it, any depth | folded into ONE row",
-		"MOST QUESTIONS WANT BOTH",
-		"Never derive one from the other",
-		"## Defaults and the applied block",
-		"trailing 365 days",
-		"`defaulted`, the list of parameters the lens chose",
-		"offer what a reader most often wants next",
-		"Do\nnot compare the figure with a number from another dashboard",
-		// scope totals
-		"| contributors | total | Distinct code contributors over the scope, ONE figure",
-		"| contributions | total | Code contribution volume over the scope, ONE figure",
-		"| maintainers | total | Active maintainers over the scope, ONE figure",
-		"a subsidiary is a different company",
-		"a subproject is part of its project",
-		"folded into ONE row",
-		"one row per parent organization",
-		// the shape rule
-		"A FLOW metric takes since/until",
-		"SNAPSHOT: memberships and maintainers",
-		"a SNAPSHOT metric takes as_of",
-		"membership count", "is a query_lfx_lens question",
-		"Do not approximate it from new_members",
-		"folds every project column of the result away",
-		// how to call
-		"There is no free-form filter",
-		"labelled as such",
-		"omitted, returns EVERY row",
-		"order_by takes the result columns as they come back",
-		"WHAT YOU CAN ORDER BY",
-		"minus any column\nthe call folds away",
-		"a\ntop-N per project needs subprojects=separate first",
-		// inventory: the families and their groupings, what each answers,
-		// its result columns
-		"| memberships | total |",
-		"| memberships | org |",
-		"| memberships | tier |",
-		"| new_members | year |",
-		"| membership_churn | year |",
-		"| contributions | org |",
-		"| contributors | org |",
-		"| contributors | project |",
-		"| maintainers | org |",
-		"| maintainers | project |",
-		"| maintainers | maintainer |",
-		"| maintainer_contributions | total |",
-		"account, parent_org, current_membership_count, current_membership_revenue",
-		"tier, current_membership_count",
-		"year, new_membership_count",
-		"year, churned_membership_count",
-		"account, parent_org, code_contribution_activities",
-		"project, project_name, total_contributors",
-		"| account, active_maintainers |",
-		"foundation, project, project_name, active_maintainers",
-		"project, project_name, maintainer, account, role, active_maintainers",
-		"project, project_name, maintainer_contributions, contributing_maintainers",
-		"account, parent_org, maintainer_contributions, contributing_maintainers",
-		"CURRENT maintainer roster of the project the activity belongs to",
-		// the caveats that change how a figure is read
-		"Tier literals differ per foundation",
-		"rejoins counts again",
-		"the day AFTER the term ended",
-		"never sum the rows",
-		"LF-project filter is built into every maintainer headcount metric",
-		// organizations: account, parent_org, any depth, the stray accounts
+		"one row per\nparent organization",
+		"MOST QUESTIONS WANT\nBOTH",
+		"Never derive one from the other: distinct counts do not sum",
+		// inventory: every family, kind and grouping list
+		"## Inventory",
+		"| memberships | at-date | total, org, tier, project, country, region |",
+		"| new_members | window | total, org, project |",
+		"| membership_churn | window | total, org, project |",
+		"| contributors | window | total, org, project, country, region |",
+		"| contributions | window | total, org, project, contributor, type, platform, org_region |",
+		"| contributing_organizations | window | total, project |",
+		"| participants | window | total, org, project |",
+		"| maintainers | at-date | total, org, project, maintainer |",
+		"| maintainer_contributions | window | total, org, project, maintainer |",
+		"| project_health | at-date | total, foundation, category, population |",
+		"| software_value | at-date | total, foundation, population |",
+		"| event_registrations | window | total, event, org |",
+		"| event_sponsorships | window | total, org, event |",
+		"| speakers | window | total, event |",
+		"| training_enrollments | window | total, org, course |",
+		"| certifications | window | total, org |",
+		"| social_mentions | window | total, project, network, sentiment |",
+		"| social_reach | window | total, project |",
+		// the definitions and caveats that change how a figure is read
+		"revenue is LIST PRICE, not dues billed — never divide one by the other",
+		"membership_count, membership_revenue on any day but today and on a series",
+		"region is provisional",
+		"The churn date is the day AFTER the term ended",
+		"known for about a third of contributors",
+		"one row per GitHub identity (`handle`, a profile URL)",
+		"Organizations from the enrichment vocabulary, not CRM accounts",
+		"A superset of contributors",
+		"today's roster active in each period",
+		"Maintainership as of the build, contributions in the window",
+		"LF-hosted projects unless by=population (rows lf_hosted and index)",
+		"never sum or re-average rows",
+		"additive across projects at a date, never across days",
+		"totals read low, never inflated",
+		"The window is the EVENT start date",
+		"distinct people by email: never sum them across rows",
+		"Sessionize rows count proposal SUBMITTERS whether accepted or not",
+		"the edX branch carries no account",
+		"neutral or unknown sentiment is in neither positive nor negative",
+		"The sum counts a prolific author once per mention",
+		// organizations: exact literals, the guard, the candidates
 		"names its organization column `account`",
-		"as Salesforce spells it",
-		"it is the account's direct parent; without\none (a parent leaderboard) it is the top of the account's chain",
-		"ANY DEPTH: separate and combined walk the account hierarchy to the bottom",
-		"nothing to disclose about depth on these figures",
-		"account__account_rollup_name, which is that one hop, labelled ad hoc",
-		"STRAY SAME-COMPANY ACCOUNTS",
-		"never sum their rows into a parent figure",
-		// projects: any depth on every metric, and that reaching the whole
-		// subtree is coverage, never permission to add the rows up
-		"AT ANY DEPTH",
-		"grandchildren included",
-		"covers the whole\nsubtree with nothing missing",
+		"ANY DEPTH:\nseparate and combined walk the account hierarchy to the bottom",
+		"LITERALS ARE EXACT",
+		"STRAY SAME-COMPANY ACCOUNT",
+		"the rejection lists\nup to five data-bearing candidates",
+		"the parent legal name first",
+		"never present a\ncandidate as the caller's own choice",
+		// projects
+		"AT ANY DEPTH\n(grandchildren included)",
 		"never sum to a subtree total",
-		"a reason to prefer the standard\nmetric, not something to caption",
 		"Memberships attach at FOUNDATION level",
-		// provenance stays with the agent
-		"`engine` is provenance for you",
-		"it never goes in an answer",
+		"'kubernetes' is\nnot a slug, 'k8s' is",
+		// what goes in the answer
+		"## What goes in the answer",
+		"only the caveats that change how THIS figure is read",
+		"in the reader's words",
+		"Column names, keys, engines, SQL and the other tools\nstay out",
 		// reading results
-		"never an organization",
-		"different grains",
-		"rows are NAMES, not identities",
-		"`maintainer` and `contributor` are personal names",
-		"already resolved to the parent account\n  for that project",
-		"never mix the two in one",
-		"as of the last warehouse build",
-		"US-Pacific day boundaries",
-		"compiled_sql",
+		"## Reading results",
+		"Every date is a UTC calendar day, on both engines",
+		"`period` is the first day of each period",
+		"`period_end` is the day the state was read on",
+		"never an organization, never\n  folded into a parent",
+		"Present them side by side, never as a ratio",
+		"rows are GitHub identities",
+		"Two identities sharing a display name are two\n  rows",
+		"never as a contact list",
+		"never mix\n  the two in one answer",
+		"truncated=true means limit cut rows off",
+		// worked calls, one per kind, a series, an org, a rejection
+		"## Worked calls",
+		"One figure, window: contributors, project=cncf, start_date=2025-01-01",
+		"One figure, at-date: memberships, project=cncf",
+		"A series: new_members, project=tlf, period=year",
+		"An org with subsidiaries: contributions, org=International Business\n  Machines Corporation, subsidiaries=combined",
+		"A rejection: memberships, start_date=2020-01-01",
 		// errors
-		"the message lists\n  the valid names or groupings",
-		"an org that matches no account",
+		"## Errors",
+		"read it and change the call, do\nnot retry the same one",
+		"since, until or as_of: the message names start_date or end_date",
+		"an org that matches no data-bearing account: 400 with candidates",
+		"an unknown project slug: 400 with candidates",
 		"an order_by field that is not one of the result columns",
+		"no snapshot on or before\n  end_date",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("standard metric guidance missing %q", want)
+		}
+	}
+	// Nothing from the old contract survives in the document as a live
+	// instruction (as_of, since and until are named only as the words a
+	// rejection replaces).
+	for _, gone := range []string{"since/until", "takes as_of", "FLOW", "SNAPSHOT", "US-Pacific", "display name — \"top", "one-hop"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("standard metric guidance still says %q, which the contract removed", gone)
+		}
+	}
+}
+
+// TestStandardMetricsGuidanceCarriesNoFigure pins that the guidance quotes
+// no absolute figure: a number in the guidance goes stale the day after it
+// is written and gets quoted as if it were the answer. Dates, parameter
+// counts, HTTP statuses and the 365-day default are the only numbers.
+func TestStandardMetricsGuidanceCarriesNoFigure(t *testing.T) {
+	allowed := regexp.MustCompile(`^(20\d\d(-\d\d(-\d\d)?)?|365|400|404|1|2|3|4|5|31|01)$`)
+	// A date is one token, not three: consume yyyy-mm-dd before bare numbers.
+	for _, match := range regexp.MustCompile(`\b\d{4}-\d\d-\d\d\b|\b\d[\d,.]*\b`).FindAllString(standardMetricsGuidance, -1) {
+		match = strings.TrimRight(match, ".,")
+		if !allowed.MatchString(match) {
+			t.Errorf("standard metric guidance carries the figure %q; figures go stale and get quoted", match)
 		}
 	}
 }

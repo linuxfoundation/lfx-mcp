@@ -37,7 +37,7 @@ func TestCountLFXResources_PayloadMapping(t *testing.T) {
 		DateField:  "start_time",
 		DateFrom:   "2026-01-01",
 		DateTo:     "2026-06-30",
-		Filters:    []string{"org_name:Red Hat"},
+		FiltersOr:  []string{"org_name:Red Hat", "org_name:SUSE"},
 		FiltersAll: []string{"is_invited:true"},
 	})
 	if err != nil {
@@ -63,7 +63,7 @@ func TestCountLFXResources_PayloadMapping(t *testing.T) {
 		"date_field":  {"start_time"},
 		"date_from":   {"2026-01-01"},
 		"date_to":     {"2026-06-30"},
-		"filters":     {"org_name:Red Hat"},
+		"filters_or":  {"org_name:Red Hat", "org_name:SUSE"},
 		"filters_all": {"is_invited:true"},
 	}
 	for k, v := range want {
@@ -83,6 +83,19 @@ func TestCountLFXResources_PayloadMapping(t *testing.T) {
 	}
 	if note, _ := out["note"].(string); note != callerVisibilityNote {
 		t.Errorf("complete count must carry only the visibility note, got %q", note)
+	}
+}
+
+func TestCountLFXResources_NeverSendsLegacyFiltersParam(t *testing.T) {
+	// "filters" on the query service is an AND alias of filters_all; the tool
+	// must only ever use the explicit filters_all / filters_or names.
+	api := setupCountTest(t)
+	api.Respond(countPath, `{"count": 0, "has_more": false}`)
+	handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{ //nolint:errcheck
+		Type: "project", FiltersOr: []string{"a:1"}, FiltersAll: []string{"b:2"},
+	})
+	if _, has := api.LastRequest().Query["filters"]; has {
+		t.Error("legacy filters param must not be sent")
 	}
 }
 
@@ -207,7 +220,7 @@ func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 	if n := len(tool.Description); n > 1000 {
 		t.Errorf("description is %d bytes, budget is 1000", n)
 	}
-	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "project:<uid>", "date_field", "filters_all"} {
+	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "project:<uid>", "date_field", "filters_all", "filters_or"} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}

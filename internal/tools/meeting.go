@@ -275,9 +275,9 @@ type SearchPastMeetingParticipantsArgs struct {
 	CommitteeUID  string `json:"committee_uid,omitempty" jsonschema:"Filter participants by committee UID (ignored when past_meeting_id is set; takes precedence over project_uid)"`
 	ProjectUID    string `json:"project_uid,omitempty" jsonschema:"Filter participants by project UID (ignored when past_meeting_id or committee_uid is set)"`
 	Name          string `json:"name,omitempty" jsonschema:"Name or partial name of the participant to search for"`
-	DateFrom      string `json:"date_from,omitempty" jsonschema:"Only participants of past meetings that started on or after this ISO 8601 date (e.g. 2026-06-01); resolved via the past meetings of the same project/committee"`
+	DateFrom      string `json:"date_from,omitempty" jsonschema:"Only participants of past meetings that started on or after this ISO 8601 date (e.g. 2026-06-01); requires project_uid or committee_uid, resolved via that scope's past meetings"`
 	DateTo        string `json:"date_to,omitempty" jsonschema:"Only participants of past meetings that started on or before this ISO 8601 date (e.g. 2026-06-30)"`
-	MaxMeetings   int    `json:"max_meetings,omitempty" jsonschema:"With a date range: maximum past meetings to expand (default 50, max 200); truncated_meetings=true in the result when the cap was hit"`
+	MaxMeetings   int    `json:"max_meetings,omitempty" jsonschema:"With a date range: maximum past meetings to expand (default 50, max 200), earliest first (past meetings sort chronologically); truncated_meetings=true in the result when the cap was hit"`
 	AttendedOnly  bool   `json:"attended_only,omitempty" jsonschema:"Only participants who attended (is_attended:true)"`
 	OrgName       string `json:"org_name,omitempty" jsonschema:"Exact stored organisation name, case-sensitive (copy it from a participant record)"`
 	CountOnly     bool   `json:"count_only,omitempty" jsonschema:"Return only {count, complete, visibility, note}: the number of participant records (not distinct people) matching the filters"`

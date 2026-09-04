@@ -376,6 +376,8 @@ func TestParticipants_ArgumentGuards(t *testing.T) {
 		want string
 	}{
 		{SearchPastMeetingParticipantsArgs{PastMeetingID: "m", DateFrom: "2026-01-01"}, "past_meeting_id"},
+		{SearchPastMeetingParticipantsArgs{DateFrom: "2026-01-01"}, "require project_uid or committee_uid"},
+		{SearchPastMeetingParticipantsArgs{Name: "Ann", DateTo: "2026-01-31"}, "require project_uid or committee_uid"},
 		{SearchPastMeetingParticipantsArgs{ProjectUID: "p", DateFrom: "2026-01-01", PageToken: "x"}, "page_token"},
 		{SearchPastMeetingParticipantsArgs{ProjectUID: "p", DateFrom: "2026-01-01", MaxMeetings: 201}, "max_meetings"},
 	} {

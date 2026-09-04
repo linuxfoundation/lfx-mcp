@@ -49,8 +49,8 @@ type CountLFXResourcesArgs struct {
 	DateField  string   `json:"date_field,omitempty" jsonschema:"Data field for the date range, e.g. start_time, updated_at (required with date_from or date_to)"`
 	DateFrom   string   `json:"date_from,omitempty" jsonschema:"Inclusive start, ISO 8601 date or datetime (date-only = start of day UTC)"`
 	DateTo     string   `json:"date_to,omitempty" jsonschema:"Inclusive end, ISO 8601 date or datetime (date-only = end of day UTC)"`
-	Filters    []string `json:"filters,omitempty" jsonschema:"Exact field filters field:value on data fields, matched with OR"`
-	FiltersAll []string `json:"filters_all,omitempty" jsonschema:"Exact field filters that must all match"`
+	FiltersOr  []string `json:"filters_or,omitempty" jsonschema:"Exact field filters field:value on data fields, at least one must match"`
+	FiltersAll []string `json:"filters_all,omitempty" jsonschema:"Exact field filters field:value on data fields that must all match"`
 }
 
 // countResult is the output shape of count_lfx_resources. The count is never
@@ -69,7 +69,7 @@ func RegisterCountLFXResources(server *mcp.Server) {
 		Description: "Count LFX resources of one type via the query service, over the records visible to the caller. " +
 			"Accepts the same filters as the search tools: parent (project:<uid>, committee:<uid>, past_meeting:<meeting_and_occurrence_id>), " +
 			"tags OR / tags_all AND (is_attended:true, project_slug:cncf), an inclusive date range on a data field (date_field=start_time date_from=2026-01-01 date_to=2026-06-30), " +
-			"and exact stored-value filters / filters_all (org_name:<stored value>). " +
+			"and exact stored-value filters_all (all must match) / filters_or (at least one must match), e.g. org_name:<stored value>. " +
 			"Returns {count, complete, visibility, note}; complete=false means the count is a lower bound and the query should be narrowed. " +
 			"Use this instead of paging a search to count meetings, participants, committees, members or projects.",
 		Annotations: &mcp.ToolAnnotations{
@@ -122,8 +122,8 @@ func buildCountPayload(args CountLFXResourcesArgs) *querysvc.QueryResourcesCount
 	if args.DateTo != "" {
 		payload.DateTo = strPtr(args.DateTo)
 	}
-	if len(args.Filters) > 0 {
-		payload.Filters = args.Filters
+	if len(args.FiltersOr) > 0 {
+		payload.FiltersOr = args.FiltersOr
 	}
 	if len(args.FiltersAll) > 0 {
 		payload.FiltersAll = args.FiltersAll

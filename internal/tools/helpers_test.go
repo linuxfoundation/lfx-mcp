@@ -4,12 +4,16 @@
 package tools
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestFriendlyAPIError_403(t *testing.T) {
@@ -98,5 +102,33 @@ func TestSlugResolveError_contextCanceled(t *testing.T) {
 	got := slugResolveError("tlf", err)
 	if strings.Contains(got.Error(), accessDeniedMessage) {
 		t.Errorf("context error must not become accessDeniedMessage, got: %q", got)
+	}
+}
+
+// TestNewToolLogger_NilSessionUsesServerHandlerOnly pins the guard that lets
+// handlers be exercised directly in unit tests: with no MCP session the
+// logger must not tee into mcp.LoggingHandler (whose Enabled dereferences
+// the session) and must still deliver records to the server-side handler.
+func TestNewToolLogger_NilSessionUsesServerHandlerOnly(t *testing.T) {
+	var buf bytes.Buffer
+	sys := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	ctx := WithLogger(context.Background(), sys)
+
+	for name, req := range map[string]*mcp.CallToolRequest{
+		"nil request": nil,
+		"nil session": {},
+		"no session":  {Session: nil, Extra: &mcp.RequestExtra{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf.Reset()
+			logger := newToolLogger(ctx, req)
+			if _, isTee := logger.Handler().(*teeHandler); isTee {
+				t.Fatal("without a session the logger must not tee into the MCP handler")
+			}
+			logger.InfoContext(ctx, "probe", "k", "v")
+			if !strings.Contains(buf.String(), "probe") || !strings.Contains(buf.String(), "k=v") {
+				t.Errorf("record did not reach the server-side handler: %q", buf.String())
+			}
+		})
 	}
 }

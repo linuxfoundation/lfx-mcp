@@ -216,17 +216,18 @@ sequenceDiagram
     Note over MCP: query_lfx_lens registered only when<br />read scope (read:all or manage:all) AND lf_staff=true
     MCP-->>Client: tools/list (includes query_lfx_lens)
 
-    User->>Client: invoke query_lfx_lens (project_slug="tlf")
+    User->>Client: invoke query_lfx_lens (input; project_slugs optional, omitted = LF-wide)
     Client->>MCP: tools/call {query_lfx_lens}<br />Authorization: Bearer {mcp_jwt}
 
     Note over MCP: lf_staff=true already verified at registration
     MCP->>Auth0: client_credentials grant<br />audience = Lens API resource server
     Auth0-->>MCP: Lens M2M token (no user identity, cached)
 
-    MCP->>Lens: POST /workflows/.../runs<br />Authorization: Bearer {lens_m2m_token}
+    MCP->>Lens: POST /workflows/.../runs<br />additional_data {"project_slugs": [...]}<br />Authorization: Bearer {lens_m2m_token}
     Lens->>Lens: verify JWT via JWKS
-    Lens-->>MCP: response
-    MCP-->>Client: tool result
+    Lens->>Lens: resolve slugs (unknown -> rejection, no query)
+    Lens-->>MCP: response (opens with **scope**, ends with **snapshot**)
+    MCP-->>Client: tool result (rejection -> IsError)
 ```
 
 ### Flow 3: End-user → MCP-brokered service API (with CTE + access-check)

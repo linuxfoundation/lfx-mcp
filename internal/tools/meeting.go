@@ -392,12 +392,14 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("meetings", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
@@ -422,7 +424,7 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // handleGetMeeting implements the get_meeting tool logic.
@@ -593,12 +595,14 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("meeting registrants", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
@@ -623,7 +627,7 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // handleGetMeetingRegistrant implements the get_meeting_registrant tool logic.
@@ -798,12 +802,14 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("past-meeting participants", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
@@ -828,7 +834,7 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // handleGetPastMeetingParticipant implements the get_past_meeting_participant tool logic.
@@ -920,12 +926,14 @@ func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequ
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("past-meeting summaries", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
@@ -950,7 +958,7 @@ func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequ
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // handleGetPastMeetingSummary implements the get_past_meeting_summary tool logic.
@@ -1228,12 +1236,14 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("past meetings", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
@@ -1258,7 +1268,7 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // pastMeetingGetResult is the output type for the get_past_meeting tool. It nests

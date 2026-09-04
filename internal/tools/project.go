@@ -36,6 +36,7 @@ func SetProjectConfig(cfg *ProjectConfig) {
 type projectSearchResult struct {
 	Resources []*querysvc.Resource `json:"resources"`
 	PageToken *string              `json:"page_token,omitempty"`
+	Note      string               `json:"note,omitempty"`
 }
 
 // projectGetResult is the output type for the get_project tool.
@@ -153,6 +154,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("projects", len(result.Resources), result.PageToken != nil)
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {

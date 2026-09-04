@@ -34,6 +34,7 @@ var committeeConfig *CommitteeConfig
 type committeeSearchResult struct {
 	Resources []*querysvc.Resource `json:"resources"`
 	PageToken *string              `json:"page_token,omitempty"`
+	Note      string               `json:"note,omitempty"`
 }
 
 // committeeGetResult is the output type for get_committee / get_group.
@@ -46,6 +47,7 @@ type committeeGetResult struct {
 type committeeMemberSearchResult struct {
 	Resources []*querysvc.Resource `json:"resources"`
 	PageToken *string              `json:"page_token,omitempty"`
+	Note      string               `json:"note,omitempty"`
 }
 
 // SetCommitteeConfig sets the configuration for committee tools.
@@ -209,9 +211,11 @@ type SearchGroupMembersArgs struct {
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
-// handleSearchCommitteesGroupMode adapts group-mode args to the committee handler.
+// handleSearchCommitteesGroupMode adapts group-mode args to the committee
+// handler, carrying the group-mode noun so user-facing notes match the tool's
+// terminology contract.
 func handleSearchCommitteesGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupsArgs) (*mcp.CallToolResult, committeeSearchResult, error) {
-	return handleSearchCommittees(ctx, req, SearchCommitteesArgs(args))
+	return searchCommittees(ctx, req, SearchCommitteesArgs(args), "groups")
 }
 
 // handleGetCommitteeGroupMode adapts group-mode args to the committee handler.
@@ -227,19 +231,28 @@ func handleGetCommitteeMemberGroupMode(ctx context.Context, req *mcp.CallToolReq
 	})
 }
 
-// handleSearchCommitteeMembersGroupMode adapts group-mode args to the committee members handler.
+// handleSearchCommitteeMembersGroupMode adapts group-mode args to the
+// committee members handler, carrying the group-mode noun so user-facing
+// notes match the tool's terminology contract.
 func handleSearchCommitteeMembersGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupMembersArgs) (*mcp.CallToolResult, committeeMemberSearchResult, error) {
-	return handleSearchCommitteeMembers(ctx, req, SearchCommitteeMembersArgs{
+	return searchCommitteeMembers(ctx, req, SearchCommitteeMembersArgs{
 		CommitteeUID: args.GroupUID,
 		ProjectUID:   args.ProjectUID,
 		Name:         args.Name,
 		PageSize:     args.PageSize,
 		PageToken:    args.PageToken,
-	})
+	}, "group members")
 }
 
 // handleSearchCommittees implements the search_committees tool logic.
 func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteesArgs) (*mcp.CallToolResult, committeeSearchResult, error) {
+	return searchCommittees(ctx, req, args, "committees")
+}
+
+// searchCommittees is the shared search implementation; resourceNoun is
+// "committees" or "groups" depending on which tool surface reached it, and is
+// used in user-facing notes.
+func searchCommittees(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteesArgs, resourceNoun string) (*mcp.CallToolResult, committeeSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
@@ -320,6 +333,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote(resourceNoun, len(result.Resources), result.PageToken != nil)
 
 	// Warn if fewer results than requested were returned but more pages exist.
 	// This indicates some results on this page were excluded due to access controls.
@@ -539,6 +553,13 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 
 // handleSearchCommitteeMembers implements the search_committee_members tool logic.
 func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteeMembersArgs) (*mcp.CallToolResult, committeeMemberSearchResult, error) {
+	return searchCommitteeMembers(ctx, req, args, "committee members")
+}
+
+// searchCommitteeMembers is the shared search implementation; resourceNoun is
+// "committee members" or "group members" depending on which tool surface
+// reached it, and is used in user-facing notes.
+func searchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteeMembersArgs, resourceNoun string) (*mcp.CallToolResult, committeeMemberSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
@@ -615,6 +636,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote(resourceNoun, len(result.Resources), result.PageToken != nil)
 
 	// Warn if fewer results than requested were returned but more pages exist.
 	// This indicates some results on this page were excluded due to access controls.

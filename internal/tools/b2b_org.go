@@ -28,6 +28,7 @@ type SearchB2bOrgsArgs struct {
 type b2bOrgSearchResult struct {
 	Resources []*querysvc.Resource `json:"resources"`
 	PageToken *string              `json:"page_token,omitempty"`
+	Note      string               `json:"note,omitempty"`
 }
 
 // RegisterSearchB2bOrgs registers the search_b2b_orgs tool with the MCP server.
@@ -107,6 +108,7 @@ func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("organizations", len(result.Resources), result.PageToken != nil)
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {

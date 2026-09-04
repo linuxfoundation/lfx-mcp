@@ -69,6 +69,7 @@ type GetMembershipKeyContactArgs struct {
 type memberSearchResult struct {
 	Resources []membershipView `json:"resources"`
 	PageToken *string          `json:"page_token,omitempty"`
+	Note      string           `json:"note,omitempty"`
 }
 
 // membershipView is a shaped view of a project_membership resource returned by
@@ -145,6 +146,7 @@ func toKeyContactResourceView(r *querysvc.Resource) membershipView {
 type keyContactListResult struct {
 	Resources []membershipView `json:"resources"`
 	PageToken *string          `json:"page_token,omitempty"`
+	Note      string           `json:"note,omitempty"`
 }
 
 // keyContactView is a filtered view of ProjectKeyContactResponse for MCP
@@ -332,6 +334,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		Resources: views,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("memberships", len(result.Resources), result.PageToken != nil)
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
@@ -508,6 +511,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		Resources: views,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("key contacts", len(result.Resources), result.PageToken != nil)
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {

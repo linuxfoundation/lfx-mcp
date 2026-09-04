@@ -424,12 +424,14 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("mailing lists", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
@@ -454,7 +456,7 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }
 
 // handleSearchMailingListMembers implements the search_mailing_list_members tool logic.
@@ -533,12 +535,14 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
+		Note      string               `json:"note,omitempty"`
 	}
 
 	out := searchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
 	}
+	out.Note = accessFilteredEmptyNote("mailing-list members", len(result.Resources), result.PageToken != nil)
 
 	var pageWarning string
 	if result.PageToken != nil && len(result.Resources) < pageSize {
@@ -563,5 +567,5 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	return &mcp.CallToolResult{Content: content}, out, nil
 }

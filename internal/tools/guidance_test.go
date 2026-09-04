@@ -140,6 +140,8 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"Premier Membership",
 		"health_metric_key__health_score_category_v2') }} IS NOT NULL",
 		"(Excellent, Healthy, Fair, Concerning, Critical)",
+		"current_avg_health_score and current_software_value",
+		"answer current-state questions without a pin",
 		"total_software_value",
 		"COCOMO",
 		// populations, maintainers, regions, person grain
@@ -448,7 +450,7 @@ func TestGuidanceNamesNoOtherSurface(t *testing.T) {
 // undeclaring the v1 category dimension, so the guidance names only the v2
 // one, and categories are the stored band names, never a score threshold.
 func TestGuidanceHealthIsV2ByName(t *testing.T) {
-	v1 := regexp.MustCompile(`health_score_category\b[^_]|Unsteady|Critical <|\b20-39\b`)
+	v1 := regexp.MustCompile(`health_score_category\b[^_]|Stable|Unsteady|Critical <|\b20-39\b`)
 	for name, text := range map[string]string{
 		"semantic layer guidance":  semanticLayerGuidance,
 		"standard metric guidance": standardMetricsGuidance,

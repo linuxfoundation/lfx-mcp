@@ -191,7 +191,9 @@ and the two vocabularies never mix in one answer.
 ({{ Dimension('health_metric_key__health_score_category_v2') }} IS NOT NULL),
 filter to it, then aggregate; unfiltered grouping inflates ~8-9x. Categories
 are the stored v2 band names (Excellent, Healthy, Fair, Concerning, Critical):
-group by them, never by a threshold.
+group by them, never by a threshold. Once allowlisted, current_project_health_count,
+current_avg_health_score and current_software_value (on
+silver_fact_project_health_latest) answer current-state questions without a pin.
 
 9. ECONOMIC VALUE = total_software_value / total_estimated_cost (COCOMO): non-additive
 daily snapshots; totals can read low, never inflated.

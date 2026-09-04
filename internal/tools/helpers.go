@@ -41,9 +41,16 @@ func loggerFromContext(ctx context.Context) *slog.Logger {
 //
 // Use logger.XxxContext(ctx, ...) with the returned logger so the active OTel
 // span's trace_id and span_id are injected into every log record.
+//
+// When the request carries no session (unit tests that call handlers directly),
+// only the server-side handler is used: mcp.LoggingHandler dereferences its
+// session on every Enabled check and would panic.
 func newToolLogger(ctx context.Context, req *mcp.CallToolRequest) *slog.Logger {
-	mcpHandler := mcp.NewLoggingHandler(req.Session, nil)
 	sysHandler := loggerFromContext(ctx).Handler()
+	if req == nil || req.Session == nil {
+		return slog.New(sysHandler)
+	}
+	mcpHandler := mcp.NewLoggingHandler(req.Session, nil)
 	return slog.New(&teeHandler{mcp: mcpHandler, sys: sysHandler})
 }
 

@@ -164,6 +164,8 @@ var defaultTools = []string{
 	"query_lfx_semantic_layer",
 	"read_lfx_semantic_layer_guidance",
 	"search_b2b_orgs",
+	// TOOLS-1 (LFXV2-2891): caller-visibility counts and governance/meeting lookups.
+	"count_lfx_resources",
 }
 
 var logger *slog.Logger
@@ -768,6 +770,12 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	if enabledTools["search_b2b_orgs"] && canRead {
 		tools.RegisterSearchB2bOrgs(server)
+	}
+
+	// TOOLS-1 (LFXV2-2891) tools. Registered under canRead, not isStaff: they
+	// carry the caller's own visibility through the exchanged token.
+	if enabledTools["count_lfx_resources"] && canRead {
+		tools.RegisterCountLFXResources(server)
 	}
 
 	// Service API tools.

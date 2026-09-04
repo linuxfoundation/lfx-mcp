@@ -165,7 +165,8 @@ func standardMetricError(body []byte, statusCode int) string {
 	return fmt.Sprintf("Error (HTTP %d): %s", statusCode, string(body))
 }
 
-// detailText renders a FastAPI detail — string, object or list — as text.
+// detailText renders a FastAPI detail — string, object or list — as text;
+// "" when the detail is none of the three shapes.
 func detailText(detail json.RawMessage) string {
 	var text string
 	if err := json.Unmarshal(detail, &text); err == nil {
@@ -186,14 +187,25 @@ func detailText(detail json.RawMessage) string {
 		return guard.Message + ":\n" + string(rendered)
 	}
 	var errors []struct {
+		Loc []any  `json:"loc"`
 		Msg string `json:"msg"`
 	}
 	if err := json.Unmarshal(detail, &errors); err == nil && len(errors) > 0 {
 		var msgs []string
 		for _, e := range errors {
-			if e.Msg != "" {
-				msgs = append(msgs, strings.TrimPrefix(e.Msg, "Value error, "))
+			if e.Msg == "" {
+				continue
 			}
+			msg := strings.TrimPrefix(e.Msg, "Value error, ")
+			// A generic validation error ("Input should be a valid integer")
+			// is unactionable without the field it is about; the lens's own
+			// messages sit on the body itself and already name the word.
+			if n := len(e.Loc); n > 1 {
+				if field, ok := e.Loc[n-1].(string); ok && field != "body" {
+					msg = field + ": " + msg
+				}
+			}
+			msgs = append(msgs, msg)
 		}
 		return strings.Join(msgs, "\n")
 	}

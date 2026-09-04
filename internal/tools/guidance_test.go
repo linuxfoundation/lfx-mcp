@@ -80,6 +80,167 @@ func TestGuidanceHandlers_ReturnTheDocuments(t *testing.T) {
 	}
 }
 
+// TestSemanticLayerGuidanceContent pins the doctrine: every recipe verified
+// against the live layer during the August 2026 evals, plus the failure
+// modes the 2026-08-31 post-deploy eval rounds surfaced (rollup direction,
+// person-grain rankings, events/training account dimensions, LF-wide scope,
+// one-hop standard metric recipe filters).
+func TestSemanticLayerGuidanceContent(t *testing.T) {
+	text := semanticLayerGuidance
+	for _, want := range []string{
+		// windows and membership parity
+		"trailing 12 months",
+		"Membership\n  counts as of a past date or by year",
+		"are standard metrics, not lens questions",
+		"no metric, dimension or\ncolumn names, keys, SQL or tool names",
+		"asset_id__end_date",
+		"current_membership_count",
+		"future-dated",
+		// scoping and hierarchy
+		"project__foundation_slug",
+		"spine_hierarchy_level = 2",
+		"risc-v-international/riscv",
+		"There is no separate project parameter",
+		"conformed lens",
+		"asset_id__project_slug",
+		"carry the conformed project entity",
+		"event_id__project_name",
+		"maintainer_key__project_slug",
+		"returns ZERO",
+		"health_metric_key__foundation_slug",
+		"counts only, never sums",
+		"__segment_slug",
+		"PCC-style foundation rollups",
+		`"Direct children of X"`,
+		// LF-wide scope ambiguity (round-2 eval divergence)
+		"'tlf' slug is the umbrella",
+		// syntax
+		"metric_time__year",
+		"yyyy-mm-dd",
+		"omitted = EVERY row",
+		// value discovery
+		"'Asia Pacific'",
+		"Viet Nam",
+		"asset_id__billing_country",
+		"zero rows",
+		// bots
+		"member_is_bot",
+		"bot_activities",
+		"roughly 1.8x",
+		// org shares and headcounts
+		"org-ATTRIBUTED",
+		"Individual - No Account",
+		"2-4x",
+		// name discovery and rollups
+		"International Business Machines Corporation",
+		"Red Hat LLC",
+		"account__account_rollup_name",
+		"subsidiaries INTO parents",
+		// tiers, health, value
+		"Premier Membership",
+		"Critical <20, Unsteady",
+		"total_software_value",
+		"COCOMO",
+		// populations, maintainers, regions, person grain
+		"total_contributors_with_collaboration",
+		"2000-01-01 sentinel",
+		"maintainer_key__is_lf_project",
+		"organization_lf_region",
+		"activity_project_id__member_display_name",
+		"not identity keys",
+		// governance and meetings routing
+		"search_committees",
+		"search_committee_members",
+		"Never infer a roster",
+		"search_past_meetings",
+		"attendance\nRECORDS, not unique people",
+		"'Individual - No Account'",
+		"there is no account entity, so no rollup",
+		// events/training/sponsorships account entities and tiers
+		"account__account_name",
+		"NULL bucket",
+		"sponsorship__sponsorship_tier_type",
+		"'package_tier'",
+		// governed org-attribution filter, and the account-attributed superset
+		"activity_project_id__is_org_contribution = true",
+		"SUPERSET of is_org_contribution",
+		// account vs rollup doctrine, in full, once
+		"is its parent",
+		"returns only what rolls up to THAT subsidiary",
+		"Red Hat LLC is itself a rollup parent",
+		"Always filter the TOP\nparent",
+		"value-searching 'IBM' finds",
+		"their OWN rollup",
+		"headcounts may NOT",
+		// the fuzzy did-you-mean trap
+		"get_dimensions(search=) is authoritative",
+		// as-of maintainers
+		"As of date D: total_maintainers where",
+		"one as-of reading per period",
+		// events/training/sponsorships are standard metrics now; the ad-hoc
+		// shape of each cut stays here for the slices they lack
+		"event_registrations,\nevent_sponsorships, speakers, training_enrollments and certifications cover",
+		"ACCEPTED registrations",
+		"enrollment records only",
+		"scope them with project__foundation_slug",
+		"leaf project's own slug returns NOTHING",
+		"registration_id__event_start_date",
+		"and metric_time, the sign-up\ndate",
+		"event_id__event_name",
+		"enrollment_id__course_name",
+		"enrollment_id__product_type",
+		"every org-scoped figure here is a\nfloor",
+		// other surfaces are never a reconciliation target
+		"is code contributions, bots excluded",
+		"Do NOT reconcile figures against other\n  dashboards or pages",
+		"PCC-style reporting is the\n  reconciliation surface",
+		// worked examples stay live-verified
+		"## Worked examples (verified live)",
+		// resolve-first: a guessed slug or account name is a silent wrong answer
+		"ALWAYS resolve names first",
+		"has not come back from them",
+		// the layer's own reach is one hop / one level, and it says so, with
+		// the standard metrics as the any-depth route
+		"REACH — how deep this layer's own dimensions go",
+		"ONE HOP",
+		"not their own acquisitions",
+		"for the whole company at any depth use the standard\nmetric",
+		"already resolved to the parent account FOR THAT PROJECT",
+		// where each domain attaches
+		"ATTACHMENT LEVELS",
+		"legitimately\n  near-empty",
+		// windows cut on Pacific days, layer-wide
+		"Day boundaries are US-Pacific",
+		// standard metric calls
+		"STANDARD METRIC CALLS take uniform parameters",
+		"this means INDIVIDUALS by contribution volume — run it, do not ask",
+		"16. SOCIAL LISTENING lives here",
+		"stored as 'Twitter', not 'X'",
+		"no filter means ALL of LF",
+		"17. WHAT GOES IN THE ANSWER",
+		"There is no free filter on a standard metric",
+		"default combined",
+		"default excluded",
+		"start_date,\nend_date, period (day|week|month|quarter|year)",
+		"there is no\nsince, until or as_of",
+		"DEFAULTS are the plain reading",
+		"applied block",
+		"a WINDOW family counts between start_date and end_date",
+		"an AT-DATE family (memberships, maintainers,\nproject_health, software_value) reports the state on end_date",
+		"no lens call needed",
+		"Every date is a UTC calendar day",
+		"separate and combined cover a named node's tree and a company's subsidiaries\nat ANY depth",
+		"maintainer_contributions (by=project or by=org",
+		"PEOPLE is maintainer_contributions by=maintainer",
+		"query_lfx_standard_metrics",
+		"PREFER it over the",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("semantic layer guidance missing %q", want)
+		}
+	}
+}
+
 // TestStandardMetricsGuidanceContent pins what the standard-metric guidance
 // must say: resolve names before calling, the contract table with the three
 // date parameters and the removed ones, the two kinds with their examples,

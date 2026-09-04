@@ -423,6 +423,52 @@ func TestStandardMetrics_RendersValidationErrors(t *testing.T) {
 	}
 }
 
+// TestDetailText pins every shape of lens detail the tool renders, and the
+// fallback to nothing (so standardMetricError shows the whole body) when the
+// detail is none of them.
+func TestDetailText(t *testing.T) {
+	for name, tc := range map[string]struct {
+		detail string
+		want   string
+	}{
+		"string": {`"limit must be at least 1, got 0."`, "limit must be at least 1, got 0."},
+		"guard without candidates": {
+			`{"message":"no project with slug 'zzz'. project takes the stored slug; resolve it with search_projects first","candidates":[]}`,
+			"no project with slug 'zzz'. project takes the stored slug; resolve it with search_projects first",
+		},
+		"guard with no candidates key": {`{"message":"no data-bearing account named 'x'"}`, "no data-bearing account named 'x'"},
+		"guard with candidates": {
+			`{"message":"pick one of these","candidates":[{"slug":"k8s","name":"Kubernetes"}]}`,
+			"pick one of these:\n[\n  {\n    \"name\": \"Kubernetes\",\n    \"slug\": \"k8s\"\n  }\n]",
+		},
+		"validation list on the body": {
+			`[{"type":"value_error","loc":["body"],"msg":"Value error, since is now start_date."}]`,
+			"since is now start_date.",
+		},
+		"validation list on a field": {
+			`[{"type":"int_parsing","loc":["body","limit"],"msg":"Input should be a valid integer"}]`,
+			"limit: Input should be a valid integer",
+		},
+		"several validation errors": {
+			`[{"loc":["body","limit"],"msg":"Input should be a valid integer"},{"loc":["body","order_by"],"msg":"Input should be a valid list"}]`,
+			"limit: Input should be a valid integer\norder_by: Input should be a valid list",
+		},
+		"number":       {`42`, ""},
+		"empty object": {`{}`, ""},
+		"empty list":   {`[]`, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := detailText(json.RawMessage(tc.detail)); got != tc.want {
+				t.Errorf("detailText(%s) = %q, want %q", tc.detail, got, tc.want)
+			}
+		})
+	}
+	// An unrenderable detail falls back to the status and the whole body.
+	if got := standardMetricError([]byte(`{"detail":42}`), 400); got != `Error (HTTP 400): {"detail":42}` {
+		t.Errorf("standardMetricError fallback = %q", got)
+	}
+}
+
 // A failure that carries no message still reaches the caller whole, with its
 // status: a silent empty error reads as an empty result.
 func TestStandardMetrics_PassesUnstructuredErrorsThrough(t *testing.T) {

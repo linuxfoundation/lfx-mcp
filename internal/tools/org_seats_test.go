@@ -283,3 +283,38 @@ func TestOrgSeats_DescriptionBudgetAndContent(t *testing.T) {
 		t.Error("tool must be read-only")
 	}
 }
+
+func TestOrgSeats_UpstreamBodiesAreBoundedAnd5xxHidden(t *testing.T) {
+	api := setupOrgSeatsTest(t)
+	huge := strings.Repeat("x", 100000)
+	api.RespondStatus(seatsPath, http.StatusBadGateway, `<html>`+huge+`</html>`)
+	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{OrgUID: testSFID})
+	text := allResultText(t, res)
+	if !res.IsError || !strings.Contains(text, "502") {
+		t.Fatalf("expected a 502 error, got %q", text)
+	}
+	if strings.Contains(text, "xxxx") || len(text) > 300 {
+		t.Errorf("5xx body must not reach the caller, got %d bytes", len(text))
+	}
+
+	api2 := setupOrgSeatsTest(t)
+	api2.RespondStatus(seatsPath, http.StatusBadRequest, `{"message":"`+huge+`"}`)
+	res2, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{OrgUID: testSFID})
+	if text := allResultText(t, res2); len(text) > orgSeatsErrorBodyLimit+200 {
+		t.Errorf("4xx body must be truncated to ~%d bytes, got %d", orgSeatsErrorBodyLimit, len(text))
+	}
+}
+
+func TestOrgSeats_FamilyResolutionIsCapped(t *testing.T) {
+	api := setupOrgSeatsTest(t)
+	for i := 0; i < participantMaxDrainPages+5; i++ {
+		api.Respond(resourcesPath, page(nil, fmt.Sprintf("t%d", i)))
+	}
+	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{OrgUID: testSFID, FoundationUID: "p"})
+	if !res.IsError || !strings.Contains(allResultText(t, res), "page cap") {
+		t.Errorf("expected a page-cap error, got %q", allResultText(t, res))
+	}
+	if len(api.RequestsTo(seatsPath)) != 0 {
+		t.Error("seats must not be fetched after a capped family resolution")
+	}
+}

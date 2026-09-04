@@ -20,6 +20,17 @@ import (
 // page of a participant or past-meeting query itself.
 const participantDrainPageSize = 100
 
+// participantMaxDrainPages caps every page_token loop the tool runs itself,
+// so a stale or repeating token can never spin.
+const participantMaxDrainPages = 200
+
+// participantMaxRecords caps the participant records collected under a date
+// range before dedup; max_meetings bounds meetings, not people.
+const participantMaxRecords = 5000
+
+// errDrainPageCap is returned when a page_token loop hits participantMaxDrainPages.
+var errDrainPageCap = fmt.Errorf("paging exceeded the %d-page cap; narrow the query", participantMaxDrainPages)
+
 // participantDefaultMaxMeetings caps the past meetings expanded by a date
 // range when max_meetings is not given.
 const participantDefaultMaxMeetings = 50
@@ -39,6 +50,13 @@ const participantEmptyNote = "No past-meeting participants are visible to your i
 // participantTruncatedNote is added when the date range matched more past
 // meetings than max_meetings.
 const participantTruncatedNote = "The date range matched more past meetings than max_meetings; only the first %d were expanded. Narrow the range or raise max_meetings (max %d)."
+
+// participantRecordsCapNote is added when the date range collected more
+// participant records than participantMaxRecords.
+const participantRecordsCapNote = "The date range matched more than %d participant records; the result stops there (truncated_records=true). Narrow the range, add attended_only or org_name, or use count_only."
+
+// participantPerPageNote explains dedup scope on a paged call.
+const participantPerPageNote = "people and records describe this page only; a person whose records straddle pages can appear on more than one page."
 
 // participantCountRecordsNote distinguishes counted records from people.
 const participantCountRecordsNote = " This counts participant records, not distinct people; use count_only=false for de-duplicated people."
@@ -68,6 +86,7 @@ type participantSearchResult struct {
 	Records           *int                 `json:"records,omitempty"`
 	Meetings          *int                 `json:"meetings,omitempty"`
 	TruncatedMeetings bool                 `json:"truncated_meetings,omitempty"`
+	TruncatedRecords  bool                 `json:"truncated_records,omitempty"`
 	Note              string               `json:"note,omitempty"`
 }
 
@@ -104,7 +123,10 @@ func resolvePastMeetingIDs(ctx context.Context, clients *lfxv2.Clients, parent s
 	resourceType := pastMeetingResourceType
 	dateField := "start_time"
 	var pageToken *string
-	for {
+	for pages := 0; ; pages++ {
+		if pages >= participantMaxDrainPages {
+			return nil, false, errDrainPageCap
+		}
 		payload := &querysvc.QueryResourcesPayload{
 			Version:   "1",
 			Type:      &resourceType,
@@ -160,13 +182,17 @@ func pastMeetingOccurrenceID(r *querysvc.Resource) string {
 	return ""
 }
 
-// drainParticipants fetches every page of participants for one parent.
-func drainParticipants(ctx context.Context, clients *lfxv2.Clients, parent string, args SearchPastMeetingParticipantsArgs, sort string) ([]*querysvc.Resource, error) {
+// drainParticipants fetches pages of participants for one parent until the
+// pages run out or budget records have been collected (capped reports the
+// latter).
+func drainParticipants(ctx context.Context, clients *lfxv2.Clients, parent string, args SearchPastMeetingParticipantsArgs, sort string, budget int) (out []*querysvc.Resource, capped bool, err error) {
 	resourceType := pastMeetingParticipantResourceType
 	tags, filtersAll := participantFilters(args)
-	var out []*querysvc.Resource
 	var pageToken *string
-	for {
+	for pages := 0; ; pages++ {
+		if pages >= participantMaxDrainPages {
+			return nil, false, errDrainPageCap
+		}
 		payload := &querysvc.QueryResourcesPayload{
 			Version:    "1",
 			Type:       &resourceType,
@@ -182,11 +208,14 @@ func drainParticipants(ctx context.Context, clients *lfxv2.Clients, parent strin
 		}
 		result, err := clients.QuerySvc.QueryResources(ctx, payload)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		out = append(out, result.Resources...)
+		if len(out) >= budget {
+			return out[:budget], len(out) > budget || (result.PageToken != nil && *result.PageToken != ""), nil
+		}
 		if result.PageToken == nil || *result.PageToken == "" {
-			return out, nil
+			return out, false, nil
 		}
 		pageToken = result.PageToken
 	}
@@ -418,7 +447,7 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 		if truncated {
 			out.Note += " " + fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings)
 		}
-		return jsonResult(logger, ctx, "search_past_meeting_participants count succeeded", out)
+		return jsonResult(ctx, logger, "search_past_meeting_participants count succeeded", out)
 	}
 
 	out := participantSearchResult{}
@@ -427,12 +456,16 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 	if hasDateRange {
 		var all []*querysvc.Resource
 		for _, p := range parents {
-			rs, err := drainParticipants(ctx, clients, p, args, sort)
+			rs, capped, err := drainParticipants(ctx, clients, p, args, sort, participantMaxRecords-len(all))
 			if err != nil {
 				logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 				return errorResult(friendlyAPIError("failed to search past meeting participants", err)), nil, nil
 			}
 			all = append(all, rs...)
+			if capped || len(all) >= participantMaxRecords {
+				out.TruncatedRecords = true
+				break
+			}
 		}
 		n := len(parents)
 		out.Meetings = &n
@@ -480,17 +513,20 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 	if out.Resources == nil {
 		out.Resources = []*querysvc.Resource{}
 	}
+	var notes []string
 	if len(out.Resources) == 0 {
-		out.Note = participantEmptyNote
+		notes = append(notes, participantEmptyNote)
+	}
+	if dedupe && !hasDateRange && (out.PageToken != nil || args.PageToken != "") {
+		notes = append(notes, participantPerPageNote)
 	}
 	if truncated {
-		note := fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings)
-		if out.Note != "" {
-			out.Note += " " + note
-		} else {
-			out.Note = note
-		}
+		notes = append(notes, fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings))
 	}
+	if out.TruncatedRecords {
+		notes = append(notes, fmt.Sprintf(participantRecordsCapNote, participantMaxRecords))
+	}
+	out.Note = strings.Join(notes, " ")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
@@ -509,7 +545,7 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 }
 
 // jsonResult marshals v as the single text block of a successful result.
-func jsonResult(logger *slog.Logger, ctx context.Context, msg string, v any) (*mcp.CallToolResult, any, error) {
+func jsonResult(ctx context.Context, logger *slog.Logger, msg string, v any) (*mcp.CallToolResult, any, error) {
 	prettyJSON, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal result", "error", err)

@@ -127,14 +127,30 @@ type orgSeatsSummary struct {
 	Seats                []orgCommitteeSeat `json:"seats,omitempty"`
 }
 
-// orgSeatsHTTPError carries the status of a non-2xx seats response.
+// orgSeatsErrorBodyLimit bounds how much of an upstream error body is kept.
+const orgSeatsErrorBodyLimit = 512
+
+// orgSeatsHTTPError carries the status of a non-2xx seats response. Body is
+// truncated to orgSeatsErrorBodyLimit and is only surfaced to callers for
+// 4xx statuses; 5xx bodies stay in the server log.
 type orgSeatsHTTPError struct {
 	Status int
 	Body   string
 }
 
 func (e *orgSeatsHTTPError) Error() string {
+	if e.Status >= 500 {
+		return fmt.Sprintf("invalid response code %d", e.Status)
+	}
 	return fmt.Sprintf("invalid response code %d: %s", e.Status, strings.TrimSpace(e.Body))
+}
+
+// truncateBody keeps at most orgSeatsErrorBodyLimit bytes of an error body.
+func truncateBody(body []byte) string {
+	if len(body) > orgSeatsErrorBodyLimit {
+		return string(body[:orgSeatsErrorBodyLimit]) + "…"
+	}
+	return string(body)
 }
 
 // RegisterGetOrgCommitteeSeats registers the get_org_committee_seats tool with the MCP server.
@@ -161,7 +177,10 @@ func resolveFoundationFamily(ctx context.Context, clients *lfxv2.Clients, founda
 	resourceType := projectResourceType
 	parent := "project:" + foundationUID
 	var pageToken *string
-	for {
+	for pages := 0; ; pages++ {
+		if pages >= participantMaxDrainPages {
+			return nil, fmt.Errorf("the foundation's project list exceeds the %d-page cap", participantMaxDrainPages)
+		}
 		result, err := clients.QuerySvc.QueryResources(ctx, &querysvc.QueryResourcesPayload{
 			Version:   "1",
 			Type:      &resourceType,
@@ -229,7 +248,7 @@ func fetchOrgSeatsPage(ctx context.Context, cfg *OrgSeatsConfig, token, orgUID s
 		return nil, fmt.Errorf("failed to read seats response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, &orgSeatsHTTPError{Status: resp.StatusCode, Body: string(body)}
+		return nil, &orgSeatsHTTPError{Status: resp.StatusCode, Body: truncateBody(body)}
 	}
 	var pg orgCommitteeSeatPage
 	if err := json.Unmarshal(body, &pg); err != nil {
@@ -376,10 +395,13 @@ func handleGetOrgCommitteeSeats(ctx context.Context, req *mcp.CallToolRequest, a
 
 	seats, err := drainOrgSeats(ctx, orgSeatsConfig, token, args.OrgUID, projectUIDs)
 	if err != nil {
-		logger.ErrorContext(ctx, "org seats fetch failed", "error", err)
 		var httpErr *orgSeatsHTTPError
 		if e, ok := err.(*orgSeatsHTTPError); ok {
 			httpErr = e
+			// Full (truncated) body for operators; callers get Error().
+			logger.ErrorContext(ctx, "org seats fetch failed", "status", e.Status, "body", e.Body)
+		} else {
+			logger.ErrorContext(ctx, "org seats fetch failed", "error", err)
 		}
 		if httpErr != nil && httpErr.Status == http.StatusForbidden {
 			return errorResult(orgSeatsForbiddenMessage), nil, nil
@@ -396,5 +418,5 @@ func handleGetOrgCommitteeSeats(ctx context.Context, req *mcp.CallToolRequest, a
 	}
 
 	logger.InfoContext(ctx, "get_org_committee_seats succeeded", "org_uid", args.OrgUID, "seats_total", out.SeatsTotal, "people", out.People)
-	return jsonResult(logger, ctx, "get_org_committee_seats formatted", out)
+	return jsonResult(ctx, logger, "get_org_committee_seats formatted", out)
 }

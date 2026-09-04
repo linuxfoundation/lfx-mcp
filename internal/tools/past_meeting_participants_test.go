@@ -437,3 +437,70 @@ func TestParticipantsDescriptionAdvertisesNewFilters(t *testing.T) {
 		}
 	}
 }
+
+func TestParticipants_PageTokenLoopsAreCapped(t *testing.T) {
+	// Every participant page returns a token: the drain must stop with an error.
+	api := setupParticipantTest(t)
+	api.Respond(resourcesPath, page([]string{pastMeetingDoc("m-1")}, ""))
+	for i := 0; i < participantMaxDrainPages+5; i++ {
+		api.Respond(resourcesPath, page(nil, fmt.Sprintf("t%d", i)))
+	}
+	res, _, _ := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p", DateFrom: "2026-01-01"})
+	if !res.IsError || !strings.Contains(allResultText(t, res), "page cap") {
+		t.Errorf("expected a page-cap error, got %q", allResultText(t, res))
+	}
+	if n := len(api.Requests()); n != participantMaxDrainPages+1 {
+		t.Errorf("expected 1 meeting page + %d participant pages, got %d", participantMaxDrainPages, n)
+	}
+
+	// Same for the past-meeting resolution loop.
+	api2 := setupParticipantTest(t)
+	for i := 0; i < participantMaxDrainPages+5; i++ {
+		api2.Respond(resourcesPath, page(nil, fmt.Sprintf("t%d", i)))
+	}
+	res2, _, _ := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p", DateFrom: "2026-01-01"})
+	if !res2.IsError || len(api2.Requests()) != participantMaxDrainPages {
+		t.Errorf("meeting resolution must stop at the page cap, got error=%v requests=%d", res2.IsError, len(api2.Requests()))
+	}
+}
+
+func TestParticipants_DateRangeRecordCap(t *testing.T) {
+	api := setupParticipantTest(t)
+	api.Respond(resourcesPath, page([]string{pastMeetingDoc("m-1"), pastMeetingDoc("m-2")}, ""))
+	// m-1 alone yields more than the cap across pages; m-2 must never be queried.
+	perPage := 100
+	pages := participantMaxRecords/perPage + 1
+	for p := 0; p < pages; p++ {
+		docs := make([]string, perPage)
+		for i := range docs {
+			n := p*perPage + i
+			docs[i] = participantDoc(fmt.Sprintf("p%d", n), fmt.Sprintf("u%d@x.org", n), "U", fmt.Sprintf("%d", n), true, true, "")
+		}
+		api.Respond(resourcesPath, page(docs, fmt.Sprintf("t%d", p)))
+	}
+	res, _, _ := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p", DateFrom: "2026-01-01"})
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", allResultText(t, res))
+	}
+	out := resultJSON(t, res)
+	if out["truncated_records"] != true || out["records"] != float64(participantMaxRecords) {
+		t.Errorf("expected truncated_records=true records=%d, got %v %v", participantMaxRecords, out["truncated_records"], out["records"])
+	}
+	if !strings.Contains(out["note"].(string), "count_only") {
+		t.Errorf("record-cap note missing: %v", out["note"])
+	}
+	for _, r := range api.RequestsTo(resourcesPath) {
+		if r.Query.Get("parent") == "past_meeting:m-2" {
+			t.Error("must stop draining once the record cap is hit")
+		}
+	}
+}
+
+func TestParticipants_PerPageDedupeIsDisclosed(t *testing.T) {
+	api := setupParticipantTest(t)
+	api.Respond(resourcesPath, page([]string{participantDoc("p1", "a@x.org", "A", "A", true, true, "")}, "next"))
+	res, _, _ := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p", PageSize: 1})
+	if !strings.Contains(resultJSON(t, res)["note"].(string), "this page only") {
+		t.Errorf("a paged dedupe must say people/records are per page, got %v", resultJSON(t, res)["note"])
+	}
+}

@@ -281,7 +281,7 @@ type SearchPastMeetingParticipantsArgs struct {
 	AttendedOnly  bool   `json:"attended_only,omitempty" jsonschema:"Only participants who attended (is_attended:true)"`
 	OrgName       string `json:"org_name,omitempty" jsonschema:"Exact stored organisation name, case-sensitive (copy it from a participant record)"`
 	CountOnly     bool   `json:"count_only,omitempty" jsonschema:"Return only {count, complete, visibility, note}: the number of participant records (not distinct people) matching the filters"`
-	Dedupe        *bool  `json:"dedupe,omitempty" jsonschema:"De-duplicate people by e-mail (default true), merging attendance flags like LFX Self Serve; set false for the raw records"`
+	Dedupe        *bool  `json:"dedupe,omitempty" jsonschema:"De-duplicate people by e-mail (default true), merging attendance flags like LFX Self Serve; applies within the returned page (or the whole date range); set false for the raw records"`
 	Sort          string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
 	PageSize      int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100); ignored when a date range is set (all matching meetings are drained)"`
 	PageToken     string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response (not usable with a date range)"`

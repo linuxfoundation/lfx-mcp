@@ -6,6 +6,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -38,6 +39,12 @@ type capturedLensRequest struct {
 // lensConfig is a package-level global.
 func setupLensTest(t *testing.T) *capturedLensRequest {
 	t.Helper()
+	return setupLensTestResponding(t, `{"ok": true}`)
+}
+
+// setupLensTestResponding is setupLensTest with a chosen JSON response body.
+func setupLensTestResponding(t *testing.T, response string) *capturedLensRequest {
+	t.Helper()
 
 	captured := &capturedLensRequest{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +55,7 @@ func setupLensTest(t *testing.T) *capturedLensRequest {
 		captured.Body = body
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok": true}`))
+		_, _ = w.Write([]byte(response))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -994,6 +1001,76 @@ func TestQueryLFXLensUnknownSlugIsAnError(t *testing.T) {
 	}
 }
 
+// The other two rejections the lens can return are errors too, and a caller
+// can tell them apart by their opener.
+func TestQueryLFXLensOtherRejectionsAreErrors(t *testing.T) {
+	for _, rejection := range []string{
+		"Invalid project_slugs: at most 25 slugs per call (30 given). Pass a list of exact slugs from search_projects, or omit project_slugs for an LF-wide answer.",
+		"Project scope could not be resolved: the warehouse lookup failed (OperationalError). The slugs may be correct; retry, or omit project_slugs for an LF-wide answer.",
+	} {
+		setupLensTestResponding(t, `{"content":`+strconv.Quote(rejection)+`,"status":"COMPLETED","session_id":"s"}`)
+
+		res, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+			ProjectSlugs: []string{"cncf"},
+			Input:        "How many members do we have?",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !res.IsError {
+			t.Errorf("expected IsError for %q", rejection[:30])
+		}
+		if got := resultText(t, res); got != rejection {
+			t.Errorf("rejection text changed: %q", got)
+		}
+	}
+}
+
+// Oversized or malformed lists are argument errors here, before the lens is
+// called, and the offending value is not echoed back.
+func TestQueryLFXLensRejectsOversizedSlugLists(t *testing.T) {
+	captured := setupLensTest(t)
+
+	tooMany := make([]string, 0, maxLensProjectSlugs+1)
+	for i := 0; i <= maxLensProjectSlugs; i++ {
+		tooMany = append(tooMany, fmt.Sprintf("slug-%d", i))
+	}
+	cases := map[string][]string{
+		"too many":      tooMany,
+		"too long":      {strings.Repeat("x", maxLensSlugLength+1)},
+		"control chars": {"cncf\nDROP"},
+		"tab in slug":   {"cn\tcf"},
+	}
+	for name, slugs := range cases {
+		_, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+			ProjectSlugs: slugs,
+			Input:        "How many members?",
+		})
+		if err == nil || !strings.HasPrefix(err.Error(), "project_slugs:") {
+			t.Errorf("%s: expected a project_slugs argument error, got %v", name, err)
+		}
+		if strings.Contains(err.Error(), "xxxx") || strings.Contains(err.Error(), "DROP") {
+			t.Errorf("%s: error echoes the offending value: %q", name, err)
+		}
+		if captured.Body != nil {
+			t.Errorf("%s: the lens was called with an invalid list", name)
+		}
+	}
+
+	// exactly the cap, with duplicates that collapse under it, is fine
+	atCap := make([]string, 0, maxLensProjectSlugs+2)
+	for i := 0; i < maxLensProjectSlugs; i++ {
+		atCap = append(atCap, fmt.Sprintf("slug-%d", i))
+	}
+	atCap = append(atCap, "slug-0", " slug-1 ")
+	if _, _, err := handleQueryLFXLens(context.Background(), &mcp.CallToolRequest{}, QueryLFXLensArgs{
+		ProjectSlugs: atCap,
+		Input:        "How many members?",
+	}); err != nil {
+		t.Errorf("a list at the cap must pass, got %v", err)
+	}
+}
+
 // A normal completed answer, scope line and all, is not an error.
 func TestQueryLFXLensCompletedAnswerIsNotAnError(t *testing.T) {
 	const answer = "**scope**: LF-wide — no project filter applied.\n\n### Countries\n| N |\n| --- |\n| 140 |"
@@ -1025,43 +1102,16 @@ func lensAdditionalData(t *testing.T, captured *capturedLensRequest) string {
 	}
 	rest := body[i+len(marker):]
 	// Skip the header/body separator, then read to the next boundary.
-	rest = rest[strings.Index(rest, "\r\n\r\n")+4:]
+	sep := strings.Index(rest, "\r\n\r\n")
+	if sep < 0 {
+		t.Fatalf("additional_data field has no header/body separator: %s", body)
+	}
+	rest = rest[sep+4:]
 	end := strings.Index(rest, "\r\n--")
 	if end < 0 {
 		t.Fatalf("unterminated additional_data field: %s", body)
 	}
 	return rest[:end]
-}
-
-// setupLensTestResponding is setupLensTest with a chosen JSON response body.
-func setupLensTestResponding(t *testing.T, response string) *capturedLensRequest {
-	t.Helper()
-
-	captured := &capturedLensRequest{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		captured.Method = r.Method
-		captured.Path = r.URL.Path
-		body, _ := io.ReadAll(r.Body)
-		captured.Body = body
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(response))
-	}))
-	t.Cleanup(srv.Close)
-
-	client, err := serviceapi.NewClient(serviceapi.Config{
-		BaseURL:     srv.URL,
-		TokenSource: stubTokenSource{},
-	})
-	if err != nil {
-		t.Fatalf("failed to create service API client: %v", err)
-	}
-
-	prev := lensConfig
-	SetLensConfig(&LensConfig{ServiceClient: client})
-	t.Cleanup(func() { lensConfig = prev })
-
-	return captured
 }
 
 // TestQueryLFXLensDoesNotClaimMemberships guards the other half of the routing

@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/serviceapi"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -80,11 +81,26 @@ type lensWorkflowAdditional struct {
 	ProjectSlugs []string `json:"project_slugs"`
 }
 
-// lensUnknownSlugPrefix opens the lens's rejection when a slug has no
-// PROJECT_SPINE row. The lens completes the run (status COMPLETED) with that
-// text as its whole content, so the prefix is how this side tells a rejection
-// from an answer. Pinned by tests on both sides.
-const lensUnknownSlugPrefix = "Unknown project slug"
+// lensRejectionPrefixes open the lens's scope rejections: a slug with no
+// PROJECT_SPINE row, a malformed list, or a failed warehouse lookup. The lens
+// completes such a run (status COMPLETED) with the rejection as its whole
+// content — no agent ran, no query executed — so the prefix is how this side
+// tells a rejection from an answer. Kept as three so a caller can tell "your
+// slug is wrong" from "the warehouse was down; retry". Pinned by tests on both
+// sides (lfx-lens resolve_lfx_lens_mcp_scope.REJECTION_PREFIXES).
+var lensRejectionPrefixes = []string{
+	"Unknown project slug",
+	"Invalid project_slugs",
+	"Project scope could not be resolved",
+}
+
+// Bounds on project_slugs, applied here so an oversized list never reaches
+// the lens: every slug costs it warehouse work. The largest legitimate scope
+// is a handful of foundations to compare. The lens enforces the same limits.
+const (
+	maxLensProjectSlugs = 25
+	maxLensSlugLength   = 128
+)
 
 type lensQueryResponse struct {
 	Content    string `json:"content,omitempty"`
@@ -105,6 +121,11 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 		return nil, nil, fmt.Errorf("input is required")
 	}
 
+	slugs, err := normalizeSlugs(args.ProjectSlugs)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	userID := AnonymousUserID
 	if req.Extra != nil && req.Extra.TokenInfo != nil && req.Extra.TokenInfo.UserID != "" {
 		userID = req.Extra.TokenInfo.UserID
@@ -113,7 +134,7 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 	sessionID := userID + "-" + time.Now().UTC().Format("2006-01-02T15:04:05Z")
 
 	additionalData, err := json.Marshal(lensWorkflowAdditional{
-		ProjectSlugs: normalizeSlugs(args.ProjectSlugs),
+		ProjectSlugs: slugs,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal additional_data: %w", err)
@@ -147,10 +168,11 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 		}, nil, nil
 	}
 
-	// An unknown slug is not an answer: the lens stopped before the agent ran
-	// and no query executed. Surface it as an error, text unchanged, so the
-	// caller re-resolves the slug instead of reading the message as data.
-	if strings.HasPrefix(strings.TrimSpace(resp.Content), lensUnknownSlugPrefix) {
+	// A scope rejection is not an answer: the lens stopped before the agent
+	// ran and no query executed. Surface it as an error, text unchanged, so
+	// the caller re-resolves the slug (or retries) instead of reading the
+	// message as data.
+	if isLensRejection(resp.Content) {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: resp.Content}},
 			IsError: true,
@@ -162,11 +184,26 @@ func handleQueryLFXLens(ctx context.Context, req *mcp.CallToolRequest, args Quer
 	}, nil, nil
 }
 
+// isLensRejection reports whether lens content is a scope rejection rather
+// than an answer. Real answers open with "**scope**:", so a prefix match on
+// the rejection openers cannot mistake one for the other.
+func isLensRejection(content string) bool {
+	trimmed := strings.TrimSpace(content)
+	for _, prefix := range lensRejectionPrefixes {
+		if strings.HasPrefix(trimmed, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // normalizeSlugs trims, drops empties and de-duplicates preserving order. No
 // case folding and no fuzzy matching: stored slugs are exact and
 // search_projects is the resolver. Always returns a non-nil slice so the JSON
-// carries [] rather than null.
-func normalizeSlugs(slugs []string) []string {
+// carries [] rather than null. An over-long list, an over-long slug or a slug
+// with control characters is an argument error; the offending value is not
+// echoed.
+func normalizeSlugs(slugs []string) ([]string, error) {
 	out := make([]string, 0, len(slugs))
 	seen := make(map[string]struct{}, len(slugs))
 	for _, s := range slugs {
@@ -174,13 +211,22 @@ func normalizeSlugs(slugs []string) []string {
 		if s == "" {
 			continue
 		}
+		if len(s) > maxLensSlugLength {
+			return nil, fmt.Errorf("project_slugs: a slug exceeds %d bytes", maxLensSlugLength)
+		}
+		if strings.ContainsFunc(s, unicode.IsControl) {
+			return nil, fmt.Errorf("project_slugs: a slug contains control characters")
+		}
 		if _, dup := seen[s]; dup {
 			continue
 		}
 		seen[s] = struct{}{}
 		out = append(out, s)
 	}
-	return out
+	if len(out) > maxLensProjectSlugs {
+		return nil, fmt.Errorf("project_slugs: at most %d slugs per call (%d given)", maxLensProjectSlugs, len(out))
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------------------

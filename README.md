@@ -151,6 +151,15 @@ Add the following to your `~/.cursor/mcp.json`:
 }
 ```
 
+### ChatGPT
+
+> **Status: pending.** Setup steps below are a placeholder until ChatGPT/Codex connector support is validated end-to-end (tracking: [linuxfoundation/lfx-mcp#126](https://github.com/linuxfoundation/lfx-mcp/issues/126)).
+
+ChatGPT (Developer Mode / custom connectors, Business/Enterprise plans) and Codex CLI/IDE support CIMD, so no `client_id` is needed.
+
+1. In ChatGPT, enable **Developer Mode** (Settings → Connectors → Advanced), then add a custom connector with the URL `https://mcp.lfx.dev/mcp`.
+2. Authenticate with your LFID when prompted.
+
 ### Additional clients (via mcp-remote)
 
 If your MCP client is not listed here, you may try using [mcp-remote](https://github.com/geelen/mcp-remote) as a local proxy.

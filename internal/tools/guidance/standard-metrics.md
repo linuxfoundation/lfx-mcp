@@ -119,9 +119,11 @@ roster), project_health and software_value (a daily snapshot).
   withheld under a coverage threshold, so only a subset of LF-hosted
   projects carry one — applied.coverage says how many, out of the LF-hosted
   projects with a health row on the snapshot day (more have been tracked at
-  some point). The family reports the COUNT of scored projects; the average
-  score returns once the layer's average reads the v2 score. Say the
-  coverage whenever the count is the answer.
+  some point). The family reports the count of scored projects and their
+  mean score; the average is the v2 health score from the lf-dbt DBT-1
+  deployment (week of 2026-09-07) onward, and before that day the layer's
+  average still reads the v1 score. Say the coverage whenever the count is
+  the answer.
 
 ## Defaults and the applied block
 
@@ -184,7 +186,7 @@ series adds `period` in front; an at-date series adds `period_end` too.
 | participants | window | total, org, project | Distinct people with a code contribution OR a collaboration activity | [...,] total_contributors_with_collaboration | A superset of contributors (issues, comments, reviews count); distinct people: never sum rows |
 | maintainers | at-date | total, org, project, maintainer | Active maintainers today (LF projects only); with period, today's roster active in each period | [account / foundation, project, project_name / project, project_name, maintainer, account, role,] active_maintainers | Distinct people; the NULL account row is maintainers with no resolved employer; today only unless period; by=maintainer has no series |
 | maintainer_contributions | window | total, org, project, maintainer | Code contributions by people on the CURRENT maintainer roster of the activity's project | [...,] maintainer_contributions[, contributing_maintainers] | Maintainership as of the build, contributions in the window; maintainer_contributions is additive, contributing_maintainers a distinct count; "share of work" is this over contributions for the same scope and window |
-| project_health | at-date | total, foundation, category, population | Projects with a v2 health score, on the latest snapshot on or before end_date | [foundation / category / population,] project_health_count | v2 score; snapshots start on 2026-08-25; a subset of LF-hosted projects (applied.coverage); LF-hosted unless by=population (rows lf_hosted and index); category is the stored v2 band name (Excellent, Healthy, Fair, Concerning, Critical), never a threshold; a distinct-project count: never sum rows; no average until the layer's average reads v2 |
+| project_health | at-date | total, foundation, category, population | Projects with a v2 health score and their mean score, on the latest snapshot on or before end_date | [foundation / category / population,] project_health_count, avg_project_health_score | v2 score; snapshots start on 2026-08-25; a subset of LF-hosted projects (applied.coverage); LF-hosted unless by=population (rows lf_hosted and index); category is the stored v2 band name (Excellent, Healthy, Fair, Concerning, Critical), never a threshold; a distinct-project count: never sum rows; a mean of project scores: never re-average; the average is v2 from the DBT-1 deployment (week of 2026-09-07) onward, v1 before |
 | software_value | at-date | total, foundation, population | COCOMO software value, each project's latest row on or before end_date, summed | [foundation / population,] total_software_value | USD; additive across projects at a date, never across days; a project whose latest row is a health-only day contributes nothing, so totals read low, never inflated |
 | event_registrations | window | total, event, org | Accepted registrations of events starting in the window, and the distinct people behind them | [event / account, parent_org,] total_registrations, total_unique_registrants, total_checked_in_attendees | The window is the EVENT start date; registrants and attendees are distinct people by email: never sum them across rows; by=org is the registrant's account, NULL = unattributed |
 | event_sponsorships | window | total, org, event | Sponsorship revenue and count of events starting in the window | [account, parent_org / event,] total_sponsorship_revenue, total_sponsorship_count | Additive; USD; all tier types |

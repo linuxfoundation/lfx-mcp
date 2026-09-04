@@ -96,7 +96,7 @@ func RegisterSearchMeetingRegistrants(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_meeting_registrants",
-			Description: "Search for LFX meeting registrants using the query service. Supports filtering by meeting, group (also known as committee), project, date range, and other fields.",
+			Description: "Search for LFX meeting registrants using the query service. Supports filtering by meeting ID or group UID (also known as committee UID) and by registrant name, with paging.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Meeting Registrants",
 				ReadOnlyHint: true,
@@ -106,7 +106,7 @@ func RegisterSearchMeetingRegistrants(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_meeting_registrants",
-		Description: "Search for LFX meeting registrants using the query service. Supports filtering by meeting, committee, project, date range, and other fields.",
+		Description: "Search for LFX meeting registrants using the query service. Supports filtering by meeting ID or committee UID and by registrant name, with paging.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Meeting Registrants",
 			ReadOnlyHint: true,
@@ -130,7 +130,7 @@ func RegisterGetMeetingRegistrant(server *mcp.Server) {
 func RegisterSearchPastMeetingParticipants(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meeting_participants",
-		Description: "Search for LFX past meeting participants using the query service. Supports filtering by past meeting ID (meeting_and_occurrence_id), project UID, and name.",
+		Description: "Search for LFX past meeting participants using the query service. Filter by past meeting ID (meeting_and_occurrence_id), committee UID or project UID, by name, by meeting start date range (date_from/date_to, resolved through the past meetings of that project or committee), attended_only, and exact stored org_name. People are de-duplicated by e-mail like LFX Self Serve (dedupe=false for raw records); count_only returns the record count with complete and visibility. Results cover only the meetings visible to the caller.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Past Meeting Participants",
 			ReadOnlyHint: true,
@@ -269,13 +269,22 @@ type GetMeetingRegistrantArgs struct {
 }
 
 // SearchPastMeetingParticipantsArgs defines the input parameters for the search_past_meeting_participants tool.
+// The handler lives in past_meeting_participants.go.
 type SearchPastMeetingParticipantsArgs struct {
-	PastMeetingID string `json:"past_meeting_id,omitempty" jsonschema:"Filter participants by past meeting ID (the meeting_and_occurrence_id value, e.g. 91461158520-1771596000000)"`
-	ProjectUID    string `json:"project_uid,omitempty" jsonschema:"Filter participants by project UID (ignored when past_meeting_id is set)"`
+	PastMeetingID string `json:"past_meeting_id,omitempty" jsonschema:"Filter participants by past meeting ID (the meeting_and_occurrence_id value, e.g. 91461158520-1771596000000); takes precedence over committee_uid and project_uid"`
+	CommitteeUID  string `json:"committee_uid,omitempty" jsonschema:"Filter participants by committee UID (ignored when past_meeting_id is set; takes precedence over project_uid)"`
+	ProjectUID    string `json:"project_uid,omitempty" jsonschema:"Filter participants by project UID (ignored when past_meeting_id or committee_uid is set)"`
 	Name          string `json:"name,omitempty" jsonschema:"Name or partial name of the participant to search for"`
+	DateFrom      string `json:"date_from,omitempty" jsonschema:"Only participants of past meetings that started on or after this ISO 8601 date (e.g. 2026-06-01); resolved via the past meetings of the same project/committee"`
+	DateTo        string `json:"date_to,omitempty" jsonschema:"Only participants of past meetings that started on or before this ISO 8601 date (e.g. 2026-06-30)"`
+	MaxMeetings   int    `json:"max_meetings,omitempty" jsonschema:"With a date range: maximum past meetings to expand (default 50, max 200); truncated_meetings=true in the result when the cap was hit"`
+	AttendedOnly  bool   `json:"attended_only,omitempty" jsonschema:"Only participants who attended (is_attended:true)"`
+	OrgName       string `json:"org_name,omitempty" jsonschema:"Exact stored organisation name, case-sensitive (copy it from a participant record)"`
+	CountOnly     bool   `json:"count_only,omitempty" jsonschema:"Return only {count, complete, visibility, note}: the number of participant records (not distinct people) matching the filters"`
+	Dedupe        *bool  `json:"dedupe,omitempty" jsonschema:"De-duplicate people by e-mail (default true), merging attendance flags like LFX Self Serve; set false for the raw records"`
 	Sort          string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
-	PageSize      int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken     string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	PageSize      int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100); ignored when a date range is set (all matching meetings are drained)"`
+	PageToken     string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response (not usable with a date range)"`
 }
 
 // GetPastMeetingParticipantArgs defines the input parameters for the get_past_meeting_participant tool.
@@ -712,123 +721,6 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 			&mcp.TextContent{Text: string(prettyJSON)},
 		},
 	}, nil, nil
-}
-
-// handleSearchPastMeetingParticipants implements the search_past_meeting_participants tool logic.
-func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolRequest, args SearchPastMeetingParticipantsArgs) (*mcp.CallToolResult, any, error) {
-	logger := newToolLogger(ctx, req)
-
-	if meetingConfig == nil {
-		logger.ErrorContext(ctx, "meeting tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: meeting tools not configured"},
-			},
-			IsError: true,
-		}, nil, nil
-	}
-
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
-	}
-
-	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
-	clients := meetingConfig.Clients
-
-	pageSize := args.PageSize
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-
-	sort := args.Sort
-	if sort == "" {
-		sort = "name_asc"
-	}
-
-	resourceType := pastMeetingParticipantResourceType
-	payload := &querysvc.QueryResourcesPayload{
-		Version:  "1",
-		Type:     &resourceType,
-		PageSize: pageSize,
-		Sort:     sort,
-	}
-
-	// past_meeting_id takes precedence over project_uid; only one filter of this type can be set.
-	if args.PastMeetingID != "" {
-		parentRef := "past_meeting:" + args.PastMeetingID
-		payload.Parent = &parentRef
-	} else if args.ProjectUID != "" {
-		parentRef := "project:" + args.ProjectUID
-		payload.Parent = &parentRef
-	}
-
-	if args.Name != "" {
-		payload.Name = &args.Name
-	}
-
-	if args.PageToken != "" {
-		payload.PageToken = &args.PageToken
-	}
-
-	logger.InfoContext(ctx, "searching past meeting participants",
-		"past_meeting_id", args.PastMeetingID,
-		"project_uid", args.ProjectUID,
-		"name", args.Name,
-		"page_size", pageSize,
-	)
-
-	result, err := clients.QuerySvc.QueryResources(ctx, payload)
-	if err != nil {
-		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search past meeting participants", err)},
-			},
-			IsError: true,
-		}, nil, nil
-	}
-
-	type searchResult struct {
-		Resources []*querysvc.Resource `json:"resources"`
-		PageToken *string              `json:"page_token,omitempty"`
-	}
-
-	out := searchResult{
-		Resources: result.Resources,
-		PageToken: result.PageToken,
-	}
-
-	var pageWarning string
-	if result.PageToken != nil && len(result.Resources) < pageSize {
-		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
-	}
-
-	prettyJSON, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
-	}
-
-	logger.InfoContext(ctx, "search past meeting participants succeeded", "count", len(result.Resources))
-
-	content := []mcp.Content{}
-	if pageWarning != "" {
-		content = append(content, &mcp.TextContent{Text: pageWarning})
-	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
 }
 
 // handleGetPastMeetingParticipant implements the get_past_meeting_participant tool logic.

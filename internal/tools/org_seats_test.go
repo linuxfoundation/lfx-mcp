@@ -18,7 +18,10 @@ const testSFID = "001B000000IqhSLIAZ"
 var seatsPath = "/committees/b2b-org/" + testSFID + "/seats"
 
 // seatDoc is one OrgCommitteeSeat as committee-service 0.4.22 serves it
-// (cmd/committee-api/design/type.go OrgCommitteeSeatType); values are test data.
+// (cmd/committee-api/design/type.go OrgCommitteeSeatType, decoded by the
+// vendored client of the same version). uid/committee_uid/project_uid are
+// uuid-formatted and avatar is omitted when empty, as the service does;
+// values are test data.
 func seatDoc(uid, committeeUID, committeeName, category, projectUID, projectSlug, first, last, email, role string, editable bool) string {
 	reason := ""
 	if !editable {
@@ -45,9 +48,18 @@ func seatDoc(uid, committeeUID, committeeName, category, projectUID, projectSlug
 	  "organization_id": %q,
 	  "is_org_editable": %t,
 	  "reason": %q,
-	  "avatar": "",
 	  "username": %q
-	}`, uid, committeeUID, committeeName, category, projectUID, projectSlug, first, last, email, role, appointedBy, testSFID, editable, reason, strings.ToLower(first))
+	}`, uuidFor(uid), uuidFor(committeeUID), committeeName, category, uuidFor(projectUID), projectSlug, first, last, email, role, appointedBy, testSFID, editable, reason, strings.ToLower(first))
+}
+
+// uuidFor derives a deterministic, well-formed UUID from a short label so
+// fixtures read naturally while satisfying the client's uuid format checks.
+func uuidFor(label string) string {
+	h := 0
+	for _, c := range label {
+		h = h*131 + int(c)
+	}
+	return fmt.Sprintf("%08x-%04x-4%03x-8%03x-%012x", h&0xffffffff, (h>>8)&0xffff, (h>>4)&0xfff, h&0xfff, h&0xffffffffffff)
 }
 
 // tenSeatsFixture: ten seats, two categories (Board / Technical), two
@@ -80,7 +92,7 @@ func setupOrgSeatsTest(t *testing.T) *stubLFXAPI {
 	t.Helper()
 	api := newStubLFXAPI(t)
 	prev := orgSeatsConfig
-	SetOrgSeatsConfig(&OrgSeatsConfig{Clients: api.Clients, APIURL: api.server.URL})
+	SetOrgSeatsConfig(&OrgSeatsConfig{Clients: api.Clients})
 	t.Cleanup(func() { orgSeatsConfig = prev })
 	return api
 }
@@ -167,7 +179,7 @@ func TestOrgSeats_IncludeSeatsAndCategoryFilter(t *testing.T) {
 		}
 	}
 	if row["project_slug"] == "" {
-		t.Error("project_slug must survive decoding (vendored client would have dropped it)")
+		t.Error("project_slug must survive decoding (the v0.4.0 client dropped it; v0.4.22 carries it)")
 	}
 }
 
@@ -258,6 +270,7 @@ func TestOrgSeats_ForbiddenMapsToOrgGrantMessage(t *testing.T) {
 func TestOrgSeats_OtherErrorsAreFriendly(t *testing.T) {
 	api := setupOrgSeatsTest(t)
 	api.RespondStatus(seatsPath, http.StatusNotFound, `{"message":"org not found"}`)
+	// Goa's default branch wraps unknown statuses as "invalid response code N".
 	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{OrgUID: testSFID})
 	if !res.IsError || !strings.Contains(allResultText(t, res), "404") {
 		t.Errorf("404 must pass through friendlyAPIError, got %q", allResultText(t, res))
@@ -281,27 +294,6 @@ func TestOrgSeats_DescriptionBudgetAndContent(t *testing.T) {
 	}
 	if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
 		t.Error("tool must be read-only")
-	}
-}
-
-func TestOrgSeats_UpstreamBodiesAreBoundedAnd5xxHidden(t *testing.T) {
-	api := setupOrgSeatsTest(t)
-	huge := strings.Repeat("x", 100000)
-	api.RespondStatus(seatsPath, http.StatusBadGateway, `<html>`+huge+`</html>`)
-	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{OrgUID: testSFID})
-	text := allResultText(t, res)
-	if !res.IsError || !strings.Contains(text, "502") {
-		t.Fatalf("expected a 502 error, got %q", text)
-	}
-	if strings.Contains(text, "xxxx") || len(text) > 300 {
-		t.Errorf("5xx body must not reach the caller, got %d bytes", len(text))
-	}
-
-	api2 := setupOrgSeatsTest(t)
-	api2.RespondStatus(seatsPath, http.StatusBadRequest, `{"message":"`+huge+`"}`)
-	res2, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{OrgUID: testSFID})
-	if text := allResultText(t, res2); len(text) > orgSeatsErrorBodyLimit+200 {
-		t.Errorf("4xx body must be truncated to ~%d bytes, got %d", orgSeatsErrorBodyLimit, len(text))
 	}
 }
 

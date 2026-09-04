@@ -401,13 +401,8 @@ func main() {
 				tools.SetMeetingConfig(&tools.MeetingConfig{
 					Clients: sharedClients,
 				})
-				// TOOLS-1: the seats route is read with a plain client and the
-				// exchanged token set per request (the vendored committee client
-				// predates the seat's project fields).
 				tools.SetOrgSeatsConfig(&tools.OrgSeatsConfig{
-					Clients:    sharedClients,
-					APIURL:     cfg.LFXAPIURL,
-					HTTPClient: &http.Client{Timeout: 30 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
+					Clients: sharedClients,
 				})
 			}
 

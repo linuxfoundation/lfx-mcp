@@ -6,17 +6,13 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
+	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -49,15 +45,9 @@ const orgSeatsForbiddenMessage = "Error: your identity does not hold the organis
 
 // OrgSeatsConfig holds configuration for get_org_committee_seats.
 type OrgSeatsConfig struct {
-	// Clients is the shared LFX v2 API client instance (token exchange and
-	// the query service). Must be the instance created at startup.
+	// Clients is the shared LFX v2 API client instance (committee service and
+	// query service). Must be the instance created at startup.
 	Clients *lfxv2.Clients
-	// APIURL is the LFX API base URL the seats route is served under.
-	APIURL string
-	// HTTPClient performs the seats request. The exchanged token is set
-	// explicitly per request, so this must be a plain client, not one wrapped
-	// by the auth interceptor. Nil means a 30s-timeout default.
-	HTTPClient *http.Client
 }
 
 var orgSeatsConfig *OrgSeatsConfig
@@ -75,11 +65,9 @@ type GetOrgCommitteeSeatsArgs struct {
 	IncludeSeats  bool   `json:"include_seats,omitempty" jsonschema:"Return the seat rows as well as the summary (default false: summary only)"`
 }
 
-// orgCommitteeSeat is one seat row as committee-service 0.4.22 serves it
-// (cmd/committee-api/design/type.go, OrgCommitteeSeatType). It is decoded
-// here rather than through the vendored Goa client: the vendored v0.4.0
-// client predates project_uid, project_slug, avatar and username and its
-// decoder drops unknown keys silently.
+// orgCommitteeSeat is one seat row as returned to the caller: the
+// committee-service OrgCommitteeSeat (client v0.4.22, the version prod runs)
+// flattened so optional fields serialise as plain strings.
 type orgCommitteeSeat struct {
 	UID               string `json:"uid"`
 	CommitteeUID      string `json:"committee_uid"`
@@ -101,10 +89,28 @@ type orgCommitteeSeat struct {
 	Username          string `json:"username,omitempty"`
 }
 
-// orgCommitteeSeatPage is the seats route's response body.
-type orgCommitteeSeatPage struct {
-	Seats     []orgCommitteeSeat `json:"seats"`
-	PageToken string             `json:"page_token,omitempty"`
+// seatFromService flattens a committee-service seat (derefStr from committee_write.go).
+func seatFromService(in *committeeservice.OrgCommitteeSeat) orgCommitteeSeat {
+	return orgCommitteeSeat{
+		UID:               in.UID,
+		CommitteeUID:      in.CommitteeUID,
+		CommitteeName:     in.CommitteeName,
+		CommitteeCategory: in.CommitteeCategory,
+		ProjectUID:        derefStr(in.ProjectUID),
+		ProjectSlug:       derefStr(in.ProjectSlug),
+		FirstName:         in.FirstName,
+		LastName:          in.LastName,
+		Email:             in.Email,
+		JobTitle:          derefStr(in.JobTitle),
+		RoleName:          in.RoleName,
+		VotingStatus:      in.VotingStatus,
+		AppointedBy:       in.AppointedBy,
+		OrganizationID:    in.OrganizationID,
+		IsOrgEditable:     in.IsOrgEditable,
+		Reason:            derefStr(in.Reason),
+		Avatar:            derefStr(in.Avatar),
+		Username:          derefStr(in.Username),
+	}
 }
 
 // orgSeatsSummary is the output of get_org_committee_seats.
@@ -125,32 +131,6 @@ type orgSeatsSummary struct {
 	Visibility           string             `json:"visibility"`
 	Note                 string             `json:"note"`
 	Seats                []orgCommitteeSeat `json:"seats,omitempty"`
-}
-
-// orgSeatsErrorBodyLimit bounds how much of an upstream error body is kept.
-const orgSeatsErrorBodyLimit = 512
-
-// orgSeatsHTTPError carries the status of a non-2xx seats response. Body is
-// truncated to orgSeatsErrorBodyLimit and is only surfaced to callers for
-// 4xx statuses; 5xx bodies stay in the server log.
-type orgSeatsHTTPError struct {
-	Status int
-	Body   string
-}
-
-func (e *orgSeatsHTTPError) Error() string {
-	if e.Status >= 500 {
-		return fmt.Sprintf("invalid response code %d", e.Status)
-	}
-	return fmt.Sprintf("invalid response code %d: %s", e.Status, strings.TrimSpace(e.Body))
-}
-
-// truncateBody keeps at most orgSeatsErrorBodyLimit bytes of an error body.
-func truncateBody(body []byte) string {
-	if len(body) > orgSeatsErrorBodyLimit {
-		return string(body[:orgSeatsErrorBodyLimit]) + "…"
-	}
-	return string(body)
 }
 
 // RegisterGetOrgCommitteeSeats registers the get_org_committee_seats tool with the MCP server.
@@ -213,62 +193,30 @@ func resolveFoundationFamily(ctx context.Context, clients *lfxv2.Clients, founda
 	}
 }
 
-// fetchOrgSeatsPage performs one authenticated GET on the seats route.
-func fetchOrgSeatsPage(ctx context.Context, cfg *OrgSeatsConfig, token, orgUID string, projectUIDs []string, pageToken string) (*orgCommitteeSeatPage, error) {
-	q := url.Values{}
-	q.Set("v", "1")
-	for _, uid := range projectUIDs {
-		q.Add("project_uids", uid)
-	}
-	q.Set("page_size", fmt.Sprintf("%d", orgSeatsPageSize))
-	if pageToken != "" {
-		q.Set("page_token", pageToken)
-	}
-	endpoint := strings.TrimSuffix(cfg.APIURL, "/") + "/committees/b2b-org/" + url.PathEscape(orgUID) + "/seats?" + q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build seats request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-
-	httpClient := cfg.HTTPClient
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 30 * time.Second}
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("seats request failed: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck // Response body close errors are not actionable after reading.
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read seats response: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, &orgSeatsHTTPError{Status: resp.StatusCode, Body: truncateBody(body)}
-	}
-	var pg orgCommitteeSeatPage
-	if err := json.Unmarshal(body, &pg); err != nil {
-		return nil, fmt.Errorf("failed to decode seats response: %w", err)
-	}
-	return &pg, nil
-}
-
 // drainOrgSeats follows page_token until exhausted or the page cap; the cap
-// is an error because LFX Self Serve never shows a partial roster.
-func drainOrgSeats(ctx context.Context, cfg *OrgSeatsConfig, token, orgUID string, projectUIDs []string) ([]orgCommitteeSeat, error) {
+// is an error because LFX Self Serve never shows a partial roster. The shared
+// auth interceptor injects the caller's exchanged token on every request.
+func drainOrgSeats(ctx context.Context, clients *lfxv2.Clients, orgUID string, projectUIDs []string) ([]orgCommitteeSeat, error) {
 	var seats []orgCommitteeSeat
-	pageToken := ""
+	var pageToken *string
+	pageSize := orgSeatsPageSize
 	for pages := 0; pages < orgSeatsMaxPages; pages++ {
-		pg, err := fetchOrgSeatsPage(ctx, cfg, token, orgUID, projectUIDs, pageToken)
+		pg, err := clients.Committee.GetOrgCommitteeSeats(ctx, &committeeservice.GetOrgCommitteeSeatsPayload{
+			Version:     "1",
+			UID:         orgUID,
+			ProjectUids: projectUIDs,
+			PageSize:    &pageSize,
+			PageToken:   pageToken,
+		})
 		if err != nil {
 			return nil, err
 		}
-		seats = append(seats, pg.Seats...)
-		if pg.PageToken == "" {
+		for _, seat := range pg.Seats {
+			if seat != nil {
+				seats = append(seats, seatFromService(seat))
+			}
+		}
+		if pg.PageToken == nil || *pg.PageToken == "" {
 			return seats, nil
 		}
 		pageToken = pg.PageToken
@@ -359,7 +307,7 @@ func summariseOrgSeats(seats []orgCommitteeSeat, category string) orgSeatsSummar
 func handleGetOrgCommitteeSeats(ctx context.Context, req *mcp.CallToolRequest, args GetOrgCommitteeSeatsArgs) (*mcp.CallToolResult, any, error) {
 	logger := newToolLogger(ctx, req)
 
-	if orgSeatsConfig == nil || orgSeatsConfig.Clients == nil || orgSeatsConfig.APIURL == "" {
+	if orgSeatsConfig == nil || orgSeatsConfig.Clients == nil {
 		logger.ErrorContext(ctx, "org seats tool not configured")
 		return errorResult("Error: org seats tool not configured"), nil, nil
 	}
@@ -387,23 +335,12 @@ func handleGetOrgCommitteeSeats(ctx context.Context, req *mcp.CallToolRequest, a
 		}
 	}
 
-	token, err := clients.GetExchangedToken(ctx)
+	seats, err := drainOrgSeats(ctx, clients, args.OrgUID, projectUIDs)
 	if err != nil {
-		logger.ErrorContext(ctx, "token exchange failed", "error", err)
-		return errorResult(fmt.Sprintf("Error: failed to obtain an LFX API token: %v", err)), nil, nil
-	}
-
-	seats, err := drainOrgSeats(ctx, orgSeatsConfig, token, args.OrgUID, projectUIDs)
-	if err != nil {
-		var httpErr *orgSeatsHTTPError
-		if e, ok := err.(*orgSeatsHTTPError); ok {
-			httpErr = e
-			// Full (truncated) body for operators; callers get Error().
-			logger.ErrorContext(ctx, "org seats fetch failed", "status", e.Status, "body", e.Body)
-		} else {
-			logger.ErrorContext(ctx, "org seats fetch failed", "error", err)
-		}
-		if httpErr != nil && httpErr.Status == http.StatusForbidden {
+		logger.ErrorContext(ctx, "org seats fetch failed", "error", err)
+		// Heimdall answers 403 when the caller lacks the b2b_org auditor grant;
+		// the Goa client surfaces it as an invalid-response error.
+		if strings.Contains(err.Error(), "response code 403") {
 			return errorResult(orgSeatsForbiddenMessage), nil, nil
 		}
 		return errorResult(friendlyAPIError("failed to get organization committee seats", err)), nil, nil

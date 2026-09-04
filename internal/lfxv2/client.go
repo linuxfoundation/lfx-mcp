@@ -234,6 +234,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		committeeHTTPClient.DeleteCommitteeDocument(),
 		committeeHTTPClient.GetCurrentWeeklyBrief(),
 		committeeHTTPClient.GenerateWeeklyBrief(),
+		committeeHTTPClient.UpdateCurrentWeeklyBrief(),
 	)
 
 	// Initialize mailing list service client.

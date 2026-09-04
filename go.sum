@@ -54,8 +54,8 @@ github.com/lestrrat-go/jwx/v2 v2.1.6 h1:hxM1gfDILk/l5ylers6BX/Eq1m/pnxe9NBwW6lVf
 github.com/lestrrat-go/jwx/v2 v2.1.6/go.mod h1:Y722kU5r/8mV7fYDifjug0r8FK8mZdw0K0GpJw/l8pU=
 github.com/lestrrat-go/option v1.0.1 h1:oAzP2fvZGQKWkvHa1/SAcFolBEca1oN+mQ7eooNBEYU=
 github.com/lestrrat-go/option v1.0.1/go.mod h1:5ZHFbivi4xwXxhxY9XHDe2FHo6/Z7WWmtT7T5nBBp3I=
-github.com/linuxfoundation/lfx-v2-committee-service v0.4.0 h1:KOqG9brs0XV6Yd71cbVebOjtUV6M6ZfaGaWT0NPpm24=
-github.com/linuxfoundation/lfx-v2-committee-service v0.4.0/go.mod h1:QZtzJQpcPOLuVcTo3+3Crcn0agAsj53CSe8Bh9odIlU=
+github.com/linuxfoundation/lfx-v2-committee-service v0.4.22 h1:l4LLF0NXgMRvB0d+VHOObqRMxrKD5iJ/yo37EN1uBRs=
+github.com/linuxfoundation/lfx-v2-committee-service v0.4.22/go.mod h1:aF2WeU5qpiVsjaAVoPXJgzJUOyczgVukiA3zw6GampU=
 github.com/linuxfoundation/lfx-v2-mailing-list-service v0.5.0 h1:YXPkGBIP7BKLn28UiLZAD9JrmHcs8rGI9yUBEALgypc=
 github.com/linuxfoundation/lfx-v2-mailing-list-service v0.5.0/go.mod h1:3Sktz+IJy1oQvqgg4pgvx+/JqjLDKuwL4vJIuM3LID0=
 github.com/linuxfoundation/lfx-v2-meeting-service v0.11.8 h1:yR84cNCxhr6rFAijyIBIhI6yr+mTVMy0GlxJbPf9Yww=

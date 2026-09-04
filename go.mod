@@ -9,7 +9,7 @@ require (
 	github.com/knadh/koanf/providers/env/v2 v2.0.0
 	github.com/knadh/koanf/v2 v2.3.5
 	github.com/lestrrat-go/jwx/v2 v2.1.6
-	github.com/linuxfoundation/lfx-v2-committee-service v0.4.0
+	github.com/linuxfoundation/lfx-v2-committee-service v0.4.22
 	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.5.0
 	github.com/linuxfoundation/lfx-v2-meeting-service v0.11.8
 	github.com/linuxfoundation/lfx-v2-member-service v0.9.0

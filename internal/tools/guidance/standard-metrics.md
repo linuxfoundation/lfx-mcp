@@ -113,8 +113,13 @@ roster), project_health and software_value (a daily snapshot).
   honest history, so maintainers with an end_date other than today is a
   rejection that says exactly this.
 - project_health and software_value are read on the latest snapshot on or
-  before end_date (applied.snapshot_date); the snapshot history is days
-  deep, so an end_date before it is a 404, not a zero.
+  before end_date (applied.snapshot_date). project_health is the v2 health
+  score, whose snapshots start on 2026-08-25: an end_date before that
+  returns "no snapshot on or before end_date", not a zero. The v2 score is
+  withheld under a coverage threshold, so only a subset of LF-hosted
+  projects carry one; applied.coverage says how many on the snapshot day,
+  and the average is over the scored projects only. Say so whenever the
+  count or the average is the answer.
 
 ## Defaults and the applied block
 
@@ -177,7 +182,7 @@ series adds `period` in front; an at-date series adds `period_end` too.
 | participants | window | total, org, project | Distinct people with a code contribution OR a collaboration activity | [...,] total_contributors_with_collaboration | A superset of contributors (issues, comments, reviews count); distinct people: never sum rows |
 | maintainers | at-date | total, org, project, maintainer | Active maintainers today (LF projects only); with period, today's roster active in each period | [account / foundation, project, project_name / project, project_name, maintainer, account, role,] active_maintainers | Distinct people; the NULL account row is maintainers with no resolved employer; today only unless period; by=maintainer has no series |
 | maintainer_contributions | window | total, org, project, maintainer | Code contributions by people on the CURRENT maintainer roster of the activity's project | [...,] maintainer_contributions[, contributing_maintainers] | Maintainership as of the build, contributions in the window; maintainer_contributions is additive, contributing_maintainers a distinct count; "share of work" is this over contributions for the same scope and window |
-| project_health | at-date | total, foundation, category, population | Projects with a health score and their mean score, on the latest snapshot on or before end_date | [foundation / category / population,] project_health_count, avg_project_health_score | LF-hosted projects unless by=population (rows lf_hosted and index); the mean is of project scores: never sum or re-average rows |
+| project_health | at-date | total, foundation, category, population | Projects with a v2 health score and their mean score, on the latest snapshot on or before end_date | [foundation / category / population,] project_health_count, avg_project_health_score | v2 score; snapshots start on 2026-08-25; a subset of LF-hosted projects (applied.coverage); LF-hosted unless by=population (rows lf_hosted and index); category is the stored v2 band name; the mean is of project scores: never sum or re-average rows |
 | software_value | at-date | total, foundation, population | COCOMO software value, each project's latest row on or before end_date, summed | [foundation / population,] total_software_value | USD; additive across projects at a date, never across days; a project whose latest row is a health-only day contributes nothing, so totals read low, never inflated |
 | event_registrations | window | total, event, org | Accepted registrations of events starting in the window, and the distinct people behind them | [event / account, parent_org,] total_registrations, total_unique_registrants, total_checked_in_attendees | The window is the EVENT start date; registrants and attendees are distinct people by email: never sum them across rows; by=org is the registrant's account, NULL = unattributed |
 | event_sponsorships | window | total, org, event | Sponsorship revenue and count of events starting in the window | [account, parent_org / event,] total_sponsorship_revenue, total_sponsorship_count | Additive; USD; all tier types |
@@ -309,4 +314,4 @@ not retry the same one.
 - an order_by field that is not one of the result columns (the message
   lists them, minus any column the call folds away).
 - a 404 on project_health or software_value: no snapshot on or before
-  end_date.
+  end_date (v2 health snapshots start on 2026-08-25).

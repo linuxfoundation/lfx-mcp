@@ -188,8 +188,10 @@ and the two vocabularies never mix in one answer.
 7. TIER LITERALS differ per foundation ('Premier Membership' vs 'Premier Member') — get_dimension_values per foundation, never reuse.
 
 8. HEALTH SCORES are daily snapshots: find the latest health-bearing date
-(health_score_category IS NOT NULL), filter to it, then aggregate; unfiltered
-grouping inflates ~8-9x. Bands: Critical <20, Unsteady 20-39.
+({{ Dimension('health_metric_key__health_score_category_v2') }} IS NOT NULL),
+filter to it, then aggregate; unfiltered grouping inflates ~8-9x. Categories
+are the stored v2 band names (Excellent, Healthy, Fair, Concerning, Critical):
+group by them, never by a threshold.
 
 9. ECONOMIC VALUE = total_software_value / total_estimated_cost (COCOMO): non-additive
 daily snapshots; totals can read low, never inflated.

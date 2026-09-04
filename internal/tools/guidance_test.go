@@ -138,7 +138,8 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"subsidiaries INTO parents",
 		// tiers, health, value
 		"Premier Membership",
-		"Critical <20, Unsteady",
+		"health_metric_key__health_score_category_v2') }} IS NOT NULL",
+		"(Excellent, Healthy, Fair, Concerning, Critical)",
 		"total_software_value",
 		"COCOMO",
 		// populations, maintainers, regions, person grain
@@ -439,6 +440,22 @@ func TestGuidanceNamesNoOtherSurface(t *testing.T) {
 	} {
 		if strings.Contains(text, "Insights") {
 			t.Errorf("%s names Insights; describe what the figure covers instead", name)
+		}
+	}
+}
+
+// TestGuidanceHealthIsV2ByName pins the health vocabulary: the layer is
+// undeclaring the v1 category dimension, so the guidance names only the v2
+// one, and categories are the stored band names, never a score threshold.
+func TestGuidanceHealthIsV2ByName(t *testing.T) {
+	v1 := regexp.MustCompile(`health_score_category\b[^_]|Unsteady|Critical <|\b20-39\b`)
+	for name, text := range map[string]string{
+		"semantic layer guidance":  semanticLayerGuidance,
+		"standard metric guidance": standardMetricsGuidance,
+		"tool description":         standardMetricsDescription,
+	} {
+		if m := v1.FindString(text); m != "" {
+			t.Errorf("%s still carries the v1 health vocabulary: %q", name, m)
 		}
 	}
 }

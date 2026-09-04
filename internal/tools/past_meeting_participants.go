@@ -41,10 +41,9 @@ const participantHardMaxMeetings = 200
 // participantPageWarning is the existing access-filtered-page warning.
 const participantPageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
 
-// participantEmptyNote is returned with an empty page. Wording follows
-// PR #118's accessFilteredEmptyNote; the helper is not on main yet, so the
-// sentence lives here (see the TOOLS-1 PR body).
-// TODO(TOOLS-1): swap for accessFilteredEmptyNote once PR #118 merges.
+// participantEmptyNote is returned with an empty page so silence is never
+// mistaken for "no participants": only records the caller can see are
+// returned.
 const participantEmptyNote = "No past-meeting participants are visible to your identity for these filters; records you cannot see are not returned."
 
 // participantTruncatedNote is added when the date range matched more past

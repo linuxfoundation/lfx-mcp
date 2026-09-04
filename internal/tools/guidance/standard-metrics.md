@@ -181,7 +181,7 @@ series adds `period` in front; an at-date series adds `period_end` too.
 | software_value | at-date | total, foundation, population | COCOMO software value, each project's latest row on or before end_date, summed | [foundation / population,] total_software_value | USD; additive across projects at a date, never across days; a project whose latest row is a health-only day contributes nothing, so totals read low, never inflated |
 | event_registrations | window | total, event, org | Accepted registrations of events starting in the window, and the distinct people behind them | [event / account, parent_org,] total_registrations, total_unique_registrants, total_checked_in_attendees | The window is the EVENT start date; registrants and attendees are distinct people by email: never sum them across rows; by=org is the registrant's account, NULL = unattributed |
 | event_sponsorships | window | total, org, event | Sponsorship revenue and count of events starting in the window | [account, parent_org / event,] total_sponsorship_revenue, total_sponsorship_count | Additive; USD; all tier types |
-| speakers | window | total, event | Distinct speakers of events starting in the window | [event,] total_speakers | Sessionize rows count proposal SUBMITTERS whether accepted or not, so the figure over-reads actual speakers; no org scope |
+| speakers | window | total, event | Accepted speakers of events starting in the window | [event,] total_speakers | Distinct people with an Accepted speaker status (Sessionize proposals accepted, Bevy listed speakers); rejected and in-review proposals are excluded; no org scope |
 | training_enrollments | window | total, org, course | Enrollments and enrolled users by enrollment date | [account, parent_org / course,] total_enrollments, total_enrolled_users | Platform data only (TI + edX), so lifetime totals read below the official trained figure; the edX branch carries no account and sits in the NULL account row; enrolled users is a distinct count |
 | certifications | window | total, org | Completed certifications by enrollment date | [account, parent_org,] total_certifications | Additive; counted at enrollment time; the edX branch has no account |
 | social_mentions | window | total, project, network, sentiment | Social listening mentions, distinct authors and sentiment by mention date | [project, project_name / network / sentiment,] social_listening_mentions, social_listening_unique_authors, social_listening_positive_mentions, social_listening_negative_mentions | Mention counts are additive; unique_authors is a distinct count; neutral or unknown sentiment is in neither positive nor negative; no org scope |
@@ -242,8 +242,8 @@ another window or the series.
 - Every date is a UTC calendar day, on both engines; say "UTC" only when a
   reader compares with another clock.
 - `period` is the first day of each period; on an at-date series
-  `period_end` is the day the state was read on. partial_last_period means
-  the last row is to-date, not a full period.
+  `period_end` is the day the state was read on. partial_last_period is set
+  on both kinds and means the last row is to-date, not a full period.
 - by=org rows come per account with the parent alongside: read account
   rankings straight off the rows, and take parent figures from
   subsidiaries=combined rather than from a client-side sum.

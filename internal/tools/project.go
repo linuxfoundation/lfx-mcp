@@ -34,8 +34,10 @@ func SetProjectConfig(cfg *ProjectConfig) {
 
 // projectSearchResult is the output type for the search_projects tool.
 type projectSearchResult struct {
-	Resources []*querysvc.Resource `json:"resources"`
-	PageToken *string              `json:"page_token,omitempty"`
+	Resources     []*querysvc.Resource `json:"resources"`
+	PageToken     *string              `json:"page_token,omitempty"`
+	Total         *uint64              `json:"total,omitempty"`
+	TotalComplete *bool                `json:"total_complete,omitempty"`
 }
 
 // projectGetResult is the output type for the get_project tool.
@@ -48,7 +50,7 @@ type projectGetResult struct {
 func RegisterSearchProjects(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_projects",
-		Description: "Search for LFX projects by name or by parent project UID using the LFX query service",
+		Description: "Search for LFX projects using the LFX query service. name is a typeahead match; slug is an exact project slug (e.g. c2pa-fund); name_exact matches the stored project name exactly (case-sensitive); parent_uid lists the children of a foundation or umbrella project; legal_parent_uid lists the projects under one legal entity. include_total adds total and total_complete (the count over the caller's visibility; false means a lower bound) so you do not have to page to count.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Projects",
 			ReadOnlyHint: true,
@@ -70,10 +72,14 @@ func RegisterGetProject(server *mcp.Server) {
 
 // SearchProjectsArgs defines the input parameters for the search_projects tool.
 type SearchProjectsArgs struct {
-	Name      string `json:"name,omitempty" jsonschema:"Name or partial name of the project to search for"`
-	ParentUID string `json:"parent_uid,omitempty" jsonschema:"Optional UID of a foundation or umbrella project to filter child projects by"`
-	PageSize  int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	Name           string `json:"name,omitempty" jsonschema:"Name or partial name of the project to search for (typeahead)"`
+	Slug           string `json:"slug,omitempty" jsonschema:"Exact project slug, e.g. c2pa-fund"`
+	NameExact      string `json:"name_exact,omitempty" jsonschema:"Exact stored project name, case-sensitive"`
+	ParentUID      string `json:"parent_uid,omitempty" jsonschema:"Optional UID of a foundation or umbrella project to filter child projects by"`
+	LegalParentUID string `json:"legal_parent_uid,omitempty" jsonschema:"UID of the legal parent entity whose projects to list"`
+	IncludeTotal   bool   `json:"include_total,omitempty" jsonschema:"Also return total (count of matching projects visible to the caller) and total_complete"`
+	PageSize       int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken      string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // GetProjectArgs defines the input parameters for the get_project tool.
@@ -132,11 +138,26 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		payload.Parent = &parentRef
 	}
 
+	if args.Slug != "" {
+		// project_slug is the only tag the project indexer emits.
+		payload.Tags = []string{"project_slug:" + args.Slug}
+	}
+
+	// data is a flat_object: these are exact, case-sensitive matches on the
+	// stored value.
+	if args.NameExact != "" {
+		payload.FiltersAll = append(payload.FiltersAll, "name:"+args.NameExact)
+	}
+	if args.LegalParentUID != "" {
+		payload.FiltersAll = append(payload.FiltersAll, "legal_parent_uid:"+args.LegalParentUID)
+	}
+
 	if args.PageToken != "" {
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.InfoContext(ctx, "searching projects", "name", args.Name, "parent_uid", args.ParentUID, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching projects", "name", args.Name, "slug", args.Slug, "name_exact", args.NameExact,
+		"parent_uid", args.ParentUID, "legal_parent_uid", args.LegalParentUID, "include_total", args.IncludeTotal, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
@@ -152,6 +173,31 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 	out := projectSearchResult{
 		Resources: result.Resources,
 		PageToken: result.PageToken,
+	}
+
+	if args.IncludeTotal {
+		// Same Name/Parent/Tags/FiltersAll as the page, on the count route.
+		countResult, err := clients.QuerySvc.QueryResourcesCount(ctx, &querysvc.QueryResourcesCountPayload{
+			Version:    "1",
+			Type:       payload.Type,
+			Name:       payload.Name,
+			Parent:     payload.Parent,
+			Tags:       payload.Tags,
+			FiltersAll: payload.FiltersAll,
+		})
+		if err != nil {
+			logger.ErrorContext(ctx, "QueryResourcesCount failed", "error", err)
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: friendlyAPIError("failed to count projects", err)},
+				},
+				IsError: true,
+			}, projectSearchResult{}, nil
+		}
+		total := countResult.Count
+		complete := !countResult.HasMore
+		out.Total = &total
+		out.TotalComplete = &complete
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")

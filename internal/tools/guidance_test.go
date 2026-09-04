@@ -214,7 +214,8 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		// standard metric calls
 		"STANDARD METRIC CALLS take uniform parameters",
 		"this means INDIVIDUALS by contribution volume — run it, do not ask",
-		"16. SOCIAL LISTENING lives here",
+		"16. SOCIAL LISTENING. The standard metrics social_mentions (by total,\nproject, network, sentiment) and social_reach (by total, project) cover the\ncommon readings — prefer them",
+		"Compose here only for a slice they lack",
 		"stored as 'Twitter', not 'X'",
 		"no filter means ALL of LF",
 		"17. WHAT GOES IN THE ANSWER",
@@ -311,26 +312,9 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"one row per\nparent organization",
 		"MOST QUESTIONS WANT\nBOTH",
 		"Never derive one from the other: distinct counts do not sum",
-		// inventory: every family, kind and grouping list
+		// inventory: every family, kind and grouping list — derived below from
+		// standardMetricNames and standardMetricGroupings, the single source
 		"## Inventory",
-		"| memberships | at-date | total, org, tier, project, country, region |",
-		"| new_members | window | total, org, project |",
-		"| membership_churn | window | total, org, project |",
-		"| contributors | window | total, org, project, country, region |",
-		"| contributions | window | total, org, project, contributor, type, platform, org_region |",
-		"| contributing_organizations | window | total, project |",
-		"| participants | window | total, org, project |",
-		"| maintainers | at-date | total, org, project, maintainer |",
-		"| maintainer_contributions | window | total, org, project, maintainer |",
-		"| project_health | at-date | total, foundation, category, population |",
-		"| software_value | at-date | total, foundation, population |",
-		"| event_registrations | window | total, event, org |",
-		"| event_sponsorships | window | total, org, event |",
-		"| speakers | window | total, event |",
-		"| training_enrollments | window | total, org, course |",
-		"| certifications | window | total, org |",
-		"| social_mentions | window | total, project, network, sentiment |",
-		"| social_reach | window | total, project |",
 		// the definitions and caveats that change how a figure is read
 		"revenue is LIST PRICE, not dues billed — never divide one by the other",
 		"membership_count, membership_revenue on any day but today and on a series",
@@ -400,6 +384,15 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("standard metric guidance missing %q", want)
+		}
+	}
+	// Every family's inventory row, in the guidance's own table shape, from the
+	// one list the description and the schema tests use too: a grouping
+	// added on one surface and not the other fails here.
+	for _, name := range standardMetricNames {
+		row := "| " + name + " | " + standardMetricKinds[name] + " | " + standardMetricGroupings[name] + " |"
+		if !strings.Contains(text, row) {
+			t.Errorf("standard metric guidance missing inventory row %q", row)
 		}
 	}
 	// Nothing from the old contract survives in the document as a live

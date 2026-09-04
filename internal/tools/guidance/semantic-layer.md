@@ -313,8 +313,12 @@ There is no free filter on a standard metric: a slice the switches, the dates an
 the period cannot express is an explore + query question, and its answer is
 labelled ad hoc.
 
-16. SOCIAL LISTENING lives here: mentions of a project across social and web
-platforms, one row per mention. METRICS: social_listening_mentions,
+16. SOCIAL LISTENING. The standard metrics social_mentions (by total,
+project, network, sentiment) and social_reach (by total, project) cover the
+common readings — prefer them. Compose here only for a slice they lack:
+language, keyword, share of voice across foundations, trends at a grain the
+period switch does not give. The model: mentions of a project across social
+and web platforms, one row per mention. METRICS: social_listening_mentions,
 social_listening_positive_mentions and social_listening_negative_mentions
 (the rest are neutral), social_listening_unique_authors, and reach as
 social_listening_total_author_followers (the authors' follower counts summed;

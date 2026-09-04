@@ -70,9 +70,36 @@ var standardMetricNames = []string{
 	"social_reach",
 }
 
+// standardMetricKinds is each family's kind as the guidance lists it: a
+// window family counts between start_date and end_date, an at-date family
+// reports the state on end_date. The four at-date families are also named
+// on the required metric parameter, where they survive schema compaction.
+var standardMetricKinds = map[string]string{
+	"memberships":                "at-date",
+	"new_members":                "window",
+	"membership_churn":           "window",
+	"contributors":               "window",
+	"contributions":              "window",
+	"contributing_organizations": "window",
+	"participants":               "window",
+	"maintainers":                "at-date",
+	"maintainer_contributions":   "window",
+	"project_health":             "at-date",
+	"software_value":             "at-date",
+	"event_registrations":        "window",
+	"event_sponsorships":         "window",
+	"speakers":                   "window",
+	"training_enrollments":       "window",
+	"certifications":             "window",
+	"social_mentions":            "window",
+	"social_reach":               "window",
+}
+
 // standardMetricGroupings is each family's groupings as the GUIDANCE lists
 // them, in the order the lens offers them, the first being the default the
-// lens applies when by is omitted. The description no longer carries them.
+// lens applies when by is omitted. The description no longer carries them;
+// TestStandardMetricsGuidanceContent derives the inventory rows from this
+// map, so it is the single source.
 var standardMetricGroupings = map[string]string{
 	"memberships":                "total, org, tier, project, country, region",
 	"new_members":                "total, org, project",
@@ -212,9 +239,15 @@ func TestStandardMetricsSurface_NamesNoWarehouseRecipe(t *testing.T) {
 // parameters that carry them.
 func TestStandardMetrics_RequiredParamSurvivesCompaction(t *testing.T) {
 	desc := schemaPropertyDescription(t, listStandardMetricsTool(t), "metric")
+	var atDate []string
+	for _, name := range standardMetricNames {
+		if standardMetricKinds[name] == "at-date" {
+			atDate = append(atDate, name)
+		}
+	}
 	for _, want := range append([]string{
 		"metrics/group_by", "read_lfx_standard_metrics_guidance", "start_date, end_date and period",
-		"WINDOW", "AT-DATE", "state on end_date",
+		"WINDOW", "AT-DATE family (" + strings.Join(atDate, ", ") + ")", "state on end_date",
 	}, standardMetricNames...) {
 		if !strings.Contains(desc, want) {
 			t.Errorf("metric description does not mention %q — the contract must survive schema compaction", want)

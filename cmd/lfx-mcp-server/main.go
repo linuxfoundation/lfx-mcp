@@ -166,6 +166,7 @@ var defaultTools = []string{
 	"search_b2b_orgs",
 	// TOOLS-1 (LFXV2-2891): caller-visibility counts and governance/meeting lookups.
 	"count_lfx_resources",
+	"get_org_committee_seats",
 }
 
 var logger *slog.Logger
@@ -399,6 +400,14 @@ func main() {
 				})
 				tools.SetMeetingConfig(&tools.MeetingConfig{
 					Clients: sharedClients,
+				})
+				// TOOLS-1: the seats route is read with a plain client and the
+				// exchanged token set per request (the vendored committee client
+				// predates the seat's project fields).
+				tools.SetOrgSeatsConfig(&tools.OrgSeatsConfig{
+					Clients:    sharedClients,
+					APIURL:     cfg.LFXAPIURL,
+					HTTPClient: &http.Client{Timeout: 30 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 				})
 			}
 
@@ -776,6 +785,9 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	// carry the caller's own visibility through the exchanged token.
 	if enabledTools["count_lfx_resources"] && canRead {
 		tools.RegisterCountLFXResources(server)
+	}
+	if enabledTools["get_org_committee_seats"] && canRead {
+		tools.RegisterGetOrgCommitteeSeats(server)
 	}
 
 	// Service API tools.

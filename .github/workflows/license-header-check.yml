@@ -12,4 +12,4 @@ permissions:
 jobs:
   license-header-check:
     name: License Header Check
-    uses: linuxfoundation/lfx-public-workflows/.github/workflows/license-header-check.yml@main
+    uses: linuxfoundation/lfx-public-workflows/.github/workflows/license-header-check.yml@a93335d2abc2a2e2bb1b7a4cdefbbf15351681ce # v0.1.0

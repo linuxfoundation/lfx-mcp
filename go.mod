@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 module github.com/linuxfoundation/lfx-mcp
 
-go 1.26.4
+go 1.26.3
 
 require (
 	github.com/knadh/koanf/providers/basicflag v1.1.0

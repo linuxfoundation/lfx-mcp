@@ -46,7 +46,7 @@ var standardMetricParameters = []string{
 }
 
 // standardMetricNames is the whole inventory, in the order the guidance lists
-// it: the lens registry exposes exactly these twenty-two families (each with
+// it: the lens registry exposes exactly these twenty-four families (each with
 // its own groupings under by), so this list is what the routing surface must
 // name — no more, and none of them missing.
 var standardMetricNames = []string{
@@ -72,6 +72,8 @@ var standardMetricNames = []string{
 	"certifications",
 	"social_mentions",
 	"social_reach",
+	"meetups",
+	"meetup_attendees",
 }
 
 // standardMetricKinds is each family's kind as the guidance lists it: a
@@ -101,6 +103,8 @@ var standardMetricKinds = map[string]string{
 	"certifications":              "window",
 	"social_mentions":             "window",
 	"social_reach":                "window",
+	"meetups":                     "window",
+	"meetup_attendees":            "window",
 }
 
 // standardMetricGroupings is each family's groupings as the GUIDANCE lists
@@ -131,6 +135,8 @@ var standardMetricGroupings = map[string]string{
 	"certifications":              "total, org",
 	"social_mentions":             "total, project, network, sentiment",
 	"social_reach":                "total, project",
+	"meetups":                     "total, community, region, group, city",
+	"meetup_attendees":            "total, community, region, group, city",
 }
 
 // TestStandardMetricsDescription_FitsSchemaBudget holds the tool to the same budget as
@@ -261,6 +267,7 @@ func TestStandardMetrics_RequiredParamSurvivesCompaction(t *testing.T) {
 	for _, want := range append([]string{
 		"metrics/group_by", "read_lfx_standard_metrics_guidance", "start_date, end_date and period",
 		"WINDOW", "AT-DATE family (" + strings.Join(atDate, ", ") + ")", "state on end_date",
+		"meetups and meetup_attendees take project only (org and subsidiaries rejected, subprojects a no-op) and read all history when start_date is omitted",
 	}, standardMetricNames...) {
 		if !strings.Contains(desc, want) {
 			t.Errorf("metric description does not mention %q — the contract must survive schema compaction", want)

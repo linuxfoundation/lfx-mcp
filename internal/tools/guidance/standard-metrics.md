@@ -231,6 +231,8 @@ series adds `period` in front; an at-date series adds `period_end` too.
 | certifications | window | total, org | Completed certifications by enrollment date | [account, parent_org,] total_certifications | Additive; counted at enrollment time; the edX branch has no account and sits in the NULL account row with the placeholder learners |
 | social_mentions | window | total, project, network, sentiment | Social listening mentions, distinct authors and sentiment by mention date | [project, project_name / network / sentiment,] social_listening_mentions, social_listening_unique_authors, social_listening_positive_mentions, social_listening_negative_mentions | Mention counts are additive; unique_authors is a distinct count; neutral or unknown sentiment is in neither positive nor negative; no org scope |
 | social_reach | window | total, project | Potential reach of the mentions by mention date | [project, project_name,] social_listening_total_author_followers, social_listening_avg_author_followers | The sum counts a prolific author once per mention; the average is per mention; NULL follower counts excluded; no org scope |
+| meetups | window | total, community, region, group, city | Open Community Group meetups (ocgroups.dev chapter events) starting in the window | [community / region / group, group_slug, community, city / city, region,] meetups | Additive, counted on the event start date; ALL history when start_date is omitted, unlike the activity families; period=year is the yearly series; a group with no event in the window is absent rather than a zero row; NULL region or city rows are chapters with none set; community is the foundation (scope with project=cncf, never a community name); no org scope; subprojects accepted but a no-op, chapters attach at the foundation |
+| meetup_attendees | window | total, community, region, group, city | Distinct people who attended Open Community Group meetups starting in the window | [community / region / group, group_slug, community, city / city, region,] meetup_attendees | A distinct-person count over the window: never sum rows across groupings or periods, take a wider window instead; period=year gives attendance per year, the current year to date; ALL history when start_date is omitted; NULL region or city rows are chapters with none set; no org scope; subprojects a no-op |
 
 ## Organizations: account and parent_org
 
@@ -271,6 +273,44 @@ new_member_organizations follows the same switch (applied.firstness names
 it): an arrival with no project (first LF membership ever or a return after
 a lapse), first in the foundation (or its consortium) for a root, first in
 the project with excluded.
+
+## Meetups (Open Community Groups)
+
+meetups and meetup_attendees cover the Open Community Group chapters on
+ocgroups.dev — community-run meetup groups, not LF conferences
+(event_registrations) and not LFX project meetings (the meeting tools).
+Both attach at COMMUNITY level, and a community is a foundation: scope with
+the foundation's slug (project=cncf), never a community name. org and
+subsidiaries do not apply and are rejected. subprojects is accepted but a
+NO-OP: chapters hang off the foundation, not off projects, so there is no
+tree to walk and subprojects=separate yields no project rows — the
+breakdowns these families offer are by=community, region, group and city,
+and period for time. The DEPTH rule under "Projects and subprojects" does
+not apply here.
+
+meetups counts events on their start date and is additive; meetup_attendees
+is a distinct-person count over the window, so two years' rows do not sum
+to a two-year figure — take that from by=total with a wider window. Both
+read ALL HISTORY when start_date is omitted, unlike the activity families:
+set start_date/end_date for any comparison, and say when a year is to date.
+
+Worked shapes:
+
+- "How many people attended CNCF meetups in 2024 vs 2025": meetup_attendees,
+  project=cncf, period=year, start_date=2024-01-01, end_date=2025-12-31.
+  Two rows; say the current year is partial if it is.
+- "Top 5 regions by meetup activity": meetups, by=region,
+  order_by=-meetups, limit=5 — activity read as events held. Offer the
+  headcount reading (meetup_attendees by=region) as the follow-up, do not
+  ask first. project for one foundation, none for all of OCG.
+- "The 3 least active groups": meetups, by=group, order_by=meetups,
+  limit=3, with start_date so "least active" has a window. Groups with no
+  event in the window are absent rather than zero — say the ranking covers
+  groups that met at all, and offer the no-event list as a follow-up.
+- "Is the Austin meetup scene growing": a city FILTER with a yearly trend,
+  which no grouping expresses — by=city gives every city, not one city over
+  time. This is the explore+query flow: read_lfx_semantic_layer_guidance
+  has the recipe (Meetups by city over time).
 
 ## What goes in the answer
 

@@ -861,6 +861,14 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["query_lfx_standard_metrics"] && canRead && isStaff {
 		tools.RegisterStandardMetrics(server)
 	}
+	// Not in defaultTools for the same reason: the OCG meetup endpoints are
+	// lens-side, so a deployment enables these by name once they are live.
+	if enabledTools["search_ocg_meetups"] && canRead && isStaff {
+		tools.RegisterSearchOCGMeetups(server)
+	}
+	if enabledTools["list_ocg_meetup_filters"] && canRead && isStaff {
+		tools.RegisterListOCGMeetupFilters(server)
+	}
 	// Guidance tools carry the query doctrine as tool results (no byte budget)
 	// and are gated exactly like the tools they document — staff-only, one
 	// name per audience so a deployment enables exactly the guidance its

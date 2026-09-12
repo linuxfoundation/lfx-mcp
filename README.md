@@ -8,6 +8,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that c
 - **Manage committees** — Search, create, update, and delete project committees and their members
 - **Work with mailing lists** — Search project mailing lists and their subscribers
 - **Track project meetings** — Find upcoming meetings, registrants, past participants, and AI-generated summaries
+- **Discover community meetups** — Find upcoming Open Community Group meetup events by community, location, and date
 - **Query membership** — Search project memberships by tier, status, organization, and more; get and manage key contacts
 - **Analyze data with LFX Lens** — Compare and report on project activities and contributions over time
 - ... and more!
@@ -291,6 +292,16 @@ npx @modelcontextprotocol/inspector
 | `get_past_meeting_participant`     | Get a past meeting participant by UID                                   |
 | `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, committee, project    |
 | `get_past_meeting_summary`         | Get a past meeting summary by UID                                       |
+
+### Open Community Groups
+
+*Staff-only, and not enabled by default: these tools are backed by LFX Lens
+endpoints and are turned on by name via `LFXMCP_TOOLS` once those are live.*
+
+| Tool                      | Description                                                                               |
+|---------------------------|-------------------------------------------------------------------------------------------|
+| `search_ocg_meetups`      | Search upcoming Open Community Group meetups; filter by community, name, location, date   |
+| `list_ocg_meetup_filters` | List the community names accepted by the meetup search (plus meetup roles, for reference) |
 
 ### Discord
 

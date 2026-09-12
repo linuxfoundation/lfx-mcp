@@ -105,6 +105,8 @@ var staffOnlyTools = []string{
 	"query_lfx_standard_metrics",
 	"read_lfx_semantic_layer_guidance",
 	"read_lfx_standard_metrics_guidance",
+	"search_ocg_meetups",
+	"list_ocg_meetup_filters",
 }
 
 // listedTools is the tools/list a caller holding token sees from a server

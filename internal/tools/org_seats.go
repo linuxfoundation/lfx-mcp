@@ -90,7 +90,7 @@ type GetOrgCommitteeSeatsArgs struct {
 	FoundationUID             string `json:"foundation_uid,omitempty" jsonschema:"Scope seats to one membership foundation (its root project and its direct child projects, as LFX Self Serve scopes it). Omit for the organization's seats across all projects"`
 	Category                  string `json:"category,omitempty" jsonschema:"Exact committee category to keep, e.g. Board, Technical, Marketing; matched case-insensitively"`
 	IncludeSeats              bool   `json:"include_seats,omitempty" jsonschema:"Return the seat rows as well as the summary (default false: summary only)"`
-	IncludeMembershipContacts bool   `json:"include_membership_contacts,omitempty" jsonschema:"Also return the organization's membership key contacts on the projects in scope (contact of record per membership) and a per-project representation pairing them with the board seats; default false"`
+	IncludeMembershipContacts bool   `json:"include_membership_contacts,omitempty" jsonschema:"Also return the organization's membership key contacts on the projects in scope (contact of record per membership) and a per-project representation pairing them with the board seats; representation carries the board-seat rows whether or not include_seats is set; default false"`
 }
 
 // orgCommitteeSeat is one seat row as returned to the caller: the
@@ -223,8 +223,9 @@ func RegisterGetOrgCommitteeSeats(server *mcp.Server) {
 // project whose parent is the foundation (direct children only — the project
 // indexer's parent ref carries the immediate parent, and this mirrors LFX
 // Self Serve's getFoundationProjectUids), skipping the ROOT pseudo-project,
-// draining every page. Errors propagate: the caller fails closed rather than
-// silently scoping to the root alone.
+// draining every page. Each uid appears once, so a caller that reads the
+// family in chunks never reads a project twice. Errors propagate: the caller
+// fails closed rather than silently scoping to the root alone.
 func resolveFoundationFamily(ctx context.Context, clients *lfxv2.Clients, foundationUID string) ([]string, error) {
 	family := []string{foundationUID}
 	resourceType := projectResourceType
@@ -260,7 +261,7 @@ func resolveFoundationFamily(ctx context.Context, clients *lfxv2.Clients, founda
 			}
 		}
 		if result.PageToken == nil || *result.PageToken == "" {
-			return family, nil
+			return dedupeStrings(family), nil
 		}
 		pageToken = result.PageToken
 	}

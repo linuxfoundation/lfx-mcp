@@ -942,6 +942,36 @@ func TestOrgSeats_PersonSeatedAcrossChunksCountsOnce(t *testing.T) {
 	}
 }
 
+func TestOrgSeats_RepeatedFamilyUIDIsSentOnce(t *testing.T) {
+	api := setupOrgSeatsTest(t)
+	// The index echoes child p-k8s on both pages and the root as its own child.
+	api.Respond(resourcesPath, page([]string{projectDoc("p-k8s", "kubernetes", "Kubernetes", "p-cncf", ""), projectDoc("p-cncf", "cncf", "CNCF", "p-cncf", "")}, "more"))
+	api.Respond(resourcesPath, page([]string{projectDoc("p-k8s", "kubernetes", "Kubernetes", "p-cncf", ""), projectDoc("p-env", "envoy", "Envoy", "p-cncf", "")}, ""))
+	api.Respond(seatsPath, seatsPage(tenSeatsFixture()[:3], ""))
+
+	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{B2bOrgUID: testSFID, FoundationUID: "p-cncf"})
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", allResultText(t, res))
+	}
+	want := []string{"p-cncf", "p-k8s", "p-env"}
+	if got := api.RequestsTo(seatsPath)[0].Query["project_uids"]; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("each family uid must be sent once, root first: want %v got %v", want, got)
+	}
+	if out := resultJSON(t, res); out["project_uids_in_scope"] != float64(3) {
+		t.Errorf("project_uids_in_scope counts each uid once, got %v", out["project_uids_in_scope"])
+	}
+}
+
+func TestDedupeStrings(t *testing.T) {
+	got := dedupeStrings([]string{"a", "b", "a", "c", "b"})
+	if strings.Join(got, "") != "abc" {
+		t.Errorf("dedupeStrings keeps the first occurrence in order, got %v", got)
+	}
+	if got := dedupeStrings(nil); len(got) != 0 {
+		t.Errorf("empty input yields empty output, got %v", got)
+	}
+}
+
 func TestOrgSeats_DescriptionMentionsChunkedReads(t *testing.T) {
 	tool := listRegisteredTool(t, "get_org_committee_seats", RegisterGetOrgCommitteeSeats)
 	if !strings.Contains(tool.Description, "Large foundations are read in several requests; the result is still complete for the scope.") {

@@ -204,22 +204,8 @@ func countGrouped(ctx context.Context, clients *lfxv2.Clients, resourceType stri
 	return out, nil
 }
 
-// dedupeStrings returns in without repeated values, first occurrence kept.
-func dedupeStrings(in []string) []string {
-	out := make([]string, 0, len(in))
-	seen := make(map[string]struct{}, len(in))
-	for _, v := range in {
-		if _, dup := seen[v]; dup {
-			continue
-		}
-		seen[v] = struct{}{}
-		out = append(out, v)
-	}
-	return out
-}
-
-// buildCoverage assembles the per-project rows: every family uid (already
-// deduplicated), root first then by uid; committees by name. The gap and
+// buildCoverage assembles the per-project rows: every family uid (the
+// family carries each uid once), root first then by uid; committees by name. The gap and
 // has_board_committee are evaluated over every committee of the project;
 // wantCategory (lower-cased, trimmed; "" for all) narrows only the emitted
 // committees and committees_with_no_visible_members, so a category filter
@@ -309,9 +295,6 @@ func handleAuditCommitteeCoverage(ctx context.Context, req *mcp.CallToolRequest,
 		logger.ErrorContext(ctx, "foundation family resolution failed", "error", err)
 		return errorResult(friendlyAPIError("failed to resolve the foundation's projects", err)), nil, nil
 	}
-	// A uid repeated across chunks would be counted twice; read each once.
-	family = dedupeStrings(family)
-
 	wantCategory := strings.ToLower(strings.TrimSpace(args.Category))
 	var committees []coverageCommittee
 	dropped := 0

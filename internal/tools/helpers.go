@@ -101,6 +101,20 @@ func strPtr(s string) *string {
 	return &s
 }
 
+// dedupeStrings returns in without repeated values, first occurrence kept.
+func dedupeStrings(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, v := range in {
+		if _, dup := seen[v]; dup {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
 // chunkStrings splits in into consecutive slices of at most size elements,
 // preserving order. A size below one yields the whole input as one chunk;
 // an empty input yields no chunks.

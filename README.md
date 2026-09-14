@@ -248,7 +248,7 @@ npx @modelcontextprotocol/inspector
 | `create_committee_member`   | Add a new member to a committee                                                           |
 | `update_committee_member`   | Update an existing committee member's information                                         |
 | `delete_committee_member`   | Remove a member from a committee                                                          |
-| `get_org_committee_seats`   | Summarise an organisation's committee seats across a foundation and its direct child projects; filter by category, optionally list the seats (seats, not the membership's contact of record) |
+| `get_org_committee_seats`   | Summarise an organisation's committee seats across a foundation and its direct child projects; filter by category, optionally list the seats (seats, not the membership's contact of record); include_membership_contacts adds the membership contacts of record and a per-project representation pairing |
 
 ### Mailing Lists
 

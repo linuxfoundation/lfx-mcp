@@ -43,6 +43,27 @@ const orgSeatsNote = "Seats of this organisation across the projects in scope, a
 // orgSeatsForbiddenMessage is returned when committee-service answers 403.
 const orgSeatsForbiddenMessage = "Error: your identity does not hold the organisation grant (auditor or writer) that LFX Self Serve requires to read this organisation's seats (or the b2b_org_uid is not a known organisation — confirm the SFID with search_b2b_orgs)"
 
+// seatKindBoard and seatKindCommittee label each seat row by its committee
+// category, so a caller can tell a board seat from any other seat without
+// re-deriving the category test.
+const (
+	seatKindBoard     = "board_seat"
+	seatKindCommittee = "committee_seat"
+)
+
+// membershipContactKind labels every membership key-contact row.
+const membershipContactKind = "membership_contact"
+
+// votingContactRole is the key-contact role that names the membership's
+// representative, as the member service stores it.
+const votingContactRole = "Representative/Voting Contact"
+
+// membershipContactsNote travels with membership_contacts and representation.
+const membershipContactsNote = "Membership key contacts are the contacts of record for each membership (roles as stored; status Active or Inactive, no dates); board seats are roster rows; the two can name different people — cite which one you mean."
+
+// membershipContactsNoneNote is appended when no key contact came back.
+const membershipContactsNoneNote = " No key contact is indexed for this organization in scope; get_membership_key_contacts per membership is the fallback."
+
 // OrgSeatsConfig holds configuration for get_org_committee_seats.
 type OrgSeatsConfig struct {
 	// Clients is the shared LFX v2 API client instance (committee service and
@@ -59,16 +80,18 @@ func SetOrgSeatsConfig(cfg *OrgSeatsConfig) {
 
 // GetOrgCommitteeSeatsArgs defines the input parameters for the get_org_committee_seats tool.
 type GetOrgCommitteeSeatsArgs struct {
-	B2bOrgUID     string `json:"b2b_org_uid" jsonschema:"(required) B2B organization UID: the 18-character SFID from search_b2b_orgs (the same identifier search_members calls b2b_org_uid)"`
-	FoundationUID string `json:"foundation_uid,omitempty" jsonschema:"Scope seats to one membership foundation (its root project and its direct child projects, as LFX Self Serve scopes it). Omit for the organization's seats across all projects"`
-	Category      string `json:"category,omitempty" jsonschema:"Exact committee category to keep, e.g. Board, Technical, Marketing; matched case-insensitively"`
-	IncludeSeats  bool   `json:"include_seats,omitempty" jsonschema:"Return the seat rows as well as the summary (default false: summary only)"`
+	B2bOrgUID                 string `json:"b2b_org_uid" jsonschema:"(required) B2B organization UID: the 18-character SFID from search_b2b_orgs (the same identifier search_members calls b2b_org_uid)"`
+	FoundationUID             string `json:"foundation_uid,omitempty" jsonschema:"Scope seats to one membership foundation (its root project and its direct child projects, as LFX Self Serve scopes it). Omit for the organization's seats across all projects"`
+	Category                  string `json:"category,omitempty" jsonschema:"Exact committee category to keep, e.g. Board, Technical, Marketing; matched case-insensitively"`
+	IncludeSeats              bool   `json:"include_seats,omitempty" jsonschema:"Return the seat rows as well as the summary (default false: summary only)"`
+	IncludeMembershipContacts bool   `json:"include_membership_contacts,omitempty" jsonschema:"Also return the organization's membership key contacts on the projects in scope (contact of record per membership) and a per-project representation pairing them with the board seats; default false"`
 }
 
 // orgCommitteeSeat is one seat row as returned to the caller: the
 // committee-service OrgCommitteeSeat (client v0.4.22, the version prod runs)
 // flattened so optional fields serialise as plain strings.
 type orgCommitteeSeat struct {
+	Kind              string `json:"kind"`
 	UID               string `json:"uid"`
 	CommitteeUID      string `json:"committee_uid"`
 	CommitteeName     string `json:"committee_name"`
@@ -91,7 +114,12 @@ type orgCommitteeSeat struct {
 
 // seatFromService flattens a committee-service seat (derefStr from committee_write.go).
 func seatFromService(in *committeeservice.OrgCommitteeSeat) orgCommitteeSeat {
+	kind := seatKindCommittee
+	if isBoardCategory(in.CommitteeCategory) {
+		kind = seatKindBoard
+	}
 	return orgCommitteeSeat{
+		Kind:              kind,
 		UID:               in.UID,
 		CommitteeUID:      in.CommitteeUID,
 		CommitteeName:     in.CommitteeName,
@@ -126,11 +154,46 @@ type orgSeatsSummary struct {
 	ByCategory           map[string]int     `json:"by_category"`
 	ByProject            map[string]int     `json:"by_project"`
 	ByRole               map[string]int     `json:"by_role"`
+	ByVotingStatus       map[string]int     `json:"by_voting_status"`
 	Editable             int                `json:"editable"`
 	FoundationControlled int                `json:"foundation_controlled"`
 	Visibility           string             `json:"visibility"`
 	Note                 string             `json:"note"`
 	Seats                []orgCommitteeSeat `json:"seats,omitempty"`
+
+	// Only with include_membership_contacts; present (possibly empty) whenever
+	// the flag is set, so an empty list is a stated answer, not an omission.
+	MembershipContacts *[]membershipContact     `json:"membership_contacts,omitempty"`
+	Representation     *[]projectRepresentation `json:"representation,omitempty"`
+	ContactsNote       string                   `json:"contacts_note,omitempty"`
+}
+
+// membershipContact is one key_contact record of the organization's
+// memberships, as the member service indexes it (values as stored).
+type membershipContact struct {
+	Kind           string `json:"kind"`
+	UID            string `json:"uid"`
+	MembershipUID  string `json:"membership_uid"`
+	ProjectUID     string `json:"project_uid"`
+	ProjectName    string `json:"project_name,omitempty"`
+	Role           string `json:"role"`
+	Status         string `json:"status"`
+	BoardMember    bool   `json:"board_member"`
+	PrimaryContact bool   `json:"primary_contact"`
+	FirstName      string `json:"first_name"`
+	LastName       string `json:"last_name"`
+	Email          string `json:"email"`
+	Title          string `json:"title,omitempty"`
+}
+
+// projectRepresentation pairs, for one project, the membership's voting
+// contacts with the organization's board seats; neither is merged into the
+// other.
+type projectRepresentation struct {
+	ProjectUID     string              `json:"project_uid"`
+	ProjectSlug    string              `json:"project_slug,omitempty"`
+	VotingContacts []membershipContact `json:"voting_contacts"`
+	BoardSeats     []orgCommitteeSeat  `json:"board_seats"`
 }
 
 // RegisterGetOrgCommitteeSeats registers the get_org_committee_seats tool with the MCP server.
@@ -140,7 +203,8 @@ func RegisterGetOrgCommitteeSeats(server *mcp.Server) {
 		Description: "Summarise an organization's committee seats as LFX Self Serve's Org Lens Board & Committee tab shows them. " +
 			"b2b_org_uid is the 18-character SFID from search_b2b_orgs. With foundation_uid, scope is its root project plus direct child projects as visible to the caller, the way LFX Self Serve scopes it; an organization grant does not make project discovery exhaustive. Omit foundation_uid for the organization's seats across all projects. " +
 			"Returns seats_total, people (distinct e-mails), board_seats vs committee_seats, by_category, by_project, by_role, editable vs foundation_controlled; include_seats adds the rows (name, e-mail, role, voting status, appointed_by, committee, project). " +
-			"category keeps one committee category, matched case-insensitively. The caller needs the organization grant (auditor or writer) LFX Self Serve requires; the result is complete for the scope, never truncated. Seats only; the membership's contact of record is get_membership_key_contacts and can be a different person.",
+			"category keeps one committee category, matched case-insensitively. The caller needs the organization grant (auditor or writer) LFX Self Serve requires; the result is complete for the scope, never truncated. Seats only; the membership's contact of record is get_membership_key_contacts and can be a different person. " +
+			"include_membership_contacts=true adds membership_contacts (the organization's key contacts on the projects in scope: contact of record per membership, roles and status as stored) and representation (per project: the Representative/Voting Contact rows beside the board seats with their voting_status) — the two answers to who represents the organization, labelled, never merged; by_voting_status is always returned.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Organization Committee Seats",
 			ReadOnlyHint: true,
@@ -246,13 +310,14 @@ func summariseOrgSeats(seats []orgCommitteeSeat, category string) orgSeatsSummar
 	}
 
 	out := orgSeatsSummary{
-		Category:   category,
-		SeatsTotal: len(seats),
-		ByCategory: map[string]int{},
-		ByProject:  map[string]int{},
-		ByRole:     map[string]int{},
-		Visibility: "organization",
-		Note:       orgSeatsNote,
+		Category:       category,
+		SeatsTotal:     len(seats),
+		ByCategory:     map[string]int{},
+		ByProject:      map[string]int{},
+		ByRole:         map[string]int{},
+		ByVotingStatus: map[string]int{},
+		Visibility:     "organization",
+		Note:           orgSeatsNote,
 	}
 	people := map[string]struct{}{}
 	for _, s := range seats {
@@ -278,6 +343,7 @@ func summariseOrgSeats(seats []orgCommitteeSeat, category string) orgSeatsSummar
 		}
 		out.ByProject[project]++
 		out.ByRole[s.RoleName]++
+		out.ByVotingStatus[s.VotingStatus]++
 
 		if s.IsOrgEditable {
 			out.Editable++
@@ -287,7 +353,13 @@ func summariseOrgSeats(seats []orgCommitteeSeat, category string) orgSeatsSummar
 	}
 	out.People = len(people)
 
-	// Stable row order: committee, then last name, first name, e-mail.
+	sortSeats(seats)
+	out.Seats = seats
+	return out
+}
+
+// sortSeats orders rows by committee, then last name, first name, e-mail.
+func sortSeats(seats []orgCommitteeSeat) {
 	sort.SliceStable(seats, func(i, j int) bool {
 		a, b := seats[i], seats[j]
 		if a.CommitteeName != b.CommitteeName {
@@ -301,7 +373,142 @@ func summariseOrgSeats(seats []orgCommitteeSeat, category string) orgSeatsSummar
 		}
 		return a.Email < b.Email
 	})
-	out.Seats = seats
+}
+
+// drainMembershipContacts reads every key_contact of the organization
+// (tags_all b2b_org_uid:<sfid>), following page_token to the same cap as the
+// family resolution, and keeps those on a project of the family when one
+// was given. The family is never sent as tags: a large foundation would
+// overflow the request line, so the scope filter is applied here.
+func drainMembershipContacts(ctx context.Context, clients *lfxv2.Clients, orgUID string, projectUIDs []string) ([]membershipContact, error) {
+	var inFamily map[string]struct{}
+	if len(projectUIDs) > 0 {
+		inFamily = make(map[string]struct{}, len(projectUIDs))
+		for _, uid := range projectUIDs {
+			inFamily[uid] = struct{}{}
+		}
+	}
+
+	contacts := []membershipContact{}
+	resourceType := keyContactResourceType
+	var pageToken *string
+	for pages := 0; ; pages++ {
+		if pages >= participantMaxDrainPages {
+			return nil, fmt.Errorf("the organisation's key contacts exceed the %d-page cap", participantMaxDrainPages)
+		}
+		result, err := clients.QuerySvc.QueryResources(ctx, &querysvc.QueryResourcesPayload{
+			Version:   "1",
+			Type:      &resourceType,
+			TagsAll:   []string{"b2b_org_uid:" + orgUID},
+			PageSize:  participantDrainPageSize,
+			Sort:      "name_asc",
+			PageToken: pageToken,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range result.Resources {
+			if r == nil {
+				continue
+			}
+			c := membershipContactFromResource(r)
+			if inFamily != nil {
+				if _, ok := inFamily[c.ProjectUID]; !ok {
+					continue
+				}
+			}
+			contacts = append(contacts, c)
+		}
+		if result.PageToken == nil || *result.PageToken == "" {
+			return contacts, nil
+		}
+		pageToken = result.PageToken
+	}
+}
+
+// membershipContactFromResource copies the key_contact data fields the tool
+// returns, values as stored.
+func membershipContactFromResource(r *querysvc.Resource) membershipContact {
+	data, _ := r.Data.(map[string]any)
+	str := func(key string) string {
+		v, _ := data[key].(string)
+		return v
+	}
+	flag := func(key string) bool {
+		v, _ := data[key].(bool)
+		return v
+	}
+	c := membershipContact{
+		Kind:           membershipContactKind,
+		UID:            str("uid"),
+		MembershipUID:  str("membership_uid"),
+		ProjectUID:     str("project_uid"),
+		ProjectName:    str("project_name"),
+		Role:           str("role"),
+		Status:         str("status"),
+		BoardMember:    flag("board_member"),
+		PrimaryContact: flag("primary_contact"),
+		FirstName:      str("first_name"),
+		LastName:       str("last_name"),
+		Email:          str("email"),
+		Title:          str("title"),
+	}
+	if c.UID == "" && r.ID != nil {
+		c.UID = *r.ID
+	}
+	return c
+}
+
+// buildRepresentation pairs, per project, the voting contacts with the board
+// seats; one row per project uid that has at least one of either, ordered by
+// project uid. It reads every drained seat, not the category-filtered list:
+// a category filter narrows the summary counts, never the pairing. A contact
+// or seat with no project uid cannot be paired and earns no row.
+// Voting-status buckets are not derived: each seat row carries its own
+// voting_status.
+func buildRepresentation(contacts []membershipContact, seats []orgCommitteeSeat) []projectRepresentation {
+	byProject := map[string]*projectRepresentation{}
+	row := func(projectUID string) *projectRepresentation {
+		r, ok := byProject[projectUID]
+		if !ok {
+			r = &projectRepresentation{ProjectUID: projectUID, VotingContacts: []membershipContact{}, BoardSeats: []orgCommitteeSeat{}}
+			byProject[projectUID] = r
+		}
+		return r
+	}
+	// The slug comes from the first sorted seat row of the project, board
+	// or not; the drained order is not relied on.
+	sorted := append([]orgCommitteeSeat(nil), seats...)
+	sortSeats(sorted)
+	seats = sorted
+	slugByProject := map[string]string{}
+	for _, s := range seats {
+		if s.ProjectUID != "" && s.ProjectSlug != "" {
+			if _, ok := slugByProject[s.ProjectUID]; !ok {
+				slugByProject[s.ProjectUID] = s.ProjectSlug
+			}
+		}
+	}
+	for _, c := range contacts {
+		if c.Role != votingContactRole || c.ProjectUID == "" {
+			continue
+		}
+		r := row(c.ProjectUID)
+		r.VotingContacts = append(r.VotingContacts, c)
+	}
+	for _, s := range seats {
+		if s.Kind != seatKindBoard || s.ProjectUID == "" {
+			continue
+		}
+		r := row(s.ProjectUID)
+		r.BoardSeats = append(r.BoardSeats, s)
+	}
+	out := make([]projectRepresentation, 0, len(byProject))
+	for _, r := range byProject {
+		r.ProjectSlug = slugByProject[r.ProjectUID]
+		out = append(out, *r)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ProjectUID < out[j].ProjectUID })
 	return out
 }
 
@@ -326,7 +533,7 @@ func handleGetOrgCommitteeSeats(ctx context.Context, req *mcp.CallToolRequest, a
 	ctx = orgSeatsConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := orgSeatsConfig.Clients
 
-	logger.InfoContext(ctx, "fetching org committee seats", "b2b_org_uid", args.B2bOrgUID, "foundation_uid", args.FoundationUID, "category", args.Category, "include_seats", args.IncludeSeats)
+	logger.InfoContext(ctx, "fetching org committee seats", "b2b_org_uid", args.B2bOrgUID, "foundation_uid", args.FoundationUID, "category", args.Category, "include_seats", args.IncludeSeats, "include_membership_contacts", args.IncludeMembershipContacts)
 
 	var projectUIDs []string
 	if args.FoundationUID != "" {
@@ -352,6 +559,24 @@ func handleGetOrgCommitteeSeats(ctx context.Context, req *mcp.CallToolRequest, a
 	out.B2bOrgUID = args.B2bOrgUID
 	out.FoundationUID = args.FoundationUID
 	out.ProjectUIDsInScope = len(projectUIDs)
+
+	if args.IncludeMembershipContacts {
+		contacts, err := drainMembershipContacts(ctx, clients, args.B2bOrgUID, projectUIDs)
+		if err != nil {
+			logger.ErrorContext(ctx, "membership key contacts fetch failed", "error", err)
+			return errorResult(friendlyAPIError("failed to get membership key contacts", err)), nil, nil
+		}
+		out.MembershipContacts = &contacts
+		// Pair against every drained seat: category narrows the counts above,
+		// not which board seats stand beside the voting contacts.
+		representation := buildRepresentation(contacts, seats)
+		out.Representation = &representation
+		out.ContactsNote = membershipContactsNote
+		if len(contacts) == 0 {
+			out.ContactsNote += membershipContactsNoneNote
+		}
+	}
+
 	if !args.IncludeSeats {
 		out.Seats = nil
 	}

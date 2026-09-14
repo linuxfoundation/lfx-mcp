@@ -739,3 +739,212 @@ func TestOrgSeats_DescriptionCoversMembershipContacts(t *testing.T) {
 		}
 	}
 }
+
+// familyOf returns n child project docs of root plus the expected family
+// uids (root first, children in page order).
+func familyOf(root string, n int) (docs []string, family []string) {
+	family = []string{root}
+	for i := 0; i < n; i++ {
+		uid := fmt.Sprintf("%s-child-%03d", root, i)
+		docs = append(docs, projectDoc(uid, fmt.Sprintf("child%03d", i), fmt.Sprintf("Child %03d", i), root, ""))
+		family = append(family, uid)
+	}
+	return docs, family
+}
+
+func TestChunkStrings(t *testing.T) {
+	in := []string{"a", "b", "c", "d", "e"}
+	got := chunkStrings(in, 2)
+	if len(got) != 3 || strings.Join(got[0], "") != "ab" || strings.Join(got[1], "") != "cd" || strings.Join(got[2], "") != "e" {
+		t.Errorf("chunkStrings(5, 2): %v", got)
+	}
+	if got := chunkStrings(in, 5); len(got) != 1 || len(got[0]) != 5 {
+		t.Errorf("exact fit must be one chunk: %v", got)
+	}
+	if got := chunkStrings(in, 10); len(got) != 1 || len(got[0]) != 5 {
+		t.Errorf("size larger than input must be one chunk: %v", got)
+	}
+	if got := chunkStrings(nil, 3); got != nil {
+		t.Errorf("empty input must yield no chunks: %v", got)
+	}
+	if got := chunkStrings(in, 0); len(got) != 1 || len(got[0]) != 5 {
+		t.Errorf("size below one must yield the whole input: %v", got)
+	}
+}
+
+func TestOrgSeats_LargeFamilyIsReadInChunks(t *testing.T) {
+	api := setupOrgSeatsTest(t)
+	// Root plus 89 children = 90 uids -> chunks of 40, 40, 10.
+	docs, family := familyOf("p-big", 89)
+	api.Respond(resourcesPath, page(docs, ""))
+	fx := tenSeatsFixture()
+	// Chunk 1: two pages. Chunk 2: two pages. Chunk 3: one page.
+	api.Respond(seatsPath, seatsPage(fx[:2], "c1p2"))
+	api.Respond(seatsPath, seatsPage(fx[2:4], ""))
+	api.Respond(seatsPath, seatsPage(fx[4:6], "c2p2"))
+	api.Respond(seatsPath, seatsPage(fx[6:8], ""))
+	api.Respond(seatsPath, seatsPage(fx[8:], ""))
+
+	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{B2bOrgUID: testSFID, FoundationUID: "p-big"})
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", allResultText(t, res))
+	}
+	reqs := api.RequestsTo(seatsPath)
+	if len(reqs) != 5 {
+		t.Fatalf("expected five seats requests (3 chunks, two of them paged), got %d", len(reqs))
+	}
+	// project_uids partition the family in order across the first request of
+	// each chunk; continuation pages repeat their chunk's uids.
+	var seen []string
+	for i, want := range [][]string{family[:40], family[:40], family[40:80], family[40:80], family[80:]} {
+		if got := reqs[i].Query["project_uids"]; strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("request %d project_uids: want %d uids starting %s, got %d starting %s", i, len(want), want[0], len(got), firstOf(got))
+		}
+	}
+	for _, i := range []int{0, 2, 4} {
+		seen = append(seen, reqs[i].Query["project_uids"]...)
+	}
+	if strings.Join(seen, ",") != strings.Join(family, ",") {
+		t.Error("the chunks' first requests must partition the family in order without gaps or repeats")
+	}
+	if reqs[1].Query.Get("page_token") != "c1p2" || reqs[3].Query.Get("page_token") != "c2p2" || reqs[0].Query.Get("page_token") != "" || reqs[2].Query.Get("page_token") != "" || reqs[4].Query.Get("page_token") != "" {
+		t.Errorf("page tokens must be followed within each chunk and reset between chunks: %+v", reqs)
+	}
+	out := resultJSON(t, res)
+	if out["seats_total"] != float64(10) || out["people"] != float64(9) || out["project_uids_in_scope"] != float64(90) {
+		t.Errorf("merged summary must count every seat once across chunks: %v", out)
+	}
+}
+
+func firstOf(s []string) string {
+	if len(s) == 0 {
+		return "(none)"
+	}
+	return s[0]
+}
+
+func TestOrgSeats_ChunkForbiddenFailsClosed(t *testing.T) {
+	api := setupOrgSeatsTest(t)
+	docs, _ := familyOf("p-big", 89)
+	api.Respond(resourcesPath, page(docs, ""))
+	api.Respond(seatsPath, seatsPage(tenSeatsFixture()[:3], ""))
+	api.RespondStatus(seatsPath, http.StatusForbidden, `{"message":"forbidden"}`)
+	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{B2bOrgUID: testSFID, FoundationUID: "p-big"})
+	if !res.IsError || !strings.Contains(allResultText(t, res), "organisation grant") {
+		t.Errorf("a 403 on the second chunk must return the forbidden message, got %q", allResultText(t, res))
+	}
+	if n := len(api.RequestsTo(seatsPath)); n != 2 {
+		t.Errorf("must stop at the failing chunk, made %d seats requests", n)
+	}
+}
+
+func TestOrgSeats_SmallFamilyIsOneRequest(t *testing.T) {
+	api := setupOrgSeatsTest(t)
+	// Root plus 39 children = exactly the chunk size: one request, unchanged.
+	docs, family := familyOf("p-mid", 39)
+	api.Respond(resourcesPath, page(docs, ""))
+	api.Respond(seatsPath, seatsPage(tenSeatsFixture(), ""))
+	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{B2bOrgUID: testSFID, FoundationUID: "p-mid"})
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", allResultText(t, res))
+	}
+	reqs := api.RequestsTo(seatsPath)
+	if len(reqs) != 1 {
+		t.Fatalf("a family at or under the chunk size must be one request, made %d", len(reqs))
+	}
+	if got := reqs[0].Query["project_uids"]; len(got) != orgSeatsProjectChunk || strings.Join(got, ",") != strings.Join(family, ",") {
+		t.Errorf("the one request must carry every uid in order: %d uids", len(got))
+	}
+	if out := resultJSON(t, res); out["seats_total"] != float64(10) {
+		t.Errorf("summary: %v", out)
+	}
+}
+
+func TestOrgSeats_ChunkPageCapIsAnError(t *testing.T) {
+	api := setupOrgSeatsTest(t)
+	docs, _ := familyOf("p-big", 89)
+	api.Respond(resourcesPath, page(docs, ""))
+	// First chunk drains in one page; the second never ends.
+	api.Respond(seatsPath, seatsPage(tenSeatsFixture()[:1], ""))
+	for i := 0; i < orgSeatsMaxPages+5; i++ {
+		api.Respond(seatsPath, seatsPage(tenSeatsFixture()[1:2], fmt.Sprintf("t%d", i)))
+	}
+	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{B2bOrgUID: testSFID, FoundationUID: "p-big"})
+	if !res.IsError || !strings.Contains(allResultText(t, res), "page cap") {
+		t.Errorf("the page cap applies per chunk and is an error, got %q", allResultText(t, res))
+	}
+	if n := len(api.RequestsTo(seatsPath)); n != 1+orgSeatsMaxPages {
+		t.Errorf("must stop at the cap of the second chunk: made %d requests, want %d", n, 1+orgSeatsMaxPages)
+	}
+}
+
+func TestOrgSeats_PersonSeatedAcrossChunksCountsOnce(t *testing.T) {
+	api := setupOrgSeatsTest(t)
+	docs, family := familyOf("p-big", 89) // chunks: [0:40], [40:80], [80:90]
+	api.Respond(resourcesPath, page(docs, ""))
+	// ann@x.org holds a board seat on a project of chunk 1 and a technical
+	// seat on a project of chunk 3; bob@x.org one seat in chunk 2.
+	api.Respond(seatsPath, seatsPage([]string{
+		seatDoc("x01", "c-gb", "Governing Board", "Board", family[3], "chunk1-proj", "Ann", "Alpha", "ann@x.org", "Chair", true),
+	}, ""))
+	api.Respond(seatsPath, seatsPage([]string{
+		seatDoc("x02", "c-sc", "Steering", "Technical", family[45], "chunk2-proj", "Bob", "Beta", "bob@x.org", "None", false),
+	}, ""))
+	api.Respond(seatsPath, seatsPage([]string{
+		seatDoc("x03", "c-toc", "TOC", "Technical", family[85], "chunk3-proj", "Ann", "Alpha", "ANN@x.org", "None", false),
+	}, ""))
+
+	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{B2bOrgUID: testSFID, FoundationUID: "p-big", IncludeSeats: true})
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", allResultText(t, res))
+	}
+	// The three chunks must not overlap and must cover the family exactly.
+	reqs := api.RequestsTo(seatsPath)
+	if len(reqs) != 3 {
+		t.Fatalf("expected three chunk requests, got %d", len(reqs))
+	}
+	seen := map[string]int{}
+	var union []string
+	for i, r := range reqs {
+		uids := r.Query["project_uids"]
+		wantLen := []int{40, 40, 10}[i]
+		if len(uids) != wantLen {
+			t.Errorf("chunk %d carries %d uids, want %d", i, len(uids), wantLen)
+		}
+		for _, u := range uids {
+			seen[u]++
+			union = append(union, u)
+		}
+	}
+	for u, n := range seen {
+		if n != 1 {
+			t.Errorf("uid %s sent in %d chunks; chunks must not overlap", u, n)
+		}
+	}
+	if strings.Join(union, ",") != strings.Join(family, ",") {
+		t.Error("the union of the chunks must be the family, in order")
+	}
+
+	// One summary over the merged rows: the person counts once, both seats count.
+	out := resultJSON(t, res)
+	if out["seats_total"] != float64(3) || out["people"] != float64(2) || out["board_seats"] != float64(1) || out["committee_seats"] != float64(2) {
+		t.Errorf("merged summary wrong: seats_total=%v people=%v board=%v committee=%v", out["seats_total"], out["people"], out["board_seats"], out["committee_seats"])
+	}
+	if out["editable"] != float64(1) || out["foundation_controlled"] != float64(2) || out["project_uids_in_scope"] != float64(90) {
+		t.Errorf("merged arithmetic wrong: %v", out)
+	}
+	byProject := out["by_project"].(map[string]any)
+	if byProject["chunk1-proj"] != float64(1) || byProject["chunk2-proj"] != float64(1) || byProject["chunk3-proj"] != float64(1) {
+		t.Errorf("by_project must span every chunk: %v", byProject)
+	}
+	if rows := out["seats"].([]any); len(rows) != 3 || rows[0].(map[string]any)["committee_name"] != "Governing Board" {
+		t.Errorf("rows must be merged and sorted once (committee name first): %v", rows)
+	}
+}
+
+func TestOrgSeats_DescriptionMentionsChunkedReads(t *testing.T) {
+	tool := listRegisteredTool(t, "get_org_committee_seats", RegisterGetOrgCommitteeSeats)
+	if !strings.Contains(tool.Description, "Large foundations are read in several requests; the result is still complete for the scope.") {
+		t.Error("description must state that large foundations are read in several requests")
+	}
+}

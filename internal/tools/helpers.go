@@ -101,6 +101,27 @@ func strPtr(s string) *string {
 	return &s
 }
 
+// chunkStrings splits in into consecutive slices of at most size elements,
+// preserving order. A size below one yields the whole input as one chunk;
+// an empty input yields no chunks.
+func chunkStrings(in []string, size int) [][]string {
+	if len(in) == 0 {
+		return nil
+	}
+	if size < 1 {
+		return [][]string{in}
+	}
+	out := make([][]string, 0, (len(in)+size-1)/size)
+	for start := 0; start < len(in); start += size {
+		end := start + size
+		if end > len(in) {
+			end = len(in)
+		}
+		out = append(out, in[start:end])
+	}
+	return out
+}
+
 // accessDeniedMessage is the user-facing message returned when a downstream
 // API call is rejected with HTTP 403.
 const accessDeniedMessage = "this resource may not exist or you may not have enough access to complete this operation. Request support @ https://support.lfx.dev"

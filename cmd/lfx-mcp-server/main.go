@@ -168,6 +168,7 @@ var defaultTools = []string{
 	// TOOLS-1 (LFXV2-2891): caller-visibility counts and governance/meeting lookups.
 	"count_lfx_resources",
 	"get_org_committee_seats",
+	"audit_committee_coverage",
 }
 
 var logger *slog.Logger
@@ -815,6 +816,9 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	if enabledTools["get_org_committee_seats"] && canRead {
 		tools.RegisterGetOrgCommitteeSeats(server)
+	}
+	if enabledTools["audit_committee_coverage"] && canRead {
+		tools.RegisterAuditCommitteeCoverage(server)
 	}
 
 	// Service API tools.

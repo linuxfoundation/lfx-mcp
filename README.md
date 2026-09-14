@@ -249,6 +249,7 @@ npx @modelcontextprotocol/inspector
 | `update_committee_member`   | Update an existing committee member's information                                         |
 | `delete_committee_member`   | Remove a member from a committee                                                          |
 | `get_org_committee_seats`   | Summarise an organisation's committee seats across a foundation and its direct child projects; filter by category, optionally list the seats (seats, not the membership's contact of record); include_membership_contacts adds the membership contacts of record and a per-project representation pairing |
+| `audit_committee_coverage`  | Audit a foundation and its direct child projects for committees onboarded into LFX v2, visible member counts per committee, and projects with active memberships but no committee or an empty board |
 
 ### Mailing Lists
 

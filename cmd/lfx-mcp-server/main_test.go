@@ -394,12 +394,12 @@ func TestChallengeScopeWriter_Flush(t *testing.T) {
 	}
 }
 
-// TestNewServer_Tools1AreReadScoped pins the TOOLS-1 registrations: the two
-// new tools carry the caller's own visibility through the exchanged token, so
+// TestNewServer_Tools1AreReadScoped pins the TOOLS-1 registrations: these
+// tools carry the caller's own visibility through the exchanged token, so
 // they are listed for any read-scoped caller (staff or not) and absent for a
 // token without read scope.
 func TestNewServer_Tools1AreReadScoped(t *testing.T) {
-	tools1 := []string{"count_lfx_resources", "get_org_committee_seats"}
+	tools1 := []string{"count_lfx_resources", "get_org_committee_seats", "audit_committee_coverage"}
 	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
 	noScope := &auth.TokenInfo{Scopes: []string{}}
 

@@ -22,6 +22,7 @@ func TestTools1Descriptions_FitSchemaBudget(t *testing.T) {
 		{"search_past_meeting_participants", func(s *mcp.Server) { RegisterSearchPastMeetingParticipants(s, false) }},
 		{"search_past_meeting_participants", func(s *mcp.Server) { RegisterSearchPastMeetingParticipants(s, true) }},
 		{"get_org_committee_seats", RegisterGetOrgCommitteeSeats},
+		{"audit_committee_coverage", RegisterAuditCommitteeCoverage},
 		{"search_projects", RegisterSearchProjects},
 		{"get_membership_key_contacts", RegisterGetMembershipKeyContacts},
 		{"search_committee_members", func(s *mcp.Server) { RegisterSearchCommitteeMembers(s, false) }},

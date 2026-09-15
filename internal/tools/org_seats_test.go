@@ -24,6 +24,17 @@ var seatsPath = "/committees/b2b-org/" + testSFID + "/seats"
 // uuid-formatted and avatar is omitted when empty, as the service does;
 // values are test data.
 func seatDoc(uid, committeeUID, committeeName, category, projectUID, projectSlug, first, last, email, role string, editable bool) string {
+	// Board seats carry Voting Rep, every other seat None, so the two ways a
+	// seat can represent the organisation stay distinguishable in fixtures.
+	votingStatus := "None"
+	if isBoardCategory(category) {
+		votingStatus = "Voting Rep"
+	}
+	return seatDocVoting(uid, committeeUID, committeeName, category, projectUID, projectSlug, first, last, email, role, votingStatus, editable)
+}
+
+// seatDocVoting is seatDoc with an explicit stored voting_status.
+func seatDocVoting(uid, committeeUID, committeeName, category, projectUID, projectSlug, first, last, email, role, votingStatus string, editable bool) string {
 	reason := ""
 	if !editable {
 		reason = "This seat is foundation-controlled."
@@ -44,13 +55,13 @@ func seatDoc(uid, committeeUID, committeeName, category, projectUID, projectSlug
 	  "email": %q,
 	  "job_title": "Director",
 	  "role_name": %q,
-	  "voting_status": "Voting Rep",
+	  "voting_status": %q,
 	  "appointed_by": %q,
 	  "organization_id": %q,
 	  "is_org_editable": %t,
 	  "reason": %q,
 	  "username": %q
-	}`, uuidFor(uid), uuidFor(committeeUID), committeeName, category, uuidFor(projectUID), projectSlug, first, last, email, role, appointedBy, testSFID, editable, reason, strings.ToLower(first))
+	}`, uuidFor(uid), uuidFor(committeeUID), committeeName, category, uuidFor(projectUID), projectSlug, first, last, email, role, votingStatus, appointedBy, testSFID, editable, reason, strings.ToLower(first))
 }
 
 // uuidFor derives a deterministic, well-formed UUID from a short label so
@@ -412,7 +423,7 @@ func TestOrgSeats_DefaultCallMakesNoContactsRequestAndReturnsVotingStatus(t *tes
 	}
 	out := resultJSON(t, res)
 	byVoting, ok := out["by_voting_status"].(map[string]any)
-	if !ok || byVoting["Voting Rep"] != float64(10) {
+	if !ok || byVoting["Voting Rep"] != float64(5) || byVoting["None"] != float64(5) {
 		t.Errorf("by_voting_status must always be returned from the seats, got %v", out["by_voting_status"])
 	}
 	for _, k := range []string{"membership_contacts", "representation", "contacts_note"} {
@@ -507,7 +518,7 @@ func TestOrgSeats_IncludeMembershipContactsRequestAndRepresentation(t *testing.T
 	for _, rp := range reps {
 		row := rp.(map[string]any)
 		voting := row["voting_contacts"].([]any)
-		board := row["board_seats"].([]any)
+		seats := row["seats"].([]any)
 		switch row["project_uid"] {
 		case uuidFor("p-cncf"):
 			if row["project_slug"] != "cncf" {
@@ -517,10 +528,10 @@ func TestOrgSeats_IncludeMembershipContactsRequestAndRepresentation(t *testing.T
 				t.Errorf("cncf voting contacts: the billing contact must not be there, got %v", voting)
 			}
 			// Three board seats on cncf (Board, Board, "board ").
-			if len(board) != 3 {
-				t.Errorf("cncf board seats: want 3 got %d", len(board))
+			if len(seats) != 3 {
+				t.Errorf("cncf board seats: want 3 got %d", len(seats))
 			}
-			for _, b := range board {
+			for _, b := range seats {
 				seat := b.(map[string]any)
 				if seat["kind"] != "board_seat" || seat["voting_status"] != "Voting Rep" {
 					t.Errorf("board seat rows carry kind and voting_status as stored: %v", seat)
@@ -530,8 +541,8 @@ func TestOrgSeats_IncludeMembershipContactsRequestAndRepresentation(t *testing.T
 			if len(voting) != 1 || voting[0].(map[string]any)["status"] != "Inactive" {
 				t.Errorf("an Inactive voting contact is kept with status Inactive, got %v", voting)
 			}
-			if len(board) != 2 {
-				t.Errorf("kubernetes board seats: want 2 got %d", len(board))
+			if len(seats) != 2 {
+				t.Errorf("kubernetes board seats: want 2 got %d", len(seats))
 			}
 		default:
 			t.Errorf("unexpected representation row %v", row)
@@ -601,7 +612,7 @@ func TestOrgSeats_ContactsUnscopedKeepsAllAndZeroContactsAddsFallback(t *testing
 	if !strings.Contains(note, "No key contact is indexed for this organization in scope") || !strings.Contains(note, "get_membership_key_contacts per membership is the fallback") {
 		t.Errorf("zero contacts must add the fallback sentence, got %q", note)
 	}
-	if reps := out2["representation"].([]any); len(reps) != 1 || len(reps[0].(map[string]any)["board_seats"].([]any)) != 1 || len(reps[0].(map[string]any)["voting_contacts"].([]any)) != 0 {
+	if reps := out2["representation"].([]any); len(reps) != 1 || len(reps[0].(map[string]any)["seats"].([]any)) != 1 || len(reps[0].(map[string]any)["voting_contacts"].([]any)) != 0 {
 		t.Errorf("representation must still pair the board seat with an empty voting_contacts list, got %v", reps)
 	}
 	if contacts, has := out2["membership_contacts"]; !has || contacts == nil || len(contacts.([]any)) != 0 {
@@ -624,7 +635,7 @@ func TestOrgSeats_CategoryNarrowsCountsNotTheRepresentation(t *testing.T) {
 	if out["seats_total"] != float64(5) || out["board_seats"] != float64(0) {
 		t.Errorf("category=Technical must narrow the counts, got %v", out)
 	}
-	if byVoting := out["by_voting_status"].(map[string]any); byVoting["Voting Rep"] != float64(5) {
+	if byVoting := out["by_voting_status"].(map[string]any); byVoting["None"] != float64(5) || byVoting["Voting Rep"] != nil {
 		t.Errorf("by_voting_status follows the category filter, got %v", byVoting)
 	}
 	// The pairing does not: the board seats on cncf and kubernetes stand
@@ -635,17 +646,17 @@ func TestOrgSeats_CategoryNarrowsCountsNotTheRepresentation(t *testing.T) {
 	}
 	for _, rp := range reps {
 		row := rp.(map[string]any)
-		board := row["board_seats"].([]any)
+		seats := row["seats"].([]any)
 		switch row["project_uid"] {
 		case uuidFor("p-cncf"):
-			if len(board) != 3 || row["project_slug"] != "cncf" || len(row["voting_contacts"].([]any)) != 1 {
+			if len(seats) != 3 || row["project_slug"] != "cncf" || len(row["voting_contacts"].([]any)) != 1 {
 				t.Errorf("cncf row must keep its three board seats, slug and voting contact under category=Technical: %v", row)
 			}
-			if first := board[0].(map[string]any); first["last_name"] != "Alpha" {
-				t.Errorf("board_seats must be ordered by committee, last name, first name regardless of the category filter; got %v first", first["last_name"])
+			if first := seats[0].(map[string]any); first["last_name"] != "Alpha" {
+				t.Errorf("seats must be ordered by committee, last name, first name regardless of the category filter; got %v first", first["last_name"])
 			}
 		case uuidFor("p-k8s"):
-			if len(board) != 2 || row["project_slug"] != "kubernetes" {
+			if len(seats) != 2 || row["project_slug"] != "kubernetes" {
 				t.Errorf("kubernetes row must keep its two board seats and slug: %v", row)
 			}
 		default:
@@ -682,8 +693,97 @@ func TestOrgSeats_RepresentationSlugFromAnySeatAndNoRowWithoutProject(t *testing
 		t.Fatalf("one row (kubernetes) expected: no row for a contact or seat without project_uid, got %v", reps)
 	}
 	row := reps[0].(map[string]any)
-	if row["project_uid"] != uuidFor("p-k8s") || row["project_slug"] != "kubernetes" || len(row["board_seats"].([]any)) != 0 || len(row["voting_contacts"].([]any)) != 1 {
-		t.Errorf("kubernetes row must carry the slug from a non-board seat row and an empty board_seats list: %v", row)
+	if row["project_uid"] != uuidFor("p-k8s") || row["project_slug"] != "kubernetes" || len(row["seats"].([]any)) != 0 || len(row["voting_contacts"].([]any)) != 1 {
+		t.Errorf("kubernetes row must carry the slug from a non-board seat row and an empty seats list: %v", row)
+	}
+}
+
+func TestOrgSeats_RepresentationPairsOnVotingStatusNotOnlyBoard(t *testing.T) {
+	api := setupOrgSeatsTest(t)
+	// Project p-other has no board committee: a member-class roster of
+	// category "Other" holds a Voting Rep seat, an Alternate Voting Rep seat
+	// and an Observer seat; project p-k8s keeps its board.
+	api.Respond(seatsPath, seatsPage([]string{
+		seatDocVoting("o01", "c-mem", "Members", "Other", "p-other", "other", "Vera", "Rep", "vera@x.org", "None", "Voting Rep", true),
+		seatDocVoting("o02", "c-mem", "Members", "Other", "p-other", "other", "Alt", "Rep", "alt@x.org", "None", "Alternate Voting Rep", true),
+		seatDocVoting("o03", "c-mem", "Members", "Other", "p-other", "other", "Obs", "Watch", "obs@x.org", "None", "Observer", true),
+		// A board seat with status None still pairs, by category.
+		seatDocVoting("s09", "c-k8b", "K8s Board", "Board", "p-k8s", "kubernetes", "Hal", "Theta", "hal@x.org", "None", "None", true),
+	}, ""))
+	api.Respond(resourcesPath, page([]string{
+		keyContactDoc("kc7", "m-other", "p-other", "Other", "Representative/Voting Contact", "Active", "Con", "Tact", "con@x.org"),
+	}, ""))
+
+	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{B2bOrgUID: testSFID, IncludeMembershipContacts: true})
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", allResultText(t, res))
+	}
+	out := resultJSON(t, res)
+	// Summary counts are untouched by the pairing rule: one board seat, three
+	// committee seats, voting statuses as stored.
+	if out["board_seats"] != float64(1) || out["committee_seats"] != float64(3) {
+		t.Errorf("summary counts must not change: %v", out)
+	}
+	byVoting := out["by_voting_status"].(map[string]any)
+	if byVoting["Voting Rep"] != float64(1) || byVoting["Alternate Voting Rep"] != float64(1) || byVoting["Observer"] != float64(1) || byVoting["None"] != float64(1) {
+		t.Errorf("by_voting_status as stored: %v", byVoting)
+	}
+
+	reps := out["representation"].([]any)
+	if len(reps) != 2 {
+		t.Fatalf("expected rows for p-other and p-k8s, got %v", reps)
+	}
+	for _, rp := range reps {
+		row := rp.(map[string]any)
+		seats := row["seats"].([]any)
+		switch row["project_uid"] {
+		case uuidFor("p-other"):
+			if len(row["voting_contacts"].([]any)) != 1 {
+				t.Errorf("the voting contact pairs on p-other: %v", row)
+			}
+			if len(seats) != 2 {
+				t.Fatalf("Voting Rep and Alternate Voting Rep seats pair, the Observer does not: %v", seats)
+			}
+			statuses := map[string]bool{}
+			for _, sr := range seats {
+				seat := sr.(map[string]any)
+				statuses[seat["voting_status"].(string)] = true
+				if seat["kind"] != "committee_seat" {
+					t.Errorf("kind stays the category label (committee_seat) for a seat paired on voting status: %v", seat)
+				}
+				if seat["committee_category"] != "Other" {
+					t.Errorf("category as stored: %v", seat)
+				}
+			}
+			if !statuses["Voting Rep"] || !statuses["Alternate Voting Rep"] || statuses["Observer"] {
+				t.Errorf("paired statuses wrong: %v", statuses)
+			}
+			if row["project_slug"] != "other" {
+				t.Errorf("slug from the seat rows: %v", row["project_slug"])
+			}
+		case uuidFor("p-k8s"):
+			if len(seats) != 1 || seats[0].(map[string]any)["kind"] != "board_seat" || seats[0].(map[string]any)["voting_status"] != "None" {
+				t.Errorf("a board seat pairs by category whatever its voting status: %v", seats)
+			}
+		default:
+			t.Errorf("unexpected row %v", row)
+		}
+	}
+}
+
+func TestIsRepresentingVotingStatus(t *testing.T) {
+	for status, want := range map[string]bool{
+		"Voting Rep": true, "Alternate Voting Rep": true, " voting rep ": true, "ALTERNATE VOTING REP": true,
+		"Observer": false, "Emeritus": false, "None": false, "": false, "Voting": false,
+	} {
+		if got := isRepresentingVotingStatus(status); got != want {
+			t.Errorf("isRepresentingVotingStatus(%q) = %v, want %v", status, got, want)
+		}
+	}
+	board := orgCommitteeSeat{Kind: seatKindBoard, VotingStatus: "None"}
+	other := orgCommitteeSeat{Kind: seatKindCommittee, VotingStatus: "Observer"}
+	if !representsOrganization(board) || representsOrganization(other) {
+		t.Error("a board seat represents whatever its status; an Observer committee seat does not")
 	}
 }
 
@@ -733,7 +833,7 @@ func TestOrgSeats_ContactsDrainIsCapped(t *testing.T) {
 
 func TestOrgSeats_DescriptionCoversMembershipContacts(t *testing.T) {
 	tool := listRegisteredTool(t, "get_org_committee_seats", RegisterGetOrgCommitteeSeats)
-	for _, want := range []string{"include_membership_contacts", "contact of record", "never merged", "by_voting_status", "representation"} {
+	for _, want := range []string{"include_membership_contacts", "contact of record", "never merged", "by_voting_status", "representation", "Voting Rep / Alternate Voting Rep seats on any committee", "each with kind and voting_status"} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}

@@ -90,7 +90,7 @@ type GetOrgCommitteeSeatsArgs struct {
 	FoundationUID             string `json:"foundation_uid,omitempty" jsonschema:"Scope seats to one membership foundation (its root project and its direct child projects, as LFX Self Serve scopes it). Omit for the organization's seats across all projects"`
 	Category                  string `json:"category,omitempty" jsonschema:"Exact committee category to keep, e.g. Board, Technical, Marketing; matched case-insensitively"`
 	IncludeSeats              bool   `json:"include_seats,omitempty" jsonschema:"Return the seat rows as well as the summary (default false: summary only)"`
-	IncludeMembershipContacts bool   `json:"include_membership_contacts,omitempty" jsonschema:"Also return the organization's membership key contacts on the projects in scope (contact of record per membership) and a per-project representation pairing them with the board seats; representation carries the board-seat rows whether or not include_seats is set; default false"`
+	IncludeMembershipContacts bool   `json:"include_membership_contacts,omitempty" jsonschema:"Also return the organization's membership key contacts on the projects in scope (contact of record per membership) and a per-project representation pairing them with the seats that represent it (board seats and Voting Rep / Alternate Voting Rep seats); representation carries those seat rows whether or not include_seats is set; default false"`
 }
 
 // orgCommitteeSeat is one seat row as returned to the caller: the
@@ -193,13 +193,14 @@ type membershipContact struct {
 }
 
 // projectRepresentation pairs, for one project, the membership's voting
-// contacts with the organization's board seats; neither is merged into the
-// other.
+// contacts with the seats that represent the organization: board seats and
+// any seat with Voting Rep or Alternate Voting Rep status, whatever the
+// committee category; neither is merged into the other.
 type projectRepresentation struct {
 	ProjectUID     string              `json:"project_uid"`
 	ProjectSlug    string              `json:"project_slug,omitempty"`
 	VotingContacts []membershipContact `json:"voting_contacts"`
-	BoardSeats     []orgCommitteeSeat  `json:"board_seats"`
+	Seats          []orgCommitteeSeat  `json:"seats"`
 }
 
 // RegisterGetOrgCommitteeSeats registers the get_org_committee_seats tool with the MCP server.
@@ -210,7 +211,7 @@ func RegisterGetOrgCommitteeSeats(server *mcp.Server) {
 			"b2b_org_uid is the 18-character SFID from search_b2b_orgs. With foundation_uid, scope is its root project plus direct child projects as visible to the caller, the way LFX Self Serve scopes it; an organization grant does not make project discovery exhaustive. Omit foundation_uid for the organization's seats across all projects. " +
 			"Returns seats_total, people (distinct e-mails), board_seats vs committee_seats, by_category, by_project, by_role, editable vs foundation_controlled; include_seats adds the rows (name, e-mail, role, voting status, appointed_by, committee, project). " +
 			"category keeps one committee category, matched case-insensitively. The caller needs the organization grant (auditor or writer) LFX Self Serve requires; the result is complete for the scope, never truncated. Seats only; the membership's contact of record is get_membership_key_contacts and can be a different person. " +
-			"include_membership_contacts=true adds membership_contacts (the organization's key contacts on the projects in scope: contact of record per membership, roles and status as stored) and representation (per project: the Representative/Voting Contact rows beside the board seats with their voting_status) — the two answers to who represents the organization, labelled, never merged; by_voting_status is always returned. " +
+			"include_membership_contacts=true adds membership_contacts (the organization's key contacts on the projects in scope: contact of record per membership, role and status as stored) and representation (per project: the Representative/Voting Contact rows beside the seats that represent it: board seats and Voting Rep / Alternate Voting Rep seats on any committee, each with kind and voting_status): two answers to who represents the organization, labelled, never merged; by_voting_status is always returned. " +
 			"Large foundations are read in several requests; the result is still complete for the scope.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Organization Committee Seats",
@@ -327,6 +328,24 @@ func drainOrgSeatsScope(ctx context.Context, clients *lfxv2.Clients, orgUID stri
 // isBoardCategory mirrors LFX Self Serve's isBoardCategory.
 func isBoardCategory(category string) bool {
 	return strings.ToLower(strings.TrimSpace(category)) == boardCommitteeCategory
+}
+
+// isRepresentingVotingStatus reports whether a stored voting status makes
+// the seat represent the organisation: Voting Rep or Alternate Voting Rep
+// (the committee-service enum also holds Observer, Emeritus and None).
+func isRepresentingVotingStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "voting rep", "alternate voting rep":
+		return true
+	}
+	return false
+}
+
+// representsOrganization reports whether a seat stands for the
+// organisation on its project: a board seat, or a seat with a representing
+// voting status on any committee.
+func representsOrganization(s orgCommitteeSeat) bool {
+	return s.Kind == seatKindBoard || isRepresentingVotingStatus(s.VotingStatus)
 }
 
 // summariseOrgSeats computes the Board & Committee tab arithmetic over seats,
@@ -493,19 +512,20 @@ func membershipContactFromResource(r *querysvc.Resource) membershipContact {
 	return c
 }
 
-// buildRepresentation pairs, per project, the voting contacts with the board
-// seats; one row per project uid that has at least one of either, ordered by
-// project uid. It reads every drained seat, not the category-filtered list:
-// a category filter narrows the summary counts, never the pairing. A contact
-// or seat with no project uid cannot be paired and earns no row.
-// Voting-status buckets are not derived: each seat row carries its own
-// voting_status.
+// buildRepresentation pairs, per project, the voting contacts with the seats
+// that represent the organisation (representsOrganization); one row per
+// project uid that has at least one of either, ordered by project uid. It
+// reads every drained seat, not the category-filtered list: a category
+// filter narrows the summary counts, never the pairing. A contact or seat
+// with no project uid cannot be paired and earns no row. kind on a seat row
+// stays the category label; the category (board) or the voting status is
+// what pairs it.
 func buildRepresentation(contacts []membershipContact, seats []orgCommitteeSeat) []projectRepresentation {
 	byProject := map[string]*projectRepresentation{}
 	row := func(projectUID string) *projectRepresentation {
 		r, ok := byProject[projectUID]
 		if !ok {
-			r = &projectRepresentation{ProjectUID: projectUID, VotingContacts: []membershipContact{}, BoardSeats: []orgCommitteeSeat{}}
+			r = &projectRepresentation{ProjectUID: projectUID, VotingContacts: []membershipContact{}, Seats: []orgCommitteeSeat{}}
 			byProject[projectUID] = r
 		}
 		return r
@@ -531,11 +551,11 @@ func buildRepresentation(contacts []membershipContact, seats []orgCommitteeSeat)
 		r.VotingContacts = append(r.VotingContacts, c)
 	}
 	for _, s := range seats {
-		if s.Kind != seatKindBoard || s.ProjectUID == "" {
+		if !representsOrganization(s) || s.ProjectUID == "" {
 			continue
 		}
 		r := row(s.ProjectUID)
-		r.BoardSeats = append(r.BoardSeats, s)
+		r.Seats = append(r.Seats, s)
 	}
 	out := make([]projectRepresentation, 0, len(byProject))
 	for _, r := range byProject {

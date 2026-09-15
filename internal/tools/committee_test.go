@@ -46,7 +46,7 @@ func TestCommitteeToolsClaimGovernanceRosters(t *testing.T) {
 			toolName: "search_committee_members",
 			register: func(s *mcp.Server) { RegisterSearchCommitteeMembers(s, false) },
 			wants: []string{
-				"authoritative roster source",
+				"authoritative source for committee rosters",
 				"paginate until page_token is absent",
 				"no country",
 			},
@@ -55,7 +55,7 @@ func TestCommitteeToolsClaimGovernanceRosters(t *testing.T) {
 			toolName: "search_group_members",
 			register: func(s *mcp.Server) { RegisterSearchCommitteeMembers(s, true) },
 			wants: []string{
-				"authoritative roster source",
+				"authoritative source for committee rosters",
 				"paginate until page_token is absent",
 			},
 		},

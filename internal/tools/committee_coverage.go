@@ -58,8 +58,12 @@ type committeeCoverageResult struct {
 	Category        string            `json:"category,omitempty"`
 	Projects        []projectCoverage `json:"projects"`
 	Complete        bool              `json:"complete"`
-	Visibility      string            `json:"visibility"`
-	Note            string            `json:"note"`
+	// CountAccuracyBound is the largest undercount the query service allowed
+	// for any returned group across the audit's counts; zero means every
+	// count is exact. Any nonzero bound makes Complete false.
+	CountAccuracyBound uint64 `json:"count_accuracy_bound"`
+	Visibility         string `json:"visibility"`
+	Note               string `json:"note"`
 }
 
 // projectCoverage is one project of the family with its committees, their
@@ -93,11 +97,11 @@ type coverageCommittee struct {
 func RegisterAuditCommitteeCoverage(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "audit_committee_coverage",
-		Description: "Audit which projects of a foundation have committees onboarded into LFX v2 and how many members each committee has, over the records visible to the caller. " +
+		Description: "Audit which projects of a foundation have committees onboarded into LFX v2 and how many members each has, over the records visible to the caller. " +
 			"foundation_uid is the root project; the audit covers it and its direct child projects. " +
 			"Returns, per project: active_memberships, committees (uid, name, category, visible_members), committees_with_no_visible_members, has_board_committee and gap. " +
-			"gap is set only for projects with active memberships: no_committee (no committee indexed), no_board_committee (committees, none of board category), empty_board (a board committee with no visible member). " +
-			"category keeps one committee category in the listed committees, matched case-insensitively; gap and has_board_committee are evaluated over every committee. complete=false means a count stopped early or not every group was returned. " +
+			"gap is set only for projects with active memberships: no_committee (none indexed), no_board_committee (none of board category), empty_board (a board committee with no visible member). " +
+			"category keeps one committee category in the listed committees, matched case-insensitively; gap and has_board_committee are evaluated over every committee. complete=false means a count stopped early, missed groups or may be short by up to count_accuracy_bound. " +
 			"A zero can be an access effect or a roster not yet onboarded. For a person's or organization's seats use get_org_committee_seats or search_committee_members.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Audit Committee Coverage",
@@ -160,11 +164,12 @@ func drainCommittees(ctx context.Context, clients *lfxv2.Clients, chunk []string
 	}
 }
 
-// groupedCount is one grouped count answer: counts by group key plus
-// whether the answer is complete.
+// groupedCount is one grouped count answer: counts by group key, whether
+// the answer is complete, and the undercount the service allowed per group.
 type groupedCount struct {
-	ByKey    map[string]uint64
-	Complete bool
+	ByKey         map[string]uint64
+	Complete      bool
+	AccuracyBound uint64
 }
 
 // countGrouped runs one grouped count over the chunk and fails closed when
@@ -194,6 +199,12 @@ func countGrouped(ctx context.Context, clients *lfxv2.Clients, resourceType stri
 	}
 	out := groupedCount{ByKey: map[string]uint64{}, Complete: !result.HasMore}
 	if result.GroupsComplete == nil || !*result.GroupsComplete {
+		out.Complete = false
+	}
+	// A nonzero bound means a returned group's count may be an undercount;
+	// the answer is then not complete, whatever groups_complete says.
+	if result.GroupCountErrorUpperBound != nil && *result.GroupCountErrorUpperBound > 0 {
+		out.AccuracyBound = *result.GroupCountErrorUpperBound
 		out.Complete = false
 	}
 	for _, g := range result.Groups {
@@ -301,6 +312,7 @@ func handleAuditCommitteeCoverage(ctx context.Context, req *mcp.CallToolRequest,
 	membersByCommittee := map[string]uint64{}
 	membershipsByProject := map[string]uint64{}
 	complete := true
+	var accuracyBound uint64
 
 	for _, chunk := range chunkStrings(family, orgSeatsProjectChunk) {
 		found, err := drainCommittees(ctx, clients, chunk)
@@ -326,6 +338,7 @@ func handleAuditCommitteeCoverage(ctx context.Context, req *mcp.CallToolRequest,
 			membersByCommittee[k] += v
 		}
 		complete = complete && members.Complete
+		accuracyBound = max(accuracyBound, members.AccuracyBound)
 
 		memberships, err := countGrouped(ctx, clients, memberResourceType, chunk, coverageGroupByProject, []string{activeMembershipFilter})
 		if err != nil {
@@ -336,16 +349,18 @@ func handleAuditCommitteeCoverage(ctx context.Context, req *mcp.CallToolRequest,
 			membershipsByProject[k] += v
 		}
 		complete = complete && memberships.Complete
+		accuracyBound = max(accuracyBound, memberships.AccuracyBound)
 	}
 
 	out := committeeCoverageResult{
-		FoundationUID:   args.FoundationUID,
-		ProjectsInScope: len(family),
-		Category:        args.Category,
-		Projects:        buildCoverage(family, committees, membersByCommittee, membershipsByProject, wantCategory),
-		Complete:        complete,
-		Visibility:      "caller",
-		Note:            coverageNote,
+		FoundationUID:      args.FoundationUID,
+		ProjectsInScope:    len(family),
+		Category:           args.Category,
+		Projects:           buildCoverage(family, committees, membersByCommittee, membershipsByProject, wantCategory),
+		Complete:           complete,
+		CountAccuracyBound: accuracyBound,
+		Visibility:         "caller",
+		Note:               coverageNote,
 	}
 
 	if dropped > 0 {

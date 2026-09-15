@@ -47,6 +47,12 @@ func groupedCountDoc(count uint64, hasMore bool, groupsComplete *bool, groups ma
 	return body + "}"
 }
 
+// groupedCountDocWithBound is groupedCountDoc plus group_count_error_upper_bound.
+func groupedCountDocWithBound(count uint64, hasMore bool, groupsComplete *bool, groups map[string]uint64, bound uint64) string {
+	doc := groupedCountDoc(count, hasMore, groupsComplete, groups)
+	return strings.TrimSuffix(doc, "}") + fmt.Sprintf(`, "group_count_error_upper_bound": %d}`, bound)
+}
+
 func coverageArgs(foundation string) AuditCommitteeCoverageArgs {
 	return AuditCommitteeCoverageArgs{FoundationUID: foundation}
 }
@@ -291,6 +297,51 @@ func TestCoverage_IncompleteWhenAnyCountIsPartial(t *testing.T) {
 	}
 }
 
+func TestCoverage_AccuracyBoundMakesTheAuditIncomplete(t *testing.T) {
+	yes := true
+	// Groups complete, has_more false, but the member count carries a
+	// nonzero undercount bound: the audit is not complete and reports the bound.
+	api := setupOrgSeatsTest(t)
+	api.Respond(resourcesPath, page(nil, ""))
+	api.Respond(resourcesPath, page([]string{committeeDoc("c1", "Board", "Board", "f")}, ""))
+	api.Respond(countPath, groupedCountDocWithBound(3, false, &yes, map[string]uint64{"c1": 3}, 1))
+	api.Respond(countPath, groupedCountDocWithBound(2, false, &yes, map[string]uint64{"f": 2}, 0))
+	res, _, _ := handleAuditCommitteeCoverage(context.Background(), stubCallToolRequest(), coverageArgs("f"))
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", allResultText(t, res))
+	}
+	out := resultJSON(t, res)
+	if out["complete"] != false || out["count_accuracy_bound"] != float64(1) {
+		t.Errorf("a nonzero accuracy bound must make complete false and be reported: complete=%v bound=%v", out["complete"], out["count_accuracy_bound"])
+	}
+	// The counts themselves are still returned as the service gave them.
+	row := out["projects"].([]any)[0].(map[string]any)
+	if row["committees"].([]any)[0].(map[string]any)["visible_members"] != float64(3) || row["active_memberships"] != float64(2) {
+		t.Errorf("counts must pass through unchanged: %v", row)
+	}
+
+	// A zero bound (exact) leaves the audit complete and reports zero; the
+	// largest bound across counts wins.
+	api2 := setupOrgSeatsTest(t)
+	api2.Respond(resourcesPath, page(nil, ""))
+	api2.Respond(resourcesPath, page([]string{committeeDoc("c1", "Board", "Board", "f")}, ""))
+	api2.Respond(countPath, groupedCountDocWithBound(3, false, &yes, map[string]uint64{"c1": 3}, 0))
+	api2.Respond(countPath, groupedCountDoc(2, false, &yes, map[string]uint64{"f": 2}))
+	res2, _, _ := handleAuditCommitteeCoverage(context.Background(), stubCallToolRequest(), coverageArgs("f"))
+	if out2 := resultJSON(t, res2); out2["complete"] != true || out2["count_accuracy_bound"] != float64(0) {
+		t.Errorf("an exact or absent bound keeps the audit complete: %v %v", out2["complete"], out2["count_accuracy_bound"])
+	}
+	api3 := setupOrgSeatsTest(t)
+	api3.Respond(resourcesPath, page(nil, ""))
+	api3.Respond(resourcesPath, page([]string{committeeDoc("c1", "Board", "Board", "f")}, ""))
+	api3.Respond(countPath, groupedCountDocWithBound(3, false, &yes, map[string]uint64{"c1": 3}, 2))
+	api3.Respond(countPath, groupedCountDocWithBound(2, false, &yes, map[string]uint64{"f": 2}, 5))
+	res3, _, _ := handleAuditCommitteeCoverage(context.Background(), stubCallToolRequest(), coverageArgs("f"))
+	if out3 := resultJSON(t, res3); out3["complete"] != false || out3["count_accuracy_bound"] != float64(5) {
+		t.Errorf("the largest bound across counts is reported: %v %v", out3["complete"], out3["count_accuracy_bound"])
+	}
+}
+
 func TestCoverage_CategoryFilter(t *testing.T) {
 	api := setupOrgSeatsTest(t)
 	api.Respond(resourcesPath, page(nil, ""))
@@ -454,10 +505,11 @@ func TestCoverage_ErrorsFailClosed(t *testing.T) {
 
 func TestCoverage_DescriptionBudgetAndContent(t *testing.T) {
 	tool := listRegisteredTool(t, "audit_committee_coverage", RegisterAuditCommitteeCoverage)
-	if n := len(tool.Description); n > 1000 {
-		t.Errorf("description is %d bytes, keep it under 1000", n)
+	// 994 is the description's size when the tool shipped; it must not grow.
+	if n := len(tool.Description); n > 994 {
+		t.Errorf("description is %d bytes, keep it at or under 994", n)
 	}
-	for _, want := range []string{"foundation_uid", "direct child projects", "visible to the caller", "complete", "no_committee", "no_board_committee", "empty_board", "get_org_committee_seats", "search_committee_members", "category", "For a person's or organization's seats use"} {
+	for _, want := range []string{"foundation_uid", "direct child projects", "visible to the caller", "complete", "no_committee", "no_board_committee", "empty_board", "get_org_committee_seats", "search_committee_members", "category", "For a person's or organization's seats use", "count_accuracy_bound"} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}

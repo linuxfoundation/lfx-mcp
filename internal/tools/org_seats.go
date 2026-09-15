@@ -65,7 +65,7 @@ const membershipContactKind = "membership_contact"
 const votingContactRole = "Representative/Voting Contact"
 
 // membershipContactsNote travels with membership_contacts and representation.
-const membershipContactsNote = "Membership key contacts are the contacts of record for each membership (roles as stored; status Active or Inactive, no dates); board seats are roster rows; the two can name different people — cite which one you mean."
+const membershipContactsNote = "Membership key contacts are the contacts of record for each membership (roles as stored; status Active or Inactive, no dates); seats are roster rows; the two can name different people — cite which one you mean."
 
 // membershipContactsNoneNote is appended when no key contact came back.
 const membershipContactsNoneNote = " No key contact is indexed for this organization in scope; get_membership_key_contacts per membership is the fallback."

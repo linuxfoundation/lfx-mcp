@@ -120,7 +120,7 @@ var standardMetricGroupings = map[string]string{
 	"contributions":               "total, org, project, contributor, type, platform, org_region",
 	"contributing_organizations":  "total, project",
 	"participants":                "total, org, project",
-	"maintainers":                 "total, org, project, maintainer",
+	"maintainers":                 "total, org, project, maintainer, role, source",
 	"maintainer_contributions":    "total, org, project, maintainer",
 	"project_health":              "total, foundation, category, population",
 	"software_value":              "total, foundation, population",

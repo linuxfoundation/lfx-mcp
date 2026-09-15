@@ -48,7 +48,7 @@ func TestGuidanceSeparatesContactOfRecordFromSeatHolder(t *testing.T) {
 	}
 
 	standard := strings.Join(strings.Fields(standardMetricsGuidance), " ")
-	const standardWant = "The standard metrics carry no people. A membership's contact of record is get_membership_key_contacts; the holder of a board or committee seat is the committee tools; the two can differ and both are correct — label which one you cite."
+	const standardWant = `The standard metrics carry no people. Who represents an organization has two answers from two records: the membership's contact of record (get_membership_key_contacts) and the holder of a seat (get_org_committee_seats, search_committee_members). Read seats on Board and TOC/TSC committees and on the member-class rosters filed under category Other whose voting_status is Voting Rep or Alternate Voting Rep — never Board alone. A seat carries its created date only and a contact its updated date: cite each as recorded on its side, with its date, never as "current"; when the two name different people show both side by side, labelled, never merged.`
 	if !strings.Contains(standard, standardWant) {
 		t.Error("standard-metrics organizations section must separate the contact of record from the seat holder")
 	}
@@ -59,9 +59,13 @@ func TestGuidanceSeparatesContactOfRecordFromSeatHolder(t *testing.T) {
 // reviewers and per-project counting.
 func TestMaintainersRowCarriesRosterInheritanceCaveat(t *testing.T) {
 	standard := strings.Join(strings.Fields(standardMetricsGuidance), " ")
-	const want = "by=maintainer has no series; per-project counts include people the roster inherits from vendored Linux kernel trees on kernel-fork projects, and MAINTAINERS-file reviewers count as maintainers; a person maintaining two projects counts once in each"
-	if !strings.Contains(standard, want) {
-		t.Error("maintainers row must carry the roster-inheritance caveat")
+	for _, want := range []string{
+		"by=maintainer has no series; per-project counts include people the roster inherits from vendored Linux kernel trees on kernel-fork projects, and MAINTAINERS-file reviewers count as maintainers",
+		"a person maintaining two projects counts once in each and can sit in two role or source rows",
+	} {
+		if !strings.Contains(standard, want) {
+			t.Errorf("maintainers row must carry %q", want)
+		}
 	}
 }
 

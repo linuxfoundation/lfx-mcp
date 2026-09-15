@@ -518,6 +518,26 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 // no absolute figure: a number in the guidance goes stale the day after it
 // is written and gets quoted as if it were the answer. Dates, parameter
 // counts, HTTP statuses and the 365-day default are the only numbers.
+// TestStandardMetricsGuidanceMaintainerSplitsAndRepresentation pins the
+// maintainers row's role and source groupings and split columns, and the
+// organizations section's reading of seats and contacts.
+func TestStandardMetricsGuidanceMaintainerSplitsAndRepresentation(t *testing.T) {
+	text := strings.Join(strings.Fields(standardMetricsGuidance), " ")
+	for _, want := range []string{
+		"| maintainers | at-date | total, org, project, maintainer, role, source |",
+		"active_maintainers[, active_maintainers_excl_reviewers, active_reviewers, active_maintainers_excl_inherited]",
+		"by=total, org and project carry the three split columns beside active_maintainers (excl_reviewers and reviewers partition it within one project; excl_inherited drops people whose roster came only with a vendored kernel tree or another seeded roster)",
+		"by=role (maintainer, reviewer) and by=source (project_repo, inherited_kernel_tree, roster_repo) give one row per value",
+		"never Board alone",
+		`as recorded on its side, with its date, never as "current"`,
+		"show both side by side, labelled, never merged",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("standard metric guidance missing %q", want)
+		}
+	}
+}
+
 func TestStandardMetricsGuidanceCarriesNoFigure(t *testing.T) {
 	allowed := regexp.MustCompile(`^(20\d\d(-\d\d(-\d\d)?)?|365|400|404|1|2|3|4|5|31|01)$`)
 	// A date is one token, not three: consume yyyy-mm-dd before bare numbers.

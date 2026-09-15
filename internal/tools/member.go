@@ -215,7 +215,7 @@ func RegisterGetMemberMembership(server *mcp.Server) {
 func RegisterGetMembershipKeyContacts(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_membership_key_contacts",
-		Description: "List key contacts for a membership by membership UID. Key contacts are the contacts of record for the membership (roles such as Representative/Voting Contact, Authorized Signatory or Billing Contact; status Active or Inactive, no dates), not committee seats: for who holds a board or committee seat use get_org_committee_seats or search_committee_members; the two can name different people.",
+		Description: "List key contacts for a membership by membership UID. Key contacts are the contacts of record for the membership (roles such as Representative/Voting Contact, Authorized Signatory or Billing Contact; status Active or Inactive), not committee seats: for who holds a board or committee seat use get_org_committee_seats or search_committee_members; the two can name different people.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Membership Key Contacts",
 			ReadOnlyHint: true,

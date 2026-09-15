@@ -523,6 +523,7 @@ func TestSemanticLayerGuidanceMaintainerSplitsAndRosterSources(t *testing.T) {
 		"maintainer_key__maintainer_role (maintainer, reviewer) and maintainer_key__maintainer_source (project_repo, inherited_kernel_tree, roster_repo) group the roster",
 		"a split queried alone omits every group with nothing in it, so read it beside active_maintainers or use the standard metric maintainers (by=role, by=source, or the split columns on total, org and project)",
 		"never Board alone",
+		"the seats that represent the organization are Board seats and Voting Rep or Alternate Voting Rep seats on any committee",
 		"lacks rosters native to v2",
 		"say which one you read",
 		"with the date where one is returned",
@@ -560,6 +561,7 @@ func TestStandardMetricsGuidanceMaintainerSplitsAndRepresentation(t *testing.T) 
 		"by=total, org and project carry the three split columns beside active_maintainers (excl_reviewers and reviewers partition it within one project; excl_inherited drops people whose roster came only with a vendored kernel tree or another seeded roster)",
 		"by=role (maintainer, reviewer) and by=source (project_repo, inherited_kernel_tree, roster_repo) give one row per value",
 		"never Board alone",
+		"Observer, Emeritus and None seats are read from the seat rows",
 		`as recorded on its side, with the date where one is returned, never as "current"`,
 		"show both side by side, labelled, never merged",
 	} {

@@ -251,9 +251,11 @@ caller's own choice.
 The standard metrics carry no people. Who represents an organization has two
 answers from two records: the membership's contact of record
 (get_membership_key_contacts) and the holder of a seat (get_org_committee_seats,
-search_committee_members). Read seats on Board and TOC/TSC committees and on the
-member-class rosters filed under category Other whose voting_status is Voting
-Rep or Alternate Voting Rep — never Board alone. A contact carries its updated
+search_committee_members). A seat represents the organization when its
+committee category is Board or its voting_status is Voting Rep or Alternate
+Voting Rep on any committee — TOC/TSC and the member-class rosters filed under
+category Other included — never Board alone; Observer, Emeritus and None seats
+are read from the seat rows, not as representation. A contact carries its updated
 date; a seat row from the committee tools carries none: cite each as recorded
 on its side, with the date where one is returned, never as "current"; when the
 two name different people show both side by side, labelled, never merged.

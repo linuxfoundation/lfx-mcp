@@ -514,10 +514,39 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 	}
 }
 
+// TestSemanticLayerGuidanceMaintainerSplitsAndRosterSources pins recipe 11's
+// role and source dimensions and split metrics, and the roster-source wording
+// in the routing bullet and recipe 12.
+func TestSemanticLayerGuidanceMaintainerSplitsAndRosterSources(t *testing.T) {
+	text := strings.Join(strings.Fields(semanticLayerGuidance), " ")
+	for _, want := range []string{
+		"maintainer_key__maintainer_role (maintainer, reviewer) and maintainer_key__maintainer_source (project_repo, inherited_kernel_tree, roster_repo) group the roster",
+		"a split queried alone omits every group with nothing in it, so read it beside active_maintainers or use the standard metric maintainers (by=role, by=source, or the split columns on total, org and project)",
+		"never Board alone",
+		"lacks rosters native to v2",
+		"say which one you read",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("semantic layer guidance missing %q", want)
+		}
+	}
+}
+
 // TestStandardMetricsGuidanceCarriesNoFigure pins that the guidance quotes
 // no absolute figure: a number in the guidance goes stale the day after it
 // is written and gets quoted as if it were the answer. Dates, parameter
 // counts, HTTP statuses and the 365-day default are the only numbers.
+func TestStandardMetricsGuidanceCarriesNoFigure(t *testing.T) {
+	allowed := regexp.MustCompile(`^(20\d\d(-\d\d(-\d\d)?)?|365|400|404|1|2|3|4|5|31|01)$`)
+	// A date is one token, not three: consume yyyy-mm-dd before bare numbers.
+	for _, match := range regexp.MustCompile(`\b\d{4}-\d\d-\d\d\b|\b\d[\d,.]*\b`).FindAllString(standardMetricsGuidance, -1) {
+		match = strings.TrimRight(match, ".,")
+		if !allowed.MatchString(match) {
+			t.Errorf("standard metric guidance carries the figure %q; figures go stale and get quoted", match)
+		}
+	}
+}
+
 // TestStandardMetricsGuidanceMaintainerSplitsAndRepresentation pins the
 // maintainers row's role and source groupings and split columns, and the
 // organizations section's reading of seats and contacts.
@@ -534,17 +563,6 @@ func TestStandardMetricsGuidanceMaintainerSplitsAndRepresentation(t *testing.T) 
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("standard metric guidance missing %q", want)
-		}
-	}
-}
-
-func TestStandardMetricsGuidanceCarriesNoFigure(t *testing.T) {
-	allowed := regexp.MustCompile(`^(20\d\d(-\d\d(-\d\d)?)?|365|400|404|1|2|3|4|5|31|01)$`)
-	// A date is one token, not three: consume yyyy-mm-dd before bare numbers.
-	for _, match := range regexp.MustCompile(`\b\d{4}-\d\d-\d\d\b|\b\d[\d,.]*\b`).FindAllString(standardMetricsGuidance, -1) {
-		match = strings.TrimRight(match, ".,")
-		if !allowed.MatchString(match) {
-			t.Errorf("standard metric guidance carries the figure %q; figures go stale and get quoted", match)
 		}
 	}
 }

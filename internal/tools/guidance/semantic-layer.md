@@ -20,7 +20,7 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   counts as of a past date or by year, social listening aggregates, event,
   training and health figures, and people rankings (top contributors, top
   maintainers) are standard metrics, not lens questions.
-- Committee/board/ambassador rosters: committee tools. Meeting lists and one meeting's details: meeting tools. Counts of meetings and participants with the caller's visibility: count_lfx_resources and search_past_meeting_participants (recipe 12). Meeting TOTALS over a period (occurrences, scheduled minutes, unique attendees, attendances) are in this layer (recipe 12). "Who represents ORG at FOUNDATION" has two true answers: the membership's contact of record (get_membership_key_contacts — key-contact roles such as Representative/Voting Contact, Authorized Signatory or Billing Contact; status Active or Inactive, no dates) and who holds the seat (get_org_committee_seats or search_committee_members — roster rows with voting_status Voting Rep, Alternate Voting Rep, Observer, Emeritus or None). They are different records and can name different people: return both, labelled, never one for the other.
+- Committee/board/ambassador rosters: committee tools. Meeting lists and one meeting's details: meeting tools. Counts of meetings and participants with the caller's visibility: count_lfx_resources and search_past_meeting_participants (recipe 12). Meeting TOTALS over a period (occurrences, scheduled minutes, unique attendees, attendances) are in this layer (recipe 12). "Who represents ORG at FOUNDATION" has two true answers: the membership's contact of record (get_membership_key_contacts — key-contact roles such as Representative/Voting Contact, Authorized Signatory or Billing Contact; status Active or Inactive, no dates) and who holds the seat (get_org_committee_seats or search_committee_members — roster rows with voting_status Voting Rep, Alternate Voting Rep, Observer, Emeritus or None). They are different records and can name different people: return both, labelled, never one for the other; seats include member-class rosters filed under category Other with Voting Rep or Alternate Voting Rep status, never Board alone; a seat carries a created date only and a contact an updated date — cite each as recorded on its side, with its date, never as "current".
 - How many projects a foundation or parent has: this layer's project metrics count the authoritative project directory; search_projects and count_lfx_resources count only projects onboarded into LFX v2 and can be lower — use the tools to resolve names and slugs, the layer for the number.
 - Where this layer and the standard metrics read differently (both are
   right; say which one you used): dates are UTC calendar days on the
@@ -235,7 +235,15 @@ built in. Active = no end date; start_date has a
 2000-01-01 sentinel — never trend on it. As of date D: total_maintainers where
 maintainer_key__start_date <= 'D' AND (end_date IS NULL OR end_date >= 'D');
 since/until on start_date is meaningless, readings before tracking began run
-high, and a trend is one as-of reading per period. Maintainer×contribution
+high, and a trend is one as-of reading per period. Role and source:
+maintainer_key__maintainer_role (maintainer, reviewer) and
+maintainer_key__maintainer_source (project_repo, inherited_kernel_tree,
+roster_repo) group the roster. active_maintainers_excl_reviewers,
+active_reviewers and active_maintainers_excl_inherited are filtered splits of
+active_maintainers: a split queried alone omits every group with nothing in
+it, so read it beside active_maintainers or use the standard metric
+maintainers (by=role, by=source, or the split columns on total, org and
+project). Maintainer×contribution
 figures are not in this layer: contributions made by maintainers per project
 or per organization, and the maintainer share of work, are the standard
 metric maintainer_contributions (by=project or by=org; the share is over
@@ -246,7 +254,11 @@ PEOPLE is maintainer_contributions by=maintainer.
 group-mode names: search_groups/search_group_members). Never infer a roster from
 membership or event data. A membership's key contact is the contact of record,
 not a seat; a roster row is a seat, not the contact of record — label which one
-you cite. Meeting LISTS and one meeting's details:
+you cite, with its date as recorded on that side. The committee tools read the
+v2 committee service; this layer's committee and maintainer models read the
+warehouse mirror, which lacks rosters native to v2, so a roster question
+answered from the tools and from the layer can differ with neither wrong — say
+which one you read. Meeting LISTS and one meeting's details:
 search_meetings and search_past_meetings. Meeting TOTALS over a period are in
 this layer on two models. OCCURRENCES (one row per meeting occurrence):
 meeting_occurrences (distinct occurrences held) and scheduled_meeting_minutes

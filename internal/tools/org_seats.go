@@ -190,6 +190,9 @@ type membershipContact struct {
 	LastName       string `json:"last_name"`
 	Email          string `json:"email"`
 	Title          string `json:"title,omitempty"`
+	// UpdatedAt is the contact record's updated date as the member service
+	// stores it; the only date either side of the pairing returns.
+	UpdatedAt *string `json:"updated_at,omitempty"`
 }
 
 // projectRepresentation pairs, for one project, the membership's voting
@@ -504,6 +507,9 @@ func membershipContactFromResource(r *querysvc.Resource) membershipContact {
 		LastName:       str("last_name"),
 		Email:          str("email"),
 		Title:          str("title"),
+	}
+	if updated := str("updated_at"); updated != "" {
+		c.UpdatedAt = &updated
 	}
 	if c.UID == "" && r.ID != nil {
 		c.UID = *r.ID

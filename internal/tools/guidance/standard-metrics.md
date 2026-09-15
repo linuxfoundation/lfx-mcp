@@ -253,10 +253,10 @@ answers from two records: the membership's contact of record
 (get_membership_key_contacts) and the holder of a seat (get_org_committee_seats,
 search_committee_members). Read seats on Board and TOC/TSC committees and on the
 member-class rosters filed under category Other whose voting_status is Voting
-Rep or Alternate Voting Rep — never Board alone. A seat carries its created
-date only and a contact its updated date: cite each as recorded on its side,
-with its date, never as "current"; when the two name different people show
-both side by side, labelled, never merged.
+Rep or Alternate Voting Rep — never Board alone. A contact carries its updated
+date; a seat row from the committee tools carries none: cite each as recorded
+on its side, with the date where one is returned, never as "current"; when the
+two name different people show both side by side, labelled, never merged.
 
 ## Projects and subprojects
 

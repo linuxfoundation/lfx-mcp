@@ -32,14 +32,14 @@ func guidanceRoutingSection(t *testing.T) string {
 // standard metrics describe organizations.
 func TestGuidanceSeparatesContactOfRecordFromSeatHolder(t *testing.T) {
 	routing := guidanceRoutingSection(t)
-	const routingWant = `"Who represents ORG at FOUNDATION" has two true answers: the membership's contact of record (get_membership_key_contacts — key-contact roles such as Representative/Voting Contact, Authorized Signatory or Billing Contact; status Active or Inactive, no dates) and who holds the seat (get_org_committee_seats or search_committee_members — roster rows with voting_status Voting Rep, Alternate Voting Rep, Observer, Emeritus or None). They are different records and can name different people: return both, labelled, never one for the other; seats include member-class rosters filed under category Other with Voting Rep or Alternate Voting Rep status, never Board alone; a seat carries a created date only and a contact an updated date — cite each as recorded on its side, with its date, never as "current".`
+	const routingWant = `"Who represents ORG at FOUNDATION" has two true answers: the membership's contact of record (get_membership_key_contacts — key-contact roles such as Representative/Voting Contact, Authorized Signatory or Billing Contact; status Active or Inactive, no dates) and who holds the seat (get_org_committee_seats or search_committee_members — roster rows with voting_status Voting Rep, Alternate Voting Rep, Observer, Emeritus or None). They are different records and can name different people: return both, labelled, never one for the other; seats include member-class rosters filed under category Other with Voting Rep or Alternate Voting Rep status, never Board alone; a contact carries an updated date and a seat row from the committee tools none — cite each as recorded on its side, with the date where one is returned, never as "current".`
 	if !strings.Contains(routing, routingWant) {
 		t.Error("routing must separate the membership's contact of record from the seat holder")
 	}
 
 	semantic := strings.Join(strings.Fields(semanticLayerGuidance), " ")
 	for _, want := range []string{
-		"Never infer a roster from membership or event data. A membership's key contact is the contact of record, not a seat; a roster row is a seat, not the contact of record — label which one you cite, with its date as recorded on that side. The committee tools read the v2 committee service; this layer's committee and maintainer models read the warehouse mirror, which lacks rosters native to v2, so a roster question answered from the tools and from the layer can differ with neither wrong — say which one you read.",
+		"Never infer a roster from membership or event data. A membership's key contact is the contact of record, not a seat; a roster row is a seat, not the contact of record — label which one you cite, with its date where the source returns one. The committee tools read the v2 committee service; this layer's committee and maintainer models read the warehouse mirror, which lacks rosters native to v2, so a roster question answered from the tools and from the layer can differ with neither wrong — say which one you read.",
 		"are not the route for an organisation's seats. The membership's contact of record is get_membership_key_contacts; the two can name different people.",
 	} {
 		if !strings.Contains(semantic, want) {
@@ -48,7 +48,7 @@ func TestGuidanceSeparatesContactOfRecordFromSeatHolder(t *testing.T) {
 	}
 
 	standard := strings.Join(strings.Fields(standardMetricsGuidance), " ")
-	const standardWant = `The standard metrics carry no people. Who represents an organization has two answers from two records: the membership's contact of record (get_membership_key_contacts) and the holder of a seat (get_org_committee_seats, search_committee_members). Read seats on Board and TOC/TSC committees and on the member-class rosters filed under category Other whose voting_status is Voting Rep or Alternate Voting Rep — never Board alone. A seat carries its created date only and a contact its updated date: cite each as recorded on its side, with its date, never as "current"; when the two name different people show both side by side, labelled, never merged.`
+	const standardWant = `The standard metrics carry no people. Who represents an organization has two answers from two records: the membership's contact of record (get_membership_key_contacts) and the holder of a seat (get_org_committee_seats, search_committee_members). Read seats on Board and TOC/TSC committees and on the member-class rosters filed under category Other whose voting_status is Voting Rep or Alternate Voting Rep — never Board alone. A contact carries its updated date; a seat row from the committee tools carries none: cite each as recorded on its side, with the date where one is returned, never as "current"; when the two name different people show both side by side, labelled, never merged.`
 	if !strings.Contains(standard, standardWant) {
 		t.Error("standard-metrics organizations section must separate the contact of record from the seat holder")
 	}

@@ -525,6 +525,8 @@ func TestSemanticLayerGuidanceMaintainerSplitsAndRosterSources(t *testing.T) {
 		"never Board alone",
 		"lacks rosters native to v2",
 		"say which one you read",
+		"with the date where one is returned",
+		"with its date where the source returns one",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("semantic layer guidance missing %q", want)
@@ -558,7 +560,7 @@ func TestStandardMetricsGuidanceMaintainerSplitsAndRepresentation(t *testing.T) 
 		"by=total, org and project carry the three split columns beside active_maintainers (excl_reviewers and reviewers partition it within one project; excl_inherited drops people whose roster came only with a vendored kernel tree or another seeded roster)",
 		"by=role (maintainer, reviewer) and by=source (project_repo, inherited_kernel_tree, roster_repo) give one row per value",
 		"never Board alone",
-		`as recorded on its side, with its date, never as "current"`,
+		`as recorded on its side, with the date where one is returned, never as "current"`,
 		"show both side by side, labelled, never merged",
 	} {
 		if !strings.Contains(text, want) {

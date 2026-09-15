@@ -562,6 +562,34 @@ func TestOrgSeats_IncludeMembershipContactsRequestAndRepresentation(t *testing.T
 	}
 }
 
+func TestOrgSeats_ContactsCarryUpdatedAt(t *testing.T) {
+	api := setupOrgSeatsTest(t)
+	api.Respond(seatsPath, seatsPage(tenSeatsFixture()[:1], ""))
+	api.Respond(resourcesPath, page([]string{
+		keyContactDoc("kc1", "m-cncf", "p-cncf", "CNCF", "Representative/Voting Contact", "Active", "Vic", "Vote", "vic@x.org"),
+	}, ""))
+	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{B2bOrgUID: testSFID, IncludeMembershipContacts: true})
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", allResultText(t, res))
+	}
+	out := resultJSON(t, res)
+	const want = "2026-01-01T00:00:00Z" // the fixture's updated_at, as stored
+	contact := out["membership_contacts"].([]any)[0].(map[string]any)
+	if contact["updated_at"] != want {
+		t.Errorf("membership_contacts must carry the contact's updated_at as stored, got %v", contact["updated_at"])
+	}
+	voting := out["representation"].([]any)[0].(map[string]any)["voting_contacts"].([]any)[0].(map[string]any)
+	if voting["updated_at"] != want {
+		t.Errorf("representation voting_contacts must carry updated_at too, got %v", voting["updated_at"])
+	}
+	// Seat rows carry no date: the committee-service seat has none.
+	for _, k := range []string{"created_at", "updated_at"} {
+		if _, has := out["representation"].([]any)[0].(map[string]any)["seats"].([]any)[0].(map[string]any)[k]; has {
+			t.Errorf("seat rows must not invent a %s", k)
+		}
+	}
+}
+
 func TestOrgSeats_SeatRowsCarryKind(t *testing.T) {
 	api := setupOrgSeatsTest(t)
 	api.Respond(seatsPath, seatsPage(tenSeatsFixture(), ""))

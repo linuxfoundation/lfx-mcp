@@ -550,7 +550,7 @@ func TestOrgSeats_IncludeMembershipContactsRequestAndRepresentation(t *testing.T
 		}
 	}
 	note, _ := out["contacts_note"].(string)
-	if !strings.Contains(note, "contacts of record") || !strings.Contains(note, "cite which one you mean") {
+	if !strings.Contains(note, "contacts of record") || !strings.Contains(note, "updated_at where one is returned") || strings.Contains(note, "no dates") || !strings.Contains(note, "cite which one you mean") {
 		t.Errorf("contacts_note wrong: %q", note)
 	}
 	if strings.Contains(note, "No key contact is indexed") {

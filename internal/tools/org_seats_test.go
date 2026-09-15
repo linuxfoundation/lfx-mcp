@@ -296,10 +296,11 @@ func TestOrgSeats_OtherErrorsAreFriendly(t *testing.T) {
 
 func TestOrgSeats_DescriptionBudgetAndContent(t *testing.T) {
 	tool := listRegisteredTool(t, "get_org_committee_seats", RegisterGetOrgCommitteeSeats)
-	// The client cap is schemaDescriptionBudget (2048); 1600 keeps headroom
-	// for the include_membership_contacts and chunking sentences.
-	if n := len(tool.Description); n > 1600 {
-		t.Errorf("description is %d bytes, keep it under 1600", n)
+	// The client cap is schemaDescriptionBudget (2048). The description must
+	// not grow: 1508 is its size before the representation rule was widened,
+	// and every later edit trims at least as much as it adds.
+	if n := len(tool.Description); n > 1508 {
+		t.Errorf("description is %d bytes, keep it at or under 1508", n)
 	}
 	for _, want := range []string{"search_b2b_orgs", "foundation_uid", "category", "organization grant", "include_seats", "Board & Committee", "direct child projects as visible to the caller", "the way LFX Self Serve scopes it", "an organization grant does not make project discovery exhaustive"} {
 		if !strings.Contains(tool.Description, want) {
@@ -833,7 +834,7 @@ func TestOrgSeats_ContactsDrainIsCapped(t *testing.T) {
 
 func TestOrgSeats_DescriptionCoversMembershipContacts(t *testing.T) {
 	tool := listRegisteredTool(t, "get_org_committee_seats", RegisterGetOrgCommitteeSeats)
-	for _, want := range []string{"include_membership_contacts", "contact of record", "never merged", "by_voting_status", "representation", "Voting Rep / Alternate Voting Rep seats on any committee", "each with kind and voting_status"} {
+	for _, want := range []string{"include_membership_contacts", "contact of record", "never merged", "by_voting_status", "representation", "board, or Voting Rep / Alternate Voting Rep on any committee"} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}
@@ -1074,7 +1075,7 @@ func TestDedupeStrings(t *testing.T) {
 
 func TestOrgSeats_DescriptionMentionsChunkedReads(t *testing.T) {
 	tool := listRegisteredTool(t, "get_org_committee_seats", RegisterGetOrgCommitteeSeats)
-	if !strings.Contains(tool.Description, "Large foundations are read in several requests; the result is still complete for the scope.") {
+	if !strings.Contains(tool.Description, "large foundations being read in several requests") {
 		t.Error("description must state that large foundations are read in several requests")
 	}
 }

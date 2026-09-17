@@ -46,7 +46,7 @@ var standardMetricParameters = []string{
 }
 
 // standardMetricNames is the whole inventory, in the order the guidance lists
-// it: the lens registry exposes exactly these twenty-two families (each with
+// it: the lens registry exposes exactly these twenty-four families (each with
 // its own groupings under by), so this list is what the routing surface must
 // name — no more, and none of them missing.
 var standardMetricNames = []string{
@@ -72,6 +72,8 @@ var standardMetricNames = []string{
 	"certifications",
 	"social_mentions",
 	"social_reach",
+	"meetups",
+	"meetup_attendees",
 }
 
 // standardMetricKinds is each family's kind as the guidance lists it: a
@@ -101,6 +103,8 @@ var standardMetricKinds = map[string]string{
 	"certifications":              "window",
 	"social_mentions":             "window",
 	"social_reach":                "window",
+	"meetups":                     "window",
+	"meetup_attendees":            "window",
 }
 
 // standardMetricGroupings is each family's groupings as the GUIDANCE lists
@@ -131,6 +135,8 @@ var standardMetricGroupings = map[string]string{
 	"certifications":              "total, org",
 	"social_mentions":             "total, project, network, sentiment",
 	"social_reach":                "total, project",
+	"meetups":                     "total, community, region, group, city",
+	"meetup_attendees":            "total, community, region, group, city",
 }
 
 // TestStandardMetricsDescription_FitsSchemaBudget holds the tool to the same budget as
@@ -261,10 +267,17 @@ func TestStandardMetrics_RequiredParamSurvivesCompaction(t *testing.T) {
 	for _, want := range append([]string{
 		"metrics/group_by", "read_lfx_standard_metrics_guidance", "start_date, end_date and period",
 		"WINDOW", "AT-DATE family (" + strings.Join(atDate, ", ") + ")", "state on end_date",
+		"meetups and meetup_attendees take project only (org and subsidiaries rejected, subprojects a no-op) and read all history when start_date is omitted",
 	}, standardMetricNames...) {
 		if !strings.Contains(desc, want) {
 			t.Errorf("metric description does not mention %q — the contract must survive schema compaction", want)
 		}
+	}
+	// The start_date default must agree with the exception the metric
+	// description carries: one all-history list, the meetup families on it.
+	start := schemaPropertyDescription(t, listStandardMetricsTool(t), "start_date")
+	if want := "the meetup families (meetups, meetup_attendees)"; !strings.Contains(start, want) {
+		t.Errorf("start_date description does not list %q among the all-history families", want)
 	}
 }
 
@@ -289,7 +302,7 @@ func TestStandardMetrics_RegistersReadOnly(t *testing.T) {
 func TestStandardMetrics_ParameterDescriptionsMatchTheGuidance(t *testing.T) {
 	tool := listStandardMetricsTool(t)
 	for property, want := range map[string]string{
-		"start_date": "all history on new_members, membership_churn and the new_/lost_member_organizations families",
+		"start_date": "all history on new_members, membership_churn, the new_/lost_member_organizations families and the meetup families (meetups, meetup_attendees)",
 		"project":    "the LF's own membership programme and a root of the project tree, not the LF-wide scope",
 	} {
 		if got := schemaPropertyDescription(t, tool, property); !strings.Contains(got, want) {

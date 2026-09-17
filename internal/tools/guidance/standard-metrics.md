@@ -25,7 +25,8 @@ only; resolve them in-session like any other name.
 
 ## The contract
 
-Every family takes the same parameters, and nothing per family:
+Every family takes the same parameters, and nothing per family — with one
+exception, topic, which only talks accepts:
 
 | Parameter | Meaning | Default |
 |---|---|---|
@@ -35,6 +36,7 @@ Every family takes the same parameters, and nothing per family:
 | subprojects | excluded, separate or combined: what the project name covers | combined |
 | org | one stored legal account name from search_b2b_orgs, exact | none |
 | subsidiaries | excluded, separate or combined: what the org name covers | excluded |
+| topic | talks only: one term matched against the session's title, track, abstract and tags | none = every talk |
 | start_date | yyyy-mm-dd, a UTC calendar day | the family's window (below) |
 | end_date | yyyy-mm-dd, a UTC calendar day; for "each year since X" or "through now" leave it unset — a future end_date reads the scheduled state on that day and sets includes_future_dated, it is not the to-date row | today (UTC) |
 | period | day, week, month, quarter or year: adds a time dimension to by | none = no time series |
@@ -226,11 +228,12 @@ series adds `period` in front; an at-date series adds `period_end` too.
 | software_value | at-date | total, foundation, population | COCOMO software value summed over each LF-hosted project's own latest snapshot row on or before end_date, whatever day that row is on | [foundation / population,] total_software_value | USD; not pinned to one day (applied.snapshot_date is null): each project as of its own latest row; a project whose latest row is a health-only day contributes nothing, so totals read low, never inflated — applied.coverage says how many LF-hosted projects carry a value; additive across projects, never across days |
 | event_registrations | window | total, event, org | Accepted registrations of events starting in the window, and the distinct people behind them | [event / account, parent_org,] total_registrations, total_unique_registrants, total_checked_in_attendees | The window is the EVENT start date (an ad hoc query by registration date reads differently); registrants and checked-in attendees are distinct people by email, not registrations: never sum them across rows; check-in data exists only for some registration sources, so an event whose source carries none shows zero attendees, not low attendance; by=org is the registrant's account, NULL = unattributed |
 | event_sponsorships | window | total, org, event | Sponsorship revenue and count of sponsorships, for events starting in the window (one event can carry several) | [account, parent_org / event,] total_sponsorship_revenue, total_sponsorship_count | Additive; USD; all tier types |
-| speakers | window | total, event, org | Accepted speakers of events starting in the window | [event / account, parent_org,] total_speakers | Distinct people with an Accepted speaker status (Sessionize proposals accepted, Bevy listed speakers); rejected and in-review proposals are excluded, so an ad hoc count over all statuses reads higher; by=org is the speaker's account as resolved from the proposal; a large share resolves to none and sits in the NULL account row |
+| speakers | window | total, event, org | Accepted speakers of events starting in the window | [event / account, parent_org,] total_speakers | Distinct people with an Accepted speaker status (Sessionize proposals accepted, Bevy listed speakers); rejected and in-review proposals are excluded, so an ad hoc count over all statuses reads higher; by=org is the speaker's account as resolved from the proposal; a large share resolves to none and sits in the NULL account row; this counts PEOPLE, not sessions — "how many talks" is the talks family |
 | training_enrollments | window | total, org, course | Enrollments and enrolled users by enrollment date | [account, parent_org / course,] total_enrollments, total_enrolled_users | Platform data only (TI + edX), so lifetime totals read below the official trained figure; the edX branch carries no account and sits in the NULL account row with the placeholder learners; enrolled users is a distinct count |
 | certifications | window | total, org | Completed certifications by enrollment date | [account, parent_org,] total_certifications | Additive; counted at enrollment time; the edX branch has no account and sits in the NULL account row with the placeholder learners |
 | social_mentions | window | total, project, network, sentiment | Social listening mentions, distinct authors and sentiment by mention date | [project, project_name / network / sentiment,] social_listening_mentions, social_listening_unique_authors, social_listening_positive_mentions, social_listening_negative_mentions | Mention counts are additive; unique_authors is a distinct count; neutral or unknown sentiment is in neither positive nor negative; no org scope |
 | social_reach | window | total, project | Potential reach of the mentions by mention date | [project, project_name,] social_listening_total_author_followers, social_listening_avg_author_followers | The sum counts a prolific author once per mention; the average is per mention; NULL follower counts excluded; no org scope |
+| talks | window | total, event, track, topic, format, org, speaker | Accepted sessions (talks, keynotes, lightning talks, panels, workshops) of events starting in the window | [event / event, track / event, topic / format / account, parent_org / speaker, account, event,] talks | Counts SESSIONS, not people: a session with three speakers is one talk, a person with two sessions is two; speakers is the people count. Accepted status only, like speakers. topic is a case-insensitive keyword match on title, track, abstract and any tags the event captured — say "talks mentioning X", not "talks about X"; by=topic groups on the event's own track/tag vocabulary, which differs per event. by=org attributes a talk to every distinct speaker account on it, so org rows can exceed the total; a large share of speakers resolve to no account and sit in the NULL row (a floor). by=speaker is one row per person per event with their talk count |
 
 ## Organizations: account and parent_org
 
@@ -405,6 +408,31 @@ member organizations across the LF today", and the offer of memberships
   bare logins, so strip the URL prefix before matching, case-insensitively;
   a NULL-handle row cannot be matched on the login: report it as unmatched
   under its display name, never as a match.
+- A company's speakers at an event ("how many Red Hat employees gave talks
+  at KubeCon"): speakers, by=event, org=<Red Hat's stored legal name from
+  search_b2b_orgs>, subsidiaries=combined, start_date/end_date bracketing
+  the edition → one row per event the company spoke at; read the KubeCon
+  row(s). The figure is people, not talks (a person with two sessions
+  counts once; a session with three speakers counts three), and it is a
+  FLOOR: the account is resolved from the proposal's company field and a
+  large share resolves to none, so say "at least N speakers attributed to
+  Red Hat". Several editions in the window are several rows; do not add
+  them up for a distinct headcount — widen to by=total for that. There is
+  no event filter: by=event and a window is how one event is isolated.
+- Talks on a topic at an event ("how many OpenTelemetry talks occurred at
+  KubeCon"): talks, by=event, topic=OpenTelemetry, project=cncf,
+  start_date/end_date bracketing the edition → one row per event with a
+  matching accepted session; read the KubeCon row(s). Say "accepted
+  sessions whose title, track, abstract or tags mention OpenTelemetry" — a
+  keyword match, so a talk about the project under another name is missed
+  and a passing mention is counted. For the breakdown, by=track or
+  by=format with the same topic. Without topic the same call is the
+  event's total accepted sessions.
+- A company's talks (rather than its speakers): talks, by=event,
+  org=<stored legal name>, subsidiaries=combined → sessions with at least
+  one speaker attributed to the company; a co-presented session counts
+  once here and once for each other company on it, so company rows do not
+  sum to the event total. Same floor caveat as speakers.
 - A rejection: memberships, start_date=2020-01-01 → "start_date needs period
   for an at-date metric; the state on a single day is end_date alone" — add
   period=year for the series, or drop start_date for one day.

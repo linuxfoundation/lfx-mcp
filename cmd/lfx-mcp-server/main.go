@@ -375,6 +375,9 @@ func main() {
 				Timeout:   30 * time.Second,
 				Transport: otelhttp.NewTransport(http.DefaultTransport),
 			}
+			// Share the access checker between meeting tools and service authorization.
+			accessChecker := lfxv2.NewAccessCheckClient(cfg.LFXAPIURL, &http.Client{Timeout: 30 * time.Second})
+
 			// Create a single shared Clients instance so that the token cache
 			// persists across requests, eliminating redundant token-exchange
 			// round-trips to Auth0 on every tool invocation.
@@ -384,8 +387,6 @@ func main() {
 				DebugLogger:         debugLogger,
 				HTTPClient:          lfxHTTPClient,
 			})
-
-			accessChecker := lfxv2.NewAccessCheckClient(cfg.LFXAPIURL, &http.Client{Timeout: 30 * time.Second})
 
 			if err != nil {
 				logger.Warn("failed to create shared LFX v2 clients - LFX API tools will not be available", errKey, err)

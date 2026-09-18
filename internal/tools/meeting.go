@@ -75,6 +75,9 @@ type MeetingConfig struct {
 	// Clients is the shared LFX v2 API client instance. It must be created once
 	// at startup so that its token cache persists across requests.
 	Clients *lfxv2.Clients
+	// AccessChecker determines whether pending summary text can be returned.
+	// When absent, pending summary text is withheld.
+	AccessChecker accessChecker
 }
 
 var meetingConfig *MeetingConfig
@@ -883,6 +886,8 @@ func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequ
 		}, nil, nil
 	}
 
+	meetingConfig.preparePastMeetingSummaryResults(ctx, logger, result.Resources)
+
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
@@ -983,6 +988,10 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 			},
 			IsError: true,
 		}, nil, nil
+	}
+
+	if resourceType == pastMeetingSummaryResourceType {
+		meetingConfig.preparePastMeetingSummaryResults(ctx, logger, result.Resources)
 	}
 
 	prettyJSON, err := json.MarshalIndent(result.Resources[0], "", "  ")

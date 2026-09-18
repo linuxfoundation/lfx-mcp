@@ -385,6 +385,8 @@ func main() {
 				HTTPClient:          lfxHTTPClient,
 			})
 
+			accessChecker := lfxv2.NewAccessCheckClient(cfg.LFXAPIURL, &http.Client{Timeout: 30 * time.Second})
+
 			if err != nil {
 				logger.Warn("failed to create shared LFX v2 clients - LFX API tools will not be available", errKey, err)
 			} else {
@@ -400,9 +402,11 @@ func main() {
 				tools.SetMemberConfig(&tools.MemberConfig{
 					Clients: sharedClients,
 				})
-				tools.SetMeetingConfig(&tools.MeetingConfig{
-					Clients: sharedClients,
-				})
+				meetingCfg := &tools.MeetingConfig{Clients: sharedClients}
+				if accessChecker != nil {
+					meetingCfg.AccessChecker = accessChecker
+				}
+				tools.SetMeetingConfig(meetingCfg)
 				tools.SetOrgSeatsConfig(&tools.OrgSeatsConfig{
 					Clients: sharedClients,
 				})
@@ -410,7 +414,6 @@ func main() {
 
 			// Configure service API infrastructure (shared across onboarding, lens, etc.).
 			slugResolver := lfxv2.NewSlugResolver()
-			accessChecker := lfxv2.NewAccessCheckClient(cfg.LFXAPIURL, &http.Client{Timeout: 30 * time.Second})
 
 			sharedAuth := tools.ServiceAuth{
 				LFXAPIURL:           cfg.LFXAPIURL,

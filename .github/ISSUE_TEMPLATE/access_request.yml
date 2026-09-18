@@ -1,0 +1,76 @@
+---
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+name: LFX MCP access request
+description: Request or remove LFX MCP Server access for a community member
+title: "[access] <LFID username>"
+assignees: ["seberslinux"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        More info: [Using the LFX MCP Server as a community member][playbook] · [README][readme]
+
+        [playbook]: https://github.com/linuxfoundation/lfx-mcp/blob/main/docs/community-access.md
+        [readme]: https://github.com/linuxfoundation/lfx-mcp/blob/main/README.md
+  - type: dropdown
+    id: request_type
+    attributes:
+      label: Request
+      options: ["Grant access", "Remove access"]
+    validations:
+      required: true
+  - type: input
+    id: lfid
+    attributes:
+      label: LFID username
+      description: >-
+        The Linux Foundation username of the person who needs access, shown in the LFX profile. Not an e-mail.
+        If you file on someone's behalf, answer the rest of the form for that person.
+      placeholder: jdoe
+    validations:
+      required: true
+  - type: textarea
+    id: intended_use
+    attributes:
+      label: What you plan to do with it
+      description: For a removal, give the reason instead.
+      placeholder: Draft minutes from the summaries and transcripts of the SIG meetings I attend.
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        ### Additional data
+        Optional; it may make approval faster if you can provide it.
+  - type: input
+    id: where
+    attributes:
+      label: Where you take part
+      description: Foundation, project or group (committee), if you know it.
+      placeholder: CNCF, TAG Security
+  - type: dropdown
+    id: role
+    attributes:
+      label: Your role in it
+      options:
+        - Not sure
+        - Group (committee) member
+        - Group (committee) manager or chair
+        - Project or foundation administrator
+        - Meeting host or guest
+        - Organization admin
+        - Other
+  - type: input
+    id: sponsor
+    attributes:
+      label: Who can confirm your participation
+      description: A role is enough; we can check on our side.
+      placeholder: Group chair
+  - type: dropdown
+    id: client
+    attributes:
+      label: AI client(s)
+      description: Select all that apply.
+      multiple: true
+      options: [Claude, Cursor, Goose, GitHub Copilot, OpenCode, Other]

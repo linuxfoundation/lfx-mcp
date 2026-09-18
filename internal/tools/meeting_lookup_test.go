@@ -7,6 +7,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -270,6 +271,11 @@ func TestTrimMeetingResultFields_Helper(t *testing.T) {
 			if got := trimMeetingResultFields(in); got != in {
 				t.Errorf("trim(%v) = %v", in, got)
 			}
+		}
+		array := []any{map[string]any{"passcode": "kept", "join_url": "kept"}}
+		want := []any{map[string]any{"passcode": "kept", "join_url": "kept"}}
+		if got := trimMeetingResultFields(array); !reflect.DeepEqual(got, want) || !reflect.DeepEqual(array, want) {
+			t.Errorf("top-level non-map Data must remain untouched: got %v, input %v", got, array)
 		}
 	})
 

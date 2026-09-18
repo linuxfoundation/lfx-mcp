@@ -19,10 +19,17 @@ var meetingResultDeniedFields = map[string]struct{}{
 	"host_key":           {},
 }
 
-// trimMeetingResultFields removes the denied keys from a decoded
-// query-service record at any depth. It walks maps and slices in place and
-// returns the (possibly mutated) value; any other type is returned untouched.
+// trimMeetingResultFields removes the denied keys from a decoded record
+// map at any depth. Non-map Data is returned untouched.
 func trimMeetingResultFields(data any) any {
+	if _, ok := data.(map[string]any); ok {
+		trimMeetingResultValue(data)
+	}
+	return data
+}
+
+// trimMeetingResultValue walks maps and their nested slices in place.
+func trimMeetingResultValue(data any) {
 	switch v := data.(type) {
 	case map[string]any:
 		for key, value := range v {
@@ -30,15 +37,11 @@ func trimMeetingResultFields(data any) any {
 				delete(v, key)
 				continue
 			}
-			v[key] = trimMeetingResultFields(value)
+			trimMeetingResultValue(value)
 		}
-		return v
 	case []any:
-		for i, item := range v {
-			v[i] = trimMeetingResultFields(item)
+		for _, item := range v {
+			trimMeetingResultValue(item)
 		}
-		return v
-	default:
-		return data
 	}
 }

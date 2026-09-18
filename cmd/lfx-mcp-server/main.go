@@ -375,6 +375,9 @@ func main() {
 				Timeout:   30 * time.Second,
 				Transport: otelhttp.NewTransport(http.DefaultTransport),
 			}
+			// Share the access checker between meeting tools and service authorization.
+			accessChecker := lfxv2.NewAccessCheckClient(cfg.LFXAPIURL, &http.Client{Timeout: 30 * time.Second})
+
 			// Create a single shared Clients instance so that the token cache
 			// persists across requests, eliminating redundant token-exchange
 			// round-trips to Auth0 on every tool invocation.
@@ -400,9 +403,11 @@ func main() {
 				tools.SetMemberConfig(&tools.MemberConfig{
 					Clients: sharedClients,
 				})
-				tools.SetMeetingConfig(&tools.MeetingConfig{
-					Clients: sharedClients,
-				})
+				meetingCfg := &tools.MeetingConfig{Clients: sharedClients}
+				if accessChecker != nil {
+					meetingCfg.AccessChecker = accessChecker
+				}
+				tools.SetMeetingConfig(meetingCfg)
 				tools.SetOrgSeatsConfig(&tools.OrgSeatsConfig{
 					Clients: sharedClients,
 				})
@@ -410,7 +415,6 @@ func main() {
 
 			// Configure service API infrastructure (shared across onboarding, lens, etc.).
 			slugResolver := lfxv2.NewSlugResolver()
-			accessChecker := lfxv2.NewAccessCheckClient(cfg.LFXAPIURL, &http.Client{Timeout: 30 * time.Second})
 
 			sharedAuth := tools.ServiceAuth{
 				LFXAPIURL:           cfg.LFXAPIURL,

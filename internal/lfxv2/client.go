@@ -196,12 +196,16 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		tokenCache: gocache.New(gocache.NoExpiration, 10*time.Minute),
 	}
 
-	if cfg.DebugLogger != nil {
-		httpClient = newDebugTransportClient(httpClient, cfg.DebugLogger)
-	}
-
+	// Apply the auth interceptor first so it is the innermost wrapper, then
+	// apply the debug transport last so it is outermost: debug logging must
+	// see the request before the auth interceptor injects the Authorization
+	// header, otherwise the wire dump would leak the bearer token.
 	if cfg.TokenExchangeClient != nil || cfg.StaticLFXToken != "" {
 		httpClient = clients.wrapWithAuthInterceptor(httpClient)
+	}
+
+	if cfg.DebugLogger != nil {
+		httpClient = newDebugTransportClient(httpClient, cfg.DebugLogger)
 	}
 
 	// Initialize committee service client.
@@ -563,12 +567,12 @@ func (c *Clients) TokenFromRequest(ctx context.Context, tokenInfo *auth.TokenInf
 		if c.staticLFXToken != "" {
 			return ctx, nil
 		}
-		return nil, fmt.Errorf("no bearer token available: neither an MCP OAuth token nor a static LFX token is configured")
+		return ctx, fmt.Errorf("no bearer token available: neither an MCP OAuth token nor a static LFX token is configured")
 	}
 
 	mcpToken, err := ExtractMCPToken(tokenInfo)
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
 	return c.WithMCPToken(ctx, mcpToken), nil

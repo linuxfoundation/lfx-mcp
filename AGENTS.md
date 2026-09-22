@@ -335,7 +335,7 @@ func runStdioServer() {
     // ... server setup ...
     
     // Register tools.
-    tools.RegisterHelloWorld(server)
+    tools.RegisterUserInfo(server)
     tools.RegisterMyTool(server)  // Add your new tool
     
     // ... run server ...

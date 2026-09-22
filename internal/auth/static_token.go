@@ -1,6 +1,7 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
+// Package auth provides JWT verification with JWKS caching for the LFX MCP server.
 package auth
 
 import (

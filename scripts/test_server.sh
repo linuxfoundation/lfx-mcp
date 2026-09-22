@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 
 set -e
+set -o pipefail
 
 # Parse command line arguments
 DEBUG_FLAG=""
@@ -46,7 +47,7 @@ echo "=== Test 2: List available tools (schema generation for all default tools)
 ) |
 	./bin/lfx-mcp-server $DEBUG_FLAG |
 	grep '"id":2' |
-	jq '.result.tools'
+	jq -e 'if (.result.tools | type) == "array" and (.result.tools | length) > 0 then .result.tools else halt_error(1) end'
 
 echo ""
 echo "=== Test 3: Error handling (invalid tool name) ==="

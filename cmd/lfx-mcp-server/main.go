@@ -1237,22 +1237,26 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 		logger.With(errKey, err).Error("HTTP server failed")
 	}
 
-	// Create shutdown context with timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-
-	// Attempt graceful shutdown.
-	if err := httpServer.Shutdown(ctx); err != nil {
+	// Attempt graceful shutdown, with its own fresh timeout context.
+	drainCtx, drainCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer drainCancel()
+	if err := httpServer.Shutdown(drainCtx); err != nil {
 		logger.With(errKey, err).Error("Server shutdown failed")
-		// Flush OTel spans before exiting.
-		if serr := otelShutdown(ctx); serr != nil {
+		// Flush OTel spans before exiting, using its own fresh timeout context
+		// so a slow/expired drain doesn't also starve the telemetry flush.
+		otelCtx, otelCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer otelCancel()
+		if serr := otelShutdown(otelCtx); serr != nil {
 			logger.Error("OpenTelemetry SDK shutdown failed", errKey, serr)
 		}
 		os.Exit(1)
 	}
 
-	// Flush pending OTel spans before the process exits.
-	if err := otelShutdown(ctx); err != nil {
+	// Flush pending OTel spans before the process exits, with its own fresh
+	// timeout context independent of the drain above.
+	otelCtx, otelCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer otelCancel()
+	if err := otelShutdown(otelCtx); err != nil {
 		logger.Error("OpenTelemetry SDK shutdown failed", errKey, err)
 	}
 

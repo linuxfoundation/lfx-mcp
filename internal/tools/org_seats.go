@@ -14,6 +14,7 @@ import (
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -584,12 +585,15 @@ func handleGetOrgCommitteeSeats(ctx context.Context, req *mcp.CallToolRequest, a
 		return errorResult("Error: b2b_org_uid must be the organization's 18-character SFID; resolve it with search_b2b_orgs"), nil, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := orgSeatsConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return errorResult(fmt.Sprintf("Error: failed to extract MCP token: %v", err)), nil, nil
 	}
-	ctx = orgSeatsConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := orgSeatsConfig.Clients
 
 	logger.InfoContext(ctx, "fetching org committee seats", "b2b_org_uid", args.B2bOrgUID, "foundation_uid", args.FoundationUID, "category", args.Category, "include_seats", args.IncludeSeats, "include_membership_contacts", args.IncludeMembershipContacts)

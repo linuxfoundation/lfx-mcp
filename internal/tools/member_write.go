@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	memberservice "github.com/linuxfoundation/lfx-v2-member-service/gen/membership_service"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -138,16 +138,19 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		}, nil, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := memberConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)}},
 			IsError: true,
 		}, nil, nil
 	}
 
-	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := memberConfig.Clients
 
 	version := "1"
@@ -215,16 +218,19 @@ func handleUpdateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		}, nil, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := memberConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)}},
 			IsError: true,
 		}, nil, nil
 	}
 
-	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := memberConfig.Clients
 
 	version := "1"
@@ -285,16 +291,19 @@ func handleDeleteMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		}, nil, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := memberConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)}},
 			IsError: true,
 		}, nil, nil
 	}
 
-	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := memberConfig.Clients
 
 	version := "1"

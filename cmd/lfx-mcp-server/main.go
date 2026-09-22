@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -49,9 +50,13 @@ type Config struct {
 	ClientAssertionSigningKey string       `koanf:"client_assertion_signing_key"`
 	TokenEndpoint             string       `koanf:"token_endpoint"`
 	LFXAPIURL                 string       `koanf:"lfx_api_url"`
-	Tools                     []string     `koanf:"tools"`
-	Debug                     bool         `koanf:"debug"`
-	DebugTraffic              bool         `koanf:"debug_traffic"`
+	// LFXToken is a pre-obtained LFX bearer token (e.g. from `lfx auth
+	// token`), used directly for all API calls instead of SSO, CTE, or M2M
+	// flows. Stdio mode only; see the README for usage with lfx-cli.
+	LFXToken     string   `koanf:"lfx_token"`
+	Tools        []string `koanf:"tools"`
+	Debug        bool     `koanf:"debug"`
+	DebugTraffic bool     `koanf:"debug_traffic"`
 	// APICredentials is a consumer-key→shared-secret map for static API-key auth.
 	// TEMPORARY: stop-gap for MCP clients that cannot complete OAuth2.
 	APICredentials map[string]string `koanf:"api_credentials"`
@@ -90,6 +95,11 @@ var (
 
 const errKey = "error"
 
+// shutdownTimeout bounds how long graceful shutdown (HTTP server drain,
+// OTel span/metric/log flush) is allowed to block before the process exits
+// anyway.
+const shutdownTimeout = 10 * time.Second
+
 // committeeToGroupToolNames maps committee-mode tool names to their group-mode equivalents.
 var committeeToGroupToolNames = map[string]string{
 	"search_committees":         "search_groups",
@@ -117,6 +127,7 @@ var groupToCommitteeToolNames = func() map[string]string {
 
 // defaultTools is the list of tools enabled by default.
 var defaultTools = []string{
+	"user_info",
 	"search_projects",
 	"get_project",
 	"search_committees",
@@ -216,13 +227,14 @@ func main() {
 	f.String("http.host", "127.0.0.1", "Host to bind to for HTTP transport")
 	f.Int("http.port", 8080, "Port to listen on for HTTP transport")
 	f.String("mcp_api.public_url", "", "Public URL for MCP API (for OAuth PRM; if not set, uses http://host:port/mcp)")
-	f.String("mcp_api.auth_servers", "", "Comma-separated list of authorization server URLs for OAuth PRM")
+	f.String("mcp_api.auth_servers", "https://sso.linuxfoundation.org/", "Comma-separated list of authorization server URLs for OAuth PRM and the user_info tool's /userinfo endpoint")
 	f.String("mcp_api.scopes", "", "Comma-separated list of OAuth scopes for PRM")
 	f.String("client_id", "", "OAuth client ID for authentication")
 	f.String("client_secret", "", "OAuth client secret (ignored if client_assertion_signing_key is set)")
 	f.String("client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")
 	f.String("token_endpoint", "", "OAuth2 token endpoint URL for token exchange")
-	f.String("lfx_api_url", "", "LFX API URL (used as token exchange audience)")
+	f.String("lfx_api_url", "", "LFX API base URL and OAuth2 audience")
+	f.String("lfx_token", "", "Pre-obtained LFX bearer token, used directly for all LFX API calls (stdio mode only; e.g. from 'lfx auth token')")
 	f.String("tools", strings.Join(defaultTools, ","), "Comma-separated list of tools to enable")
 	f.Bool("debug", false, "Enable debug logging")
 	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls")
@@ -338,32 +350,45 @@ func main() {
 		tools.SetUserInfoConfig(&tools.UserInfoConfig{
 			UserInfoEndpoint: userInfoEndpoint,
 			HTTPClient:       &http.Client{Timeout: 30 * time.Second},
+			StaticToken:      cfg.LFXToken,
 		})
 	}
 
-	// Configure project tools if token exchange is configured.
-	if cfg.LFXAPIURL != "" && cfg.TokenEndpoint != "" && cfg.ClientID != "" {
-		subjectTokenType := cfg.MCPAPI.PublicURL
-		if subjectTokenType == "" {
-			subjectTokenType = fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
+	// Configure project tools if either token exchange or a static LFX token
+	// is configured. The static token (stdio mode only) bypasses token
+	// exchange entirely, so it needs neither TokenEndpoint nor ClientID.
+	haveTokenExchange := cfg.TokenEndpoint != "" && cfg.ClientID != ""
+	haveStaticToken := cfg.LFXToken != ""
+	if cfg.LFXAPIURL != "" && (haveTokenExchange || haveStaticToken) {
+		var tokenExchangeClient *lfxv2.TokenExchangeClient
+		if haveTokenExchange {
+			subjectTokenType := cfg.MCPAPI.PublicURL
+			if subjectTokenType == "" {
+				subjectTokenType = fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
+			}
+
+			var err error
+			tokenExchangeClient, err = lfxv2.NewTokenExchangeClient(lfxv2.TokenExchangeConfig{
+				TokenEndpoint:             cfg.TokenEndpoint,
+				ClientID:                  cfg.ClientID,
+				ClientSecret:              cfg.ClientSecret,
+				ClientAssertionSigningKey: cfg.ClientAssertionSigningKey,
+				SubjectTokenType:          subjectTokenType,
+				Audience:                  cfg.LFXAPIURL,
+				// Wrap the token-exchange HTTP client with OTel tracing so token
+				// fetches appear as child spans under the active request trace.
+				HTTPClient: &http.Client{
+					Timeout:   30 * time.Second,
+					Transport: otelhttp.NewTransport(http.DefaultTransport),
+				},
+			})
+			if err != nil {
+				logger.Warn("failed to create token exchange client", errKey, err)
+			}
 		}
 
-		tokenExchangeClient, err := lfxv2.NewTokenExchangeClient(lfxv2.TokenExchangeConfig{
-			TokenEndpoint:             cfg.TokenEndpoint,
-			ClientID:                  cfg.ClientID,
-			ClientSecret:              cfg.ClientSecret,
-			ClientAssertionSigningKey: cfg.ClientAssertionSigningKey,
-			SubjectTokenType:          subjectTokenType,
-			Audience:                  cfg.LFXAPIURL,
-			// Wrap the token-exchange HTTP client with OTel tracing so token
-			// fetches appear as child spans under the active request trace.
-			HTTPClient: &http.Client{
-				Timeout:   30 * time.Second,
-				Transport: otelhttp.NewTransport(http.DefaultTransport),
-			},
-		})
-		if err != nil {
-			logger.Warn("failed to create token exchange client - project and committee tools will not be available", errKey, err)
+		if tokenExchangeClient == nil && !haveStaticToken {
+			logger.Warn("project and committee tools will not be available")
 		} else {
 			var debugLogger *slog.Logger
 			if cfg.DebugTraffic {
@@ -381,6 +406,7 @@ func main() {
 			sharedClients, err := lfxv2.NewClients(context.Background(), lfxv2.ClientConfig{
 				APIDomain:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
+				StaticLFXToken:      cfg.LFXToken,
 				DebugLogger:         debugLogger,
 				HTTPClient:          lfxHTTPClient,
 			})
@@ -415,6 +441,7 @@ func main() {
 			sharedAuth := tools.ServiceAuth{
 				LFXAPIURL:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
+				StaticLFXToken:      cfg.LFXToken,
 				DebugLogger:         debugLogger,
 				SlugResolver:        slugResolver,
 				AccessChecker:       accessChecker,
@@ -491,6 +518,10 @@ func main() {
 		}
 		if cfg.LFXAPIURL == "" {
 			logger.Warn("lfx_api_url not configured - token exchange will not be available")
+		}
+		if cfg.LFXToken != "" {
+			logger.With(errKey, fmt.Errorf("lfx_token is only supported in stdio mode")).Error("invalid configuration")
+			os.Exit(1)
 		}
 	}
 
@@ -699,9 +730,6 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 		enabledTools[name] = true
 	}
 
-	if enabledTools["hello_world"] && canRead {
-		tools.RegisterHelloWorld(server)
-	}
 	if enabledTools["user_info"] && canRead {
 		tools.RegisterUserInfo(server)
 	}
@@ -889,22 +917,84 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 func runStdioServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(context.Context) error) {
 	ctx := context.Background()
 
+	// When a static LFX token is configured, peek its exp claim (without
+	// verifying the signature — no authorization decision is ever made from
+	// this unverified peek; the LFX API itself independently verifies and
+	// authorizes every call) so we can fail fast on an already-expired token
+	// instead of getting a confusing 401 on the first tool call.
+	//
+	// The derived context's deadline is set to the token's exact expiry, not
+	// some earlier buffer: an outer loop (e.g. a wrapper script restarting
+	// this process) is expected to re-run `lfx auth token` and pass a fresh
+	// token on each restart. Cutting the deadline short would desynchronize
+	// this server's notion of "expired" from lfx-cli's own refresh logic,
+	// causing premature restarts while lfx-cli still considers the token valid.
+	if cfg.LFXToken != "" {
+		exp, err := lfxauth.PeekExpiry(cfg.LFXToken)
+		if err != nil {
+			logger.With(errKey, err).Error("invalid lfx_token")
+			os.Exit(1)
+		}
+		if !time.Now().Before(exp) {
+			logger.With("expired_at", exp).Error("lfx_token is already expired")
+			os.Exit(1)
+		}
+
+		// Warn (but don't fail startup) if the token's aud claim doesn't
+		// appear to match the configured LFX API URL. Every downstream LFX
+		// API call would otherwise fail with a confusing 401 that gives no
+		// hint the token itself was for the wrong audience.
+		if cfg.LFXAPIURL != "" {
+			if aud, err := lfxauth.PeekAudience(cfg.LFXToken); err != nil {
+				logger.With(errKey, err).Warn("could not read lfx_token audience")
+			} else if !slices.Contains(aud, strings.TrimSuffix(cfg.LFXAPIURL, "/")) &&
+				!slices.Contains(aud, strings.TrimSuffix(cfg.LFXAPIURL, "/")+"/") {
+				logger.With("token_audience", aud, "lfx_api_url", cfg.LFXAPIURL).
+					Warn("lfx_token audience does not appear to match lfx_api_url; LFX API calls may fail")
+			}
+		}
+
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, exp)
+		defer cancel()
+		logger.With("expires_at", exp).Info("static lfx_token configured; server will stop when it expires")
+	}
+
 	// Create the MCP server. Pass nil token so all enabled tools are registered
-	// without restriction (stdio has no auth context).
+	// without restriction (stdio has no MCP-level auth context; a static
+	// lfx_token, if configured, authenticates LFX API calls directly and
+	// carries no MCP scopes of its own).
 	server := newServer(cfg, otelCfg.ServiceName, nil)
 
 	// Run the server on stdio transport.
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
-		logger.With(errKey, err).Error("server failed")
-		// Flush OTel spans before exiting.
-		if serr := otelShutdown(ctx); serr != nil {
+		if cfg.LFXToken != "" && errors.Is(err, context.DeadlineExceeded) {
+			// Expected: the static token's deadline was reached. The SDK
+			// itself already logs its own generic "server run cancelled"
+			// message for the context cancellation; add a clearer one here
+			// so operators (and supervisor loops) see why the server stopped.
+			logger.Info("lfx_token expired (context deadline caught): stopping server")
+		} else {
+			logger.With(errKey, err).Error("server failed")
+		}
+		// Flush OTel spans before exiting. Use a fresh, timeout-bounded
+		// context rather than ctx: ctx may already be past its deadline (or
+		// otherwise cancelled) here, and an already-done context would make
+		// the flush a no-op right when we need it to actually run.
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		if serr := otelShutdown(flushCtx); serr != nil {
 			logger.Error("OpenTelemetry SDK shutdown failed", errKey, serr)
 		}
+		flushCancel()
 		os.Exit(1)
 	}
 
-	// Flush OTel spans on clean exit.
-	if err := otelShutdown(ctx); err != nil {
+	// Flush OTel spans on clean exit. Same reasoning as above: use a fresh
+	// context, not ctx, in case ctx's deadline was reached right as Run
+	// returned without an error.
+	flushCtx, flushCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer flushCancel()
+	if err := otelShutdown(flushCtx); err != nil {
 		logger.Error("OpenTelemetry SDK shutdown failed", errKey, err)
 	}
 }
@@ -1148,7 +1238,7 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 	}
 
 	// Create shutdown context with timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	// Attempt graceful shutdown.

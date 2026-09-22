@@ -12,6 +12,7 @@ import (
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	memberservice "github.com/linuxfoundation/lfx-v2-member-service/gen/membership_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -249,9 +250,13 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		}, memberSearchResult{}, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := memberConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -260,7 +265,6 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		}, memberSearchResult{}, nil
 	}
 
-	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := memberConfig.Clients
 
 	pageSize := args.PageSize
@@ -376,9 +380,13 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := memberConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -387,7 +395,6 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		}, nil, nil
 	}
 
-	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := memberConfig.Clients
 
 	logger.InfoContext(ctx, "fetching member membership", "membership_uid", args.MembershipUID)
@@ -451,9 +458,13 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, keyContactListResult{}, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := memberConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -462,7 +473,6 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		}, keyContactListResult{}, nil
 	}
 
-	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := memberConfig.Clients
 
 	pageSize := args.PageSize
@@ -561,9 +571,13 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		}, keyContactView{}, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := memberConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -572,7 +586,6 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		}, keyContactView{}, nil
 	}
 
-	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := memberConfig.Clients
 
 	logger.InfoContext(ctx, "fetching membership key contact", "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)

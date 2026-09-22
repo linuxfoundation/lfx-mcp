@@ -13,6 +13,7 @@ import (
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -265,9 +266,13 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		}, committeeSearchResult{}, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -276,7 +281,6 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		}, committeeSearchResult{}, nil
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	pageSize := args.PageSize
@@ -386,9 +390,13 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		}, committeeGetResult{}, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -397,7 +405,6 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		}, committeeGetResult{}, nil
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	logger.InfoContext(ctx, "fetching committee", "uid", args.UID)
@@ -499,9 +506,13 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		}, nil, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -510,7 +521,6 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		}, nil, nil
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	logger.InfoContext(ctx, "fetching committee member", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
@@ -564,9 +574,13 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		}, committeeMemberSearchResult{}, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -575,7 +589,6 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		}, committeeMemberSearchResult{}, nil
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	pageSize := args.PageSize

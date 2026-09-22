@@ -12,6 +12,7 @@ import (
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	projectservice "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/project_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -102,9 +103,13 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		}, projectSearchResult{}, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := projectConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -113,7 +118,6 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 		}, projectSearchResult{}, nil
 	}
 
-	ctx = projectConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := projectConfig.Clients
 
 	pageSize := args.PageSize
@@ -243,9 +247,13 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 		}, projectGetResult{}, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := projectConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -254,7 +262,6 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 		}, projectGetResult{}, nil
 	}
 
-	ctx = projectConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := projectConfig.Clients
 
 	logger.InfoContext(ctx, "fetching project", "uid", args.UID)

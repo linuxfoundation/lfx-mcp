@@ -79,9 +79,9 @@ authorization server URL before starting the OAuth flow.
 An end-user sign-in through LFX succeeds only when the LFX account has been enabled for MCP access
 and the sign-in comes from a supported client. This is enforced at sign-in, before any request
 reaches this server. The server keeps no list of enabled accounts and does not re-check the
-entitlement per request; an end-user token is issued only after that check. After that, per-request tool registration
-(the read and manage scopes and the staff-only gate) and the user's own LFX permissions upstream
-decide what the caller can see and do. How a community member requests access is described in
+entitlement per request; an end-user token is issued only after that check. After that, this
+server's scope and staff-only checks (see "Stateless HTTP and per-request tool gating" above) and
+the user's own LFX permissions upstream decide what the caller can see and do. How a community member requests access is described in
 [docs/community-access.md](docs/community-access.md).
 
 ### M2M client credentials

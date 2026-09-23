@@ -457,13 +457,18 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 
 	out := newResourceSearchResult("meetings", result, pageSize, args.PageToken != "")
 
+	omitted := fitMeetingOccurrences(out.Resources, occurrenceWindowFor(args), meetingSearchNow())
+	if omitted > 0 {
+		out.Warnings = append(out.Warnings, occurrenceNote)
+	}
+
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
 		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
-	logger.InfoContext(ctx, "search_meetings succeeded", "count", len(result.Resources))
+	logger.InfoContext(ctx, "search_meetings succeeded", "count", len(result.Resources), "occurrences_omitted", omitted)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{

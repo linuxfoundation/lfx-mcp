@@ -155,6 +155,7 @@ func textWarnings(t *testing.T, res *mcp.CallToolResult, structured []string) []
 
 func TestSearchMeetings_Warnings(t *testing.T) {
 	api := setupMeetingLookupTest(t)
+	pinMeetingSearchNow(t, beforeJoinFieldsOccurrences)
 
 	// Empty first page without a token.
 	api.Respond(resourcesPath, page(nil, ""))

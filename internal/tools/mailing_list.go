@@ -108,7 +108,7 @@ func RegisterGetMailingListMember(server *mcp.Server) {
 func RegisterSearchMailingListMembers(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_mailing_list_members",
-		Description: "Search for LFX mailing list members. Optionally filter by Groups.io mailing list ID, project UID, and/or name. At least one filter is recommended but not required.",
+		Description: "Search for LFX mailing list members. Optionally filter by Groups.io mailing list ID, project UID, and/or name. At least one filter is recommended but not required. Filters combine with AND: a record must match every filter given.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Mailing List Members",
 			ReadOnlyHint: true,
@@ -508,7 +508,7 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 		tags = append(tags, fmt.Sprintf("project_uid:%s", args.ProjectUID))
 	}
 	if len(tags) > 0 {
-		payload.Tags = tags
+		payload.TagsAll = tags
 	}
 
 	if args.Name != "" {

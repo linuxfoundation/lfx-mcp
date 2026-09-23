@@ -1,0 +1,10 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+---
+ignore:
+  # golang.org/x/crypto/openpgp is unmaintained and unsafe by design. The
+  # advisory has no fixed version — the remediation is to not import the
+  # package, which this project does not: x/crypto is a transitive dependency
+  # and only curve25519, ed25519, and pbkdf2 are in the build graph (confirmed
+  # via `go list -deps ./...`). Upgrading x/crypto will never clear this.
+  - vulnerability: GO-2026-5932

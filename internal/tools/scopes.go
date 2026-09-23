@@ -4,6 +4,8 @@
 // Package tools provides MCP tool implementations for the LFX MCP server.
 package tools
 
+import "strings"
+
 // Scope constants used to gate tool access based on the caller's JWT scopes.
 // These MUST match the scopes defined on the Auth0 resource server for the
 // LFX MCP API (see auth0-terraform resource_servers.tf, lfx_mcp_api).
@@ -14,6 +16,39 @@ const (
 	// ScopeManage is required for tools that mutate data (ReadOnlyHint defaults to false).
 	ScopeManage = "manage:all"
 )
+
+// ClaimClientID is the JWT claim holding the OAuth client identifier. For
+// clients registered via a client ID metadata document (CIMD), the value is
+// the metadata document URL rather than an opaque identifier.
+const ClaimClientID = "client_id"
+
+// scopeBlindClientIDPrefixes lists client ID prefixes for OAuth clients that
+// ignore the scopes advertised in our protected resource metadata and in the
+// WWW-Authenticate challenge, and therefore never request read:all or
+// manage:all.
+//
+// Codex derives its scope request from the authorization server's
+// scopes_supported instead, which cannot contain resource scopes. The result is
+// a valid token carrying no MCP scope, which would otherwise register no tools
+// and surface to the user as an empty connector with no error.
+//
+// Only the prefix is matched: the path segment after it is a per-server
+// callback ID that differs between environments.
+var scopeBlindClientIDPrefixes = []string{
+	"https://chatgpt.com/oauth/codex/",
+}
+
+// IsScopeBlindClient reports whether clientID belongs to a client known to
+// ignore advertised scopes. Callers use this to decide whether a token carrying
+// no MCP scope should be treated as having requested the advertised set.
+func IsScopeBlindClient(clientID string) bool {
+	for _, prefix := range scopeBlindClientIDPrefixes {
+		if strings.HasPrefix(clientID, prefix) {
+			return true
+		}
+	}
+	return false
+}
 
 // DefaultScopes returns the set of scopes the server advertises via the OAuth
 // Protected Resource Metadata endpoint. This is the enforced set plus the

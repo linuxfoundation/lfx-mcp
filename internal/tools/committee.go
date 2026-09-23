@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
@@ -20,6 +21,15 @@ const committeeResourceType = "committee"
 
 // committeeMemberResourceType is the resource type filter for committee member queries.
 const committeeMemberResourceType = "committee_member"
+
+// rosterCoverageNoneNote is prepended to an empty search_committee_members
+// result scoped by project_uid when the project has no committee visible to
+// the caller in LFX v2.
+const rosterCoverageNoneNote = "Roster coverage: no committees are onboarded into LFX v2 for this project, or none are visible to you. An empty result is not evidence that the person or organization holds no seat."
+
+// rosterCoverageNoMatchNote is prepended to an empty search_committee_members
+// result scoped by project_uid when the project does have committees in LFX v2.
+const rosterCoverageNoMatchNote = "Roster coverage: this project has committees onboarded into LFX v2, but no member record matched these filters. name is a typeahead and organization_name must equal the stored spelling; an empty result is not evidence that the person or organization holds no seat."
 
 // CommitteeConfig holds configuration shared by committee tools.
 type CommitteeConfig struct {
@@ -62,7 +72,7 @@ func RegisterSearchCommittees(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_groups",
-			Description: "Search for LFX groups (also called committees) by name using the LFX query service. Optionally filter by project UID.",
+			Description: "Search for LFX groups (also called committees) by name using the LFX query service. Optionally filter by project UID. Groups are the system of record for governance bodies - boards, TOCs/TACs, working groups, ambassador programs. Prefer this over the semantic layer or query_lfx_lens for who-sits-on-what and roster questions.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Groups",
 				ReadOnlyHint: true,
@@ -72,7 +82,7 @@ func RegisterSearchCommittees(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committees",
-		Description: "Search for LFX committees by name using the LFX query service. Optionally filter by project UID.",
+		Description: "Search for LFX committees by name using the LFX query service. Optionally filter by project UID. Committees are the system of record for governance bodies - boards, TOCs/TACs, working groups, ambassador programs. Prefer this over the semantic layer or query_lfx_lens for who-sits-on-what and roster questions.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Committees",
 			ReadOnlyHint: true,
@@ -137,7 +147,7 @@ func RegisterSearchCommitteeMembers(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_group_members",
-			Description: "Search for LFX group (also called committee) members. Optionally filter by group UID, project UID, and/or name. At least one filter is recommended but not required.",
+			Description: "Search for LFX group (also called committee) members. Optionally filter by group UID, project UID, and/or name. The authoritative source for committee rosters - prefer over the semantic layer or query_lfx_lens for board/TOC/ambassador membership. For counts, paginate until page_token is absent; records carry organization, role and voting status but no country. Filters combine with AND: a record must match every filter given. organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid set, an empty result carries a roster-coverage note saying whether the project has any committee onboarded into LFX v2; an empty result never proves that a person or organization holds no seat.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Group Members",
 				ReadOnlyHint: true,
@@ -147,7 +157,7 @@ func RegisterSearchCommitteeMembers(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committee_members",
-		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID, and/or name. At least one filter is recommended but not required.",
+		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID, and/or name. The authoritative source for committee rosters - prefer over the semantic layer or query_lfx_lens for board/TOC/ambassador membership. For counts, paginate until page_token is absent; records carry organization, role and voting status but no country. Filters combine with AND: a record must match every filter given. organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid set, an empty result carries a roster-coverage note saying whether the project has any committee onboarded into LFX v2; an empty result never proves that a person or organization holds no seat.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Committee Members",
 			ReadOnlyHint: true,
@@ -195,20 +205,22 @@ type GetGroupMemberArgs struct {
 
 // SearchCommitteeMembersArgs defines the input parameters for the search_committee_members tool.
 type SearchCommitteeMembersArgs struct {
-	CommitteeUID string `json:"committee_uid,omitempty" jsonschema:"Optional UID of the committee to filter members by"`
-	ProjectUID   string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter committee members by project"`
-	Name         string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
-	PageSize     int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken    string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	CommitteeUID     string `json:"committee_uid,omitempty" jsonschema:"Optional UID of the committee to filter members by"`
+	ProjectUID       string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter committee members by project"`
+	OrganizationName string `json:"organization_name,omitempty" jsonschema:"Exact stored organization name on the seat, as a roster row or a get_org_committee_seats row spells it; keeps one organization's members"`
+	Name             string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
+	PageSize         int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken        string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // SearchGroupMembersArgs defines the input parameters for the search_group_members tool (groups mode).
 type SearchGroupMembersArgs struct {
-	GroupUID   string `json:"group_uid,omitempty" jsonschema:"Optional UID of the group to filter members by"`
-	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter group members by project"`
-	Name       string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
-	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	GroupUID         string `json:"group_uid,omitempty" jsonschema:"Optional UID of the group to filter members by"`
+	ProjectUID       string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter group members by project"`
+	OrganizationName string `json:"organization_name,omitempty" jsonschema:"Exact stored organization name on the seat, as a roster row or a get_org_committee_seats row spells it; keeps one organization's members"`
+	Name             string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
+	PageSize         int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken        string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // handleSearchCommitteesGroupMode adapts group-mode args to the committee
@@ -236,11 +248,12 @@ func handleGetCommitteeMemberGroupMode(ctx context.Context, req *mcp.CallToolReq
 // notes match the tool's terminology contract.
 func handleSearchCommitteeMembersGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupMembersArgs) (*mcp.CallToolResult, committeeMemberSearchResult, error) {
 	return searchCommitteeMembers(ctx, req, SearchCommitteeMembersArgs{
-		CommitteeUID: args.GroupUID,
-		ProjectUID:   args.ProjectUID,
-		Name:         args.Name,
-		PageSize:     args.PageSize,
-		PageToken:    args.PageToken,
+		CommitteeUID:     args.GroupUID,
+		ProjectUID:       args.ProjectUID,
+		OrganizationName: args.OrganizationName,
+		Name:             args.Name,
+		PageSize:         args.PageSize,
+		PageToken:        args.PageToken,
 	}, "group members")
 }
 
@@ -600,6 +613,7 @@ func searchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args 
 	}
 
 	// Build tag filters: committee members are tagged by the committee service indexer.
+	// Filters go through tags_all so that every given filter must match.
 	var tags []string
 	if args.CommitteeUID != "" {
 		tags = append(tags, fmt.Sprintf("committee_uid:%s", args.CommitteeUID))
@@ -607,8 +621,11 @@ func searchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args 
 	if args.ProjectUID != "" {
 		tags = append(tags, fmt.Sprintf("project_uid:%s", args.ProjectUID))
 	}
+	if args.OrganizationName != "" {
+		tags = append(tags, "organization_name:"+args.OrganizationName)
+	}
 	if len(tags) > 0 {
-		payload.Tags = tags
+		payload.TagsAll = tags
 	}
 
 	if args.Name != "" {
@@ -619,7 +636,7 @@ func searchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args 
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.InfoContext(ctx, "searching committee members", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching committee members", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "organization_name", args.OrganizationName, "name", args.Name, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
@@ -656,12 +673,40 @@ func searchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args 
 		}, committeeMemberSearchResult{}, nil
 	}
 
-	logger.InfoContext(ctx, "search_committee_members succeeded", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
+	logger.InfoContext(ctx, "search_committee_members succeeded", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "organization_name", args.OrganizationName, "count", len(result.Resources))
 
 	content := []mcp.Content{}
+	if note := rosterCoverageNote(ctx, logger, clients, args.ProjectUID, args.PageToken, result); note != "" {
+		content = append(content, &mcp.TextContent{Text: note})
+	}
 	if pageWarning != "" {
 		content = append(content, &mcp.TextContent{Text: pageWarning})
 	}
 	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
 	return &mcp.CallToolResult{Content: content}, out, nil
+}
+
+// rosterCoverageNote returns the roster-coverage note for a genuinely empty
+// search_committee_members result scoped by project_uid: the first page, with
+// no resources and no page token. A continuation page is never genuinely
+// empty. It counts the project's committees visible to the caller; when the
+// count call fails the note is dropped and the search result stands.
+func rosterCoverageNote(ctx context.Context, logger *slog.Logger, clients *lfxv2.Clients, projectUID, pageToken string, result *querysvc.QueryResourcesResult) string {
+	if projectUID == "" || pageToken != "" || len(result.Resources) > 0 || result.PageToken != nil {
+		return ""
+	}
+	committeeType := committeeResourceType
+	count, err := clients.QuerySvc.QueryResourcesCount(ctx, &querysvc.QueryResourcesCountPayload{
+		Version: "1",
+		Type:    &committeeType,
+		Parent:  strPtr("project:" + projectUID),
+	})
+	if err != nil {
+		logger.WarnContext(ctx, "roster coverage count failed", "project_uid", projectUID, "error", err)
+		return ""
+	}
+	if count.Count == 0 {
+		return rosterCoverageNoneNote
+	}
+	return rosterCoverageNoMatchNote
 }

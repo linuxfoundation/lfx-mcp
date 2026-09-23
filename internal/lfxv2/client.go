@@ -39,8 +39,10 @@
 package lfxv2
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -234,6 +236,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		committeeHTTPClient.DeleteCommitteeDocument(),
 		committeeHTTPClient.GetCurrentWeeklyBrief(),
 		committeeHTTPClient.GenerateWeeklyBrief(),
+		committeeHTTPClient.UpdateCurrentWeeklyBrief(),
 	)
 
 	// Initialize mailing list service client.
@@ -481,12 +484,33 @@ func (dt *debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
+	// Read the body here rather than letting DumpResponse consume it: when the
+	// read fails part-way, DumpResponse leaves the body drained and the
+	// response is handed on as if intact, so every decoder downstream reports
+	// an EOF instead of the transport error. Reading first turns that read
+	// failure into this request's error and hands the decoder the full body.
+	if resp.Body == nil {
+		resp.Body = http.NoBody
+	}
+	body, readErr := io.ReadAll(resp.Body)
+	if cerr := resp.Body.Close(); cerr != nil {
+		dt.logger.Warn("failed to close inbound response body", "error", cerr, "url", req.URL.String())
+	}
+	if readErr != nil {
+		dt.logger.Error("failed to read inbound response body", "error", readErr, "url", req.URL.String())
+		return nil, fmt.Errorf("reading %s response body: %w", req.URL.Path, readErr)
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+
 	respDump, err := httputil.DumpResponse(resp, true)
 	if err != nil {
 		dt.logger.Error("failed to dump inbound response", "error", err)
 	} else {
 		dt.logger.Debug("lfxv2 inbound response", "dump", string(respDump))
 	}
+	// However DumpResponse left resp.Body, hand the caller a reader over the
+	// bytes read above.
+	resp.Body = io.NopCloser(bytes.NewReader(body))
 
 	return resp, nil
 }

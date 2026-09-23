@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -162,7 +163,12 @@ var defaultTools = []string{
 	"query_lfx_lens",
 	"explore_lfx_semantic_layer",
 	"query_lfx_semantic_layer",
+	"read_lfx_semantic_layer_guidance",
 	"search_b2b_orgs",
+	// TOOLS-1 (LFXV2-2891): caller-visibility counts and governance/meeting lookups.
+	"count_lfx_resources",
+	"get_org_committee_seats",
+	"audit_committee_coverage",
 }
 
 var logger *slog.Logger
@@ -395,6 +401,9 @@ func main() {
 					Clients: sharedClients,
 				})
 				tools.SetMeetingConfig(&tools.MeetingConfig{
+					Clients: sharedClients,
+				})
+				tools.SetOrgSeatsConfig(&tools.OrgSeatsConfig{
 					Clients: sharedClients,
 				})
 			}
@@ -640,7 +649,43 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	canManage := callerToken == nil || tools.HasAnyScope(callerScopes, []string{tools.ScopeManage})
 	canRead := callerToken == nil || canManage || tools.HasAnyScope(callerScopes, []string{tools.ScopeRead})
-	isStaff := callerToken == nil || tools.IsLFStaff(callerToken)
+
+	// Some OAuth clients ignore the scopes advertised in our protected resource
+	// metadata and in the WWW-Authenticate challenge, so their tokens arrive
+	// with no MCP scope at all. Registering nothing leaves the user with an
+	// empty tool list and no error to act on, and these clients offer no way to
+	// choose scopes, so the omission carries no intent to withhold consent.
+	// Treat them as having requested the scopes we advertise, which is what a
+	// compliant client would have sent. Advertising a narrower set therefore
+	// narrows this fallback too. The client grant already authorises those
+	// scopes, and tools still enforce per-user authorization through the
+	// caller's own exchanged token.
+	//
+	// Reaching here with canRead false already implies the token carries neither
+	// ScopeRead nor ScopeManage.
+	if !canRead {
+		if clientID := tools.ClientID(callerToken); tools.IsScopeBlindClient(clientID) {
+			advertised := cfg.MCPAPI.Scopes
+			if len(advertised) == 0 {
+				advertised = tools.DefaultScopes()
+			}
+			canManage = tools.HasAnyScope(advertised, []string{tools.ScopeManage})
+			canRead = canManage || tools.HasAnyScope(advertised, []string{tools.ScopeRead})
+			// newServer runs per request, so this is logged at debug to avoid
+			// repeating a condition that is constant for the client.
+			logger.With(
+				"client_id", clientID,
+				"advertised_scopes", advertised,
+			).Debug("client requested no MCP scopes; granting the advertised scopes")
+		}
+	}
+
+	// Machine (client-credentials/M2M) callers never carry the lf_staff claim,
+	// since Auth0 does not run post-login Actions for that grant type. Access
+	// to the LFX MCP API is already restricted to a small set of trusted
+	// server-side clients via their client_grant, so treat any M2M caller as
+	// staff-equivalent for tool registration purposes.
+	isStaff := callerToken == nil || tools.IsLFStaff(callerToken) || tools.IsMachineAccount(callerToken)
 
 	// Register tools based on configuration and caller scopes.
 	enabledTools := make(map[string]bool)
@@ -748,7 +793,7 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 		tools.RegisterGetMeetingRegistrant(server)
 	}
 	if enabledTools["search_past_meeting_participants"] && canRead {
-		tools.RegisterSearchPastMeetingParticipants(server)
+		tools.RegisterSearchPastMeetingParticipants(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["get_past_meeting_participant"] && canRead {
 		tools.RegisterGetPastMeetingParticipant(server)
@@ -767,6 +812,18 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	if enabledTools["search_b2b_orgs"] && canRead {
 		tools.RegisterSearchB2bOrgs(server)
+	}
+
+	// TOOLS-1 (LFXV2-2891) tools. Registered under canRead, not isStaff: they
+	// carry the caller's own visibility through the exchanged token.
+	if enabledTools["count_lfx_resources"] && canRead {
+		tools.RegisterCountLFXResources(server)
+	}
+	if enabledTools["get_org_committee_seats"] && canRead {
+		tools.RegisterGetOrgCommitteeSeats(server)
+	}
+	if enabledTools["audit_committee_coverage"] && canRead {
+		tools.RegisterAuditCommitteeCoverage(server)
 	}
 
 	// Service API tools.
@@ -806,6 +863,24 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	if enabledTools["query_lfx_semantic_layer"] && canRead && isStaff {
 		tools.RegisterQuerySemanticLayer(server)
+	}
+	// Not in defaultTools: the recipes it runs live in the Lens service's
+	// standard-metric endpoint, so prod enables this by name only once that
+	// endpoint is live.
+	if enabledTools["query_lfx_standard_metrics"] && canRead && isStaff {
+		tools.RegisterStandardMetrics(server)
+	}
+	// Guidance tools carry the query doctrine as tool results (no byte budget)
+	// and are gated exactly like the tools they document — staff-only, one
+	// name per audience so a deployment enables exactly the guidance its
+	// callers need. The semantic layer guidance is in defaultTools because
+	// the explore/query/lens descriptions route models to it; the standard
+	// metrics guidance ships alongside the standard metrics tool by name.
+	if enabledTools["read_lfx_semantic_layer_guidance"] && canRead && isStaff {
+		tools.RegisterSemanticLayerGuidance(server)
+	}
+	if enabledTools["read_lfx_standard_metrics_guidance"] && canRead && isStaff {
+		tools.RegisterStandardMetricsGuidance(server)
 	}
 
 	return server
@@ -870,6 +945,20 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 	apiKeyVerifier := lfxauth.NewAPIKeyVerifier(cfg.APICredentials)
 	if apiKeyVerifier != nil {
 		logger.Info("static API-key authentication enabled (TEMPORARY)")
+	}
+
+	// Resolve the advertised scope set once. The same value is used for the
+	// WWW-Authenticate challenge and the Protected Resource Metadata document
+	// so the two can never drift.
+	var scopesSupported []string
+	if len(cfg.MCPAPI.AuthServers) > 0 {
+		// Use defaults when no scopes are configured, then warn about entries the
+		// server does not recognise. The list is returned unchanged.
+		scopesSupported = cfg.MCPAPI.Scopes
+		if len(scopesSupported) == 0 {
+			scopesSupported = tools.DefaultScopes()
+		}
+		scopesSupported = tools.ValidateScopes(scopesSupported, logger.Warn)
 	}
 
 	// Apply auth middleware to the /mcp handler.
@@ -946,9 +1035,20 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 				extra["username"] = username
 			}
 
+			// Flag machine (client-credentials/M2M) tokens once here so callers
+			// don't need to re-derive it from the subject claim.
+			if lfxauth.IsMachineToken(token) {
+				extra[lfxauth.MachineAccountExtraKey] = true
+			}
+
 			// Extract lf_staff custom claim for service tool authorization (LFX Lens).
 			if staffClaim, ok := token.Get(tools.ClaimLFStaff); ok {
 				extra[tools.ClaimLFStaff] = staffClaim
+			}
+
+			// Extract client_id to identify clients that ignore advertised scopes.
+			if clientIDClaim, ok := token.Get(tools.ClaimClientID); ok {
+				extra[tools.ClaimClientID] = clientIDClaim
 			}
 
 			return &auth.TokenInfo{
@@ -962,7 +1062,12 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 		authMiddleware := auth.RequireBearerToken(verifyToken, &auth.RequireBearerTokenOptions{
 			ResourceMetadataURL: resourceMetadataURL,
 		})
-		mcpHandler = authMiddleware(handler)
+		// Note: RequireBearerTokenOptions.Scopes is deliberately left unset. It is
+		// not challenge-only: the SDK requires every listed scope to be present,
+		// which would reject valid read:all-only and manage:all-only tokens and
+		// bypass the OR/implication logic in newServer(). The challenge scopes are
+		// added by withChallengeScopes instead.
+		mcpHandler = withChallengeScopes(authMiddleware(handler), scopesSupported)
 		logger.Info("OAuth bearer token verification enabled for /mcp endpoint", "audience", audience)
 	}
 
@@ -981,14 +1086,6 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 		if resourceURL == "" {
 			resourceURL = fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
 		}
-
-		// Use defaults when no scopes are configured, then validate to ensure
-		// the enforced scopes are always present and warn about unknown ones.
-		scopesSupported := cfg.MCPAPI.Scopes
-		if len(scopesSupported) == 0 {
-			scopesSupported = tools.DefaultScopes()
-		}
-		scopesSupported = tools.ValidateScopes(scopesSupported, logger.Warn)
 
 		metadata := &oauthex.ProtectedResourceMetadata{
 			Resource:             resourceURL,
@@ -1090,4 +1187,93 @@ func localhostOnly(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+// withChallengeScopes wraps h and appends a "scope" parameter to the
+// WWW-Authenticate header on 401 and 403 responses, as recommended by RFC 6750
+// section 3 and the MCP authorization spec's scope selection strategy. Clients
+// treat this value as authoritative and fall back to the Protected Resource
+// Metadata scopes_supported field only when it is absent, so the same scope set
+// is used for both.
+//
+// This is done here rather than via RequireBearerTokenOptions.Scopes because
+// that option also enforces the scopes, requiring all of them to be present on
+// the token. The server grants read access to manage:all tokens and registers
+// tools per scope in newServer(), so enforcing both scopes at the HTTP layer
+// would reject tokens that are valid for a subset of the tools.
+func withChallengeScopes(h http.Handler, scopes []string) http.Handler {
+	if len(scopes) == 0 {
+		return h
+	}
+	scopeParam := fmt.Sprintf("scope=%q", strings.Join(scopes, " "))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(&challengeScopeWriter{ResponseWriter: w, scopeParam: scopeParam}, r)
+	})
+}
+
+// challengeScopeWriter appends the scope parameter to any WWW-Authenticate
+// header set on an auth challenge response.
+type challengeScopeWriter struct {
+	http.ResponseWriter
+	scopeParam string
+}
+
+// scopeParamPattern matches a scope parameter at the start of an auth challenge
+// or after a parameter separator. Auth parameter names are case-insensitive.
+var scopeParamPattern = regexp.MustCompile(`(?i)(?:^|[\s,])scope\s*=`)
+
+// hasScopeParam reports whether an auth challenge already carries a scope
+// parameter. The name must start a parameter rather than appear anywhere in the
+// string, so that a quoted value such as error_description="... scope=..." does
+// not suppress the parameter we intend to add.
+func hasScopeParam(challenge string) bool {
+	// Ignore anything inside quoted parameter values.
+	var unquoted strings.Builder
+	inQuotes := false
+	for i := 0; i < len(challenge); i++ {
+		c := challenge[i]
+		switch {
+		case c == '\\' && inQuotes && i+1 < len(challenge):
+			i++ // Skip the escaped character.
+		case c == '"':
+			inQuotes = !inQuotes
+		case !inQuotes:
+			unquoted.WriteByte(c)
+		}
+	}
+	return scopeParamPattern.MatchString(unquoted.String())
+}
+
+func (w *challengeScopeWriter) WriteHeader(code int) {
+	if code == http.StatusUnauthorized || code == http.StatusForbidden {
+		header := w.Header()
+		key := http.CanonicalHeaderKey("WWW-Authenticate")
+		if challenges := header.Values(key); len(challenges) > 0 {
+			updated := make([]string, len(challenges))
+			for i, challenge := range challenges {
+				// Only Bearer challenges take a scope parameter, and it must not
+				// be added twice if an inner handler already set one.
+				if strings.HasPrefix(challenge, "Bearer") && !hasScopeParam(challenge) {
+					challenge += ", " + w.scopeParam
+				}
+				updated[i] = challenge
+			}
+			header[key] = updated
+		}
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+// Flush implements http.Flusher so that the streamable HTTP transport can send
+// server-sent events through this wrapper.
+func (w *challengeScopeWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Unwrap returns the wrapped writer so that http.ResponseController can reach
+// the underlying implementation for deadlines and flushing.
+func (w *challengeScopeWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }

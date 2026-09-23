@@ -57,8 +57,10 @@ Tool registration is gated on two access levels derived from the caller's token:
 | Read   | token holds `read:all` **or** `manage:all` | All read-only tools       |
 | Manage | token holds `manage:all`                   | Read + write/delete tools |
 
-An additional requirement of the `lf_staff` claim (from the `http://lfx.dev/claims/lf_staff`
-custom claim) gates the `query_lfx_lens` tool on top of the read scope requirement.
+An additional requirement gates the `query_lfx_lens` tool on top of the read scope requirement:
+the caller must be staff-equivalent, either via the `lf_staff` claim (from the
+`http://lfx.dev/claims/lf_staff` custom claim) or via the machine-account marker set for M2M
+callers (see "MCP-brokered service APIs" below).
 
 ### End-user OAuth2 JWT
 
@@ -125,12 +127,17 @@ Service APIs (LFX Lens and Member Onboarding) accept only M2M tokens — they ha
 authorization layer. The MCP server acts as the authorization gateway, with different access
 control mechanisms per service:
 
-**LFX Lens** — access requires read scope (`read:all` or `manage:all`) plus the `lf_staff` claim
-in the caller's MCP JWT. The tool is not registered for callers missing either requirement, so no
-runtime access-check is performed. Because Auth0 only injects the `lf_staff` claim into tokens
-issued via the authorization code flow (end-user logins), M2M and API-key callers never receive
-this claim and therefore cannot access LFX Lens tools today. This is a known limitation — the
-intended behavior for M2M access has not yet been defined.
+**LFX Lens** — access requires read scope (`read:all` or `manage:all`) plus staff-equivalent
+status in the caller's MCP JWT. The tool is not registered for callers missing either
+requirement, so no runtime access-check is performed. Staff-equivalent status is satisfied by
+either the `lf_staff` claim (end-user callers whose LDAP groups include `lf-staff` or
+`lf-contractor`) or the machine-account marker (M2M callers, identified by an Auth0 subject
+ending in `@clients` — see "MCP-server M2M token" above). Because Auth0 only injects the
+`lf_staff` claim into tokens issued via the authorization code flow (end-user logins), M2M
+callers never receive it; instead the server infers staff-equivalence for them directly, since
+access to the MCP API's M2M grant is already restricted to a small set of trusted server-side
+clients. Static API-key callers are **not** treated as staff-equivalent — the API-key path sets
+no machine-account marker, so Lens tools remain unavailable to them.
 
 **Member Onboarding** — access is gated by an OpenFGA check against the LFX Self Service
 access-check endpoint:
@@ -213,20 +220,21 @@ sequenceDiagram
     MCP->>Auth0: fetch JWKS (cached)
     Auth0-->>MCP: public keys
     MCP->>MCP: verify signature, expiry, audience<br />extract scopes + lf_staff claim
-    Note over MCP: query_lfx_lens registered only when<br />read scope (read:all or manage:all) AND lf_staff=true
+    Note over MCP: query_lfx_lens registered only when<br />read scope (read:all or manage:all) AND staff-equivalent<br />(lf_staff=true here; M2M callers qualify via machine-account marker instead)
     MCP-->>Client: tools/list (includes query_lfx_lens)
 
-    User->>Client: invoke query_lfx_lens (project_slug="tlf")
+    User->>Client: invoke query_lfx_lens (input; project_slugs optional, omitted = LF-wide)
     Client->>MCP: tools/call {query_lfx_lens}<br />Authorization: Bearer {mcp_jwt}
 
-    Note over MCP: lf_staff=true already verified at registration
+    Note over MCP: staff-equivalence (lf_staff=true or machine-account marker)<br />already verified at registration
     MCP->>Auth0: client_credentials grant<br />audience = Lens API resource server
     Auth0-->>MCP: Lens M2M token (no user identity, cached)
 
-    MCP->>Lens: POST /workflows/.../runs<br />Authorization: Bearer {lens_m2m_token}
+    MCP->>Lens: POST /workflows/.../runs<br />additional_data {"project_slugs": [...]}<br />Authorization: Bearer {lens_m2m_token}
     Lens->>Lens: verify JWT via JWKS
-    Lens-->>MCP: response
-    MCP-->>Client: tool result
+    Lens->>Lens: resolve slugs (unknown -> rejection, no query)
+    Lens-->>MCP: response (opens with **scope**)
+    MCP-->>Client: tool result (rejection -> IsError)
 ```
 
 ### Flow 3: End-user → MCP-brokered service API (with CTE + access-check)

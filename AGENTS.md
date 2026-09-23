@@ -491,6 +491,15 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 | `-lens_api_url`                 | `LFXMCP_LENS_API_URL`                 | —              | Base URL of the LFX Lens service                                  |
 | `-lens_api_audience`            | `LFXMCP_LENS_API_AUDIENCE`            | —              | Auth0 resource server audience for the LFX Lens API               |
 
+## MCP Client OAuth Registration (CIMD, not DCR)
+
+LFID (our Auth0-based identity provider) does **not** support Dynamic Client Registration (DCR). It **does** support **CIMD** (Client ID Metadata Documents, the modern best-practice OAuth extension where the `client_id` is itself a URL pointing to a metadata document instead of a pre-issued opaque string).
+
+- [`linuxfoundation/auth0-terraform`](https://github.com/linuxfoundation/auth0-terraform) registers each CIMD-based MCP client as an `auth0_client_cimd` resource in `clients_cimd.tf`, keyed by that client's metadata document URL (e.g., `https://claude.ai/oauth/mcp-oauth-client-metadata`).
+- In the LFX MCP Server README, clients that don't specify a `client_id`/`clientId` at all (e.g., Goose, Claude) are relying on CIMD — the client's own metadata document is already registered in auth0-terraform.
+- Clients that require a **static** `client_id` (e.g., OpenCode, Cursor) do so because their OAuth implementation doesn't support CIMD, so a conventional Auth0 client had to be created for them instead.
+- When onboarding a new MCP client that supports CIMD, the deliverable is simply: find the exact CIMD metadata document URL the client uses (check the client's own OAuth/MCP docs), then add an `auth0_client_cimd` resource for it in `clients_cimd.tf` via a PR to auth0-terraform. No new lfx-mcp code changes are needed for CIMD-only clients — just add a new client section to this repo's README (no `client_id`/`clientId` needed, following the pattern of existing CIMD-based client sections).
+
 ## Error Handling Patterns
 
 ### Tool Error Responses

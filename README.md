@@ -22,7 +22,7 @@ https://mcp.lfx.dev/mcp
 
 You will be prompted to log in with your Linux Foundation account (LFID) the first time you connect. *All MCP permissions correspond to LFX platform permissions granted to your LFID.*
 
-**The following clients are set up to work with the LFX MCP Server.** Please file an issue to request additional client support. Running the LFX MCP Server as a local (stdio) MCP server is not supported at this time.
+**The following clients are set up to work with the LFX MCP Server.** Client-specific instructions (menu paths, settings names, etc.) are subject to change as vendors update their products; consult the client's own documentation if the steps below no longer match what you see. Please file an issue to request additional client support. Running the LFX MCP Server as a local (stdio) MCP server is not supported at this time.
 
 ### Goose
 
@@ -151,6 +151,16 @@ Add the following to your `~/.cursor/mcp.json`:
 }
 ```
 
+### ChatGPT
+
+*Must have a plan that supports Developer mode and MCP access.*
+
+1. In ChatGPT, navigate to **Plugins → MCP → Add server**.
+2. Enter **LFX** as the name.
+3. Select **Streamable HTTP** as the type.
+4. Enter `https://mcp.lfx.dev/mcp` as the URL.
+5. Hit **Save**, then click the **Authenticate** button from the Servers list to open a browser window for LFID login.
+
 ### Additional clients (via mcp-remote)
 
 If your MCP client is not listed here, you may try using [mcp-remote](https://github.com/geelen/mcp-remote) as a local proxy.
@@ -182,19 +192,31 @@ A browser window will open for authentication on first use. To re-authenticate, 
 rm -rf ~/.mcp-auth
 ```
 
-### MCP Inspector (developer testing)
+### MCP Inspector
 
 *MCP Inspector requires a client ID. The following client ID only works with MCP Inspector.*
 
-[MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a browser-based tool for exploring and testing MCP servers. To connect it to the LFX MCP Server:
+Add the following to your `~/.mcp-inspector/mcp.json`:
 
-```bash
-npx @modelcontextprotocol/inspector --transport http --server-url https://mcp.lfx.dev/mcp
+```json
+{
+  "mcpServers": {
+    "lfx": {
+      "type": "streamable-http",
+      "url": "https://mcp.lfx.dev/mcp",
+      "oauth": {
+        "clientId": "4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O"
+      }
+    }
+  }
+}
 ```
 
-From the MCP Inspector sidebar, find **Authentication** → **OAuth 2.0 Flow** → **Client ID** and enter `4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O`.
+Run:
 
-Hitting **Connect** will open a browser window for LFID login.
+```bash
+npx @modelcontextprotocol/inspector
+```
 
 ## Available Tools
 
@@ -202,8 +224,14 @@ Hitting **Connect** will open a browser window for LFID login.
 
 | Tool              | Description                                                   |
 |-------------------|---------------------------------------------------------------|
-| `search_projects` | Search for LFX projects by name with typeahead and pagination |
+| `search_projects` | Search LFX projects by name (typeahead), exact slug or exact name, optionally scoped to a parent or legal parent; include_total returns the count of indexed, caller-visible projects |
 | `get_project`     | Get a project's base info and settings by UID                 |
+
+### Resource Counts
+
+| Tool                  | Description |
+|-----------------------|-------------|
+| `count_lfx_resources` | Count indexed LFX v2 records (meetings, participants, committees, members, projects) visible to the caller; complete=false means a lower bound |
 
 ### Committees
 
@@ -215,11 +243,13 @@ Hitting **Connect** will open a browser window for LFID login.
 | `update_committee`          | Update a committee's base information                                                     |
 | `update_committee_settings` | Update a committee's settings (visibility, email requirements, meeting attendee defaults) |
 | `delete_committee`          | Delete a committee by UID                                                                 |
-| `search_committee_members`  | Search committee members; filter by committee, project, or name                           |
+| `search_committee_members`  | Search committee members; filter by committee, project, organization name, or name        |
 | `get_committee_member`      | Get a specific committee member by committee and member UID                               |
 | `create_committee_member`   | Add a new member to a committee                                                           |
 | `update_committee_member`   | Update an existing committee member's information                                         |
 | `delete_committee_member`   | Remove a member from a committee                                                          |
+| `get_org_committee_seats`   | Summarise an organisation's committee seats across a foundation and its direct child projects; filter by category, optionally list the seats (seats, not the membership's contact of record); include_membership_contacts adds the membership contacts of record and a per-project representation pairing |
+| `audit_committee_coverage`  | Audit a foundation and its direct child projects for committees onboarded into LFX v2, visible member counts per committee, and projects with active memberships but no committee or an empty board |
 
 ### Mailing Lists
 
@@ -237,7 +267,7 @@ Hitting **Connect** will open a browser window for LFID login.
 |---------------------------------|---------------------------------------------------------------------------------------|
 | `search_members`                | Search and filter members (memberships) by project, tier, status, or B2B organization |
 | `get_member_membership`         | Get a single membership by membership UID                                             |
-| `get_membership_key_contacts`   | Get key contacts (primary contacts, board members) for a membership                   |
+| `get_membership_key_contacts`   | Get a membership's key contacts (contacts of record, not committee seats)             |
 | `get_membership_key_contact`    | Get a single key contact by membership UID and contact UID                            |
 | `create_membership_key_contact` | Add a key contact to a membership                                                     |
 | `update_membership_key_contact` | Update an existing key contact on a membership                                        |
@@ -258,7 +288,7 @@ Hitting **Connect** will open a browser window for LFID login.
 |------------------------------------|-------------------------------------------------------------------------|
 | `search_past_meetings`             | Search past meetings; filter by project, committee, date range          |
 | `get_past_meeting`                 | Get a past meeting by UID                                               |
-| `search_past_meeting_participants` | Search past meeting participants; filter by meeting, committee, project |
+| `search_past_meeting_participants` | Search past meeting participants; filter by meeting, committee, project, date range, attended_only or organisation name; count_only returns record counts; people are de-duplicated by identity like LFX Self Serve (dedupe=false returns raw records) |
 | `get_past_meeting_participant`     | Get a past meeting participant by UID                                   |
 | `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, committee, project    |
 | `get_past_meeting_summary`         | Get a past meeting summary by UID                                       |

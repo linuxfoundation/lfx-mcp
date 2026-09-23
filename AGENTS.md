@@ -249,7 +249,7 @@ Two scope constants are defined in `internal/tools/scopes.go`:
 - `canManage` — true when the token holds `manage:all`.
 - `canRead` — true when `canManage` is true **or** the token holds `read:all`. A `manage:all` token implicitly has read access.
 
-With no auth token (stdio mode, or HTTP mode with no `-mcp_api.auth_servers` configured), both flags are `true` and all enabled tools are registered without restriction.
+In stdio mode (no auth token), both flags are `true` and all enabled tools are registered without restriction.
 
 **Staff-only tools.** The LFX Lens-backed tools and their guidance (the names in `staffOnlyTools`, `cmd/lfx-mcp-server/main_test.go`) are registered only when `canRead && isStaff`. `isStaff` is true for LF staff user tokens (`tools.IsLFStaff`), machine tokens (`tools.IsMachineAccount`) and a nil token (stdio, or HTTP with no `-mcp_api.auth_servers` configured); for every other caller these tools never appear in `tools/list`. A new tool of that kind uses the same gate and is added to `staffOnlyTools`, which `TestNewServer_LensToolsAreStaffOnly` checks.
 

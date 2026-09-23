@@ -69,7 +69,7 @@ type GetMembershipKeyContactArgs struct {
 type memberSearchResult struct {
 	Resources []membershipView `json:"resources"`
 	PageToken *string          `json:"page_token,omitempty"`
-	Note      string           `json:"note,omitempty"`
+	Warnings  []string         `json:"warnings,omitempty"`
 }
 
 // membershipView is a shaped view of a project_membership resource returned by
@@ -146,7 +146,7 @@ func toKeyContactResourceView(r *querysvc.Resource) membershipView {
 type keyContactListResult struct {
 	Resources []membershipView `json:"resources"`
 	PageToken *string          `json:"page_token,omitempty"`
-	Note      string           `json:"note,omitempty"`
+	Warnings  []string         `json:"warnings,omitempty"`
 }
 
 // keyContactView is a filtered view of ProjectKeyContactResponse for MCP
@@ -243,23 +243,13 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 
 	if memberConfig == nil {
 		logger.ErrorContext(ctx, "member tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: member tools not configured"},
-			},
-			IsError: true,
-		}, memberSearchResult{}, nil
+		return nil, memberSearchResult{}, toolError("Error: member tools not configured")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, memberSearchResult{}, nil
+		return nil, memberSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -318,12 +308,7 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search members", err)},
-			},
-			IsError: true,
-		}, memberSearchResult{}, nil
+		return nil, memberSearchResult{}, toolError(friendlyAPIError("failed to search members", err))
 	}
 
 	views := make([]membershipView, len(result.Resources))
@@ -333,18 +318,13 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 	out := memberSearchResult{
 		Resources: views,
 		PageToken: result.PageToken,
+		Warnings:  searchWarnings("memberships", len(result.Resources), pageSize, hasPageToken(result.PageToken), args.PageToken != ""),
 	}
-	out.Note = accessFilteredEmptyNote("memberships", len(result.Resources), result.PageToken != nil)
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, memberSearchResult{}, nil
+		return nil, memberSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "search_members succeeded", "count", len(result.Resources))
@@ -362,32 +342,17 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 
 	if memberConfig == nil {
 		logger.ErrorContext(ctx, "member tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: member tools not configured"},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, nil, toolError("Error: member tools not configured")
 	}
 
 	if args.MembershipUID == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: membership_uid is required"},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, nil, toolError("Error: membership_uid is required")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, nil, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -402,23 +367,13 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "GetProjectMembership failed", "error", err, "membership_uid", args.MembershipUID)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to get member membership", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, nil, toolError(friendlyAPIError("failed to get member membership", err))
 	}
 
 	prettyJSON, err := json.MarshalIndent(result.ProjectMembership, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal membership result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, nil, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "get_member_membership succeeded", "membership_uid", args.MembershipUID)
@@ -437,32 +392,17 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 
 	if memberConfig == nil {
 		logger.ErrorContext(ctx, "member tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: member tools not configured"},
-			},
-			IsError: true,
-		}, keyContactListResult{}, nil
+		return nil, keyContactListResult{}, toolError("Error: member tools not configured")
 	}
 
 	if args.MembershipUID == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: membership_uid is required"},
-			},
-			IsError: true,
-		}, keyContactListResult{}, nil
+		return nil, keyContactListResult{}, toolError("Error: membership_uid is required")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, keyContactListResult{}, nil
+		return nil, keyContactListResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -494,12 +434,7 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources (key_contact) failed", "error", err, "membership_uid", args.MembershipUID)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to get membership key contacts", err)},
-			},
-			IsError: true,
-		}, keyContactListResult{}, nil
+		return nil, keyContactListResult{}, toolError(friendlyAPIError("failed to get membership key contacts", err))
 	}
 
 	views := make([]membershipView, len(result.Resources))
@@ -510,18 +445,13 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 	out := keyContactListResult{
 		Resources: views,
 		PageToken: result.PageToken,
+		Warnings:  searchWarnings("key contacts", len(result.Resources), pageSize, hasPageToken(result.PageToken), args.PageToken != ""),
 	}
-	out.Note = accessFilteredEmptyNote("key contacts", len(result.Resources), result.PageToken != nil)
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal key contacts result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, keyContactListResult{}, nil
+		return nil, keyContactListResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "get_membership_key_contacts succeeded", "membership_uid", args.MembershipUID, "count", len(result.Resources))
@@ -539,41 +469,21 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 
 	if memberConfig == nil {
 		logger.ErrorContext(ctx, "member tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: member tools not configured"},
-			},
-			IsError: true,
-		}, keyContactView{}, nil
+		return nil, keyContactView{}, toolError("Error: member tools not configured")
 	}
 
 	if args.MembershipUID == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: membership_uid is required"},
-			},
-			IsError: true,
-		}, keyContactView{}, nil
+		return nil, keyContactView{}, toolError("Error: membership_uid is required")
 	}
 
 	if args.ContactUID == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: contact_uid is required"},
-			},
-			IsError: true,
-		}, keyContactView{}, nil
+		return nil, keyContactView{}, toolError("Error: contact_uid is required")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, keyContactView{}, nil
+		return nil, keyContactView{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -589,12 +499,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "GetKeyContact failed", "error", err, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to get membership key contact", err)},
-			},
-			IsError: true,
-		}, keyContactView{}, nil
+		return nil, keyContactView{}, toolError(friendlyAPIError("failed to get membership key contact", err))
 	}
 
 	contactView := toKeyContactView(result.KeyContact)
@@ -602,12 +507,7 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 	prettyJSON, err := json.MarshalIndent(contactView, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal key contact result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, keyContactView{}, nil
+		return nil, keyContactView{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "get_membership_key_contact succeeded", "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)

@@ -355,28 +355,18 @@ func handleGetMailingListMember(ctx context.Context, req *mcp.CallToolRequest, a
 }
 
 // handleSearchMailingLists implements the search_mailing_lists tool logic.
-func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, args SearchMailingListsArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, args SearchMailingListsArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if mailingListConfig == nil {
 		logger.ErrorContext(ctx, "mailing list tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: mailing list tools not configured"},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError("Error: mailing list tools not configured")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -413,75 +403,39 @@ func handleSearchMailingLists(ctx context.Context, req *mcp.CallToolRequest, arg
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search mailing lists", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search mailing lists", err))
 	}
 
-	type searchResult struct {
-		Resources []*querysvc.Resource `json:"resources"`
-		PageToken *string              `json:"page_token,omitempty"`
-		Note      string               `json:"note,omitempty"`
-	}
-
-	out := searchResult{
-		Resources: result.Resources,
-		PageToken: result.PageToken,
-	}
-	out.Note = accessFilteredEmptyNote("mailing lists", len(result.Resources), result.PageToken != nil)
-
-	var pageWarning string
-	if result.PageToken != nil && len(result.Resources) < pageSize {
-		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
-	}
+	out := newResourceSearchResult("mailing lists", result, pageSize, args.PageToken != "")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "search_mailing_lists succeeded", "count", len(result.Resources))
 
-	content := []mcp.Content{}
-	if pageWarning != "" {
-		content = append(content, &mcp.TextContent{Text: pageWarning})
-	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, out, nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(prettyJSON)},
+		},
+	}, out, nil
 }
 
 // handleSearchMailingListMembers implements the search_mailing_list_members tool logic.
-func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchMailingListMembersArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchMailingListMembersArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if mailingListConfig == nil {
 		logger.ErrorContext(ctx, "mailing list tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: mailing list tools not configured"},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError("Error: mailing list tools not configured")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = mailingListConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -524,48 +478,22 @@ func handleSearchMailingListMembers(ctx context.Context, req *mcp.CallToolReques
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search mailing list members", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search mailing list members", err))
 	}
 
-	type searchResult struct {
-		Resources []*querysvc.Resource `json:"resources"`
-		PageToken *string              `json:"page_token,omitempty"`
-		Note      string               `json:"note,omitempty"`
-	}
-
-	out := searchResult{
-		Resources: result.Resources,
-		PageToken: result.PageToken,
-	}
-	out.Note = accessFilteredEmptyNote("mailing-list members", len(result.Resources), result.PageToken != nil)
-
-	var pageWarning string
-	if result.PageToken != nil && len(result.Resources) < pageSize {
-		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
-	}
+	out := newResourceSearchResult("mailing-list members", result, pageSize, args.PageToken != "")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "search_mailing_list_members succeeded", "mailing_list_id", args.MailingListID, "project_uid", args.ProjectUID, "count", len(result.Resources))
 
-	content := []mcp.Content{}
-	if pageWarning != "" {
-		content = append(content, &mcp.TextContent{Text: pageWarning})
-	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, out, nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(prettyJSON)},
+		},
+	}, out, nil
 }

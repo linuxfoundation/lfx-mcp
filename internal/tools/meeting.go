@@ -374,28 +374,18 @@ type GetPastMeetingSummaryArgs struct {
 }
 
 // handleSearchMeetings implements the search_meetings tool logic.
-func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingsArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingsArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
 		logger.ErrorContext(ctx, "meeting tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: meeting tools not configured"},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError("Error: meeting tools not configured")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -456,12 +446,7 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search meetings", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search meetings", err))
 	}
 
 	for _, res := range result.Resources {
@@ -470,42 +455,21 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		}
 	}
 
-	type searchResult struct {
-		Resources []*querysvc.Resource `json:"resources"`
-		PageToken *string              `json:"page_token,omitempty"`
-		Note      string               `json:"note,omitempty"`
-	}
-
-	out := searchResult{
-		Resources: result.Resources,
-		PageToken: result.PageToken,
-	}
-	out.Note = accessFilteredEmptyNote("meetings", len(result.Resources), result.PageToken != nil)
-
-	var pageWarning string
-	if result.PageToken != nil && len(result.Resources) < pageSize {
-		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
-	}
+	out := newResourceSearchResult("meetings", result, pageSize, args.PageToken != "")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "search_meetings succeeded", "count", len(result.Resources))
 
-	content := []mcp.Content{}
-	if pageWarning != "" {
-		content = append(content, &mcp.TextContent{Text: pageWarning})
-	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, out, nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(prettyJSON)},
+		},
+	}, out, nil
 }
 
 // handleGetMeeting implements the get_meeting tool logic.
@@ -599,28 +563,18 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 }
 
 // handleSearchMeetingRegistrants implements the search_meeting_registrants tool logic.
-func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingRegistrantsArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingRegistrantsArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
 		logger.ErrorContext(ctx, "meeting tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: meeting tools not configured"},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError("Error: meeting tools not configured")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -667,50 +621,24 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search meeting registrants", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search meeting registrants", err))
 	}
 
-	type searchResult struct {
-		Resources []*querysvc.Resource `json:"resources"`
-		PageToken *string              `json:"page_token,omitempty"`
-		Note      string               `json:"note,omitempty"`
-	}
-
-	out := searchResult{
-		Resources: result.Resources,
-		PageToken: result.PageToken,
-	}
-	out.Note = accessFilteredEmptyNote("meeting registrants", len(result.Resources), result.PageToken != nil)
-
-	var pageWarning string
-	if result.PageToken != nil && len(result.Resources) < pageSize {
-		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
-	}
+	out := newResourceSearchResult("meeting registrants", result, pageSize, args.PageToken != "")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "search_meeting_registrants succeeded", "count", len(result.Resources))
 
-	content := []mcp.Content{}
-	if pageWarning != "" {
-		content = append(content, &mcp.TextContent{Text: pageWarning})
-	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, out, nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(prettyJSON)},
+		},
+	}, out, nil
 }
 
 // handleGetMeetingRegistrant implements the get_meeting_registrant tool logic.
@@ -807,28 +735,18 @@ func handleGetPastMeetingParticipant(ctx context.Context, req *mcp.CallToolReque
 }
 
 // handleSearchPastMeetingSummaries implements the search_past_meeting_summaries tool logic.
-func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequest, args SearchPastMeetingSummariesArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequest, args SearchPastMeetingSummariesArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
 		logger.ErrorContext(ctx, "meeting tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: meeting tools not configured"},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError("Error: meeting tools not configured")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -879,50 +797,24 @@ func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequ
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search past meeting summaries", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search past meeting summaries", err))
 	}
 
-	type searchResult struct {
-		Resources []*querysvc.Resource `json:"resources"`
-		PageToken *string              `json:"page_token,omitempty"`
-		Note      string               `json:"note,omitempty"`
-	}
-
-	out := searchResult{
-		Resources: result.Resources,
-		PageToken: result.PageToken,
-	}
-	out.Note = accessFilteredEmptyNote("past-meeting summaries", len(result.Resources), result.PageToken != nil)
-
-	var pageWarning string
-	if result.PageToken != nil && len(result.Resources) < pageSize {
-		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
-	}
+	out := newResourceSearchResult("past-meeting summaries", result, pageSize, args.PageToken != "")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "search past meeting summaries succeeded", "past_meeting_id", args.PastMeetingID, "project_uid", args.ProjectUID, "count", len(result.Resources))
 
-	content := []mcp.Content{}
-	if pageWarning != "" {
-		content = append(content, &mcp.TextContent{Text: pageWarning})
-	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, out, nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(prettyJSON)},
+		},
+	}, out, nil
 }
 
 // handleGetPastMeetingSummary implements the get_past_meeting_summary tool logic.
@@ -1045,7 +937,7 @@ type SearchPastMeetingsGroupArgs struct {
 }
 
 // handleSearchMeetingsGroupMode adapts group-mode args to the meetings handler.
-func handleSearchMeetingsGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingsGroupArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchMeetingsGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingsGroupArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
 	return handleSearchMeetings(ctx, req, SearchMeetingsArgs{
 		Name:         args.Name,
 		ProjectUID:   args.ProjectUID,
@@ -1060,7 +952,7 @@ func handleSearchMeetingsGroupMode(ctx context.Context, req *mcp.CallToolRequest
 }
 
 // handleSearchMeetingRegistrantsGroupMode adapts group-mode args to the meeting registrants handler.
-func handleSearchMeetingRegistrantsGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingRegistrantsGroupArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchMeetingRegistrantsGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchMeetingRegistrantsGroupArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
 	return handleSearchMeetingRegistrants(ctx, req, SearchMeetingRegistrantsArgs{
 		MeetingID:    args.MeetingID,
 		CommitteeUID: args.GroupUID,
@@ -1092,7 +984,7 @@ func handleSearchPastMeetingParticipantsGroupMode(ctx context.Context, req *mcp.
 }
 
 // handleSearchPastMeetingsGroupMode adapts group-mode args to the past meetings handler.
-func handleSearchPastMeetingsGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchPastMeetingsGroupArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchPastMeetingsGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchPastMeetingsGroupArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
 	return handleSearchPastMeetings(ctx, req, SearchPastMeetingsArgs{
 		Name:         args.Name,
 		ProjectUID:   args.ProjectUID,
@@ -1108,28 +1000,18 @@ func handleSearchPastMeetingsGroupMode(ctx context.Context, req *mcp.CallToolReq
 }
 
 // handleSearchPastMeetings implements the search_past_meetings tool logic.
-func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, args SearchPastMeetingsArgs) (*mcp.CallToolResult, any, error) {
+func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, args SearchPastMeetingsArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
 		logger.ErrorContext(ctx, "meeting tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: meeting tools not configured"},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError("Error: meeting tools not configured")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -1203,12 +1085,7 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search past meetings", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search past meetings", err))
 	}
 
 	for _, res := range result.Resources {
@@ -1217,42 +1094,21 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 		}
 	}
 
-	type searchResult struct {
-		Resources []*querysvc.Resource `json:"resources"`
-		PageToken *string              `json:"page_token,omitempty"`
-		Note      string               `json:"note,omitempty"`
-	}
-
-	out := searchResult{
-		Resources: result.Resources,
-		PageToken: result.PageToken,
-	}
-	out.Note = accessFilteredEmptyNote("past meetings", len(result.Resources), result.PageToken != nil)
-
-	var pageWarning string
-	if result.PageToken != nil && len(result.Resources) < pageSize {
-		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
-	}
+	out := newResourceSearchResult("past meetings", result, pageSize, args.PageToken != "")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "search_past_meetings succeeded", "count", len(result.Resources))
 
-	content := []mcp.Content{}
-	if pageWarning != "" {
-		content = append(content, &mcp.TextContent{Text: pageWarning})
-	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, out, nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(prettyJSON)},
+		},
+	}, out, nil
 }
 
 // pastMeetingGetResult is the output type for the get_past_meeting tool. It nests
@@ -1307,26 +1163,17 @@ func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args Ge
 
 	if meetingConfig == nil {
 		logger.ErrorContext(ctx, "meeting tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "Error: meeting tools not configured"}},
-			IsError: true,
-		}, pastMeetingGetResult{}, nil
+		return nil, pastMeetingGetResult{}, toolError("Error: meeting tools not configured")
 	}
 
 	if args.UID == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "Error: uid is required"}},
-			IsError: true,
-		}, pastMeetingGetResult{}, nil
+		return nil, pastMeetingGetResult{}, toolError("Error: uid is required")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)}},
-			IsError: true,
-		}, pastMeetingGetResult{}, nil
+		return nil, pastMeetingGetResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -1344,10 +1191,7 @@ func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "GetItxPastMeeting failed", "error", err, "uid", args.UID)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: friendlyAPIError("failed to get past meeting", err)}},
-			IsError: true,
-		}, pastMeetingGetResult{}, nil
+		return nil, pastMeetingGetResult{}, toolError(friendlyAPIError("failed to get past meeting", err))
 	}
 
 	out := pastMeetingGetResult{Meeting: meeting}
@@ -1384,10 +1228,7 @@ func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal past meeting result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)}},
-			IsError: true,
-		}, pastMeetingGetResult{}, nil
+		return nil, pastMeetingGetResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "get past meeting succeeded", "uid", args.UID)

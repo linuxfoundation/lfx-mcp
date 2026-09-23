@@ -247,11 +247,11 @@ func TestNewServer_ManageToolsAreListedForReaders(t *testing.T) {
 	}
 }
 
-// TestScopeStepUpMiddleware_BlocksWithoutManageScope pins the call-time
+// TestRequireManageScopeMiddleware_BlocksWithoutManageScope pins the call-time
 // enforcement: a read:all-only caller sees create_committee in tools/list
 // (TestNewServer_ManageToolsAreListedForReaders) but calling it returns a
 // step-up error result rather than invoking the handler.
-func TestScopeStepUpMiddleware_BlocksWithoutManageScope(t *testing.T) {
+func TestRequireManageScopeMiddleware_BlocksWithoutManageScope(t *testing.T) {
 	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -279,15 +279,15 @@ func TestScopeStepUpMiddleware_BlocksWithoutManageScope(t *testing.T) {
 	assertStepUpError(t, res, "create_committee")
 }
 
-// TestScopeStepUpMiddleware_BlocksGroupModeAlias pins that the group-mode
-// alias for a manage:all tool (create_group, the group-mode name for
-// create_committee) is blocked identically to its canonical committee-mode
-// name. committeeConfig is left unset here too, so — like
-// TestScopeStepUpMiddleware_BlocksWithoutManageScope — asserting the exact
-// step-up text (rather than just IsError) is required to prove the
+// TestRequireManageScopeMiddleware_BlocksGroupModeAlias pins that the
+// group-mode alias for a manage:all tool (create_group, the group-mode name
+// for create_committee) is blocked identically to its canonical
+// committee-mode name. committeeConfig is left unset here too, so — like
+// TestRequireManageScopeMiddleware_BlocksWithoutManageScope — asserting the
+// exact step-up text (rather than just IsError) is required to prove the
 // middleware, not the "committee tools not configured" fallback, produced
 // the result.
-func TestScopeStepUpMiddleware_BlocksGroupModeAlias(t *testing.T) {
+func TestRequireManageScopeMiddleware_BlocksGroupModeAlias(t *testing.T) {
 	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -316,7 +316,7 @@ func TestScopeStepUpMiddleware_BlocksGroupModeAlias(t *testing.T) {
 }
 
 // assertStepUpError asserts that res is exactly the step-up error result
-// scopeStepUpMiddleware returns for toolName, rather than merely IsError.
+// requireManageScopeMiddleware returns for toolName, rather than merely IsError.
 // committeeConfig is nil in these tests (create_committee/create_group
 // handlers are never registered against a real config), so a handler that
 // ran to completion would also return an IsError result ("committee tools

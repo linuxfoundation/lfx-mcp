@@ -637,14 +637,17 @@ func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middle
 	}
 }
 
-// scopeStepUpMiddleware returns middleware that enforces manage:all on
-// tools/call requests for tools listed in tools.ManageScopeTools. canManage
-// reflects whether the current caller's token already carries manage:all (or
-// there is no auth context at all, e.g. stdio mode). Callers lacking it get
-// an error tool result instructing them to complete an OAuth step-up for
-// manage:all, rather than a bare protocol-level rejection — the tool remains
-// visible in tools/list so the client can discover its schema up front.
-func scopeStepUpMiddleware(canManage bool) mcp.Middleware {
+// requireManageScopeMiddleware returns middleware that gates tools/call
+// requests for tools listed in tools.ManageScopeTools on manage:all. It does
+// not itself perform or trigger an OAuth step-up — that happens out of band,
+// between the client and the authorization server — it only blocks the call
+// and returns an error tool result telling the caller which scope it needs,
+// rather than a bare protocol-level rejection. canManage reflects whether the
+// current caller's token already carries manage:all (or there is no auth
+// context at all, e.g. stdio mode). The tool remains visible in tools/list
+// regardless, so the client can discover its schema before completing that
+// step-up.
+func requireManageScopeMiddleware(canManage bool) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		if canManage {
 			return next
@@ -754,7 +757,7 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	// that clients can discover them and their schemas before completing an
 	// OAuth step-up flow for manage:all. This middleware is what actually
 	// blocks the call when that step-up hasn't happened yet.
-	server.AddReceivingMiddleware(scopeStepUpMiddleware(canManage))
+	server.AddReceivingMiddleware(requireManageScopeMiddleware(canManage))
 
 	// Register tools based on configuration and caller scopes.
 	enabledTools := make(map[string]bool)
@@ -1136,7 +1139,7 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 		// read:all-only tokens and bypass the OR/implication logic in
 		// newServer(). Scope enforcement instead happens per-tool: read access
 		// gates tool registration in newServer(), and manage:all is enforced at
-		// call time by scopeStepUpMiddleware, which returns a step-up error
+		// call time by requireManageScopeMiddleware, which returns a step-up error
 		// result rather than a transport-level 403. We previously wrapped this
 		// handler to append a "scope" parameter to the WWW-Authenticate header on
 		// 401/403s (see the removed withChallengeScopes helper) to work around a

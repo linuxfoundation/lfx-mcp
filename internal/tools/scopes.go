@@ -93,8 +93,8 @@ func ValidateScopes(configured []string, warn func(msg string, args ...any)) []s
 // every caller holding at least read:all (see newServer in main.go) rather
 // than hidden from tools/list — clients can discover the tool and its schema
 // up front, and only need to complete an OAuth step-up for manage:all when
-// they actually attempt to call one. Enforcement happens in the scope
-// step-up middleware, which returns an error result for a caller lacking
+// they actually attempt to call one. Enforcement happens in
+// requireManageScopeMiddleware, which returns an error result for a caller lacking
 // manage:all instead of invoking the handler.
 var ManageScopeTools = map[string]bool{
 	"create_committee":              true,

@@ -39,6 +39,20 @@ and optionally apply fixes.
   queries first. Only pull sample documents (`"size": 3`) as a secondary
   debugging aid when a count is zero or surprising (e.g. to understand what
   fields are actually present on that resource type).
+- **`payload.Filters` (singular) is a distinct mechanism from `FiltersAll` and
+  is easy to skip.** It shows up disproportionately in single-record `get_*`
+  lookups (`Filters: []string{"uid:" + id}`) rather than multi-param
+  `search_*` tools, so a review organized by tool name or by the reference
+  table below can walk right past it. Grep for the literal mechanism
+  (`Filters:` / `FiltersAll:` / `Tags:` / `TagsAll:` / `Parent:` /
+  `payload.Parent`), not for tool-name patterns like `get_*` or `search_*` —
+  any handler that builds a `QueryResourcesPayload` is in scope, regardless of
+  what it's named. Verify every literal field name that appears in a
+  `Filters`/`FiltersAll` clause against the index document's actual top-level
+  fields (via a sample query) — `uid` in particular is rarely an indexed field
+  name; documents typically carry `object_id`, `data.id`, and/or lookup tags
+  like `meeting_id:` instead. Don't assume a `Filters: uid:<id>` clause is
+  "obviously correct" just because it looks like a primary-key lookup.
 
 ## Step 1 — Discover infrastructure
 
@@ -72,14 +86,25 @@ Substitute the kubectl context as needed to target dev vs. prod.
 
 **Do not rely solely on the reference table below — always grep the codebase
 first** to find every file that calls `QueryResources`. The table may be out of
-date if new tools have been added since it was last updated.
+date if new tools have been added since it was last updated, and it is
+organized by tool name, which historically has caused single-record `get_*`
+lookups using bare `Filters` to be overlooked (see the Gotchas note above).
+Enumerate by mechanism, not by tool naming convention.
 
 ```bash
 grep -rEn "QueryResources|QueryResourcesPayload" internal/tools/ | grep -v "_test.go"
+
+# Then, within every file that appears above, grep specifically for each
+# structural mechanism so single-record Filters-based lookups aren't missed
+# just because they don't match a search_* naming pattern:
+grep -rEn "payload\.(Filters|FiltersAll|Tags|TagsAll|Parent)\b|Filters:|FiltersAll:|Tags:|TagsAll:|Parent:" internal/tools/*.go | grep -v "_test.go"
 ```
 
-For each file that appears, read the handler and record how each filter
-parameter is sent to the query service. The mechanisms are:
+For each file that appears, read the *entire* handler (not just its
+`search_*`-named neighbor) and record how each filter parameter is sent to the
+query service — this includes `get_*`, `count_*`, and any other handler that
+constructs a `QueryResourcesPayload`, one-off lookups included. The mechanisms
+are:
 
 | Mechanism                                   | Query service field | Index field                          |
 |---------------------------------------------|---------------------|--------------------------------------|
@@ -95,10 +120,13 @@ map to indexed fields — these are the ones to validate. `Name` and date fields
 are query-time text/range operations and do not need index field verification.
 
 Reference table of known tools and their structured filter parameters (verify
-against the grep output above before trusting this):
+against the grep output above before trusting this — it is known to have
+missed entries in the past; see the last four rows, added after
+lfx-self-serve#2642 showed `Filters: uid:<id>` lookups had been skipped by an
+earlier pass of this skill):
 
-| Tool                               | Resource type                 | Parameter            | Mechanism          | Sent as                                    |
-|------------------------------------|-------------------------------|----------------------|--------------------|--------------------------------------------|
+| Tool                               | Resource type                 | Parameter             | Mechanism           | Sent as                                     |
+|-------------------------------------|--------------------------------|-------------------------|-----------------------|-----------------------------------------------|
 | `search_projects`                  | `project`                     | `parent_uid`         | Parent             | `project:<uid>`                            |
 | `search_committees`                | `committee`                   | `project_uid`        | Parent             | `project:<uid>`                            |
 | `search_committee_members`         | `committee_member`            | `committee_uid`      | Tag                | `committee_uid:<uid>`                      |
@@ -124,6 +152,10 @@ against the grep output above before trusting this):
 | `search_members`                   | `project_membership`          | `status`             | FiltersAll         | `status:Active` (hardcoded default)        |
 | `get_membership_key_contacts`      | `key_contact`                 | `membership_uid`     | FiltersAll         | `membership_uid:<uid>`                     |
 | `search_b2b_orgs`                  | `b2b_org`                     | *(none — Name only)* | —                  | —                                          |
+| `get_meeting`                      | `v1_meeting`                  | `uid` (single record) | Filters            | `uid:<id>`                                 |
+| `get_meeting_registrant`           | `v1_meeting_registrant`       | `uid` (single record) | Filters            | `uid:<id>`                                 |
+| `get_past_meeting_participant`     | `v1_past_meeting_participant` | `uid` (single record) | Filters            | `uid:<id>`                                 |
+| `get_past_meeting_summary`         | `v1_past_meeting_summary`     | `uid` (single record) | Filters            | `uid:<id>`                                 |
 
 ## Step 3 — Fetch indexer contracts
 

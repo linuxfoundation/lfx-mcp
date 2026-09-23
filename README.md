@@ -290,7 +290,7 @@ npx @modelcontextprotocol/inspector
 | `get_past_meeting`                 | Get a past meeting by UID                                               |
 | `search_past_meeting_participants` | Search past meeting participants; filter by meeting, committee, project, date range, attended_only or organisation name; count_only returns record counts; people are de-duplicated by identity like LFX Self Serve (dedupe=false returns raw records) |
 | `get_past_meeting_participant`     | Get a past meeting participant by UID                                   |
-| `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, committee, project    |
+| `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, project, name         |
 | `get_past_meeting_summary`         | Get a past meeting summary by UID                                       |
 
 ### Discord

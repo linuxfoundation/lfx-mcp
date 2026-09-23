@@ -119,7 +119,15 @@ present in the chain. This token is also cached and shared across all M2M and AP
 LFX Self Service tools (`search_projects`, `get_committee`, member, meeting, mailing list tools,
 etc.) pass the LFX token (CTE token for end-user callers; MCP-server M2M token for M2M callers)
 directly to LFX API calls. Authorization is handled natively by LFX and its OpenFGA backend; the
-MCP server performs no explicit access-check of its own for these tools.
+MCP server performs no explicit access-check of its own for these tools. When a tool reports an
+upstream error through `friendlyAPIError` (`internal/tools/helpers.go`), a 401 or 403 that carries
+no service-authored message (for example, a bare status with no body) shows the standard access
+message. A 401, or a 403 on an endpoint whose Goa design declares it, that carries the service's
+own message is shown as sent. On a declared status, a body without the fields the service's error
+body requires (both `code` and `message` for the meeting service) counts as carrying no message. A
+403 on an endpoint that does not declare it always shows the access message. Partial-result
+warnings, such as the recording and transcript warnings of `get_past_meeting`, print the upstream
+error unchanged.
 
 ### MCP-brokered service APIs (per-service M2M token)
 

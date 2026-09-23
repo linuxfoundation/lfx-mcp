@@ -377,4 +377,37 @@ func TestNewServer_ScopeBlindClientGetsAdvertisedScopes(t *testing.T) {
 			t.Errorf("no tools may be listed for an unrecognised client with no MCP scopes, got %v", listed)
 		}
 	})
+
+	// Pins the fix for the regression Copilot flagged when DefaultScopes grew
+	// manage:all: a scope-blind client with no configured cfg.MCPAPI.Scopes
+	// must fall back to ScopeBlindFallbackScopes (read:all only), not
+	// DefaultScopes, or it would be silently granted manage:all it never
+	// requested.
+	t.Run("default fallback does not grant manage:all", func(t *testing.T) {
+		const manageTool = "create_committee"
+		if logger == nil {
+			logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+		}
+		server := newServer(Config{Tools: []string{manageTool}}, "test", codexToken())
+
+		ctx := context.Background()
+		clientTransport, serverTransport := mcp.NewInMemoryTransports()
+		serverSession, err := server.Connect(ctx, serverTransport, nil)
+		if err != nil {
+			t.Fatalf("server connect failed: %v", err)
+		}
+		t.Cleanup(func() { _ = serverSession.Close() })
+		client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+		clientSession, err := client.Connect(ctx, clientTransport, nil)
+		if err != nil {
+			t.Fatalf("client connect failed: %v", err)
+		}
+		t.Cleanup(func() { _ = clientSession.Close() })
+
+		res, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: manageTool, Arguments: map[string]any{}})
+		if err != nil {
+			t.Fatalf("CallTool transport error: %v", err)
+		}
+		assertStepUpError(t, res, manageTool)
+	})
 }

@@ -731,7 +731,14 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 		if clientID := tools.ClientID(callerToken); tools.IsScopeBlindClient(clientID) {
 			advertised := cfg.MCPAPI.Scopes
 			if len(advertised) == 0 {
-				advertised = tools.DefaultScopes()
+				// Use the scope-blind-safe fallback here, not tools.DefaultScopes:
+				// that list now includes manage:all (advertised in the PRM so a
+				// client can request it explicitly), but a scope-blind client
+				// never requested anything, so it must never be silently granted
+				// write access. An operator who explicitly configures
+				// cfg.MCPAPI.Scopes to include manage:all is making a deliberate
+				// choice and is unaffected by this fallback.
+				advertised = tools.ScopeBlindFallbackScopes()
 			}
 			canManage = tools.HasAnyScope(advertised, []string{tools.ScopeManage})
 			canRead = canManage || tools.HasAnyScope(advertised, []string{tools.ScopeRead})

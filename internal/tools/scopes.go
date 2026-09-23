@@ -60,8 +60,23 @@ func IsScopeBlindClient(clientID string) bool {
 // to, or discover that manage:all exists at all — the per-call step-up error
 // (not the PRM) is what tells a caller which scope it is missing for a
 // specific tool.
+//
+// Do not reuse this list as the assumed-grant fallback for scope-blind
+// clients (see ScopeBlindFallbackScopes) — a client that never requested any
+// scope must never be silently treated as holding manage:all.
 func DefaultScopes() []string {
 	return []string{"openid", "profile", "email", ScopeRead, ScopeManage}
+}
+
+// ScopeBlindFallbackScopes returns the scopes assumed for a client that
+// ignores our advertised scopes entirely (see IsScopeBlindClient) and so
+// presents a token carrying no MCP scope at all. Unlike DefaultScopes, this
+// deliberately excludes ScopeManage: such a client never explicitly
+// requested any scope, so it must never be silently granted write access it
+// never asked for. It still needs at least read:all so it isn't left with an
+// empty tool list and no error to act on.
+func ScopeBlindFallbackScopes() []string {
+	return []string{"openid", "profile", "email", ScopeRead}
 }
 
 // ValidateScopes checks a configured scope list for unrecognised entries and

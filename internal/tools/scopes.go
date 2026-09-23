@@ -51,14 +51,17 @@ func IsScopeBlindClient(clientID string) bool {
 }
 
 // DefaultScopes returns the set of scopes the server advertises via the OAuth
-// Protected Resource Metadata endpoint. Only read:all is advertised, plus the
-// standard OIDC scopes clients need for the authorization flow: write tools
-// are registered for every authenticated caller, but their handlers require
-// manage:all at call time and respond with a step-up error when it is
-// missing. This keeps the initial consent screen scoped to read access, and
-// defers the manage:all grant to when the caller actually attempts a write.
+// Protected Resource Metadata endpoint, plus the standard OIDC scopes clients
+// need for the authorization flow. Both read:all and manage:all are
+// advertised: write tools are registered for every authenticated caller
+// holding at least read:all, but their handlers require manage:all at call
+// time and respond with a step-up error when it is missing. Advertising
+// manage:all here lets a client request both scopes up front if it chooses
+// to, or discover that manage:all exists at all — the per-call step-up error
+// (not the PRM) is what tells a caller which scope it is missing for a
+// specific tool.
 func DefaultScopes() []string {
-	return []string{"openid", "profile", "email", ScopeRead}
+	return []string{"openid", "profile", "email", ScopeRead, ScopeManage}
 }
 
 // ValidateScopes checks a configured scope list for unrecognised entries and

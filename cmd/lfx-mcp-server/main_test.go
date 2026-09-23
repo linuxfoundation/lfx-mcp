@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"reflect"
@@ -275,8 +276,68 @@ func TestScopeStepUpMiddleware_BlocksWithoutManageScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CallTool transport error: %v", err)
 	}
+	assertStepUpError(t, res, "create_committee")
+}
+
+// TestScopeStepUpMiddleware_BlocksGroupModeAlias pins that the group-mode
+// alias for a manage:all tool (create_group, the group-mode name for
+// create_committee) is blocked identically to its canonical committee-mode
+// name. committeeConfig is left unset here too, so — like
+// TestScopeStepUpMiddleware_BlocksWithoutManageScope — asserting the exact
+// step-up text (rather than just IsError) is required to prove the
+// middleware, not the "committee tools not configured" fallback, produced
+// the result.
+func TestScopeStepUpMiddleware_BlocksGroupModeAlias(t *testing.T) {
+	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	server := newServer(Config{Tools: []string{"create_group"}, CommitteesAsGroups: true}, "test", reader)
+
+	ctx := context.Background()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect failed: %v", err)
+	}
+	t.Cleanup(func() { _ = serverSession.Close() })
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect failed: %v", err)
+	}
+	t.Cleanup(func() { _ = clientSession.Close() })
+
+	res, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "create_group", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool transport error: %v", err)
+	}
+	assertStepUpError(t, res, "create_group")
+}
+
+// assertStepUpError asserts that res is exactly the step-up error result
+// scopeStepUpMiddleware returns for toolName, rather than merely IsError.
+// committeeConfig is nil in these tests (create_committee/create_group
+// handlers are never registered against a real config), so a handler that
+// ran to completion would also return an IsError result ("committee tools
+// not configured"); asserting the precise step-up text is what proves the
+// middleware — not the unconfigured-handler fallback — produced the result.
+func assertStepUpError(t *testing.T, res *mcp.CallToolResult, toolName string) {
+	t.Helper()
 	if !res.IsError {
-		t.Fatal("expected an error result for a read:all-only caller calling a manage:all tool")
+		t.Fatalf("expected an error result for a read:all-only caller calling %s", toolName)
+	}
+	want := fmt.Sprintf("Error: %q requires the %q scope, which your current session does not have. "+
+		"Reauthorize with elevated permissions and try again.", toolName, tools.ScopeManage)
+	if len(res.Content) != 1 {
+		t.Fatalf("expected exactly one content item, got %d", len(res.Content))
+	}
+	text, ok := res.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected TextContent, got %T", res.Content[0])
+	}
+	if text.Text != want {
+		t.Errorf("unexpected step-up error text:\n got:  %q\n want: %q", text.Text, want)
 	}
 }
 

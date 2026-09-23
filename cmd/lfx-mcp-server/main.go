@@ -651,14 +651,24 @@ func scopeStepUpMiddleware(canManage bool) mcp.Middleware {
 		}
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			if method == "tools/call" {
-				if params, ok := req.GetParams().(*mcp.CallToolParamsRaw); ok && tools.ManageScopeTools[params.Name] {
-					return &mcp.CallToolResult{
-						Content: []mcp.Content{&mcp.TextContent{
-							Text: fmt.Sprintf("Error: %q requires the %q scope, which your current session does not have. "+
-								"Reauthorize with elevated permissions and try again.", params.Name, tools.ScopeManage),
-						}},
-						IsError: true,
-					}, nil
+				if params, ok := req.GetParams().(*mcp.CallToolParamsRaw); ok {
+					// Group-mode aliases (create_group, update_group, etc.) map to
+					// canonical committee-mode names in ManageScopeTools; canonicalize
+					// before the lookup so group-mode callers get the same enforcement
+					// as committee-mode callers.
+					name := params.Name
+					if canonical, ok := groupToCommitteeToolNames[name]; ok {
+						name = canonical
+					}
+					if tools.ManageScopeTools[name] {
+						return &mcp.CallToolResult{
+							Content: []mcp.Content{&mcp.TextContent{
+								Text: fmt.Sprintf("Error: %q requires the %q scope, which your current session does not have. "+
+									"Reauthorize with elevated permissions and try again.", params.Name, tools.ScopeManage),
+							}},
+							IsError: true,
+						}, nil
+					}
 				}
 			}
 			return next(ctx, method, req)
@@ -1129,11 +1139,22 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 		// call time by scopeStepUpMiddleware, which returns a step-up error
 		// result rather than a transport-level 403. We previously wrapped this
 		// handler to append a "scope" parameter to the WWW-Authenticate header on
-		// 401/403s (see the removed withChallengeScopes helper), but that never
-		// addressed the ChatGPT connector issue it targeted, and now that
-		// manage:all step-up happens inside tool results instead of via HTTP 403s,
-		// the PRM's scopes_supported (read:all only) is the sole source of scope
-		// hints clients need.
+		// 401/403s (see the removed withChallengeScopes helper) to work around a
+		// ChatGPT connector issue; that never actually solved it, and hand-rolling
+		// step-up signaling at the HTTP layer duplicates what the SDK's own OAuth
+		// client support (auth.AuthorizationCodeHandler, StreamableClientTransport.
+		// OAuthHandler) already does when a server returns a real 401/403 with
+		// insufficient_scope — so we deliberately did not bring it back. Both
+		// read:all and manage:all are advertised in the PRM's scopesSupported
+		// (tools.DefaultScopes) so a client can request both up front if it
+		// chooses to; manage:all is still enforced only at call time, and the
+		// step-up error result (not the PRM) is what tells a caller which tool
+		// needs it. Emitting a spec-compliant per-call HTTP 403 instead of a tool
+		// result would require intercepting requests before the SDK's JSON-RPC
+		// dispatch to inspect params.name, which the SDK does not expose a hook
+		// for today (see go-sdk's extractErrorStatus in streamable.go, which only
+		// maps MethodNotFound/InvalidParams to HTTP status, not arbitrary codes) —
+		// tracked as a follow-up rather than implemented here.
 		mcpHandler = authMiddleware(handler)
 		logger.Info("OAuth bearer token verification enabled for /mcp endpoint", "audience", audience)
 	}

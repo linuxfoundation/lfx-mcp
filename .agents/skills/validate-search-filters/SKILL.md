@@ -47,12 +47,25 @@ and optionally apply fixes.
   (`Filters:` / `FiltersAll:` / `Tags:` / `TagsAll:` / `Parent:` /
   `payload.Parent`), not for tool-name patterns like `get_*` or `search_*` —
   any handler that builds a `QueryResourcesPayload` is in scope, regardless of
-  what it's named. Verify every literal field name that appears in a
-  `Filters`/`FiltersAll` clause against the index document's actual top-level
-  fields (via a sample query) — `uid` in particular is rarely an indexed field
-  name; documents typically carry `object_id`, `data.id`, and/or lookup tags
-  like `meeting_id:` instead. Don't assume a `Filters: uid:<id>` clause is
-  "obviously correct" just because it looks like a primary-key lookup.
+  what it's named. Don't assume a `Filters: uid:<id>` clause is "obviously
+  correct" just because it looks like a primary-key lookup — but also don't
+  assume it's broken without checking the right field (see the next point).
+- **`Filters`/`FiltersAll` target the `data` flat_object, not a literal
+  top-level document field.** `"uid:<value>"` resolves to `data.uid`, exactly
+  like the `name:`/`legal_parent_uid:` examples in `project.go` resolve to
+  `data.name`/`data.legal_parent_uid`. This is *not* the same field space as
+  `tags` and `parent_refs`, which are genuinely top-level. When checking
+  whether a `Filters`/`FiltersAll` clause matches the index, always query
+  `data.<field>` (e.g. `{"exists": {"field": "data.uid"}}` or a `term` query
+  against `data.uid`), never a bare top-level `{"exists": {"field": "uid"}}` —
+  the latter will show `0` hits for every resource type regardless of whether
+  the filter actually works, producing a false "broken" verdict. (This
+  distinction was missed in an earlier pass of this skill, which incorrectly
+  flagged `get_meeting_registrant` and `get_past_meeting_participant` as
+  broken using exactly this wrong top-level check; `data.uid` is in fact
+  populated and correct for both. Only `v1_meeting` and `v1_past_meeting_summary`
+  lack a populated `data.uid` — those two were genuinely broken and are fixed
+  by the `meeting_id:`/`past_meeting_summary_id:` tag lookup.)
 
 ## Step 1 — Discover infrastructure
 
@@ -106,14 +119,14 @@ query service — this includes `get_*`, `count_*`, and any other handler that
 constructs a `QueryResourcesPayload`, one-off lookups included. The mechanisms
 are:
 
-| Mechanism                                   | Query service field | Index field                          |
-|---------------------------------------------|---------------------|--------------------------------------|
-| `payload.Parent = "<type>:<uid>"`           | `Parent`            | `parent_refs`                        |
-| `payload.Tags = ["<key>:<value>"]`          | `Tags`              | `tags`                               |
-| `payload.Filters = ["<field>:<value>"]`     | `Filters`           | top-level doc fields                 |
-| `payload.FiltersAll = ["<field>:<value>"]`  | `FiltersAll`        | top-level doc fields (AND semantics) |
-| `payload.Name = "<value>"`                  | `Name`              | `name` (text search)                 |
-| `payload.DateField` / `DateFrom` / `DateTo` | date range          | date fields                          |
+| Mechanism                                   | Query service field | Index field                                     |
+|---------------------------------------------|---------------------|--------------------------------------------------|
+| `payload.Parent = "<type>:<uid>"`           | `Parent`            | `parent_refs`                                   |
+| `payload.Tags = ["<key>:<value>"]`          | `Tags`              | `tags`                                          |
+| `payload.Filters = ["<field>:<value>"]`     | `Filters`           | `data.<field>` (flat_object, not top-level)     |
+| `payload.FiltersAll = ["<field>:<value>"]`  | `FiltersAll`        | `data.<field>` (flat_object, AND semantics)     |
+| `payload.Name = "<value>"`                  | `Name`              | `name` (text search)                             |
+| `payload.DateField` / `DateFrom` / `DateTo` | date range          | date fields                                     |
 
 Only `Parent`, `Tags`, `Filters`, and `FiltersAll` are structural filters that
 map to indexed fields — these are the ones to validate. `Name` and date fields
@@ -152,10 +165,10 @@ earlier pass of this skill):
 | `search_members`                   | `project_membership`          | `status`             | FiltersAll         | `status:Active` (hardcoded default)        |
 | `get_membership_key_contacts`      | `key_contact`                 | `membership_uid`     | FiltersAll         | `membership_uid:<uid>`                     |
 | `search_b2b_orgs`                  | `b2b_org`                     | *(none — Name only)* | —                  | —                                          |
-| `get_meeting`                      | `v1_meeting`                  | `uid` (single record) | Filters            | `uid:<id>`                                 |
-| `get_meeting_registrant`           | `v1_meeting_registrant`       | `uid` (single record) | Filters            | `uid:<id>`                                 |
-| `get_past_meeting_participant`     | `v1_past_meeting_participant` | `uid` (single record) | Filters            | `uid:<id>`                                 |
-| `get_past_meeting_summary`         | `v1_past_meeting_summary`     | `uid` (single record) | Filters            | `uid:<id>`                                 |
+| `get_meeting`                      | `v1_meeting`                  | `uid` (single record) | TagsAll            | `meeting_id:<id>` (was `Filters: uid:<id>`, unsupported by `data.uid`) |
+| `get_meeting_registrant`           | `v1_meeting_registrant`       | `uid` (single record) | Filters            | `uid:<id>` — matches `data.uid`, populated |
+| `get_past_meeting_participant`     | `v1_past_meeting_participant` | `uid` (single record) | Filters            | `uid:<id>` — matches `data.uid`, populated |
+| `get_past_meeting_summary`         | `v1_past_meeting_summary`     | `uid` (single record) | TagsAll            | `past_meeting_summary_id:<id>` (was `Filters: uid:<id>`, unsupported by `data.uid`) |
 
 ## Step 3 — Fetch indexer contracts
 
@@ -230,6 +243,30 @@ kubectl exec -n lfx "$NATS_POD" -- \
         "must": [
           { "term": { "object_type": "<RESOURCE_TYPE>" } },
           { "prefix": { "parent_refs": "<PREFIX>:" } },
+          { "range": { "updated_at": { "gte": "now-45d" } } }
+        ]
+      }
+    }
+  }'
+```
+
+**Count documents where a `Filters`/`FiltersAll` field is populated (last 45 days):**
+
+`Filters`/`FiltersAll` target the `data` flat_object, so query `data.<field>`,
+never a bare top-level `<field>` — the latter always returns 0 and produces a
+false "broken" verdict regardless of whether the filter actually works:
+
+```bash
+kubectl exec -n lfx "$NATS_POD" -- \
+  curl -s --max-time 15 -X GET "$OPENSEARCH_BASEURL/_search" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "size": 0,
+    "query": {
+      "bool": {
+        "must": [
+          { "term": { "object_type": "<RESOURCE_TYPE>" } },
+          { "exists": { "field": "data.<FIELD>" } },
           { "range": { "updated_at": { "gte": "now-45d" } } }
         ]
       }

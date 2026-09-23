@@ -57,7 +57,9 @@ Tool registration is gated on two access levels derived from the caller's token:
 | Read   | token holds `read:all` **or** `manage:all` | All read-only tools       |
 | Manage | token holds `manage:all`                   | Read + write/delete tools |
 
-An additional requirement gates the `query_lfx_lens` tool on top of the read scope requirement:
+An additional requirement gates the staff-only tools (`query_lfx_lens`, `explore_lfx_semantic_layer`,
+`query_lfx_semantic_layer`, `query_lfx_standard_metrics`, `read_lfx_semantic_layer_guidance` and
+`read_lfx_standard_metrics_guidance`) on top of the read scope requirement:
 the caller must be staff-equivalent, either via the `lf_staff` claim (from the
 `http://lfx.dev/claims/lf_staff` custom claim) or via the machine-account marker set for M2M
 callers (see "MCP-brokered service APIs" below).
@@ -71,6 +73,16 @@ token signature via JWKS (cached), checks the audience, and extracts scopes and 
 MCP clients that implement [OAuth 2.0 Protected Resource Metadata (RFC 9728)](https://www.rfc-editor.org/rfc/rfc9728)
 first fetch `/.well-known/oauth-protected-resource` from the MCP server to discover the Auth0
 authorization server URL before starting the OAuth flow.
+
+### Sign-in entitlement
+
+An end-user sign-in through LFX succeeds only when the LFX account has been enabled for MCP access
+and the sign-in comes from a supported client. This is enforced at sign-in, before any request
+reaches this server. The server keeps no list of enabled accounts and does not re-check the
+entitlement: a token that reaches it has already passed. After that, per-request tool registration
+(the read and manage scopes and the staff-only gate) and the user's own LFX permissions upstream
+decide what the caller can see and do. How a community member requests access is described in
+[docs/community-access.md](docs/community-access.md).
 
 ### M2M client credentials
 
@@ -128,7 +140,7 @@ authorization layer. The MCP server acts as the authorization gateway, with diff
 control mechanisms per service:
 
 **LFX Lens** — access requires read scope (`read:all` or `manage:all`) plus staff-equivalent
-status in the caller's MCP JWT. The tool is not registered for callers missing either
+status in the caller's MCP JWT. The Lens-backed tools and their guidance are not registered for callers missing either
 requirement, so no runtime access-check is performed. Staff-equivalent status is satisfied by
 either the `lf_staff` claim (end-user callers whose LDAP groups include `lf-staff` or
 `lf-contractor`) or the machine-account marker (M2M callers, identified by an Auth0 subject

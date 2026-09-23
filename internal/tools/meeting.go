@@ -36,6 +36,40 @@ const pastMeetingRecordingResourceType = "v1_past_meeting_recording"
 // pastMeetingTranscriptResourceType is the resource type filter for past meeting transcript queries.
 const pastMeetingTranscriptResourceType = "v1_past_meeting_transcript"
 
+// Lookup-tag prefixes the meeting service writes on its index documents so a
+// record can be fetched by id. Meeting and summary documents carry `id`, not
+// `uid`, so a `uid:` filter never matches them. The tag alone is not enough
+// either: the meeting id tag is also written on other document types that
+// refer to the same meeting, so every lookup keeps its `Type` filter.
+const (
+	meetingIDTagPrefix            = "meeting_id:"
+	pastMeetingSummaryIDTagPrefix = "past_meeting_summary_id:"
+)
+
+// resourceLookup selects how a single record is fetched from the query
+// service. A non-empty tagPrefix looks the record up by its lookup tag
+// (`<tagPrefix><uid>`); an empty one keeps the `uid:` field filter that
+// registrant and participant documents are matched by.
+type resourceLookup struct {
+	tagPrefix string
+}
+
+// payload builds the single-record query for uid of the given resource type.
+func (l resourceLookup) payload(resourceType, uid string) *querysvc.QueryResourcesPayload {
+	payload := &querysvc.QueryResourcesPayload{
+		Version:  "1",
+		Type:     &resourceType,
+		PageSize: 1,
+		Sort:     "name_asc",
+	}
+	if l.tagPrefix != "" {
+		payload.TagsAll = []string{l.tagPrefix + uid}
+	} else {
+		payload.Filters = []string{fmt.Sprintf("uid:%s", uid)}
+	}
+	return payload
+}
+
 // MeetingConfig holds configuration shared by meeting tools.
 type MeetingConfig struct {
 	// Clients is the shared LFX v2 API client instance. It must be created once
@@ -430,6 +464,12 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		}, nil, nil
 	}
 
+	for _, res := range result.Resources {
+		if res != nil {
+			res.Data = trimMeetingResultFields(res.Data)
+		}
+	}
+
 	type searchResult struct {
 		Resources []*querysvc.Resource `json:"resources"`
 		PageToken *string              `json:"page_token,omitempty"`
@@ -509,7 +549,7 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 	payload := &querysvc.QueryResourcesPayload{
 		Version:  "1",
 		Type:     &resourceType,
-		Filters:  []string{fmt.Sprintf("uid:%s", args.UID)},
+		TagsAll:  []string{meetingIDTagPrefix + args.UID},
 		PageSize: 1,
 		Sort:     "name_asc",
 	}
@@ -533,6 +573,8 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 			IsError: true,
 		}, nil, nil
 	}
+
+	result.Resources[0].Data = trimMeetingResultFields(result.Resources[0].Data)
 
 	prettyJSON, err := json.MarshalIndent(result.Resources[0], "", "  ")
 	if err != nil {
@@ -757,7 +799,7 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 
 // handleGetPastMeetingParticipant implements the get_past_meeting_participant tool logic.
 func handleGetPastMeetingParticipant(ctx context.Context, req *mcp.CallToolRequest, args GetPastMeetingParticipantArgs) (*mcp.CallToolResult, any, error) {
-	return handleGetPastMeetingResource(ctx, req, pastMeetingParticipantResourceType, "past meeting participant", args.UID)
+	return handleGetPastMeetingResource(ctx, req, pastMeetingParticipantResourceType, "past meeting participant", args.UID, resourceLookup{})
 }
 
 // handleSearchPastMeetingSummaries implements the search_past_meeting_summaries tool logic.
@@ -879,11 +921,11 @@ func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequ
 
 // handleGetPastMeetingSummary implements the get_past_meeting_summary tool logic.
 func handleGetPastMeetingSummary(ctx context.Context, req *mcp.CallToolRequest, args GetPastMeetingSummaryArgs) (*mcp.CallToolResult, any, error) {
-	return handleGetPastMeetingResource(ctx, req, pastMeetingSummaryResourceType, "past meeting summary", args.UID)
+	return handleGetPastMeetingResource(ctx, req, pastMeetingSummaryResourceType, "past meeting summary", args.UID, resourceLookup{tagPrefix: pastMeetingSummaryIDTagPrefix})
 }
 
 // handleGetPastMeetingResource is a shared implementation for getting a past meeting resource by UID.
-func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest, resourceType, resourceLabel, uid string) (*mcp.CallToolResult, any, error) {
+func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest, resourceType, resourceLabel, uid string, lookup resourceLookup) (*mcp.CallToolResult, any, error) {
 	logger := newToolLogger(ctx, req)
 
 	if meetingConfig == nil {
@@ -921,13 +963,7 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 
 	logger.InfoContext(ctx, "fetching "+resourceLabel, "uid", uid)
 
-	payload := &querysvc.QueryResourcesPayload{
-		Version:  "1",
-		Type:     &resourceType,
-		Filters:  []string{fmt.Sprintf("uid:%s", uid)},
-		PageSize: 1,
-		Sort:     "name_asc",
-	}
+	payload := lookup.payload(resourceType, uid)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
@@ -1167,6 +1203,12 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 			},
 			IsError: true,
 		}, nil, nil
+	}
+
+	for _, res := range result.Resources {
+		if res != nil {
+			res.Data = trimMeetingResultFields(res.Data)
+		}
 	}
 
 	type searchResult struct {

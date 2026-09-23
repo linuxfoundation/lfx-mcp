@@ -107,11 +107,12 @@ func TestSlugResolveError_contextCanceled(t *testing.T) {
 	}
 }
 
-// TestNewToolLogger_NilSessionUsesServerHandlerOnly pins the guard that lets
-// handlers be exercised directly in unit tests: with no MCP session the
-// logger must not tee into mcp.LoggingHandler (whose Enabled dereferences
-// the session) and must still deliver records to the server-side handler.
-func TestNewToolLogger_NilSessionUsesServerHandlerOnly(t *testing.T) {
+// TestNewToolLogger_UsesServerSideHandler pins that newToolLogger returns the
+// server-side contextual logger regardless of the request's session (MCP
+// client-side logging is a deprecated protocol feature — see helpers.go —
+// so the request argument is accepted for call-site compatibility but not
+// used to build the logger).
+func TestNewToolLogger_UsesServerSideHandler(t *testing.T) {
 	var buf bytes.Buffer
 	sys := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	ctx := WithLogger(context.Background(), sys)
@@ -124,9 +125,6 @@ func TestNewToolLogger_NilSessionUsesServerHandlerOnly(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			buf.Reset()
 			logger := newToolLogger(ctx, req)
-			if _, isTee := logger.Handler().(*teeHandler); isTee {
-				t.Fatal("without a session the logger must not tee into the MCP handler")
-			}
 			logger.InfoContext(ctx, "probe", "k", "v")
 			if !strings.Contains(buf.String(), "probe") || !strings.Contains(buf.String(), "k=v") {
 				t.Errorf("record did not reach the server-side handler: %q", buf.String())

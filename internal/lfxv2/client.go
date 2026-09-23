@@ -236,7 +236,9 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		committeeHTTPClient.DeleteCommitteeDocument(),
 		committeeHTTPClient.GetCurrentWeeklyBrief(),
 		committeeHTTPClient.GenerateWeeklyBrief(),
+		committeeHTTPClient.PreviewGenerateWeeklyBrief(),
 		committeeHTTPClient.UpdateCurrentWeeklyBrief(),
+		committeeHTTPClient.ShareWeeklyBriefToChat(),
 	)
 
 	// Initialize mailing list service client.
@@ -310,6 +312,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		meetingHTTPClient.UpdateItxMeeting(),
 		meetingHTTPClient.GetItxMeetingCount(),
 		meetingHTTPClient.CreateItxRegistrant(),
+		meetingHTTPClient.SelfRegisterItxMeeting(),
 		meetingHTTPClient.GetItxRegistrant(),
 		meetingHTTPClient.UpdateItxRegistrant(),
 		meetingHTTPClient.DeleteItxRegistrant(),
@@ -366,12 +369,14 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		memberHTTPClient.GetB2bOrg(),
 		memberHTTPClient.CreateB2bOrg(),
 		memberHTTPClient.UpdateB2bOrg(),
+		memberHTTPClient.UploadB2bOrgLogo(),
 		memberHTTPClient.GetB2bOrgSettings(),
 		memberHTTPClient.UpdateB2bOrgSettings(),
 		memberHTTPClient.AddB2bOrgSettingsUser(),
 		memberHTTPClient.UpdateB2bOrgSettingsUserRole(),
 		memberHTTPClient.DeleteB2bOrgSettingsUser(),
 		memberHTTPClient.GetProjectMembership(),
+		memberHTTPClient.GetMemberTiers(),
 		memberHTTPClient.GetKeyContact(),
 		memberHTTPClient.CreateKeyContact(),
 		memberHTTPClient.UpdateKeyContact(),
@@ -380,6 +385,12 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		memberHTTPClient.Readyz(),
 		memberHTTPClient.Livez(),
 		memberHTTPClient.DebugVars(),
+		memberHTTPClient.CreateB2bOrgWorkspace(),
+		memberHTTPClient.UpdateB2bOrgWorkspace(),
+		memberHTTPClient.DeleteB2bOrgWorkspace(),
+		memberHTTPClient.AddB2bOrgWorkspaceProject(),
+		memberHTTPClient.BulkAddB2bOrgWorkspaceProjects(),
+		memberHTTPClient.RemoveB2bOrgWorkspaceProject(),
 	)
 
 	// Initialize project service client.
@@ -405,6 +416,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		projectHTTPClient.UpdateProjectBase(),
 		projectHTTPClient.UpdateProjectSettings(),
 		projectHTTPClient.DeleteProject(),
+		projectHTTPClient.ResolveProjectSlug(),
 		projectHTTPClient.Readyz(),
 		projectHTTPClient.Livez(),
 		projectHTTPClient.CreateProjectLink(),

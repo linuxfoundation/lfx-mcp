@@ -58,7 +58,7 @@ type ServiceAuth struct {
 // errors into a CallToolResult with IsError set, so callers can propagate
 // the error directly as the handler's error return value.
 func (s *ServiceAuth) AuthorizeProject(ctx context.Context, req *mcp.CallToolRequest, slug, relation string) (context.Context, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
+	logger := newToolLogger(ctx, req)
 
 	// Extract MCP token.
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)

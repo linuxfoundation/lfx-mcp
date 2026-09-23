@@ -35,58 +35,16 @@ func loggerFromContext(ctx context.Context) *slog.Logger {
 	return slog.Default()
 }
 
-// newToolLogger returns a logger that writes to both the MCP client session
-// (so the AI sees log output) and the server-side contextual logger (so
-// operators see it in server stdout/stderr with session_id/mcp_method
-// pre-bound from context).
+// newToolLogger returns the server-side contextual logger bound by the
+// receiving middleware (session_id/mcp_method pre-bound from context). Use
+// logger.XxxContext(ctx, ...) so the active OTel span's trace_id/span_id are
+// injected into every log record.
 //
-// Use logger.XxxContext(ctx, ...) with the returned logger so the active OTel
-// span's trace_id and span_id are injected into every log record.
-//
-// When the request carries no session (unit tests that call handlers directly),
-// only the server-side handler is used: mcp.LoggingHandler dereferences its
-// session on every Enabled check and would panic.
-func newToolLogger(ctx context.Context, req *mcp.CallToolRequest) *slog.Logger {
-	sysHandler := loggerFromContext(ctx).Handler()
-	if req == nil || req.Session == nil {
-		return slog.New(sysHandler)
-	}
-	mcpHandler := mcp.NewLoggingHandler(req.Session, nil)
-	return slog.New(&teeHandler{mcp: mcpHandler, sys: sysHandler})
-}
-
-// teeHandler is an slog.Handler that forwards every record to two handlers.
-type teeHandler struct {
-	mcp slog.Handler
-	sys slog.Handler
-}
-
-func (t *teeHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return t.mcp.Enabled(ctx, level) || t.sys.Enabled(ctx, level)
-}
-
-func (t *teeHandler) Handle(ctx context.Context, r slog.Record) error {
-	// Best-effort: forward to both, return the first non-nil error.
-	var firstErr error
-	if t.sys.Enabled(ctx, r.Level) {
-		if err := t.sys.Handle(ctx, r); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	if t.mcp.Enabled(ctx, r.Level) {
-		if err := t.mcp.Handle(ctx, r); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	return firstErr
-}
-
-func (t *teeHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &teeHandler{mcp: t.mcp.WithAttrs(attrs), sys: t.sys.WithAttrs(attrs)}
-}
-
-func (t *teeHandler) WithGroup(name string) slog.Handler {
-	return &teeHandler{mcp: t.mcp.WithGroup(name), sys: t.sys.WithGroup(name)}
+// MCP client-side logging (the logging/setLevel capability and
+// notifications/message) is a deprecated protocol feature as of the
+// 2026-07-28 revision; log to stderr/OTel instead of the client session.
+func newToolLogger(ctx context.Context, _ *mcp.CallToolRequest) *slog.Logger {
+	return loggerFromContext(ctx)
 }
 
 // boolPtr returns a pointer to the given bool value. Used for optional

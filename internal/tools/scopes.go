@@ -51,10 +51,14 @@ func IsScopeBlindClient(clientID string) bool {
 }
 
 // DefaultScopes returns the set of scopes the server advertises via the OAuth
-// Protected Resource Metadata endpoint. This is the enforced set plus the
-// standard OIDC scopes that clients typically need for the authorization flow.
+// Protected Resource Metadata endpoint. Only read:all is advertised, plus the
+// standard OIDC scopes clients need for the authorization flow: write tools
+// are registered for every authenticated caller, but their handlers require
+// manage:all at call time and respond with a step-up error when it is
+// missing. This keeps the initial consent screen scoped to read access, and
+// defers the manage:all grant to when the caller actually attempts a write.
 func DefaultScopes() []string {
-	return []string{"openid", "profile", "email", ScopeRead, ScopeManage}
+	return []string{"openid", "profile", "email", ScopeRead}
 }
 
 // ValidateScopes checks a configured scope list for unrecognised entries and
@@ -79,6 +83,34 @@ func ValidateScopes(configured []string, warn func(msg string, args ...any)) []s
 	}
 
 	return configured
+}
+
+// ManageScopeTools is the set of tool names whose handlers mutate data and
+// therefore require manage:all at call time. These tools are registered for
+// every caller holding at least read:all (see newServer in main.go) rather
+// than hidden from tools/list — clients can discover the tool and its schema
+// up front, and only need to complete an OAuth step-up for manage:all when
+// they actually attempt to call one. Enforcement happens in the scope
+// step-up middleware, which returns an error result for a caller lacking
+// manage:all instead of invoking the handler.
+var ManageScopeTools = map[string]bool{
+	"create_committee":              true,
+	"update_committee":              true,
+	"update_committee_settings":     true,
+	"delete_committee":              true,
+	"create_committee_member":       true,
+	"update_committee_member":       true,
+	"delete_committee_member":       true,
+	"create_membership_key_contact": true,
+	"update_membership_key_contact": true,
+	"delete_membership_key_contact": true,
+	"list_discord_roles":            true,
+	"find_discord_role":             true,
+	"find_discord_user":             true,
+	"check_discord_user_role":       true,
+	"assign_discord_role":           true,
+	"list_email_templates":          true,
+	"send_email":                    true,
 }
 
 // HasAnyScope returns true if tokenScopes contains at least one of the

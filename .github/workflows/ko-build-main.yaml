@@ -20,8 +20,10 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: go.mod
       - uses: ko-build/setup-ko@d006021bd0c28d1ce33a07e7943d48b079944c8d # v0.9
@@ -30,10 +32,11 @@ jobs:
       - name: Build and publish lfx-mcp-server image
         env:
           VERSION: development-${{ github.sha }}
+          SHA: ${{ github.sha }}
         run: |
           ko build github.com/linuxfoundation/lfx-mcp/cmd/lfx-mcp-server \
             -B \
             --platform linux/amd64,linux/arm64 \
-            -t ${{ github.sha }} \
+            -t "${SHA}" \
             -t development \
             --sbom spdx

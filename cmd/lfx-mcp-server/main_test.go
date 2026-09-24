@@ -8,8 +8,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	lfxauth "github.com/linuxfoundation/lfx-mcp/internal/auth"
 	"github.com/linuxfoundation/lfx-mcp/internal/tools"
@@ -247,97 +251,87 @@ func TestNewServer_ManageToolsAreListedForReaders(t *testing.T) {
 	}
 }
 
-// TestRequireManageScopeMiddleware_BlocksWithoutManageScope pins the call-time
-// enforcement: a read:all-only caller sees create_committee in tools/list
-// (TestNewServer_ManageToolsAreListedForReaders) but calling it returns a
-// step-up error result rather than invoking the handler.
-func TestRequireManageScopeMiddleware_BlocksWithoutManageScope(t *testing.T) {
-	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
-	if logger == nil {
-		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+// TestRequireManageScopeHTTP_BlocksWithoutManageScope pins the HTTP-layer
+// enforcement: a tools/call POST for a manage:all-gated tool from a
+// read:all-only caller gets a 403 with an insufficient_scope challenge,
+// without reaching the MCP handler.
+func TestRequireManageScopeHTTP_BlocksWithoutManageScope(t *testing.T) {
+	rec, ok := callManageScopeTool(t, "create_committee", []string{tools.ScopeRead})
+	if ok {
+		t.Fatalf("handler must not run for a read:all-only caller")
 	}
-	server := newServer(Config{Tools: []string{"create_committee"}}, "test", reader)
-
-	ctx := context.Background()
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("server connect failed: %v", err)
-	}
-	t.Cleanup(func() { _ = serverSession.Close() })
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client connect failed: %v", err)
-	}
-	t.Cleanup(func() { _ = clientSession.Close() })
-
-	res, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "create_committee", Arguments: map[string]any{}})
-	if err != nil {
-		t.Fatalf("CallTool transport error: %v", err)
-	}
-	assertStepUpError(t, res, "create_committee")
+	assertInsufficientScope(t, rec, "create_committee")
 }
 
-// TestRequireManageScopeMiddleware_BlocksGroupModeAlias pins that the
-// group-mode alias for a manage:all tool (create_group, the group-mode name
-// for create_committee) is blocked identically to its canonical
-// committee-mode name. committeeConfig is left unset here too, so — like
-// TestRequireManageScopeMiddleware_BlocksWithoutManageScope — asserting the
-// exact step-up text (rather than just IsError) is required to prove the
-// middleware, not the "committee tools not configured" fallback, produced
-// the result.
-func TestRequireManageScopeMiddleware_BlocksGroupModeAlias(t *testing.T) {
-	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
-	if logger == nil {
-		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+// TestRequireManageScopeHTTP_BlocksGroupModeAlias pins that the group-mode
+// alias for a manage:all tool (create_group, the group-mode name for
+// create_committee) is blocked identically to its canonical committee-mode
+// name.
+func TestRequireManageScopeHTTP_BlocksGroupModeAlias(t *testing.T) {
+	rec, ok := callManageScopeTool(t, "create_group", []string{tools.ScopeRead})
+	if ok {
+		t.Fatalf("handler must not run for a read:all-only caller")
 	}
-	server := newServer(Config{Tools: []string{"create_group"}, CommitteesAsGroups: true}, "test", reader)
-
-	ctx := context.Background()
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("server connect failed: %v", err)
-	}
-	t.Cleanup(func() { _ = serverSession.Close() })
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client connect failed: %v", err)
-	}
-	t.Cleanup(func() { _ = clientSession.Close() })
-
-	res, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "create_group", Arguments: map[string]any{}})
-	if err != nil {
-		t.Fatalf("CallTool transport error: %v", err)
-	}
-	assertStepUpError(t, res, "create_group")
+	assertInsufficientScope(t, rec, "create_group")
 }
 
-// assertStepUpError asserts that res is exactly the step-up error result
-// requireManageScopeMiddleware returns for toolName, rather than merely IsError.
-// committeeConfig is nil in these tests (create_committee/create_group
-// handlers are never registered against a real config), so a handler that
-// ran to completion would also return an IsError result ("committee tools
-// not configured"); asserting the precise step-up text is what proves the
-// middleware — not the unconfigured-handler fallback — produced the result.
-func assertStepUpError(t *testing.T, res *mcp.CallToolResult, toolName string) {
-	t.Helper()
-	if !res.IsError {
-		t.Fatalf("expected an error result for a read:all-only caller calling %s", toolName)
-	}
-	want := fmt.Sprintf("Error: %q requires the %q scope, which your current session does not have. "+
-		"Reauthorize with elevated permissions and try again.", toolName, tools.ScopeManage)
-	if len(res.Content) != 1 {
-		t.Fatalf("expected exactly one content item, got %d", len(res.Content))
-	}
-	text, ok := res.Content[0].(*mcp.TextContent)
+// TestRequireManageScopeHTTP_AllowsWithManageScope pins that a caller holding
+// manage:all reaches the handler instead of being blocked.
+func TestRequireManageScopeHTTP_AllowsWithManageScope(t *testing.T) {
+	_, ok := callManageScopeTool(t, "create_committee", []string{tools.ScopeManage})
 	if !ok {
-		t.Fatalf("expected TextContent, got %T", res.Content[0])
+		t.Fatalf("handler must run for a manage:all caller")
 	}
-	if text.Text != want {
-		t.Errorf("unexpected step-up error text:\n got:  %q\n want: %q", text.Text, want)
+}
+
+// callManageScopeTool drives requireManageScopeHTTP directly with a
+// synthetic tools/call POST for toolName and a bearer token carrying scopes.
+// The test verifier below treats the bearer value as a comma-separated scope
+// list, so it can be exercised without real JWT verification. It returns the
+// recorder and whether the wrapped handler ran.
+func callManageScopeTool(t *testing.T, toolName string, scopes []string) (*httptest.ResponseRecorder, bool) {
+	t.Helper()
+
+	verifyToken := func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+		return &auth.TokenInfo{Scopes: strings.Split(token, ","), Expiration: time.Now().Add(time.Hour)}, nil
+	}
+	authMiddleware := auth.RequireBearerToken(verifyToken, &auth.RequireBearerTokenOptions{
+		ResourceMetadataURL: "https://example.test/.well-known/oauth-protected-resource",
+	})
+
+	var handlerRan bool
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		handlerRan = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := authMiddleware(requireManageScopeHTTP(Config{}, "https://example.test/.well-known/oauth-protected-resource", next))
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":%q,"arguments":{}}}`, toolName)
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+strings.Join(scopes, ","))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	return rec, handlerRan
+}
+
+// assertInsufficientScope asserts rec is the HTTP 403 insufficient_scope
+// challenge requireManageScopeHTTP returns for toolName.
+func assertInsufficientScope(t *testing.T, rec *httptest.ResponseRecorder, toolName string) {
+	t.Helper()
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rec.Code)
+	}
+	got := rec.Header().Get("WWW-Authenticate")
+	if !strings.Contains(got, `error="insufficient_scope"`) {
+		t.Errorf("WWW-Authenticate missing insufficient_scope: %q", got)
+	}
+	if !strings.Contains(got, `scope="`+tools.ScopeManage+`"`) {
+		t.Errorf("WWW-Authenticate missing required scope: %q", got)
+	}
+	if !strings.Contains(got, toolName) {
+		t.Errorf("WWW-Authenticate missing tool name %q: %q", toolName, got)
 	}
 }
 
@@ -351,7 +345,8 @@ func TestNewServer_ScopeBlindClientGetsAdvertisedScopes(t *testing.T) {
 
 	codexToken := func() *auth.TokenInfo {
 		return &auth.TokenInfo{
-			Scopes: []string{"offline_access"},
+			Scopes:     []string{"offline_access"},
+			Expiration: time.Now().Add(time.Hour),
 			Extra: map[string]any{
 				tools.ClaimClientID: "https://chatgpt.com/oauth/codex/IrVFZga_egXz/client.json",
 			},
@@ -378,36 +373,35 @@ func TestNewServer_ScopeBlindClientGetsAdvertisedScopes(t *testing.T) {
 		}
 	})
 
-	// Pins the fix for the regression Copilot flagged when DefaultScopes grew
-	// manage:all: a scope-blind client with no configured cfg.MCPAPI.Scopes
-	// must fall back to ScopeBlindFallbackScopes (read:all only), not
-	// DefaultScopes, or it would be silently granted manage:all it never
-	// requested.
-	t.Run("default fallback does not grant manage:all", func(t *testing.T) {
+	// A scope-blind client with no configured cfg.MCPAPI.Scopes falls back to
+	// tools.DefaultScopes (read:all and manage:all), matching the default
+	// behavior any other client gets by requesting both scopes up front. It
+	// must be able to both discover and call a write tool without a step-up
+	// error, the same as a compliant client that requested manage:all.
+	t.Run("default fallback grants manage:all", func(t *testing.T) {
 		const manageTool = "create_committee"
-		if logger == nil {
-			logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-		}
-		server := newServer(Config{Tools: []string{manageTool}}, "test", codexToken())
 
-		ctx := context.Background()
-		clientTransport, serverTransport := mcp.NewInMemoryTransports()
-		serverSession, err := server.Connect(ctx, serverTransport, nil)
-		if err != nil {
-			t.Fatalf("server connect failed: %v", err)
+		verifyToken := func(_ context.Context, _ string, _ *http.Request) (*auth.TokenInfo, error) {
+			return codexToken(), nil
 		}
-		t.Cleanup(func() { _ = serverSession.Close() })
-		client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-		clientSession, err := client.Connect(ctx, clientTransport, nil)
-		if err != nil {
-			t.Fatalf("client connect failed: %v", err)
-		}
-		t.Cleanup(func() { _ = clientSession.Close() })
+		authMiddleware := auth.RequireBearerToken(verifyToken, &auth.RequireBearerTokenOptions{
+			ResourceMetadataURL: "https://example.test/.well-known/oauth-protected-resource",
+		})
+		var handlerRan bool
+		next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			handlerRan = true
+			w.WriteHeader(http.StatusOK)
+		})
+		handler := authMiddleware(requireManageScopeHTTP(Config{}, "https://example.test/.well-known/oauth-protected-resource", next))
 
-		res, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: manageTool, Arguments: map[string]any{}})
-		if err != nil {
-			t.Fatalf("CallTool transport error: %v", err)
+		body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":%q,"arguments":{}}}`, manageTool)
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer irrelevant")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if !handlerRan {
+			t.Fatalf("expected %s not to be blocked by the manage:all step-up for a scope-blind client, got status %d", manageTool, rec.Code)
 		}
-		assertStepUpError(t, res, manageTool)
 	})
 }

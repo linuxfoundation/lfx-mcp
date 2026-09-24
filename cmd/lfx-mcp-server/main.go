@@ -5,11 +5,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"expvar"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -637,46 +640,89 @@ func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middle
 	}
 }
 
-// requireManageScopeMiddleware returns middleware that gates tools/call
-// requests for tools listed in tools.ManageScopeTools on manage:all. It does
-// not itself perform or trigger an OAuth step-up — that happens out of band,
-// between the client and the authorization server — it only blocks the call
-// and returns an error tool result telling the caller which scope it needs,
-// rather than a bare protocol-level rejection. canManage reflects whether the
-// current caller's token already carries manage:all (or there is no auth
-// context at all, e.g. stdio mode). The tool remains visible in tools/list
-// regardless, so the client can discover its schema before completing that
-// step-up.
-func requireManageScopeMiddleware(canManage bool) mcp.Middleware {
-	return func(next mcp.MethodHandler) mcp.MethodHandler {
-		if canManage {
-			return next
-		}
-		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
-			if method == "tools/call" {
-				if params, ok := req.GetParams().(*mcp.CallToolParamsRaw); ok {
-					// Group-mode aliases (create_group, update_group, etc.) map to
-					// canonical committee-mode names in ManageScopeTools; canonicalize
-					// before the lookup so group-mode callers get the same enforcement
-					// as committee-mode callers.
-					name := params.Name
-					if canonical, ok := groupToCommitteeToolNames[name]; ok {
-						name = canonical
-					}
-					if tools.ManageScopeTools[name] {
-						return &mcp.CallToolResult{
-							Content: []mcp.Content{&mcp.TextContent{
-								Text: fmt.Sprintf("Error: %q requires the %q scope, which your current session does not have. "+
-									"Reauthorize with elevated permissions and try again.", params.Name, tools.ScopeManage),
-							}},
-							IsError: true,
-						}, nil
-					}
-				}
+// resolveScopes derives canRead/canManage for callerToken, applying the
+// scope-blind-client fallback (see tools.IsScopeBlindClient) when the token
+// carries no MCP scope at all. A nil callerToken (stdio mode) grants both.
+func resolveScopes(cfg Config, callerToken *auth.TokenInfo) (canRead, canManage bool) {
+	var callerScopes []string
+	if callerToken != nil {
+		callerScopes = callerToken.Scopes
+	}
+	canManage = callerToken == nil || tools.HasAnyScope(callerScopes, []string{tools.ScopeManage})
+	canRead = callerToken == nil || canManage || tools.HasAnyScope(callerScopes, []string{tools.ScopeRead})
+
+	if !canRead {
+		if clientID := tools.ClientID(callerToken); tools.IsScopeBlindClient(clientID) {
+			advertised := cfg.MCPAPI.Scopes
+			if len(advertised) == 0 {
+				advertised = tools.DefaultScopes()
 			}
-			return next(ctx, method, req)
+			canManage = tools.HasAnyScope(advertised, []string{tools.ScopeManage})
+			canRead = canManage || tools.HasAnyScope(advertised, []string{tools.ScopeRead})
 		}
 	}
+
+	return canRead, canManage
+}
+
+// requireManageScopeHTTP returns middleware that enforces manage:all on
+// tools/call requests targeting a tool in tools.ManageScopeTools. It inspects
+// the JSON-RPC method/tool name in the request body, and — when the caller
+// lacks manage:all — responds with HTTP 403 and a
+// WWW-Authenticate: Bearer error="insufficient_scope" challenge per the MCP
+// authorization spec, instead of invoking the MCP handler. It must run after
+// bearer-token verification, so auth.TokenInfoFromContext reflects the
+// caller. Requests that aren't a gated tools/call pass through unchanged,
+// with the body restored for the next handler.
+func requireManageScopeHTTP(cfg Config, resourceMetadataURL string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+
+		var msg struct {
+			Method string `json:"method"`
+			Params struct {
+				Name string `json:"name"`
+			} `json:"params"`
+		}
+		if err := json.Unmarshal(body, &msg); err != nil || msg.Method != "tools/call" || msg.Params.Name == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Group-mode aliases (create_group, etc.) map to canonical
+		// committee-mode names in ManageScopeTools.
+		name := msg.Params.Name
+		if canonical, ok := groupToCommitteeToolNames[name]; ok {
+			name = canonical
+		}
+		if !tools.ManageScopeTools[name] {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if _, canManage := resolveScopes(cfg, auth.TokenInfoFromContext(r.Context())); canManage {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		desc := fmt.Sprintf("%s requires the %s scope, which your current session does not have",
+			msg.Params.Name, tools.ScopeManage)
+		w.Header().Set("WWW-Authenticate", fmt.Sprintf(
+			`Bearer error="insufficient_scope", scope="%s", resource_metadata="%s", error_description="%s"`,
+			tools.ScopeManage, resourceMetadataURL, desc,
+		))
+		w.WriteHeader(http.StatusForbidden)
+	})
 }
 
 // newServer creates and configures a new MCP server with registered tools.
@@ -707,47 +753,12 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 
 	// Determine which scope classes and custom claims the caller holds.
 	// A nil callerToken means no auth (stdio mode) — register everything.
-	var callerScopes []string
-	if callerToken != nil {
-		callerScopes = callerToken.Scopes
-	}
-	canManage := callerToken == nil || tools.HasAnyScope(callerScopes, []string{tools.ScopeManage})
-	canRead := callerToken == nil || canManage || tools.HasAnyScope(callerScopes, []string{tools.ScopeRead})
-
-	// Some OAuth clients ignore the scopes advertised in our protected resource
-	// metadata and in the WWW-Authenticate challenge, so their tokens arrive
-	// with no MCP scope at all. Registering nothing leaves the user with an
-	// empty tool list and no error to act on, and these clients offer no way to
-	// choose scopes, so the omission carries no intent to withhold consent.
-	// Treat them as having requested the scopes we advertise, which is what a
-	// compliant client would have sent. Advertising a narrower set therefore
-	// narrows this fallback too. The client grant already authorises those
-	// scopes, and tools still enforce per-user authorization through the
-	// caller's own exchanged token.
-	//
-	// Reaching here with canRead false already implies the token carries neither
-	// ScopeRead nor ScopeManage.
-	if !canRead {
+	canRead, _ := resolveScopes(cfg, callerToken)
+	if callerToken != nil && !canRead {
 		if clientID := tools.ClientID(callerToken); tools.IsScopeBlindClient(clientID) {
-			advertised := cfg.MCPAPI.Scopes
-			if len(advertised) == 0 {
-				// Use the scope-blind-safe fallback here, not tools.DefaultScopes:
-				// that list now includes manage:all (advertised in the PRM so a
-				// client can request it explicitly), but a scope-blind client
-				// never requested anything, so it must never be silently granted
-				// write access. An operator who explicitly configures
-				// cfg.MCPAPI.Scopes to include manage:all is making a deliberate
-				// choice and is unaffected by this fallback.
-				advertised = tools.ScopeBlindFallbackScopes()
-			}
-			canManage = tools.HasAnyScope(advertised, []string{tools.ScopeManage})
-			canRead = canManage || tools.HasAnyScope(advertised, []string{tools.ScopeRead})
 			// newServer runs per request, so this is logged at debug to avoid
 			// repeating a condition that is constant for the client.
-			logger.With(
-				"client_id", clientID,
-				"advertised_scopes", advertised,
-			).Debug("client requested no MCP scopes; granting the advertised scopes")
+			logger.With("client_id", clientID).Debug("client requested no MCP scopes; granting the advertised scopes")
 		}
 	}
 
@@ -758,13 +769,10 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	// staff-equivalent for tool registration purposes.
 	isStaff := callerToken == nil || tools.IsLFStaff(callerToken) || tools.IsMachineAccount(callerToken)
 
-	// Enforce manage:all at call time for write tools. Write tools are
-	// registered below for every caller holding at least read:all (see
-	// tools.ManageScopeTools), rather than hidden from tools/list entirely, so
-	// that clients can discover them and their schemas before completing an
-	// OAuth step-up flow for manage:all. This middleware is what actually
-	// blocks the call when that step-up hasn't happened yet.
-	server.AddReceivingMiddleware(requireManageScopeMiddleware(canManage))
+	// manage:all is enforced at the HTTP layer (requireManageScopeHTTP), not
+	// here: write tools are registered below for every caller holding at
+	// least read:all so clients can discover them before completing an OAuth
+	// step-up.
 
 	// Register tools based on configuration and caller scopes.
 	enabledTools := make(map[string]bool)
@@ -1144,28 +1152,10 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 		// Note: RequireBearerTokenOptions.Scopes is deliberately left unset. The
 		// SDK requires every listed scope to be present, which would reject valid
 		// read:all-only tokens and bypass the OR/implication logic in
-		// newServer(). Scope enforcement instead happens per-tool: read access
-		// gates tool registration in newServer(), and manage:all is enforced at
-		// call time by requireManageScopeMiddleware, which returns a step-up error
-		// result rather than a transport-level 403. We previously wrapped this
-		// handler to append a "scope" parameter to the WWW-Authenticate header on
-		// 401/403s (see the removed withChallengeScopes helper) to work around a
-		// ChatGPT connector issue; that never actually solved it, and hand-rolling
-		// step-up signaling at the HTTP layer duplicates what the SDK's own OAuth
-		// client support (auth.AuthorizationCodeHandler, StreamableClientTransport.
-		// OAuthHandler) already does when a server returns a real 401/403 with
-		// insufficient_scope — so we deliberately did not bring it back. Both
-		// read:all and manage:all are advertised in the PRM's scopesSupported
-		// (tools.DefaultScopes) so a client can request both up front if it
-		// chooses to; manage:all is still enforced only at call time, and the
-		// step-up error result (not the PRM) is what tells a caller which tool
-		// needs it. Emitting a spec-compliant per-call HTTP 403 instead of a tool
-		// result would require intercepting requests before the SDK's JSON-RPC
-		// dispatch to inspect params.name, which the SDK does not expose a hook
-		// for today (see go-sdk's extractErrorStatus in streamable.go, which only
-		// maps MethodNotFound/InvalidParams to HTTP status, not arbitrary codes) —
-		// tracked as a follow-up rather than implemented here.
-		mcpHandler = authMiddleware(handler)
+		// resolveScopes(). Read access gates tool registration in newServer();
+		// manage:all is enforced per tools/call by requireManageScopeHTTP below,
+		// which runs after authMiddleware so it can read the verified TokenInfo.
+		mcpHandler = authMiddleware(requireManageScopeHTTP(cfg, resourceMetadataURL, handler))
 		logger.Info("OAuth bearer token verification enabled for /mcp endpoint", "audience", audience)
 	}
 

@@ -61,22 +61,15 @@ func IsScopeBlindClient(clientID string) bool {
 // (not the PRM) is what tells a caller which scope it is missing for a
 // specific tool.
 //
-// Do not reuse this list as the assumed-grant fallback for scope-blind
-// clients (see ScopeBlindFallbackScopes) — a client that never requested any
-// scope must never be silently treated as holding manage:all.
+// This is also the fallback assumed for a scope-blind client (see
+// IsScopeBlindClient) that presents a token carrying no MCP scope at all:
+// such a client offers no consent UI to choose scopes from, so it is treated
+// like any other client requesting the full advertised set, matching the
+// default behavior every compliant client gets by requesting both scopes up
+// front. Users rely on per-call "ask" policies for write tools regardless of
+// how the scope was granted, not on withholding manage:all here.
 func DefaultScopes() []string {
 	return []string{"openid", "profile", "email", ScopeRead, ScopeManage}
-}
-
-// ScopeBlindFallbackScopes returns the scopes assumed for a client that
-// ignores our advertised scopes entirely (see IsScopeBlindClient) and so
-// presents a token carrying no MCP scope at all. Unlike DefaultScopes, this
-// deliberately excludes ScopeManage: such a client never explicitly
-// requested any scope, so it must never be silently granted write access it
-// never asked for. It still needs at least read:all so it isn't left with an
-// empty tool list and no error to act on.
-func ScopeBlindFallbackScopes() []string {
-	return []string{"openid", "profile", "email", ScopeRead}
 }
 
 // ValidateScopes checks a configured scope list for unrecognised entries and
@@ -109,8 +102,9 @@ func ValidateScopes(configured []string, warn func(msg string, args ...any)) []s
 // than hidden from tools/list — clients can discover the tool and its schema
 // up front, and only need to complete an OAuth step-up for manage:all when
 // they actually attempt to call one. Enforcement happens in
-// requireManageScopeMiddleware, which returns an error result for a caller lacking
-// manage:all instead of invoking the handler.
+// requireManageScopeHTTP (cmd/lfx-mcp-server/main.go), which returns an HTTP
+// 403 with an insufficient_scope challenge for a caller lacking manage:all,
+// instead of invoking the handler.
 var ManageScopeTools = map[string]bool{
 	"create_committee":              true,
 	"update_committee":              true,

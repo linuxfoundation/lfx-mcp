@@ -59,11 +59,28 @@ func TestHostCredentials_NotCountable(t *testing.T) {
 // calls whose response carries the host key, and those response types, are
 // added by hostKeyProducerPatterns.
 //
-// The bare "host_key" field name is deliberately not matched: the meeting
-// result field list names it, and that list is not what this guard relies on.
+// The serialized field name host_key is matched too, so a handler cannot
+// read or return data["host_key"] from a query result unnoticed. The known
+// existing references are listed in hostCredentialAllowedLines.
 var hostCredentialSourcePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)host_?credential`),
 	regexp.MustCompile(`\bHostKey\b`),
+	regexp.MustCompile(`\bhost_key\b`),
+}
+
+// hostCredentialAllowedLines are the existing source lines the scan accepts,
+// keyed by path relative to the repository root and matched on the trimmed
+// line. Each one is reviewed and does not return host credentials to a
+// caller. Remove an entry when its line goes away; never add one without the
+// gating decision the scan asks for.
+var hostCredentialAllowedLines = map[string][]string{
+	// The meeting result field list removes host_key from meeting results.
+	"internal/tools/meeting_result_fields.go": {`"host_key":           {},`},
+	// Endpoint wiring for the meeting-service client; no tool calls these.
+	"internal/lfxv2/client.go": {
+		"meetingHTTPClient.CreateItxMeeting(),",
+		"meetingHTTPClient.GetItxMeeting(),",
+	},
 }
 
 // hostKeyProducerPatterns returns a pattern for every meeting-service client
@@ -132,7 +149,10 @@ func hostKeyProducerPatterns(t *testing.T) []*regexp.Regexp {
 // the patterns.
 func TestHostCredentials_NoSourceReference(t *testing.T) {
 	patterns := append(slices.Clone(hostCredentialSourcePatterns), hostKeyProducerPatterns(t)...)
-	roots := []string{".", filepath.Join("..", "..", "cmd")}
+	// Scan every non-test Go file under internal and cmd, so a helper package
+	// that wraps a host-credential fetch is caught as well as a tool.
+	repoRoot := filepath.Join("..", "..")
+	roots := []string{filepath.Join(repoRoot, "internal"), filepath.Join(repoRoot, "cmd")}
 	scanned := 0
 	for _, root := range roots {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -147,7 +167,15 @@ func TestHostCredentials_NoSourceReference(t *testing.T) {
 				return err
 			}
 			scanned++
+			rel, err := filepath.Rel(repoRoot, path)
+			if err != nil {
+				return err
+			}
+			allowed := hostCredentialAllowedLines[filepath.ToSlash(rel)]
 			for i, line := range strings.Split(string(src), "\n") {
+				if slices.Contains(allowed, strings.TrimSpace(line)) {
+					continue
+				}
 				for _, re := range patterns {
 					if re.MatchString(line) {
 						t.Errorf("%s:%d refers to meeting host credentials (%s): %q\n"+

@@ -53,6 +53,94 @@ func TestHostCredentials_NotCountable(t *testing.T) {
 	}
 }
 
+// callerQueryTypePatterns match the obvious ways a tool could pass a
+// caller-supplied value as the query-service resource type: into a query
+// payload's Type field, into a resourceType variable, or into the lookup
+// helper. A tool that did so could reach the host credentials type at run
+// time without naming it in source, so the source scan below would not see
+// it. The patterns are crude; the gating review a new tool gets is the real
+// control, and this only makes the premise visible.
+var callerQueryTypePatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\bType\s*:\s*&?args\.`),
+	regexp.MustCompile(`\.Type\s*=\s*&?args\.`),
+	regexp.MustCompile(`\b\w*[rR]esourceType\w*\s*:?=\s*args\.`),
+	regexp.MustCompile(`\.payload\(\s*args\.`),
+}
+
+// callerQueryTypeAllowedLines are the reviewed lines where a query type comes
+// from the caller, keyed like hostCredentialAllowedLines. count_lfx_resources
+// checks the type against countableResourceTypes first, which
+// TestHostCredentials_NotCountable pins.
+var callerQueryTypeAllowedLines = map[string][]string{
+	"internal/tools/count.go": {"resourceType := args.Type"},
+}
+
+// TestHostCredentials_NoOtherCallerQueryType pins that count_lfx_resources is
+// the only tool whose query-service type comes from the caller. If it fails,
+// a tool is forwarding a caller-supplied type: restrict it to an allowlist
+// that excludes the host credentials type, pin that in a test like
+// TestHostCredentials_NotCountable, and then list the line here.
+func TestHostCredentials_NoOtherCallerQueryType(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	unused := make(map[string]map[string]int, len(callerQueryTypeAllowedLines))
+	for file, lines := range callerQueryTypeAllowedLines {
+		unused[file] = make(map[string]int, len(lines))
+		for _, line := range lines {
+			unused[file][normalizeSourceLine(line)]++
+		}
+	}
+	scanned := 0
+	for _, root := range []string{filepath.Join(repoRoot, "internal"), filepath.Join(repoRoot, "cmd")} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			src, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			scanned++
+			rel, err := filepath.Rel(repoRoot, path)
+			if err != nil {
+				return err
+			}
+			rel = filepath.ToSlash(rel)
+			for i, line := range strings.Split(string(src), "\n") {
+				normalized := normalizeSourceLine(line)
+				if unused[rel][normalized] > 0 {
+					unused[rel][normalized]--
+					continue
+				}
+				for _, re := range callerQueryTypePatterns {
+					if re.MatchString(line) {
+						t.Errorf("%s:%d passes a caller-supplied query-service type (%s): %q\n"+
+							"Only count_lfx_resources may, through countableResourceTypes; "+
+							"see TestHostCredentials_NoOtherCallerQueryType.", rel, i+1, re, normalized)
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walking %s: %v", root, err)
+		}
+	}
+	if scanned == 0 {
+		t.Fatal("no Go source was scanned; the guard would pass vacuously")
+	}
+	for file, lines := range unused {
+		for line, n := range lines {
+			if n > 0 {
+				t.Errorf("callerQueryTypeAllowedLines entry %s: %q matched no source line; "+
+					"remove the entry now that the line is gone", file, line)
+			}
+		}
+	}
+}
+
 // hostCredentialSourcePatterns match the ways non-test Go source could start
 // reading meeting host credentials: the dedicated document type (and any
 // identifier built on it) and the host key field. The meeting-service client

@@ -69,27 +69,43 @@ var hostCredentialSourcePatterns = []*regexp.Regexp{
 }
 
 // hostCredentialAllowedLines are the existing source lines the scan accepts,
-// keyed by path relative to the repository root and matched on the trimmed
-// line. Each one is reviewed and does not return host credentials to a
-// caller. Each entry covers one occurrence, and an entry that matches no line
-// fails the test, so it must be removed when its line goes away. Never add
-// one without the gating decision the scan asks for.
+// keyed by path relative to the repository root and matched with runs of
+// whitespace collapsed (see normalizeSourceLine), so gofmt realigning a map
+// does not break a match. Each one is reviewed and does not return host
+// credentials to a caller. Each entry covers one occurrence, and an entry
+// that matches no line fails the test, so it must be removed when its line
+// goes away. Never add one without the gating decision the scan asks for.
 var hostCredentialAllowedLines = map[string][]string{
 	// The meeting result field list removes host_key from meeting results.
-	"internal/tools/meeting_result_fields.go": {`"host_key":           {},`},
-	// Endpoint wiring for the meeting-service client; no tool calls these.
-	"internal/lfxv2/client.go": {
-		"meetingHTTPClient.CreateItxMeeting(),",
-		"meetingHTTPClient.GetItxMeeting(),",
-	},
+	"internal/tools/meeting_result_fields.go": {`"host_key": {},`},
+}
+
+// meetingClientWiringFile builds the meeting-service client, wiring every
+// endpoint whether or not a tool calls it. A wiring line for a host-key
+// producer (see hostKeyProducerPatterns) is accepted there, and only there;
+// the set follows the pinned client, so it needs no entry here and cannot go
+// stale when an upgrade removes the producer.
+const meetingClientWiringFile = "internal/lfxv2/client.go"
+
+// meetingClientWiringLine matches one endpoint wiring line in
+// meetingClientWiringFile, capturing the method name.
+var meetingClientWiringLine = regexp.MustCompile(`^meetingHTTPClient\.(\w+)\(\),$`)
+
+// normalizeSourceLine trims a source line and collapses internal runs of
+// whitespace to one space.
+func normalizeSourceLine(line string) string {
+	return strings.Join(strings.Fields(line), " ")
 }
 
 // hostKeyProducerPatterns returns a pattern for every meeting-service client
 // method whose response carries a HostKey field, at any depth, and for every
-// response type that declares one. They are derived from the pinned client by
-// reflection, so a method or type added upstream is covered without editing
-// this test.
-func hostKeyProducerPatterns(t *testing.T) []*regexp.Regexp {
+// response type that declares one, and the names of those methods. They are
+// derived from the pinned client by reflection, so a method or type added
+// upstream is covered without editing this test. An empty result is valid:
+// from meeting-service v0.12.7 the host key is no longer on any client
+// response. The derivation is checked against a probe type instead, so a
+// broken derivation still fails.
+func hostKeyProducerPatterns(t *testing.T) ([]*regexp.Regexp, map[string]bool) {
 	t.Helper()
 	typeNames := make(map[string]bool)
 	var carries func(rt reflect.Type, seen map[reflect.Type]bool) bool
@@ -120,25 +136,37 @@ func hostKeyProducerPatterns(t *testing.T) []*regexp.Regexp {
 		return found
 	}
 
+	// The probe nests the field the way generated responses do (a pointer to
+	// a slice of structs). If the derivation cannot find it, an empty list
+	// from the client would mean nothing.
+	type probeHostKeyHolder struct{ HostKey *string }
+	type probeResponse struct{ Items []*probeHostKeyHolder }
+	if !carries(reflect.TypeOf(&probeResponse{}), make(map[reflect.Type]bool)) {
+		t.Fatal("the HostKey derivation does not find a nested HostKey field in a probe type; " +
+			"it is broken, and the guard would miss a fetch path")
+	}
+	delete(typeNames, "probeHostKeyHolder")
+
 	var patterns []*regexp.Regexp
+	methods := make(map[string]bool)
 	client := reflect.TypeOf(&meetingservice.Client{})
 	for i := 0; i < client.NumMethod(); i++ {
 		m := client.Method(i)
 		for j := 0; j < m.Type.NumOut(); j++ {
 			if carries(m.Type.Out(j), make(map[reflect.Type]bool)) {
 				patterns = append(patterns, regexp.MustCompile(`\b`+m.Name+`\b`))
+				methods[m.Name] = true
 				break
 			}
 		}
 	}
-	if len(patterns) == 0 {
-		t.Fatal("no meeting-service client method returns a HostKey field; " +
-			"the derivation is broken or the upstream contract changed, and the guard would miss the fetch path")
+	if len(methods) == 0 {
+		t.Log("no meeting-service client method returns a HostKey field; only the fixed patterns apply")
 	}
 	for name := range typeNames {
 		patterns = append(patterns, regexp.MustCompile(`\b`+name+`\b`))
 	}
-	return patterns
+	return patterns, methods
 }
 
 // TestHostCredentials_NoSourceReference is a deliberately crude source scan.
@@ -149,7 +177,8 @@ func hostKeyProducerPatterns(t *testing.T) []*regexp.Regexp {
 // scope and staff gate) and a reviewed update to this guard, not a tweak to
 // the patterns.
 func TestHostCredentials_NoSourceReference(t *testing.T) {
-	patterns := append(slices.Clone(hostCredentialSourcePatterns), hostKeyProducerPatterns(t)...)
+	producerPatterns, producers := hostKeyProducerPatterns(t)
+	patterns := append(slices.Clone(hostCredentialSourcePatterns), producerPatterns...)
 	// Scan every non-test Go file under internal and cmd, so a helper package
 	// that wraps a host-credential fetch is caught as well as a tool.
 	repoRoot := filepath.Join("..", "..")
@@ -162,7 +191,7 @@ func TestHostCredentials_NoSourceReference(t *testing.T) {
 	for file, lines := range hostCredentialAllowedLines {
 		unused[file] = make(map[string]int, len(lines))
 		for _, line := range lines {
-			unused[file][line]++
+			unused[file][normalizeSourceLine(line)]++
 		}
 	}
 	for _, root := range roots {
@@ -182,17 +211,24 @@ func TestHostCredentials_NoSourceReference(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			allowed := unused[filepath.ToSlash(rel)]
+			rel = filepath.ToSlash(rel)
+			allowed := unused[rel]
 			for i, line := range strings.Split(string(src), "\n") {
-				if trimmed := strings.TrimSpace(line); allowed[trimmed] > 0 {
-					allowed[trimmed]--
+				normalized := normalizeSourceLine(line)
+				if allowed[normalized] > 0 {
+					allowed[normalized]--
 					continue
+				}
+				if rel == meetingClientWiringFile {
+					if m := meetingClientWiringLine.FindStringSubmatch(normalized); m != nil && producers[m[1]] {
+						continue
+					}
 				}
 				for _, re := range patterns {
 					if re.MatchString(line) {
 						t.Errorf("%s:%d refers to meeting host credentials (%s): %q\n"+
 							"No tool may count, search or fetch meeting host credentials without a deliberate gating change; "+
-							"see TestHostCredentials_NoSourceReference.", path, i+1, re, strings.TrimSpace(line))
+							"see TestHostCredentials_NoSourceReference.", rel, i+1, re, normalized)
 					}
 				}
 			}

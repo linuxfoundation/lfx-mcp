@@ -86,14 +86,14 @@ func listAllToolsForStaff(t *testing.T, cfg Config) []*mcp.Tool {
 	return res.Tools
 }
 
-// TestToolsList_NoHostCredentials pins that no tool, as a client sees it in
+// TestNewServer_NoHostCredentialsInToolsList pins that no tool, as a client sees it in
 // tools/list, advertises meeting host keys or host credentials: not in its
 // name, title, description, input schema or output schema. It runs with every
 // tool enabled for a staff caller, so every registration branch is covered,
 // in both committee and group terminology. A tool that starts offering host
 // credentials needs a deliberate gating change in newServer and a reviewed
 // update to this test.
-func TestToolsList_NoHostCredentials(t *testing.T) {
+func TestNewServer_NoHostCredentialsInToolsList(t *testing.T) {
 	names := everyRegisteredToolName(t)
 	for _, asGroups := range []bool{false, true} {
 		listed := listAllToolsForStaff(t, Config{Tools: names, CommitteesAsGroups: asGroups})

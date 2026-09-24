@@ -374,6 +374,52 @@ return &mcp.CallToolResult{
 }, nil, nil
 ```
 
+### Query-backed search results
+
+The query service returns only the records the caller can view. By design,
+an empty page looks the same whether nothing matched or nothing matching is
+visible, and the service walks past pages where the caller can see nothing,
+so an empty page with a `page_token` only means more pages remain. Every
+search tool backed by the query service follows one result contract so
+agents do not read an empty page as proof of absence:
+
+- **Output type**: return a package-level result type as the handler's
+  concrete `Out`, never `any` or a function-local struct, so the tool
+  publishes an `outputSchema`. For a plain page of resources, return
+  `resourceSearchResult` built by `newResourceSearchResult`; do not add
+  another type with the same fields. Its items are `searchResource` values
+  (plain `Type`/`ID` strings and a `Data` object), not `querysvc.Resource`.
+  Prefer plain types over pointers and `any` where a plain type works: the
+  SDK's schema generator marks pointers as nullable and publishes `any` as a
+  bare `true` schema (see lfx-mcp#154).
+- **Warnings**: carry a top-level `warnings` key (`json:"warnings,omitempty"`)
+  filled only by the shared `searchWarnings` helper, passing whether the
+  request itself carried a `page_token` (a continuation).
+  A more specific statement of the same event (such as the roster-coverage
+  note on `search_committee_members`) replaces the generic warning; it is
+  not added next to it, so it must keep the generic warning's visibility
+  caveat. The one addition is `search_meetings`: when it shortens a
+  meeting's occurrence list to the occurrences that fit the query, it sets
+  `occurrences_omitted` in that meeting's `Data` and appends one occurrence
+  note, pointing to `get_meeting` for the full list, after any access
+  warning.
+- **One text block**: return exactly one `TextContent`, the indented JSON of
+  the same value returned as structured output. Do not prepend warning
+  blocks.
+- **Errors**: a handler with a typed `Out` returns a failure as
+  `nil, <zero value>, toolError(msg)`, never as an `IsError` result next to a
+  zero value: the SDK publishes any non-error output as structured content,
+  and an empty result next to an error reads as an empty page. Error results
+  carry no structured output.
+- **Wording**: say only what the caller can see and what to do next. Never
+  report counts of, or claim the existence of, records the caller cannot
+  see.
+
+`search_past_meeting_participants` is the one exception to the output type:
+its shape depends on `count_only`, so its `Out` is `any` and it publishes no
+`outputSchema`. It still returns its page as structured content, the same
+value as its JSON text, with the same `warnings` key.
+
 ### Tool Annotations
 
 All tools should include a `mcp.ToolAnnotations` struct to provide metadata hints to MCP clients (e.g., Claude). Annotations help clients decide how to present tools and whether to confirm before calling them.
@@ -506,18 +552,30 @@ LFID (our Auth0-based identity provider) does **not** support Dynamic Client Reg
 
 ### Tool Error Responses
 
+The SDK turns a plain Go error returned by a handler (for example
+`toolError(msg)` or `fmt.Errorf(...)`) into an `IsError` tool result whose
+text is `err.Error()` and which carries no structured content. Only a
+`*jsonrpc.Error` becomes a JSON-RPC protocol error. When the handler returns
+a nil error, the SDK publishes any non-nil output as structured content, even
+next to an `IsError` result.
+
 ```go
-// Return error in tool result (not JSON-RPC error)
+// Handler with a typed Out (such as the query-backed search tools): return
+// the failure as an error, so no zero-value output is published next to it.
+return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search meetings", err))
+
+// Handler whose Out is `any` and which returns nil output: an IsError
+// result is equivalent (errorResult builds one).
 return &mcp.CallToolResult{
     Content: []mcp.Content{
         &mcp.TextContent{Text: "Error: " + err.Error()},
     },
     IsError: true,
 }, nil, nil
-
-// Return JSON-RPC error for invalid requests
-return nil, nil, fmt.Errorf("invalid parameter: %s", param)
 ```
+
+See the **Errors** rule under
+[Query-backed search results](#query-backed-search-results).
 
 ### MCP Protocol Errors
 

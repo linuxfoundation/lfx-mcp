@@ -94,6 +94,17 @@ func URL(s string) string {
 	return signedLinkParam.ReplaceAllString(s, "${1}"+Mask)
 }
 
+// Error returns err's message with signed-link query parameters masked, for
+// logging. A failed request's error can carry the full request URL (a
+// *url.Error prints it), so an error from an HTTP call is never logged raw.
+// It returns "" for a nil error.
+func Error(err error) string {
+	if err == nil {
+		return ""
+	}
+	return URL(err.Error())
+}
+
 // maskHeaderLine masks the value of a "Name: value" line when Name is a
 // credential header, keeping the authentication scheme where there is one.
 func maskHeaderLine(line string) string {

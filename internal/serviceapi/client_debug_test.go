@@ -294,3 +294,29 @@ func TestServiceDebugTransport_ReadErrorLogMasksSignedLink(t *testing.T) {
 		t.Errorf("the logged URL must have its signature masked, got:\n%s", out)
 	}
 }
+
+// failingRoundTripper fails every request the way net/http does: with a
+// *url.Error that prints the full request URL.
+type failingRoundTripper struct{}
+
+func (failingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return nil, &url.Error{Op: req.Method, URL: req.URL.String(), Err: errors.New("dial tcp: connection refused")}
+}
+
+func TestServiceDebugTransport_TransportErrorLogMasksSignedLink(t *testing.T) {
+	// Test value only: not a real credential.
+	const signature = "test-signature-value"
+	client, logs := newDebugClientForTest(t, failingRoundTripper{})
+	query := url.Values{"X-Amz-Signature": {signature}}
+	var urlErr *url.Error
+	if _, _, err := client.Get(context.Background(), "/v1/onboarding/status", query); !errors.As(err, &urlErr) {
+		t.Fatalf("the transport error must fail the call, got %v", err)
+	}
+	out := logs.String()
+	if !strings.Contains(out, "outbound request failed") {
+		t.Errorf("the transport failure must be logged, got:\n%s", out)
+	}
+	if strings.Contains(out, signature) || !strings.Contains(out, "X-Amz-Signature=[REDACTED]") {
+		t.Errorf("the logged error must have its signature masked, got:\n%s", out)
+	}
+}

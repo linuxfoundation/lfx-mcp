@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -309,5 +310,32 @@ func TestDebugTransport_MasksMeetingPasscodesInLogOnly(t *testing.T) {
 		if !strings.Contains(out, kept) {
 			t.Errorf("the debug log must keep %q, got:\n%s", kept, out)
 		}
+	}
+}
+
+// failingRoundTripper fails every request the way net/http does: with a
+// *url.Error that prints the full request URL.
+type failingRoundTripper struct{}
+
+func (failingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return nil, &url.Error{Op: req.Method, URL: req.URL.String(), Err: errors.New("dial tcp: connection refused")}
+}
+
+func TestDebugTransport_TransportErrorLogMasksSignedLink(t *testing.T) {
+	dt, logs := newDebugTransportForTest(failingRoundTripper{})
+	req, err := http.NewRequest(http.MethodGet, "https://files.example.test/att-7/agenda.pdf?X-Amz-Signature="+debugTestSignature, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var urlErr *url.Error
+	if _, err := dt.RoundTrip(req); !errors.As(err, &urlErr) {
+		t.Fatalf("the transport error must be returned unchanged, got %v", err)
+	}
+	out := logs.String()
+	if !strings.Contains(out, "outbound request failed") {
+		t.Errorf("the transport failure must be logged, got:\n%s", out)
+	}
+	if strings.Contains(out, debugTestSignature) || !strings.Contains(out, "X-Amz-Signature=[REDACTED]") {
+		t.Errorf("the logged error must have its signature masked, got:\n%s", out)
 	}
 }

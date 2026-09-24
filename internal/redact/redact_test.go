@@ -4,6 +4,8 @@
 package redact
 
 import (
+	"errors"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -256,4 +258,19 @@ func TestWireDump_MasksMeetingPasscodeFields(t *testing.T) {
 		`{"uid":"m-2","host_key":"`+Mask+`"}`,
 		`{"uid":"m-3","password":"`+Mask+`","passcode":"`+Mask+`","meeting_password":"`+Mask+`","after":"kept"}`,
 	)
+}
+
+func TestError(t *testing.T) {
+	if got := Error(nil); got != "" {
+		t.Errorf("Error(nil) = %q, want empty", got)
+	}
+	err := &url.Error{
+		Op:  "Get",
+		URL: "https://files.example.test/a.pdf?X-Amz-Signature=abc&X-Amz-Date=20260101T000000Z",
+		Err: errors.New("dial tcp: connection refused"),
+	}
+	want := `Get "https://files.example.test/a.pdf?X-Amz-Signature=` + Mask + `&X-Amz-Date=20260101T000000Z": dial tcp: connection refused`
+	if got := Error(err); got != want {
+		t.Errorf("Error()\n got %q\nwant %q", got, want)
+	}
 }

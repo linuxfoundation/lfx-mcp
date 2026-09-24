@@ -516,14 +516,14 @@ type debugTransport struct {
 func (dt *debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	reqDump, err := httputil.DumpRequestOut(req, true)
 	if err != nil {
-		dt.logger.Error("failed to dump outbound request", "error", err)
+		dt.logger.Error("failed to dump outbound request", "error", redact.Error(err))
 	} else {
 		dt.logger.Debug("lfxv2 outbound request", "dump", redact.WireDump(reqDump))
 	}
 
 	resp, err := dt.transport.RoundTrip(req)
 	if err != nil {
-		dt.logger.Error("lfxv2 outbound request failed", "error", err, "url", redact.URL(req.URL.String()))
+		dt.logger.Error("lfxv2 outbound request failed", "error", redact.Error(err), "url", redact.URL(req.URL.String()))
 		return nil, err
 	}
 
@@ -537,17 +537,17 @@ func (dt *debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	body, readErr := io.ReadAll(resp.Body)
 	if cerr := resp.Body.Close(); cerr != nil {
-		dt.logger.Warn("failed to close inbound response body", "error", cerr, "url", redact.URL(req.URL.String()))
+		dt.logger.Warn("failed to close inbound response body", "error", redact.Error(cerr), "url", redact.URL(req.URL.String()))
 	}
 	if readErr != nil {
-		dt.logger.Error("failed to read inbound response body", "error", readErr, "url", redact.URL(req.URL.String()))
+		dt.logger.Error("failed to read inbound response body", "error", redact.Error(readErr), "url", redact.URL(req.URL.String()))
 		return nil, fmt.Errorf("reading %s response body: %w", req.URL.Path, readErr)
 	}
 	resp.Body = io.NopCloser(bytes.NewReader(body))
 
 	respDump, err := httputil.DumpResponse(resp, true)
 	if err != nil {
-		dt.logger.Error("failed to dump inbound response", "error", err)
+		dt.logger.Error("failed to dump inbound response", "error", redact.Error(err))
 	} else {
 		dt.logger.Debug("lfxv2 inbound response", "dump", redact.WireDump(respDump))
 	}

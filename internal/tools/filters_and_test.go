@@ -5,7 +5,10 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -211,7 +214,7 @@ func TestSearchCommitteeMembers_EmptyWithProjectNotesNoCommittees(t *testing.T) 
 	api.Respond(resourcesPath, page(nil, ""))
 	api.Respond(countPath, `{"count": 0, "has_more": false}`)
 
-	res, _, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{
+	res, out, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{
 		ProjectUID: "P1",
 		Name:       "Test User",
 	})
@@ -223,14 +226,36 @@ func TestSearchCommitteeMembers_EmptyWithProjectNotesNoCommittees(t *testing.T) 
 	}
 	assertRosterCoverageCount(t, api, "P1")
 	text := allResultText(t, res)
-	if !strings.Contains(text, rosterCoverageNoneNote) {
+	none := fmt.Sprintf(rosterCoverageNoneNote, "committees")
+	if !strings.Contains(text, none) {
 		t.Errorf("expected the no-committees note, got %q", text)
 	}
-	if strings.Contains(text, rosterCoverageNoMatchNote) {
+	if strings.Contains(text, "matched these filters") {
 		t.Error("must not also carry the no-match note")
 	}
-	if first, ok := res.Content[0].(*mcp.TextContent); !ok || first.Text != rosterCoverageNoneNote {
-		t.Error("the roster-coverage note must be the first content block")
+	// The roster note is the only warning: it replaces the generic one.
+	assertSingleBlockWarnings(t, res, out.Warnings, []string{none})
+}
+
+// assertSingleBlockWarnings checks that a search result is one JSON text
+// block whose warnings key equals both the structured output's warnings and
+// want.
+func assertSingleBlockWarnings(t *testing.T, res *mcp.CallToolResult, structured, want []string) {
+	t.Helper()
+	if len(res.Content) != 1 {
+		t.Fatalf("expected exactly one content block, got %d", len(res.Content))
+	}
+	if !reflect.DeepEqual(structured, want) {
+		t.Errorf("structured warnings: want %q, got %q", want, structured)
+	}
+	var text struct {
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal([]byte(res.Content[0].(*mcp.TextContent).Text), &text); err != nil {
+		t.Fatalf("result is not JSON: %v", err)
+	}
+	if !reflect.DeepEqual(text.Warnings, structured) {
+		t.Errorf("text warnings %q differ from structured warnings %q", text.Warnings, structured)
 	}
 }
 
@@ -239,7 +264,7 @@ func TestSearchCommitteeMembers_EmptyWithProjectNotesNoMatch(t *testing.T) {
 	api.Respond(resourcesPath, page(nil, ""))
 	api.Respond(countPath, `{"count": 3, "has_more": false}`)
 
-	res, _, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{
+	res, out, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{
 		ProjectUID:       "P1",
 		OrganizationName: "Oracle",
 	})
@@ -251,11 +276,39 @@ func TestSearchCommitteeMembers_EmptyWithProjectNotesNoMatch(t *testing.T) {
 	}
 	assertRosterCoverageCount(t, api, "P1")
 	text := allResultText(t, res)
-	if !strings.Contains(text, rosterCoverageNoMatchNote) {
+	noMatch := fmt.Sprintf(rosterCoverageNoMatchNote, "committees")
+	if !strings.Contains(text, noMatch) {
 		t.Errorf("expected the no-match note, got %q", text)
 	}
-	if strings.Contains(text, rosterCoverageNoneNote) {
+	if strings.Contains(text, "none are visible to you") {
 		t.Error("must not also carry the no-committees note")
+	}
+	// The committee count is access-filtered, so the note replacing the
+	// generic warning must keep its visibility caveat and never claim that
+	// no member record matched at all.
+	for _, want := range []string{"no member record visible to you matched", "results cover only records you can view"} {
+		if !strings.Contains(noMatch, want) {
+			t.Errorf("no-match note must say %q: %q", want, noMatch)
+		}
+	}
+	assertSingleBlockWarnings(t, res, out.Warnings, []string{noMatch})
+}
+
+func TestSearchGroupMembers_RosterNoteSaysGroups(t *testing.T) {
+	api := setupCommitteeTest(t)
+	api.Respond(resourcesPath, page(nil, ""))
+	api.Respond(countPath, `{"count": 3, "has_more": false}`)
+
+	res, out, err := handleSearchCommitteeMembersGroupMode(context.Background(), stubCallToolRequest(), SearchGroupMembersArgs{ProjectUID: "P1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error result: %s", allResultText(t, res))
+	}
+	assertSingleBlockWarnings(t, res, out.Warnings, []string{fmt.Sprintf(rosterCoverageNoMatchNote, "groups")})
+	if strings.Contains(allResultText(t, res), "committee") {
+		t.Errorf("group-mode warnings must not say committee: %q", out.Warnings)
 	}
 }
 
@@ -349,13 +402,15 @@ func TestSearchCommitteeMembers_CountFailureDropsNote(t *testing.T) {
 	api.Respond(resourcesPath, page(nil, ""))
 	// countPath unscripted: the stub answers 404.
 
-	res, _, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{ProjectUID: "P1"})
+	res, out, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{ProjectUID: "P1"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if res.IsError {
 		t.Fatalf("a failed coverage count must not fail the search: %s", allResultText(t, res))
 	}
+	// Without the roster note the generic empty-page warning stands.
+	assertSingleBlockWarnings(t, res, out.Warnings, searchWarnings("committee members", 0, 10, false, false))
 	if n := len(api.RequestsTo(countPath)); n != 1 {
 		t.Errorf("expected one count attempt, got %d", n)
 	}

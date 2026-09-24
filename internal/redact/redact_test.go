@@ -177,6 +177,16 @@ func TestURL(t *testing.T) {
 			want: "https://files.example.test/a.pdf?v=1&amp;amp;token=" + Mask,
 		},
 		{
+			name: "JSON-escaped HTML separator",
+			in:   `https://files.example.test/a.pdf?v=1\u0026amp;token=secret-value`,
+			want: `https://files.example.test/a.pdf?v=1\u0026amp;token=` + Mask,
+		},
+		{
+			name: "HTML numeric-entity separators",
+			in:   "https://files.example.test/a.pdf?v=1&#38;sig=s1&#x26;Signature=s2",
+			want: "https://files.example.test/a.pdf?v=1&#38;sig=" + Mask + "&#x26;Signature=" + Mask,
+		},
+		{
 			name: "fragment after a masked value is kept",
 			in:   "https://files.example.test/a.pdf?sig=abc#page=2",
 			want: "https://files.example.test/a.pdf?sig=" + Mask + "#page=2",

@@ -9,29 +9,25 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // getPastMeetingText calls get_past_meeting against a stubbed upstream answer
-// and returns the tool's error text.
+// and returns the tool's error text. The handler reports an upstream failure
+// as a returned error, which the SDK sends to the client as the text of an
+// error result (see "Tool Error Responses" in AGENTS.md).
 func getPastMeetingText(t *testing.T, status int, body string) string {
 	t.Helper()
 	api := setupMeetingLookupTest(t)
 	api.RespondStatus("/itx/past_meetings/abc", status, body)
 
 	res, _, err := handleGetPastMeeting(context.Background(), stubCallToolRequest(), GetPastMeetingArgs{UID: "abc"})
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
+	if err == nil {
+		t.Fatalf("expected the upstream failure as a returned error, got result %+v", res)
 	}
-	if res == nil || !res.IsError || len(res.Content) == 0 {
-		t.Fatalf("expected an error result, got %+v", res)
+	if res != nil {
+		t.Fatalf("expected no result next to the error, got %+v", res)
 	}
-	text, ok := res.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent, got %T", res.Content[0])
-	}
-	return text.Text
+	return err.Error()
 }
 
 func TestGetPastMeeting_RefusalWithoutBodyShowsAccessMessage(t *testing.T) {

@@ -172,6 +172,11 @@ func TestURL(t *testing.T) {
 			want: "https://files.example.test/a.pdf?v=1&amp;X-Amz-Signature=" + Mask,
 		},
 		{
+			name: "twice HTML-escaped separator",
+			in:   "https://files.example.test/a.pdf?v=1&amp;amp;token=secret-value",
+			want: "https://files.example.test/a.pdf?v=1&amp;amp;token=" + Mask,
+		},
+		{
 			name: "names that only end in a secret name are kept",
 			in:   "https://api.example.test/query/resources?page_token=p1&type=meeting&next_sig=n",
 			want: "https://api.example.test/query/resources?page_token=p1&type=meeting&next_sig=n",
@@ -207,14 +212,15 @@ func TestWireDump_MasksMeetingPasscodeFields(t *testing.T) {
 		`"passcode":"test-passcode","host_key":"test-host-key","recording_password":"test-rec-pw",` +
 		`"password":"test-join-page-pw","meeting_password": "test-past-pw","other_host_key":9,` +
 		`"host_key_hint":"kept","note":"escaped \"quote\" kept"}}],"page_token":"p2"}` + "\n" +
-		`{"uid":"m-2","host_key":654321}`
+		`{"uid":"m-2","host_key":654321}` + "\n" +
+		`{"uid":"m-3","password":987.65,"passcode":7e9,"meeting_password":-3.5E+4,"after":"kept"}`
 	dump := "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" + body
 
 	got := WireDump([]byte(dump))
 
 	for _, secret := range []string{
 		"test-join-passcode", "test-passcode", "test-host-key", "test-rec-pw",
-		"test-join-page-pw", "test-past-pw", "654321",
+		"test-join-page-pw", "test-past-pw", "654321", "987", ".65", "7e9", "3.5E", "E+4",
 	} {
 		if strings.Contains(got, secret) {
 			t.Errorf("secret %q must be masked, got:\n%s", secret, got)
@@ -233,5 +239,6 @@ func TestWireDump_MasksMeetingPasscodeFields(t *testing.T) {
 		`"note":"escaped \"quote\" kept"`,
 		`"page_token":"p2"`,
 		`{"uid":"m-2","host_key":"`+Mask+`"}`,
+		`{"uid":"m-3","password":"`+Mask+`","passcode":"`+Mask+`","meeting_password":"`+Mask+`","after":"kept"}`,
 	)
 }

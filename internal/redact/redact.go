@@ -44,12 +44,12 @@ var schemeHeaders = map[string]bool{
 // generic sig, token and access_token parameters, and pwd, the passcode
 // parameter of the join_url on meeting records. The parameter must follow
 // "?" or "&", or the escaped forms of "&" that a JSON ("\u0026") or HTML
-// ("&amp;") body uses, so names that merely end in one of these (page_token)
+// ("&amp;", once or more) body uses, so names that merely end in one of these (page_token)
 // are kept.
 // Parameters that carry no secret, such as X-Amz-Date and X-Amz-Expires,
 // are kept because they are what explains an expired link.
 var signedLinkParam = regexp.MustCompile(
-	`(?i)((?:[?&]|\\u0026|&amp;)(?:x-amz-signature|x-amz-credential|x-amz-security-token|signature|sig|token|access_token|pwd)=)[^&\s"'\\<>]*`,
+	`(?i)((?:\?|&(?:amp;)*|\\u0026)(?:x-amz-signature|x-amz-credential|x-amz-security-token|signature|sig|token|access_token|pwd)=)[^&\s"'\\<>]*`,
 )
 
 // passcodeField matches a JSON member whose key is one of the meeting
@@ -59,7 +59,7 @@ var signedLinkParam = regexp.MustCompile(
 // password and meeting_password). Matching is exact and case-sensitive, like
 // the field trimming in the tools package, so other keys are kept.
 var passcodeField = regexp.MustCompile(
-	`("(?:passcode|host_key|recording_password|password|meeting_password)"\s*:\s*)(?:"(?:[^"\\]|\\.)*"|-?[0-9]+)`,
+	`("(?:passcode|host_key|recording_password|password|meeting_password)"\s*:\s*)(?:"(?:[^"\\]|\\.)*"|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)`,
 )
 
 // headerBodySeparator ends the header block of an HTTP/1.x wire dump.

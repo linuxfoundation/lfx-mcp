@@ -173,28 +173,57 @@ func TestParticipants_ScopePrecedenceAndFilters(t *testing.T) {
 	}
 }
 
+// participantWarnings returns the warnings key of a one-block participant
+// result.
+func participantWarnings(t *testing.T, res *mcp.CallToolResult) []any {
+	t.Helper()
+	if len(res.Content) != 1 {
+		t.Fatalf("expected exactly one content block, got %d", len(res.Content))
+	}
+	w, _ := resultJSON(t, res)["warnings"].([]any)
+	return w
+}
+
 func TestParticipants_EmptyPageNotes(t *testing.T) {
-	// Empty with no token: nothing visible.
+	// Empty with no token: nothing visible, in warnings rather than note.
 	api := setupParticipantTest(t)
 	api.Respond(resourcesPath, page(nil, ""))
-	res, _, _ := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p"})
-	if !strings.Contains(allResultText(t, res), "visible to your identity") {
-		t.Errorf("empty page must carry the visibility note, got %s", allResultText(t, res))
+	res, structured, _ := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p"})
+	w := participantWarnings(t, res)
+	if len(w) != 1 || !strings.Contains(w[0].(string), "matching these filters are visible to you") {
+		t.Errorf("empty page must carry the visibility warning, got %v", w)
 	}
-	if strings.Contains(allResultText(t, res), "WARNING") {
-		t.Error("no page warning expected without a page token")
+	// The page is also the structured result, so its warnings reach clients
+	// that read structured content.
+	ps, ok := structured.(participantSearchResult)
+	if !ok {
+		t.Fatalf("structured result must be the participant page, got %T", structured)
+	}
+	if len(ps.Warnings) != 1 || ps.Warnings[0] != w[0] {
+		t.Errorf("structured warnings %q differ from text warnings %v", ps.Warnings, w)
+	}
+	if note, _ := resultJSON(t, res)["note"].(string); strings.Contains(note, "visible") {
+		t.Errorf("the visibility statement belongs in warnings, not note: %q", note)
 	}
 
-	// Empty with a token: access-filtered page, warning as before.
+	// Empty with a token: continue with page_token, no prepended block.
 	api2 := setupParticipantTest(t)
 	api2.Respond(resourcesPath, page(nil, "next"))
 	res2, _, _ := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p"})
-	text := allResultText(t, res2)
-	if !strings.Contains(text, "WARNING: some results on this page were excluded") {
-		t.Errorf("page warning missing: %s", text)
+	w2 := participantWarnings(t, res2)
+	if len(w2) != 1 || !strings.Contains(w2[0].(string), "continue with page_token") {
+		t.Errorf("empty page with a token must say to continue, got %v", w2)
 	}
 	if out := resultJSON(t, res2); out["page_token"] != "next" {
 		t.Errorf("page token must be passed through, got %v", out["page_token"])
+	}
+
+	// Empty terminal page of a walk: no warning.
+	api3 := setupParticipantTest(t)
+	api3.Respond(resourcesPath, page(nil, ""))
+	res3, _, _ := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p", PageToken: "prev"})
+	if w3 := participantWarnings(t, res3); w3 != nil {
+		t.Errorf("an empty continuation page carries no warning, got %v", w3)
 	}
 }
 
@@ -342,6 +371,12 @@ func TestParticipants_DateRangeMaxMeetingsTruncates(t *testing.T) {
 	if !strings.Contains(out["note"].(string), "max_meetings") {
 		t.Errorf("truncation note missing: %v", out["note"])
 	}
+	// The expanded meetings held no participants, but the unexpanded ones
+	// were never checked: the truncation note is the only instruction, with
+	// no "none visible" warning next to it.
+	if w := participantWarnings(t, res); w != nil {
+		t.Errorf("a truncated empty date range must carry no warning, got %v", w)
+	}
 	if len(api.Requests()) != 3 {
 		t.Errorf("must stop after the cap: 1 meeting page + 2 participant drains, got %d", len(api.Requests()))
 	}
@@ -454,7 +489,7 @@ func TestParticipantsDescriptionAdvertisesNewFilters(t *testing.T) {
 	if n := len(tool.Description); n > 1000 {
 		t.Errorf("description is %d bytes, keep it under 1000", n)
 	}
-	for _, want := range []string{"committee UID", "date_from", "attended_only", "org_name", "count_only", "dedupe", "visible to the caller"} {
+	for _, want := range []string{"committee UID", "date_from", "attended_only", "org_name", "count_only", "dedupe", "visible to the caller", "meetings and participant records visible to the caller"} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}
@@ -725,7 +760,8 @@ func TestTools1_MissingTokenFailsClosed(t *testing.T) {
 		t.Error("participants: must fail closed without a token")
 	}
 	prAPI := setupProjectTest(t)
-	if res, _, _ := handleSearchProjects(context.Background(), req, SearchProjectsArgs{}); !res.IsError || len(prAPI.Requests()) != 0 {
+	// A typed handler reports failure as its error value (see toolError).
+	if _, _, err := handleSearchProjects(context.Background(), req, SearchProjectsArgs{}); err == nil || len(prAPI.Requests()) != 0 {
 		t.Error("projects: must fail closed without a token")
 	}
 	sAPI := setupOrgSeatsTest(t)

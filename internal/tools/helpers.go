@@ -216,8 +216,13 @@ func goaMessage(e goaTypedError) string {
 	return unquoted
 }
 
-// If the error contains "response code 403" it returns a user-friendly
-// access-denied message instead of the raw internal error string.
+// If the error is an upstream 401 or 403 with no service-authored message
+// (lfxv2.IsRefusalWithoutServiceMessage), or contains "response code 403", it
+// returns a user-friendly access-denied message instead of the raw internal
+// error string. A 401, or a 403 on an endpoint that declares it, that carries
+// the service's own message (with the fields its error body requires) is shown
+// as sent; a 403 on an endpoint that does not declare it always gets the
+// access-denied message.
 // The op argument is a short description of the operation (e.g.
 // "failed to get project") and is prefixed to both 403 and non-403 error messages.
 // Goa typed errors, whose Error() is blank, are rendered through
@@ -227,7 +232,7 @@ func friendlyAPIError(op string, err error) string {
 		op = strings.ToUpper(op[:1]) + op[1:]
 	}
 	text := upstreamErrorText(err)
-	if strings.Contains(text, "response code 403") {
+	if lfxv2.IsRefusalWithoutServiceMessage(err) || strings.Contains(text, "response code 403") {
 		return op + ": " + accessDeniedMessage
 	}
 	return op + ": " + text

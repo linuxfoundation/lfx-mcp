@@ -22,7 +22,9 @@ https://mcp.lfx.dev/mcp
 
 You sign in through LFX with your Linux Foundation account (LFID) the first time you connect. Sign-in succeeds only when your account has been enabled for MCP access and you use one of the supported clients below; to request access, see [Using the LFX MCP Server as a community member](docs/community-access.md). After sign-in, what you can see and do follows your LFX permissions; some analytics tools are available only to Linux Foundation staff (see [LFX Lens](#lfx-lens)).
 
-**The following clients are set up to work with the LFX MCP Server.** Client-specific instructions (menu paths, settings names, etc.) are subject to change as vendors update their products; consult the client's own documentation if the steps below no longer match what you see. Please file an issue to request additional client support. Running the LFX MCP Server as a local (stdio) MCP server is not supported at this time.
+**The following clients are set up to work with the LFX MCP Server.** Client-specific instructions (menu paths, settings names, etc.) are subject to change as vendors update their products; consult the client's own documentation if the steps below no longer match what you see. Please file an issue to request additional client support.
+
+Running the server locally in stdio mode is also supported for development and debugging; see [Local (stdio) mode](#local-stdio-mode) below.
 
 ### Goose
 
@@ -218,6 +220,29 @@ Run:
 npx @modelcontextprotocol/inspector
 ```
 
+### Local (stdio) mode
+
+The server can run locally over stdio, authenticating with a bearer token supplied directly by the operator instead of the normal SSO, client-token-exchange (CTE), or M2M flows used in HTTP mode. This is intended to be used together with [`lfx-cli`](https://github.com/linuxfoundation/lfx-cli), which mints and refreshes that token on your behalf:
+
+```bash
+# Log in once (interactive device-code flow).
+lfx auth login
+
+# Run the server in stdio mode, passing a fresh token from lfx-cli.
+LFXMCP_LFX_TOKEN="$(lfx auth token)" \
+  LFXMCP_LFX_API_URL="https://lfx-api.v2.cluster.lfx.dev" \
+  ./bin/lfx-mcp-server -mode=stdio
+```
+
+Notes:
+
+- `lfx_token`/`LFXMCP_LFX_TOKEN` is only accepted in stdio mode; the server refuses to start in HTTP mode with it set, since HTTP mode is a shared, multi-tenant surface and a single static token must never be used to answer requests for arbitrary callers.
+- The token is used as-is for all LFX API calls — no token exchange, CTE, or M2M grant is performed for it. M2M flows to non-LFX downstream services (e.g. LFX Lens) are unaffected and continue to use their own configured client credentials.
+- The server reads the token's expiry without verifying its signature — no authorization decision is ever made from this unverified peek; the LFX API itself independently verifies and authorizes every call — and refuses to start if it has already expired. Otherwise, the server automatically stops when the token expires; run it under a supervisor loop that re-invokes `lfx auth token` and restarts the server so the token stays fresh.
+- The server also warns (without refusing to start) if the token's `aud` claim doesn't appear to match `-lfx_api_url`/`LFXMCP_LFX_API_URL`, since a mismatched audience would otherwise only surface as a confusing 401 on the first LFX API call.
+- Because there is no MCP-level OAuth in stdio mode, all tools enabled via `-tools`/`LFXMCP_TOOLS` are registered without the read/manage scope gating that applies to HTTP mode.
+- The `user_info` tool also accepts `-lfx_token`/`LFXMCP_LFX_TOKEN` as its `/userinfo` bearer in stdio mode (the LF identity provider issues it with `openid profile email` scope, which `/userinfo` accepts regardless of the token's LFX API audience).
+
 ## Available Tools
 
 ### Projects
@@ -331,10 +356,9 @@ These tools are available only to Linux Foundation staff; they do not appear in 
 
 ### Utility
 
-| Tool          | Description                                         |
-|---------------|-----------------------------------------------------|
-| `hello_world` | Simple greeting tool for testing MCP connectivity   |
-| `user_info`   | Get the authenticated user's OpenID Connect profile |
+| Tool        | Description                                         |
+|-------------|------------------------------------------------------|
+| `user_info` | Get the authenticated user's OpenID Connect profile |
 
 ## License
 

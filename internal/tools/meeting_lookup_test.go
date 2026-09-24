@@ -218,6 +218,7 @@ func assertMeetingJoinFieldsTrimmed(t *testing.T, data map[string]any) {
 
 func TestSearchMeetings_TrimsJoinFields(t *testing.T) {
 	api := setupMeetingLookupTest(t)
+	pinMeetingSearchNow(t, beforeJoinFieldsOccurrences)
 	api.Respond(resourcesPath, singleResourcePage("v1_meeting", "meeting-1", meetingDocWithJoinFields))
 
 	res, _, _ := handleSearchMeetings(context.Background(), stubCallToolRequest(), SearchMeetingsArgs{ProjectUID: "11111111-1111-1111-1111-111111111111"})

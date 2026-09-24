@@ -396,7 +396,11 @@ agents do not read an empty page as proof of absence:
   A more specific statement of the same event (such as the roster-coverage
   note on `search_committee_members`) replaces the generic warning; it is
   not added next to it, so it must keep the generic warning's visibility
-  caveat.
+  caveat. The one addition is `search_meetings`: when it shortens a
+  meeting's occurrence list to the occurrences that fit the query, it sets
+  `occurrences_omitted` in that meeting's `Data` and appends one occurrence
+  note, pointing to `get_meeting` for the full list, after any access
+  warning.
 - **One text block**: return exactly one `TextContent`, the indented JSON of
   the same value returned as structured output. Do not prepend warning
   blocks.

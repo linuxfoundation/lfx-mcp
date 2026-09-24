@@ -251,6 +251,8 @@ Two scope constants are defined in `internal/tools/scopes.go`:
 
 In stdio mode (no auth token), both flags are `true` and all enabled tools are registered without restriction.
 
+**Staff-only tools.** The LFX Lens-backed tools and their guidance (the names in `staffOnlyTools`, `cmd/lfx-mcp-server/main_test.go`) are registered only when `canRead && isStaff`. `isStaff` is true for LF staff user tokens (`tools.IsLFStaff`), machine tokens (`tools.IsMachineAccount`) and a nil token (stdio, or HTTP with no `-mcp_api.auth_servers` configured); for every other caller these tools never appear in `tools/list`. A new tool of that kind uses the same gate and is added to `staffOnlyTools`, which `TestNewServer_LensToolsAreStaffOnly` checks.
+
 ### Tool Implementation Steps
 
 1. **Create a new file** in `internal/tools/` (e.g., `my_tool.go`)

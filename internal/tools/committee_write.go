@@ -629,6 +629,7 @@ func handleUpdateCommittee(ctx context.Context, req *mcp.CallToolRequest, args U
 		Calendar:        base.Calendar,
 		DisplayName:     base.DisplayName,
 		ParentUID:       base.ParentUID,
+		ExternalSources: base.ExternalSources,
 	}
 
 	// Override with provided args.

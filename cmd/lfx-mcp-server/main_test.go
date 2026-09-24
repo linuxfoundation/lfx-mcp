@@ -335,6 +335,68 @@ func assertInsufficientScope(t *testing.T, rec *httptest.ResponseRecorder, toolN
 	}
 }
 
+// TestRequireManageScopeHTTP_BlocksBatchedCall pins that a manage:all-gated
+// tool named inside a legacy JSON-RPC batch (an array of requests, still
+// accepted by go-sdk for protocol versions negotiated below 2025-06-18) is
+// blocked identically to a single request naming the same tool.
+func TestRequireManageScopeHTTP_BlocksBatchedCall(t *testing.T) {
+	verifyToken := func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+		return &auth.TokenInfo{Scopes: strings.Split(token, ","), Expiration: time.Now().Add(time.Hour)}, nil
+	}
+	authMiddleware := auth.RequireBearerToken(verifyToken, &auth.RequireBearerTokenOptions{
+		ResourceMetadataURL: "https://example.test/.well-known/oauth-protected-resource",
+	})
+
+	var handlerRan bool
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		handlerRan = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := authMiddleware(requireManageScopeHTTP(Config{}, "https://example.test/.well-known/oauth-protected-resource", next))
+
+	body := `[
+		{"jsonrpc":"2.0","id":1,"method":"tools/list"},
+		{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"create_committee","arguments":{}}}
+	]`
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+tools.ScopeRead)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if handlerRan {
+		t.Fatalf("handler must not run for a batch containing a manage:all-gated call")
+	}
+	assertInsufficientScope(t, rec, "create_committee")
+}
+
+// TestRequireManageScopeHTTP_RejectsOversizedBody pins that the body read in
+// requireManageScopeHTTP is capped at mcp.DefaultMaxRequestBodyBytes, matching
+// the limit the downstream SDK handler itself enforces, so a caller cannot
+// force an unbounded read here before that limit would otherwise apply.
+func TestRequireManageScopeHTTP_RejectsOversizedBody(t *testing.T) {
+	verifyToken := func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+		return &auth.TokenInfo{Scopes: strings.Split(token, ","), Expiration: time.Now().Add(time.Hour)}, nil
+	}
+	authMiddleware := auth.RequireBearerToken(verifyToken, &auth.RequireBearerTokenOptions{
+		ResourceMetadataURL: "https://example.test/.well-known/oauth-protected-resource",
+	})
+
+	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatalf("handler must not run for an oversized body")
+	})
+	handler := authMiddleware(requireManageScopeHTTP(Config{}, "https://example.test/.well-known/oauth-protected-resource", next))
+
+	oversized := strings.Repeat("a", int(mcp.DefaultMaxRequestBodyBytes)+1)
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(oversized))
+	req.Header.Set("Authorization", "Bearer "+tools.ScopeManage)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d", rec.Code)
+	}
+}
+
 // TestNewServer_ScopeBlindClientGetsAdvertisedScopes covers clients that ignore
 // the scopes advertised in the PRM and so present a valid token carrying no
 // MCP scope. They are treated as having requested the advertised set, since

@@ -698,13 +698,18 @@ func resolveScopes(cfg Config, callerToken *auth.TokenInfo) (canRead, canManage 
 
 // requireManageScopeHTTP returns middleware that enforces manage:all on
 // tools/call requests targeting a tool in tools.ManageScopeTools. It inspects
-// the JSON-RPC method/tool name in the request body, and — when the caller
-// lacks manage:all — responds with HTTP 403 and a
+// the JSON-RPC method/tool name in the request body — a single request or a
+// batch (array) of requests, since go-sdk v1.7.0 still accepts batches for
+// protocol versions negotiated below 2025-06-18 — and, when the caller lacks
+// manage:all, responds with HTTP 403 and a
 // WWW-Authenticate: Bearer error="insufficient_scope" challenge per the MCP
 // authorization spec, instead of invoking the MCP handler. It must run after
 // bearer-token verification, so auth.TokenInfoFromContext reflects the
-// caller. Requests that aren't a gated tools/call pass through unchanged,
-// with the body restored for the next handler.
+// caller. The body is capped at mcp.DefaultMaxRequestBodyBytes, matching the
+// limit the downstream handler itself enforces, so a caller cannot force an
+// unbounded read here before that limit would otherwise apply. Requests
+// that aren't a gated tools/call pass through unchanged, with the body
+// restored for the next handler.
 func requireManageScopeHTTP(cfg Config, resourceMetadataURL string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -712,31 +717,23 @@ func requireManageScopeHTTP(cfg Config, resourceMetadataURL string, next http.Ha
 			return
 		}
 
-		body, err := io.ReadAll(r.Body)
+		// Match the SDK's own request-body limit so a caller cannot force an
+		// unbounded read here before the downstream handler ever applies it.
+		limited := http.MaxBytesReader(w, r.Body, mcp.DefaultMaxRequestBodyBytes)
+		body, err := io.ReadAll(limited)
 		if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
 
-		var msg struct {
-			Method string `json:"method"`
-			Params struct {
-				Name string `json:"name"`
-			} `json:"params"`
-		}
-		if err := json.Unmarshal(body, &msg); err != nil || msg.Method != "tools/call" || msg.Params.Name == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Group-mode aliases (create_group, etc.) map to canonical
-		// committee-mode names in ManageScopeTools.
-		name := msg.Params.Name
-		if canonical, ok := groupToCommitteeToolNames[name]; ok {
-			name = canonical
-		}
-		if !tools.ManageScopeTools[name] {
+		names, ok := manageScopeToolCallNames(body)
+		if !ok || len(names) == 0 {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -747,13 +744,55 @@ func requireManageScopeHTTP(cfg Config, resourceMetadataURL string, next http.Ha
 		}
 
 		desc := fmt.Sprintf("%s requires the %s scope, which your current session does not have",
-			msg.Params.Name, tools.ScopeManage)
+			names[0], tools.ScopeManage)
 		w.Header().Set("WWW-Authenticate", fmt.Sprintf(
 			`Bearer error="insufficient_scope", scope="%s", resource_metadata="%s", error_description="%s"`,
 			tools.ScopeManage, resourceMetadataURL, desc,
 		))
 		w.WriteHeader(http.StatusForbidden)
 	})
+}
+
+// manageScopeToolCallNames parses body as either a single JSON-RPC request or
+// a batch (array) of requests — go-sdk v1.7.0 still accepts batches for
+// protocol versions negotiated below 2025-06-18 — and returns the original
+// (un-canonicalized) name of every tools/call target found that requires
+// manage:all. ok is false only when body isn't valid JSON in either shape; an
+// empty, non-nil slice means the body parsed but named no gated tool.
+func manageScopeToolCallNames(body []byte) (names []string, ok bool) {
+	var single json.RawMessage
+	if err := json.Unmarshal(body, &single); err != nil {
+		return nil, false
+	}
+
+	var batch []json.RawMessage
+	if err := json.Unmarshal(body, &batch); err != nil {
+		batch = []json.RawMessage{single}
+	}
+
+	for _, raw := range batch {
+		var msg struct {
+			Method string `json:"method"`
+			Params struct {
+				Name string `json:"name"`
+			} `json:"params"`
+		}
+		if err := json.Unmarshal(raw, &msg); err != nil || msg.Method != "tools/call" || msg.Params.Name == "" {
+			continue
+		}
+
+		// Group-mode aliases (create_group, etc.) map to canonical
+		// committee-mode names in ManageScopeTools.
+		name := msg.Params.Name
+		if canonical, ok := groupToCommitteeToolNames[name]; ok {
+			name = canonical
+		}
+		if tools.ManageScopeTools[name] {
+			names = append(names, msg.Params.Name)
+		}
+	}
+
+	return names, true
 }
 
 // newServer creates and configures a new MCP server with registered tools.

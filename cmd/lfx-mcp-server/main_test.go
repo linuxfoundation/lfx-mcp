@@ -106,6 +106,8 @@ var staffOnlyTools = []string{
 	"query_lfx_standard_metrics",
 	"read_lfx_semantic_layer_guidance",
 	"read_lfx_standard_metrics_guidance",
+	"search_ocg_meetups",
+	"list_ocg_meetup_filters",
 }
 
 // listedTools is the tools/list a caller holding token sees from a server
@@ -198,6 +200,24 @@ func TestNewServer_LensToolsAreStaffOnly_MachineAccounts(t *testing.T) {
 		}
 		if forMachineNoScope[name] {
 			t.Errorf("%s is listed for a machine account with no read/manage scope; the machine marker must not bypass scope checks", name)
+		}
+	}
+}
+
+// TestNewServer_OCGToolsAreNotInDefaults pins the deployment-safety
+// invariant on the OCG meetup tools: their lens endpoints are not live, so a
+// staff caller on a server built from defaultTools must not see them. They
+// come on by name once the endpoints exist. Without this, adding a name to
+// defaultTools by mistake would expose a tool that returns 404s.
+func TestNewServer_OCGToolsAreNotInDefaults(t *testing.T) {
+	staff := &auth.TokenInfo{
+		Scopes: []string{tools.ScopeRead},
+		Extra:  map[string]any{tools.ClaimLFStaff: true},
+	}
+	forStaffDefaults := listedToolsFor(t, defaultTools, staff)
+	for _, name := range []string{"search_ocg_meetups", "list_ocg_meetup_filters"} {
+		if forStaffDefaults[name] {
+			t.Errorf("%s is listed on a defaultTools server; it must stay opt-in until its lens endpoint is live", name)
 		}
 	}
 }

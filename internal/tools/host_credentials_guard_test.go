@@ -71,8 +71,9 @@ var hostCredentialSourcePatterns = []*regexp.Regexp{
 // hostCredentialAllowedLines are the existing source lines the scan accepts,
 // keyed by path relative to the repository root and matched on the trimmed
 // line. Each one is reviewed and does not return host credentials to a
-// caller. Remove an entry when its line goes away; never add one without the
-// gating decision the scan asks for.
+// caller. Each entry covers one occurrence, and an entry that matches no line
+// fails the test, so it must be removed when its line goes away. Never add
+// one without the gating decision the scan asks for.
 var hostCredentialAllowedLines = map[string][]string{
 	// The meeting result field list removes host_key from meeting results.
 	"internal/tools/meeting_result_fields.go": {`"host_key":           {},`},
@@ -154,6 +155,16 @@ func TestHostCredentials_NoSourceReference(t *testing.T) {
 	repoRoot := filepath.Join("..", "..")
 	roots := []string{filepath.Join(repoRoot, "internal"), filepath.Join(repoRoot, "cmd")}
 	scanned := 0
+	// Each allowlisted line may be used once. Unused entries are reported, so a
+	// removed line cannot leave an entry behind that would later hide an
+	// identical new reference.
+	unused := make(map[string]map[string]int, len(hostCredentialAllowedLines))
+	for file, lines := range hostCredentialAllowedLines {
+		unused[file] = make(map[string]int, len(lines))
+		for _, line := range lines {
+			unused[file][line]++
+		}
+	}
 	for _, root := range roots {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -171,9 +182,10 @@ func TestHostCredentials_NoSourceReference(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			allowed := hostCredentialAllowedLines[filepath.ToSlash(rel)]
+			allowed := unused[filepath.ToSlash(rel)]
 			for i, line := range strings.Split(string(src), "\n") {
-				if slices.Contains(allowed, strings.TrimSpace(line)) {
+				if trimmed := strings.TrimSpace(line); allowed[trimmed] > 0 {
+					allowed[trimmed]--
 					continue
 				}
 				for _, re := range patterns {
@@ -192,5 +204,13 @@ func TestHostCredentials_NoSourceReference(t *testing.T) {
 	}
 	if scanned == 0 {
 		t.Fatal("no Go source was scanned; the guard would pass vacuously")
+	}
+	for file, lines := range unused {
+		for line, n := range lines {
+			if n > 0 {
+				t.Errorf("hostCredentialAllowedLines entry %s: %q matched no source line; "+
+					"remove the entry now that the line is gone", file, line)
+			}
+		}
 	}
 }

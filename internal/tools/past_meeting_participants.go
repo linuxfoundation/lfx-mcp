@@ -13,6 +13,7 @@ import (
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -58,14 +59,6 @@ const participantDefaultMaxMeetings = 50
 // participantHardMaxMeetings is the largest max_meetings accepted.
 const participantHardMaxMeetings = 200
 
-// participantPageWarning is the existing access-filtered-page warning.
-const participantPageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
-
-// participantEmptyNote is returned with an empty page so silence is never
-// mistaken for "no participants": only records the caller can see are
-// returned.
-const participantEmptyNote = "No past-meeting participants are visible to your identity for these filters; records you cannot see are not returned."
-
 // participantTruncatedNote is added when the date range matched more past
 // meetings than max_meetings.
 const participantTruncatedNote = "The date range matched more past meetings than max_meetings; only the first %d were expanded. Narrow the range or raise max_meetings (max %d)."
@@ -88,9 +81,10 @@ type participantSearchResult struct {
 	Records   *int                 `json:"records,omitempty"`
 	Meetings  *int                 `json:"meetings,omitempty"` // past meetings actually expanded
 
-	TruncatedMeetings bool   `json:"truncated_meetings,omitempty"`
-	TruncatedRecords  bool   `json:"truncated_records,omitempty"`
-	Note              string `json:"note,omitempty"`
+	TruncatedMeetings bool     `json:"truncated_meetings,omitempty"`
+	TruncatedRecords  bool     `json:"truncated_records,omitempty"`
+	Note              string   `json:"note,omitempty"`
+	Warnings          []string `json:"warnings,omitempty"`
 }
 
 // participantScope is the parent reference chosen from the three scope args.
@@ -276,13 +270,16 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 		return errorResult(fmt.Sprintf("Error: max_meetings must be at most %d", participantHardMaxMeetings)), nil, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := meetingConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return errorResult(fmt.Sprintf("Error: failed to extract MCP token: %v", err)), nil, nil
 	}
 
-	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := meetingConfig.Clients
 
 	pageSize := args.PageSize
@@ -361,7 +358,6 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 	}
 
 	out := participantSearchResult{}
-	var pageWarning string
 
 	if hasDateRange {
 		var all []*querysvc.Resource
@@ -416,12 +412,17 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 		}
 		out.Resources = result.Resources
 		out.PageToken = result.PageToken
-		if result.PageToken != nil && len(result.Resources) < pageSize {
-			pageWarning = participantPageWarning
-		}
 	}
 
 	records := len(out.Resources)
+	// A date range drains every page itself, so it never has a token and is
+	// never a continuation; the page-level warnings count raw records, before
+	// de-duplication. When max_meetings left meetings in the range
+	// unexpanded, the result does not cover the whole filter set, so no
+	// warning is added: the truncation note already says what to do next.
+	if !truncated {
+		out.Warnings = searchWarnings("past-meeting participants", records, pageSize, hasPageToken(out.PageToken), args.PageToken != "")
+	}
 	if dedupe {
 		out.Resources = dedupeParticipants(out.Resources)
 		people := len(out.Resources)
@@ -432,9 +433,6 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 		out.Resources = []*querysvc.Resource{}
 	}
 	var notes []string
-	if len(out.Resources) == 0 {
-		notes = append(notes, participantEmptyNote)
-	}
 	if dedupe && !hasDateRange && (out.PageToken != nil || args.PageToken != "") {
 		notes = append(notes, participantPerPageNote)
 	}
@@ -454,12 +452,14 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 
 	logger.InfoContext(ctx, "search past meeting participants succeeded", "records", records, "returned", len(out.Resources))
 
-	content := []mcp.Content{}
-	if pageWarning != "" {
-		content = append(content, &mcp.TextContent{Text: pageWarning})
-	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, nil, nil
+	// The output shape depends on count_only, so the tool publishes no output
+	// schema (its Out is any); the page is still returned as structured
+	// content, the same value as the text block.
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(prettyJSON)},
+		},
+	}, out, nil
 }
 
 // jsonResult marshals v as the single text block of a successful result.

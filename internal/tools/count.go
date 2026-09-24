@@ -7,11 +7,12 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -165,13 +166,16 @@ func handleCountLFXResources(ctx context.Context, req *mcp.CallToolRequest, args
 		return errorResult(msg), nil, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := projectConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return errorResult(fmt.Sprintf("Error: failed to extract MCP token: %v", err)), nil, nil
 	}
 
-	ctx = projectConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := projectConfig.Clients
 
 	payload := buildCountPayload(args)
@@ -205,4 +209,13 @@ func errorResult(msg string) *mcp.CallToolResult {
 		Content: []mcp.Content{&mcp.TextContent{Text: msg}},
 		IsError: true,
 	}
+}
+
+// toolError is the error a handler with a typed output returns for a failed
+// call. The SDK turns it into an IsError result whose one text block is msg and
+// that carries no structured content. Returning an IsError result together with
+// a zero output value would instead publish that zero value as structured
+// content, which reads as an empty result rather than a failure.
+func toolError(msg string) error {
+	return errors.New(msg)
 }

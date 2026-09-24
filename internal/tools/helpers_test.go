@@ -16,6 +16,7 @@ import (
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	goahttp "goa.design/goa/v3/http"
 )
 
 func TestFriendlyAPIError_403(t *testing.T) {
@@ -70,6 +71,58 @@ func TestFriendlyAPIError_accessDeniedNoPrefix(t *testing.T) {
 	got := friendlyAPIError("failed to get project", err)
 	if len(got) >= 7 && got[:7] == "Error: " {
 		t.Errorf("access denied message must not start with 'Error: ', got: %q", got)
+	}
+}
+
+func TestFriendlyAPIError_AccessRefusedSentinel(t *testing.T) {
+	// A refusal with no service message reaches the tools wrapped in Goa's
+	// decoding error, and possibly wrapped again by the caller.
+	decodeErr := goahttp.ErrDecodingError("Meeting Service", "get-itx-past-meeting", fmt.Errorf("%w (HTTP 403)", lfxv2.ErrAccessRefused))
+	want := "Failed to get past meeting: " + accessDeniedMessage
+	for _, err := range []error{decodeErr, fmt.Errorf("outer: %w", decodeErr)} {
+		if got := friendlyAPIError("failed to get past meeting", err); got != want {
+			t.Errorf("expected %q, got %q", want, got)
+		}
+	}
+}
+
+func TestFriendlyAPIError_UndeclaredRefusal(t *testing.T) {
+	// A 401 or 403 the endpoint does not declare reaches the tools as Goa's
+	// invalid_response error, never through the response decoder.
+	accessDenied := "Failed to get project: " + accessDeniedMessage
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"401 no body", goahttp.ErrInvalidResponse("project-service", "get-one-project-base", 401, ""), accessDenied},
+		{"401 html body", goahttp.ErrInvalidResponse("project-service", "get-one-project-base", 401, "<html>Unauthorized</html>"), accessDenied},
+		{"403 no body", goahttp.ErrInvalidResponse("project-service", "get-one-project-base", 403, ""), accessDenied},
+		{"403 service message", goahttp.ErrInvalidResponse("project-service", "get-one-project-base", 403, `{"message":"no"}`), accessDenied},
+		{
+			"401 service message",
+			goahttp.ErrInvalidResponse("project-service", "get-one-project-base", 401, `{"message":"token expired"}`),
+			`Failed to get project: [project-service get-one-project-base]: invalid response code 401, body: {"message":"token expired"}`,
+		},
+		{
+			"409 no body",
+			goahttp.ErrInvalidResponse("project-service", "get-one-project-base", 409, ""),
+			"Failed to get project: [project-service get-one-project-base]: invalid response code 409",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, err := range []error{tc.err, fmt.Errorf("outer: %w", tc.err)} {
+				got := friendlyAPIError("failed to get project", err)
+				want := tc.want
+				if err != tc.err && want != accessDenied {
+					want = "Failed to get project: outer: " + strings.TrimPrefix(want, "Failed to get project: ")
+				}
+				if got != want {
+					t.Errorf("expected %q, got %q", want, got)
+				}
+			}
+		})
 	}
 }
 

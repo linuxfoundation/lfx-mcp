@@ -12,18 +12,20 @@
 // # Usage in MCP Tools
 //
 // A single *Clients instance should be created once at startup (via NewClients)
-// and shared across all tool invocations. Per-request, call WithMCPToken to
-// attach the caller's MCP bearer token to the context before making LFX API calls:
+// and shared across all tool invocations. Per-request, call TokenFromRequest to
+// resolve authentication (MCP token exchange in HTTP mode, or a static LFX
+// token in stdio mode) and attach it to the context before making LFX API calls:
 //
 //	func handleMyTool(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallToolResult, any, error) {
-//	    // Extract raw MCP token from request.
-//	    mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+//	    var tokenInfo *auth.TokenInfo
+//	    if req.Extra != nil {
+//	        tokenInfo = req.Extra.TokenInfo
+//	    }
+//
+//	    ctx, err := sharedClients.TokenFromRequest(ctx, tokenInfo)
 //	    if err != nil {
 //	        return nil, nil, err
 //	    }
-//
-//	    // Attach token to context; the shared clients instance handles exchange.
-//	    ctx = sharedClients.WithMCPToken(ctx, mcpToken)
 //
 //	    // Make API calls - token exchange and caching happen automatically.
 //	    result, err := sharedClients.Project.GetOneProjectBase(ctx, &projectservice.GetOneProjectBasePayload{})
@@ -36,6 +38,14 @@
 // instance to avoid redundant token-exchange round-trips on every request.
 // The cache is goroutine-safe and automatically expires tokens with a
 // fixed buffer of 5 minutes before their exp claim.
+//
+// # Static LFX Token (stdio mode)
+//
+// When ClientConfig.StaticLFXToken is set, it is used directly as the bearer
+// token for every LFX API call, bypassing token exchange, M2M, and the
+// token cache entirely. This is intended for stdio mode, where an operator
+// supplies an already-valid LFX access token obtained out of band (e.g. via
+// `lfx auth token`) instead of going through SSO, CTE, or M2M flows.
 package lfxv2
 
 import (
@@ -132,6 +142,13 @@ type ClientConfig struct {
 	// for target API tokens.
 	TokenExchangeClient *TokenExchangeClient
 
+	// StaticLFXToken, when set, is used directly as the bearer token for every
+	// LFX API call, bypassing token exchange and M2M client-credentials
+	// entirely. It is intended only for stdio mode, where an operator supplies
+	// an already-valid LFX access token obtained out of band (e.g. via
+	// `lfx auth token`) instead of going through SSO, CTE, or M2M flows.
+	StaticLFXToken string
+
 	// DebugLogger is used for debug-level HTTP request/response logging.
 	// If nil, debug logging is disabled.
 	DebugLogger *slog.Logger
@@ -147,6 +164,10 @@ type Clients struct {
 	QuerySvc    *querysvc.Client
 
 	tokenExchangeClient *TokenExchangeClient
+
+	// staticLFXToken, when non-empty, is used directly as the bearer token for
+	// every LFX API call. See ClientConfig.StaticLFXToken.
+	staticLFXToken string
 
 	// tokenCache maps MCP token -> exchanged LFX token string, with per-entry TTL.
 	tokenCache *gocache.Cache
@@ -166,19 +187,25 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		}
 	}
 
-	// Wrap HTTP client with auth interceptor if token exchange is enabled.
+	// Wrap HTTP client with auth interceptor if token exchange, or a static
+	// token, is enabled.
 	clients := &Clients{
 		tokenExchangeClient: cfg.TokenExchangeClient,
+		staticLFXToken:      cfg.StaticLFXToken,
 		// No default expiration (TTL is set per item); run cleanup every 10 minutes.
 		tokenCache: gocache.New(gocache.NoExpiration, 10*time.Minute),
 	}
 
-	if cfg.DebugLogger != nil {
-		httpClient = newDebugTransportClient(httpClient, cfg.DebugLogger)
+	// Apply the auth interceptor first so it is the innermost wrapper, then
+	// apply the debug transport last so it is outermost: debug logging must
+	// see the request before the auth interceptor injects the Authorization
+	// header, otherwise the wire dump would leak the bearer token.
+	if cfg.TokenExchangeClient != nil || cfg.StaticLFXToken != "" {
+		httpClient = clients.wrapWithAuthInterceptor(httpClient)
 	}
 
-	if cfg.TokenExchangeClient != nil {
-		httpClient = clients.wrapWithAuthInterceptor(httpClient)
+	if cfg.DebugLogger != nil {
+		httpClient = newDebugTransportClient(httpClient, cfg.DebugLogger)
 	}
 
 	// Initialize committee service client.
@@ -192,7 +219,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		committeeURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder(),
 		false,
 	)
 
@@ -252,7 +279,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		mailingListURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder(),
 		false,
 	)
 
@@ -297,7 +324,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		meetingURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder("code"), // Its 401/403 bodies require "code" as well as "message".
 		false,
 	)
 
@@ -361,7 +388,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		memberURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder(),
 		false,
 	)
 
@@ -404,7 +431,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		projectURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder(),
 		false,
 	)
 
@@ -442,7 +469,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		queryURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder(),
 		false,
 	)
 
@@ -534,6 +561,35 @@ func (c *Clients) WithMCPToken(ctx context.Context, mcpToken string) context.Con
 	return WithMCPToken(ctx, mcpToken)
 }
 
+// TokenFromRequest resolves how the current tool invocation should authenticate
+// to LFX APIs and returns the context to use for the rest of the call.
+//
+// In HTTP mode, tokenInfo is the MCP OAuth bearer token verified by the server's
+// auth middleware (req.Extra.TokenInfo); this extracts the raw MCP token from it
+// and attaches it to ctx via WithMCPToken so the auth interceptor can exchange it.
+//
+// In stdio mode there is no MCP-level OAuth, so tokenInfo is always nil (the
+// stdio transport never populates req.Extra). If a static LFX token was
+// configured at startup (see ClientConfig.StaticLFXToken), ctx is returned
+// unchanged: the auth interceptor already has the static token and uses it
+// directly. If no static token is configured either, authentication is not
+// possible and an error is returned.
+func (c *Clients) TokenFromRequest(ctx context.Context, tokenInfo *auth.TokenInfo) (context.Context, error) {
+	if tokenInfo == nil {
+		if c.staticLFXToken != "" {
+			return ctx, nil
+		}
+		return ctx, fmt.Errorf("no bearer token available: neither an MCP OAuth token nor a static LFX token is configured")
+	}
+
+	mcpToken, err := ExtractMCPToken(tokenInfo)
+	if err != nil {
+		return ctx, err
+	}
+
+	return c.WithMCPToken(ctx, mcpToken), nil
+}
+
 // wrapWithAuthInterceptor wraps an HTTP client with automatic token exchange.
 func (c *Clients) wrapWithAuthInterceptor(client *http.Client) *http.Client {
 	originalTransport := client.Transport
@@ -558,6 +614,14 @@ type authInterceptor struct {
 
 // RoundTrip implements http.RoundTripper.
 func (a *authInterceptor) RoundTrip(req *http.Request) (*http.Response, error) {
+	// A configured static token bypasses token exchange and M2M entirely: it
+	// is already a valid LFX API token, used as-is on every request.
+	if a.clients.staticLFXToken != "" {
+		reqClone := req.Clone(req.Context())
+		reqClone.Header.Set("Authorization", "Bearer "+a.clients.staticLFXToken)
+		return a.base.RoundTrip(reqClone)
+	}
+
 	// Extract MCP token from request context.
 	mcpToken := mcpTokenFromContext(req.Context())
 	if mcpToken == "" {
@@ -587,6 +651,9 @@ const m2mCacheKey = "__m2m__"
 // the same request are cheap. This is used by the access-check client which
 // needs the V2 token as an explicit string rather than via the auth interceptor.
 func (c *Clients) GetExchangedToken(ctx context.Context) (string, error) {
+	if c.staticLFXToken != "" {
+		return c.staticLFXToken, nil
+	}
 	mcpToken := mcpTokenFromContext(ctx)
 	if mcpToken == "" {
 		return "", fmt.Errorf("MCP token not found in context")

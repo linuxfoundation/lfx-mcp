@@ -12,6 +12,7 @@ import (
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	projectservice "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/project_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -34,11 +35,12 @@ func SetProjectConfig(cfg *ProjectConfig) {
 
 // projectSearchResult is the output type for the search_projects tool.
 type projectSearchResult struct {
-	Resources     []*querysvc.Resource `json:"resources"`
-	PageToken     *string              `json:"page_token,omitempty"`
-	Total         *uint64              `json:"total,omitempty"`
-	TotalComplete *bool                `json:"total_complete,omitempty"`
-	Note          string               `json:"note,omitempty"`
+	Resources     []searchResource `json:"resources"`
+	PageToken     *string          `json:"page_token,omitempty"`
+	Total         *uint64          `json:"total,omitempty"`
+	TotalComplete *bool            `json:"total_complete,omitempty"`
+	Note          string           `json:"note,omitempty"`
+	Warnings      []string         `json:"warnings,omitempty"`
 }
 
 // projectGetResult is the output type for the get_project tool.
@@ -94,26 +96,19 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 
 	if projectConfig == nil {
 		logger.ErrorContext(ctx, "project tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: project tools not configured"},
-			},
-			IsError: true,
-		}, projectSearchResult{}, nil
+		return nil, projectSearchResult{}, toolError("Error: project tools not configured")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := projectConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, projectSearchResult{}, nil
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
+		return nil, projectSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = projectConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := projectConfig.Clients
 
 	pageSize := args.PageSize
@@ -163,17 +158,14 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search projects", err)},
-			},
-			IsError: true,
-		}, projectSearchResult{}, nil
+		return nil, projectSearchResult{}, toolError(friendlyAPIError("failed to search projects", err))
 	}
 
+	resources := newSearchResources(result.Resources)
 	out := projectSearchResult{
-		Resources: result.Resources,
+		Resources: resources,
 		PageToken: result.PageToken,
+		Warnings:  searchWarnings("projects", len(resources), pageSize, hasPageToken(result.PageToken), args.PageToken != ""),
 	}
 
 	if args.IncludeTotal {
@@ -202,12 +194,7 @@ func handleSearchProjects(ctx context.Context, req *mcp.CallToolRequest, args Se
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, projectSearchResult{}, nil
+		return nil, projectSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "search_projects succeeded", "count", len(result.Resources))
@@ -226,35 +213,23 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 
 	if projectConfig == nil {
 		logger.ErrorContext(ctx, "project tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: project tools not configured"},
-			},
-			IsError: true,
-		}, projectGetResult{}, nil
+		return nil, projectGetResult{}, toolError("Error: project tools not configured")
 	}
 
 	if args.UID == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: uid is required"},
-			},
-			IsError: true,
-		}, projectGetResult{}, nil
+		return nil, projectGetResult{}, toolError("Error: uid is required")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := projectConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, projectGetResult{}, nil
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
+		return nil, projectGetResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = projectConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := projectConfig.Clients
 
 	logger.InfoContext(ctx, "fetching project", "uid", args.UID)
@@ -264,12 +239,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "GetOneProjectBase failed", "error", err, "uid", args.UID)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to get project", err)},
-			},
-			IsError: true,
-		}, projectGetResult{}, nil
+		return nil, projectGetResult{}, toolError(friendlyAPIError("failed to get project", err))
 	}
 
 	// Settings may be unavailable (e.g. insufficient permissions, or a response
@@ -295,12 +265,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal project result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, projectGetResult{}, nil
+		return nil, projectGetResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "get_project succeeded", "uid", args.UID)

@@ -76,7 +76,7 @@ The HTTP server is designed to run across multiple pods without coordination:
 go version
 ```
 
-> **Note:** Stdio mode has no per-request OAuth context, so LFX data tools typically fail auth there. Use HTTP mode with OAuth configured, or enable only `hello_world` via `-tools`/`LFXMCP_TOOLS` for smoke tests. There is currently no personal access token (PAT) capability in LFX, so running the full server locally for end-to-end use is not practical without a complete OAuth setup.
+> **Note:** Stdio mode has no MCP-level OAuth context, so LFX data tools (and `user_info`) need a bearer token supplied directly via `-lfx_token`/`LFXMCP_LFX_TOKEN` (e.g. from `lfx auth token`; see README's "Local (stdio) mode" section) to authenticate.
 
 ### Common Development Tasks
 
@@ -236,6 +236,8 @@ In stdio mode (no auth token), `callerToken` is `nil`, so `canRead`/`canManage`/
 
 Adding a new write tool means registering it under `canRead` in `newServer()` (like a read tool) and adding its name to `tools.ManageScopeTools` in `internal/tools/scopes.go`, so the step-up middleware knows to gate it at call time.
 
+**Staff-only tools.** The LFX Lens-backed tools and their guidance (the names in `staffOnlyTools`, `cmd/lfx-mcp-server/main_test.go`) are registered only when `canRead && isStaff`. `isStaff` is true for LF staff user tokens (`tools.IsLFStaff`), machine tokens (`tools.IsMachineAccount`) and a nil token (stdio, or HTTP with no `-mcp_api.auth_servers` configured); for every other caller these tools never appear in `tools/list`. A new tool of that kind uses the same gate and is added to `staffOnlyTools`, which `TestNewServer_LensToolsAreStaffOnly` checks.
+
 ### Tool Implementation Steps
 
 1. **Create a new file** in `internal/tools/` (e.g., `my_tool.go`)
@@ -320,7 +322,7 @@ func runStdioServer() {
     // ... server setup ...
     
     // Register tools.
-    tools.RegisterHelloWorld(server)
+    tools.RegisterUserInfo(server)
     tools.RegisterMyTool(server)  // Add your new tool
     
     // ... run server ...
@@ -357,6 +359,52 @@ return &mcp.CallToolResult{
 }, nil, nil
 ```
 
+### Query-backed search results
+
+The query service returns only the records the caller can view. By design,
+an empty page looks the same whether nothing matched or nothing matching is
+visible, and the service walks past pages where the caller can see nothing,
+so an empty page with a `page_token` only means more pages remain. Every
+search tool backed by the query service follows one result contract so
+agents do not read an empty page as proof of absence:
+
+- **Output type**: return a package-level result type as the handler's
+  concrete `Out`, never `any` or a function-local struct, so the tool
+  publishes an `outputSchema`. For a plain page of resources, return
+  `resourceSearchResult` built by `newResourceSearchResult`; do not add
+  another type with the same fields. Its items are `searchResource` values
+  (plain `Type`/`ID` strings and a `Data` object), not `querysvc.Resource`.
+  Prefer plain types over pointers and `any` where a plain type works: the
+  SDK's schema generator marks pointers as nullable and publishes `any` as a
+  bare `true` schema (see lfx-mcp#154).
+- **Warnings**: carry a top-level `warnings` key (`json:"warnings,omitempty"`)
+  filled only by the shared `searchWarnings` helper, passing whether the
+  request itself carried a `page_token` (a continuation).
+  A more specific statement of the same event (such as the roster-coverage
+  note on `search_committee_members`) replaces the generic warning; it is
+  not added next to it, so it must keep the generic warning's visibility
+  caveat. The one addition is `search_meetings`: when it shortens a
+  meeting's occurrence list to the occurrences that fit the query, it sets
+  `occurrences_omitted` in that meeting's `Data` and appends one occurrence
+  note, pointing to `get_meeting` for the full list, after any access
+  warning.
+- **One text block**: return exactly one `TextContent`, the indented JSON of
+  the same value returned as structured output. Do not prepend warning
+  blocks.
+- **Errors**: a handler with a typed `Out` returns a failure as
+  `nil, <zero value>, toolError(msg)`, never as an `IsError` result next to a
+  zero value: the SDK publishes any non-error output as structured content,
+  and an empty result next to an error reads as an empty page. Error results
+  carry no structured output.
+- **Wording**: say only what the caller can see and what to do next. Never
+  report counts of, or claim the existence of, records the caller cannot
+  see.
+
+`search_past_meeting_participants` is the one exception to the output type:
+its shape depends on `count_only`, so its `Out` is `any` and it publishes no
+`outputSchema`. It still returns its page as structured content, the same
+value as its JSON text, with the same `warnings` key.
+
 ### Tool Annotations
 
 All tools should include a `mcp.ToolAnnotations` struct to provide metadata hints to MCP clients (e.g., Claude). Annotations help clients decide how to present tools and whether to confirm before calling them.
@@ -388,28 +436,32 @@ Focus annotation effort on `ReadOnlyHint` and `DestructiveHint` — those have t
 
 ### Manual Testing via stdio
 
-Test the server by sending JSON-RPC messages. `hello_world` is not in `defaultTools`, so enable it explicitly:
+Test the server by sending JSON-RPC messages. In stdio mode, `user_info` accepts `-lfx_token`/`LFXMCP_LFX_TOKEN` as its `/userinfo` bearer (the same token used for LFX API calls), so it works end to end:
 
 ```bash
 # Initialize and call tool
 (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}';
- echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"Test"}}}';
- sleep 0.5) | LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server -mode=stdio
+ echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"user_info","arguments":{}}}';
+ sleep 0.5) | LFXMCP_LFX_TOKEN="$(lfx auth token)" ./bin/lfx-mcp-server -mode=stdio
 ```
+
+Without `-lfx_token`/`LFXMCP_LFX_TOKEN` set, the same command still runs (no crash), but the call fails with "Authentication token required". See README's "Local (stdio) mode" section for using `-lfx_token` with other LFX data tools.
 
 ### Manual Testing via HTTP
 
+The call below is expected to fail with 401 "no bearer token" — it has no real `Authorization` header carrying an MCP-audienced OAuth token, so this only demonstrates the transport and error handling. For an actual OAuth flow against localhost, use MCP Inspector (README's "MCP Inspector" section; localhost is only a supported target in dev, so point `-mcp_api.auth_servers`/`LFXMCP_MCP_API_AUTH_SERVERS` at the dev tenant instead of the default production issuer).
+
 ```bash
-# Start the server, enabling only hello_world.
-LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server -mode=http &
+# Start the server, enabling only user_info, against the dev auth tenant.
+LFXMCP_TOOLS=user_info LFXMCP_MCP_API_AUTH_SERVERS=https://linuxfoundation-dev.us.auth0.com ./bin/lfx-mcp-server -mode=http &
 
 # Call the tool.
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"Test"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"user_info","arguments":{}}}'
 ```
 
-Responses are returned as Server-Sent Events (SSE) with `event: message` and `data:` fields.
+Responses are returned as Server-Sent Events (SSE) with `event: message` and `data:` fields — except the 401 above, which the auth middleware returns as plain text before reaching the SSE-producing handler.
 
 ### Integration Test Script
 
@@ -463,14 +515,15 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 | `-debug_traffic`                | `LFXMCP_DEBUG_TRAFFIC`                | `false`        | Log outbound LFX API request/response bodies                      |
 | `-tools`                        | `LFXMCP_TOOLS`                        | `defaultTools` | Comma-separated list of tools to enable                           |
 | `-committees_as_groups`         | `LFXMCP_COMMITTEES_AS_GROUPS`         | `false`        | Rebrand committee tools to use "group" terminology (feature flag) |
-| `-mcp_api.auth_servers`         | `LFXMCP_MCP_API_AUTH_SERVERS`         | —              | OAuth authorization server URLs (comma-separated)                 |
+| `-mcp_api.auth_servers`         | `LFXMCP_MCP_API_AUTH_SERVERS`         | `https://sso.linuxfoundation.org/` | OAuth authorization server URLs (comma-separated); also used as the `user_info` tool's `/userinfo` issuer |
 | `-mcp_api.public_url`           | `LFXMCP_MCP_API_PUBLIC_URL`           | —              | Public URL for MCP API (OAuth PRM)                                |
 | `-mcp_api.scopes`               | `LFXMCP_MCP_API_SCOPES`               | —              | OAuth scopes (comma-separated)                                    |
 | `-client_id`                    | `LFXMCP_CLIENT_ID`                    | —              | OAuth client ID for token exchange                                |
 | `-client_secret`                | `LFXMCP_CLIENT_SECRET`                | —              | OAuth client secret                                               |
 | `-client_assertion_signing_key` | `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | —              | PEM-encoded RSA private key for client assertion (RFC 7523)       |
 | `-token_endpoint`               | `LFXMCP_TOKEN_ENDPOINT`               | —              | OAuth2 token endpoint URL (RFC 8693)                              |
-| `-lfx_api_url`                  | `LFXMCP_LFX_API_URL`                  | —              | LFX API base URL (token exchange audience)                        |
+| `-lfx_api_url`                  | `LFXMCP_LFX_API_URL`                  | —              | LFX API base URL and OAuth2 audience                               |
+| `-lfx_token`                    | `LFXMCP_LFX_TOKEN`                    | —              | Static LFX bearer token, used directly instead of SSO/CTE/M2M (stdio mode only; see README's "Local (stdio) mode") |
 | `-onboarding_api_url`           | `LFXMCP_ONBOARDING_API_URL`           | —              | Base URL of the member onboarding service                         |
 | `-onboarding_api_audience`      | `LFXMCP_ONBOARDING_API_AUDIENCE`      | —              | Auth0 resource server audience for the member onboarding API      |
 | `-lens_api_url`                 | `LFXMCP_LENS_API_URL`                 | —              | Base URL of the LFX Lens service                                  |
@@ -489,18 +542,30 @@ LFID (our Auth0-based identity provider) does **not** support Dynamic Client Reg
 
 ### Tool Error Responses
 
+The SDK turns a plain Go error returned by a handler (for example
+`toolError(msg)` or `fmt.Errorf(...)`) into an `IsError` tool result whose
+text is `err.Error()` and which carries no structured content. Only a
+`*jsonrpc.Error` becomes a JSON-RPC protocol error. When the handler returns
+a nil error, the SDK publishes any non-nil output as structured content, even
+next to an `IsError` result.
+
 ```go
-// Return error in tool result (not JSON-RPC error)
+// Handler with a typed Out (such as the query-backed search tools): return
+// the failure as an error, so no zero-value output is published next to it.
+return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search meetings", err))
+
+// Handler whose Out is `any` and which returns nil output: an IsError
+// result is equivalent (errorResult builds one).
 return &mcp.CallToolResult{
     Content: []mcp.Content{
         &mcp.TextContent{Text: "Error: " + err.Error()},
     },
     IsError: true,
 }, nil, nil
-
-// Return JSON-RPC error for invalid requests
-return nil, nil, fmt.Errorf("invalid parameter: %s", param)
 ```
+
+See the **Errors** rule under
+[Query-backed search results](#query-backed-search-results).
 
 ### MCP Protocol Errors
 
@@ -521,7 +586,7 @@ The SDK handles most protocol-level errors automatically. Tool implementation sh
 ## Contributing Guidelines
 
 1. **Add Tools**: Create new tools in `internal/tools/` following the established pattern
-2. **Tool Organization**: One tool per file (e.g., `hello_world.go`, `my_tool.go`)
+2. **Tool Organization**: One tool per file (e.g., `project.go`, `my_tool.go`)
 3. **Registration Pattern**: Each tool should have a `Register<ToolName>(server)` function that calls `mcp.AddTool` directly — never use wrapper functions for scope enforcement
 4. **Schema Tags**: Always include descriptive `jsonschema` tags
 5. **Testing**: Test new tools with the test script (`./scripts/test_server.sh`)

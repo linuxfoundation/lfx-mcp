@@ -85,6 +85,8 @@ app:
   # debug enables debug logging.
   debug: false
   # debugTraffic enables HTTP request/response wire logging for outbound LFX API calls.
+  # Credential headers, signed-link query parameters and meeting passcode fields
+  # are masked in the log; other content is logged as is.
   debugTraffic: false
   # mcpApiAuthServers is the space-separated list of OAuth2 authorization server URLs.
   # When left empty, this key is omitted from the deployment's environment so the

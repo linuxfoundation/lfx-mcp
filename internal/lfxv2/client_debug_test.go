@@ -125,3 +125,189 @@ func TestDebugTransport_HealthyBodyReachesCallerIntact(t *testing.T) {
 		t.Errorf("the debug dump must still carry the response body, got logs:\n%s", logs.String())
 	}
 }
+
+// recordingRoundTripper answers with one canned response and keeps what it
+// was sent: the request and the body bytes it read.
+type recordingRoundTripper struct {
+	resp    *http.Response
+	gotReq  *http.Request
+	gotBody []byte
+}
+
+func (r *recordingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.gotReq = req
+	if req.Body != nil {
+		b, err := io.ReadAll(req.Body)
+		if err != nil {
+			return nil, err
+		}
+		r.gotBody = b
+	}
+	return r.resp, nil
+}
+
+// Test values only: none of these is a real credential.
+const (
+	debugTestBearer    = "test-bearer-value"
+	debugTestSignature = "test-signature-value"
+	debugTestSession   = "test-session-value"
+	debugTestCookie    = "test-cookie-value"
+)
+
+func TestDebugTransport_MasksCredentialsAndSignedLinksInLogOnly(t *testing.T) {
+	// A pre-signed download link as the meeting service returns it; Go's
+	// JSON encoder writes "&" as \u0026.
+	payload := `{"uid":"att-7","name":"agenda.pdf","download_url":"https://files.example.test/att-7/agenda.pdf` +
+		`?X-Amz-Algorithm=AWS4-HMAC-SHA256\u0026X-Amz-Date=20260101T000000Z\u0026X-Amz-Expires=3600` +
+		`\u0026X-Amz-Security-Token=` + debugTestSession + `\u0026X-Amz-Signature=` + debugTestSignature + `"}`
+	respHeader := http.Header{
+		"Content-Type": []string{"application/json"},
+		"Set-Cookie":   []string{"sid=" + debugTestCookie + "; Path=/; HttpOnly"},
+	}
+	rt := &recordingRoundTripper{resp: &http.Response{
+		StatusCode:    http.StatusOK,
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		ContentLength: int64(len(payload)),
+		Header:        respHeader,
+		Body:          io.NopCloser(strings.NewReader(payload)),
+	}}
+	dt, logs := newDebugTransportForTest(rt)
+
+	const reqBody = `{"name":"agenda.pdf"}`
+	req, err := http.NewRequest(http.MethodPost,
+		"https://api.example.test/meetings/m-1/attachments?v=1&X-Amz-Signature="+debugTestSignature,
+		strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+debugTestBearer)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := dt.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The request reaches the upstream unchanged.
+	if got := rt.gotReq.Header.Get("Authorization"); got != "Bearer "+debugTestBearer {
+		t.Errorf("the upstream must receive the original Authorization header, got %q", got)
+	}
+	if got := rt.gotReq.URL.Query().Get("X-Amz-Signature"); got != debugTestSignature {
+		t.Errorf("the upstream must receive the original URL, got signature %q", got)
+	}
+	if string(rt.gotBody) != reqBody {
+		t.Errorf("the upstream must receive the original body: want %q got %q", reqBody, rt.gotBody)
+	}
+
+	// The response reaches the caller unchanged.
+	got, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading the restored body: %v", err)
+	}
+	if string(got) != payload {
+		t.Errorf("caller must read the original body byte for byte: want %q got %q", payload, got)
+	}
+	if resp.Header.Get("Set-Cookie") != "sid="+debugTestCookie+"; Path=/; HttpOnly" {
+		t.Errorf("response headers must pass through unchanged, got %v", resp.Header)
+	}
+
+	// Only the logged copy is masked.
+	out := logs.String()
+	for _, secret := range []string{debugTestBearer, debugTestSignature, debugTestSession, debugTestCookie} {
+		if strings.Contains(out, secret) {
+			t.Errorf("secret %q must not appear in the debug log:\n%s", secret, out)
+		}
+	}
+	for _, kept := range []string{
+		"lfxv2 outbound request", "lfxv2 inbound response",
+		"Authorization: Bearer [REDACTED]", "Set-Cookie: [REDACTED]",
+		"/meetings/m-1/attachments?v=1", `\"name\":\"agenda.pdf\"`, `\"uid\":\"att-7\"`,
+		"X-Amz-Date=20260101T000000Z", "X-Amz-Signature=[REDACTED]",
+	} {
+		if !strings.Contains(out, kept) {
+			t.Errorf("the debug log must keep %q, got:\n%s", kept, out)
+		}
+	}
+}
+
+func TestDebugTransport_ReadErrorLogMasksSignedLink(t *testing.T) {
+	readErr := errors.New("connection reset by peer")
+	dt, logs := newDebugTransportForTest(&stubRoundTripper{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Proto:      "HTTP/1.1",
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		Header:     http.Header{},
+		Body:       &failingBody{prefix: strings.NewReader(`{"uid"`), err: readErr},
+	}})
+
+	req, err := http.NewRequest(http.MethodGet, "https://files.example.test/att-7/agenda.pdf?X-Amz-Signature="+debugTestSignature, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dt.RoundTrip(req); !errors.Is(err, readErr) {
+		t.Fatalf("the read error must still fail the round trip, got %v", err)
+	}
+	out := logs.String()
+	if !strings.Contains(out, "failed to read inbound response body") {
+		t.Errorf("the read failure must be logged, got:\n%s", out)
+	}
+	if strings.Contains(out, debugTestSignature) {
+		t.Errorf("the logged URL must have its signature masked, got:\n%s", out)
+	}
+}
+
+func TestDebugTransport_MasksMeetingPasscodesInLogOnly(t *testing.T) {
+	// Test values only. A meeting record as the query service returns it.
+	const (
+		joinPasscode = "test-join-passcode"
+		passcode     = "test-passcode"
+		hostKey      = "test-host-key"
+	)
+	payload := `{"resources":[{"type":"meeting","data":{"uid":"m-1","title":"Weekly sync",` +
+		`"join_url":"https://meet.example.test/j/1234567890?pwd=` + joinPasscode + `",` +
+		`"passcode":"` + passcode + `","host_key":"` + hostKey + `"}}]}`
+	rt := &recordingRoundTripper{resp: &http.Response{
+		StatusCode:    http.StatusOK,
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		ContentLength: int64(len(payload)),
+		Header:        http.Header{"Content-Type": []string{"application/json"}},
+		Body:          io.NopCloser(strings.NewReader(payload)),
+	}}
+	dt, logs := newDebugTransportForTest(rt)
+
+	req, err := http.NewRequest(http.MethodGet, "https://api.example.test/query/resources?type=meeting", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := dt.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading the restored body: %v", err)
+	}
+	if string(got) != payload {
+		t.Errorf("caller must read the original body byte for byte: want %q got %q", payload, got)
+	}
+
+	out := logs.String()
+	for _, secret := range []string{joinPasscode, passcode, hostKey} {
+		if strings.Contains(out, secret) {
+			t.Errorf("secret %q must not appear in the debug log:\n%s", secret, out)
+		}
+	}
+	for _, kept := range []string{
+		`\"title\":\"Weekly sync\"`, `/j/1234567890?pwd=[REDACTED]`,
+		`\"passcode\":\"[REDACTED]\"`, `\"host_key\":\"[REDACTED]\"`,
+	} {
+		if !strings.Contains(out, kept) {
+			t.Errorf("the debug log must keep %q, got:\n%s", kept, out)
+		}
+	}
+}

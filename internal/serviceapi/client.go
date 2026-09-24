@@ -21,6 +21,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/linuxfoundation/lfx-mcp/internal/redact"
 )
 
 // TokenSource provides bearer tokens for authenticating requests to service APIs.
@@ -176,7 +178,9 @@ func wrapWithDebugTransport(client *http.Client, logger *slog.Logger) *http.Clie
 	}
 }
 
-// serviceDebugTransport logs the full HTTP wire dump of every request and response.
+// serviceDebugTransport logs the full HTTP wire dump of every request and
+// response. The logged copy is masked as package redact describes; the
+// request sent and the response returned are not modified.
 type serviceDebugTransport struct {
 	transport http.RoundTripper
 	logger    *slog.Logger
@@ -188,12 +192,12 @@ func (dt *serviceDebugTransport) RoundTrip(req *http.Request) (*http.Response, e
 	if err != nil {
 		dt.logger.Error("failed to dump outbound request", "error", err)
 	} else {
-		dt.logger.Debug("serviceapi outbound request", "dump", string(reqDump))
+		dt.logger.Debug("serviceapi outbound request", "dump", redact.WireDump(reqDump))
 	}
 
 	resp, err := dt.transport.RoundTrip(req)
 	if err != nil {
-		dt.logger.Error("serviceapi outbound request failed", "error", err, "url", req.URL.String())
+		dt.logger.Error("serviceapi outbound request failed", "error", err, "url", redact.URL(req.URL.String()))
 		return nil, err
 	}
 
@@ -208,10 +212,10 @@ func (dt *serviceDebugTransport) RoundTrip(req *http.Request) (*http.Response, e
 	}
 	body, readErr := io.ReadAll(resp.Body)
 	if cerr := resp.Body.Close(); cerr != nil {
-		dt.logger.Warn("failed to close inbound response body", "error", cerr, "url", req.URL.String())
+		dt.logger.Warn("failed to close inbound response body", "error", cerr, "url", redact.URL(req.URL.String()))
 	}
 	if readErr != nil {
-		dt.logger.Error("failed to read inbound response body", "error", readErr, "url", req.URL.String())
+		dt.logger.Error("failed to read inbound response body", "error", readErr, "url", redact.URL(req.URL.String()))
 		return nil, fmt.Errorf("reading %s response body: %w", req.URL.Path, readErr)
 	}
 	resp.Body = io.NopCloser(bytes.NewReader(body))
@@ -220,7 +224,7 @@ func (dt *serviceDebugTransport) RoundTrip(req *http.Request) (*http.Response, e
 	if err != nil {
 		dt.logger.Error("failed to dump inbound response", "error", err)
 	} else {
-		dt.logger.Debug("serviceapi inbound response", "dump", string(respDump))
+		dt.logger.Debug("serviceapi inbound response", "dump", redact.WireDump(respDump))
 	}
 	// However DumpResponse left resp.Body, hand the caller a reader over the
 	// bytes read above.

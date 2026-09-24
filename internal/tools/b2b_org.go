@@ -24,12 +24,6 @@ type SearchB2bOrgsArgs struct {
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response."`
 }
 
-// b2bOrgSearchResult is the output type for the search_b2b_orgs tool.
-type b2bOrgSearchResult struct {
-	Resources []*querysvc.Resource `json:"resources"`
-	PageToken *string              `json:"page_token,omitempty"`
-}
-
 // RegisterSearchB2bOrgs registers the search_b2b_orgs tool with the MCP server.
 func RegisterSearchB2bOrgs(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
@@ -43,28 +37,18 @@ func RegisterSearchB2bOrgs(server *mcp.Server) {
 }
 
 // handleSearchB2bOrgs implements the search_b2b_orgs tool logic using the Query Service.
-func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args SearchB2bOrgsArgs) (*mcp.CallToolResult, b2bOrgSearchResult, error) {
+func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args SearchB2bOrgsArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if memberConfig == nil {
 		logger.ErrorContext(ctx, "member tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: member tools not configured"},
-			},
-			IsError: true,
-		}, b2bOrgSearchResult{}, nil
+		return nil, resourceSearchResult{}, toolError("Error: member tools not configured")
 	}
 
 	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, b2bOrgSearchResult{}, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
 	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
@@ -95,28 +79,15 @@ func handleSearchB2bOrgs(ctx context.Context, req *mcp.CallToolRequest, args Sea
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources (b2b_org) failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search B2B orgs", err)},
-			},
-			IsError: true,
-		}, b2bOrgSearchResult{}, nil
+		return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search B2B orgs", err))
 	}
 
-	out := b2bOrgSearchResult{
-		Resources: result.Resources,
-		PageToken: result.PageToken,
-	}
+	out := newResourceSearchResult("organizations", result, pageSize, args.PageToken != "")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, b2bOrgSearchResult{}, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "search_b2b_orgs succeeded", "count", len(result.Resources))

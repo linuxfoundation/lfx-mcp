@@ -7,6 +7,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -208,4 +209,13 @@ func errorResult(msg string) *mcp.CallToolResult {
 		Content: []mcp.Content{&mcp.TextContent{Text: msg}},
 		IsError: true,
 	}
+}
+
+// toolError is the error a handler with a typed output returns for a failed
+// call. The SDK turns it into an IsError result whose one text block is msg and
+// that carries no structured content. Returning an IsError result together with
+// a zero output value would instead publish that zero value as structured
+// content, which reads as an empty result rather than a failure.
+func toolError(msg string) error {
+	return errors.New(msg)
 }

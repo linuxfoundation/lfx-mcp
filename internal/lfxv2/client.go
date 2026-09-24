@@ -219,7 +219,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		committeeURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder(),
 		false,
 	)
 
@@ -277,7 +277,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		mailingListURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder(),
 		false,
 	)
 
@@ -322,7 +322,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		meetingURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder("code"), // Its 401/403 bodies require "code" as well as "message".
 		false,
 	)
 
@@ -385,7 +385,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		memberURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder(),
 		false,
 	)
 
@@ -420,7 +420,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		projectURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder(),
 		false,
 	)
 
@@ -457,7 +457,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		queryURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		goahttp.ResponseDecoder,
+		refusalAwareDecoder(),
 		false,
 	)
 

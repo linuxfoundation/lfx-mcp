@@ -20,7 +20,7 @@ The LFX MCP Server is available as a hosted, production service at:
 https://mcp.lfx.dev/mcp
 ```
 
-You will be prompted to log in with your Linux Foundation account (LFID) the first time you connect. *All MCP permissions correspond to LFX platform permissions granted to your LFID.*
+You sign in through LFX with your Linux Foundation account (LFID) the first time you connect. Sign-in succeeds only when your account has been enabled for MCP access and you use one of the supported clients below; to request access, see [Using the LFX MCP Server as a community member](docs/community-access.md). After sign-in, what you can see and do follows your LFX permissions; some analytics tools are available only to Linux Foundation staff (see [LFX Lens](#lfx-lens)).
 
 **The following clients are set up to work with the LFX MCP Server.** Client-specific instructions (menu paths, settings names, etc.) are subject to change as vendors update their products; consult the client's own documentation if the steps below no longer match what you see. Please file an issue to request additional client support.
 
@@ -302,7 +302,7 @@ Notes:
 
 | Tool                         | Description                                                       |
 |------------------------------|-------------------------------------------------------------------|
-| `search_meetings`            | Search for meetings; filter by project, committee, date range     |
+| `search_meetings`            | Search meetings by project, committee, date; upcoming occurrences |
 | `get_meeting`                | Get a meeting by UID                                              |
 | `search_meeting_registrants` | Search meeting registrants; filter by meeting, committee, project |
 | `get_meeting_registrant`     | Get a meeting registrant by UID                                   |
@@ -315,7 +315,7 @@ Notes:
 | `get_past_meeting`                 | Get a past meeting by UID                                               |
 | `search_past_meeting_participants` | Search past meeting participants; filter by meeting, committee, project, date range, attended_only or organisation name; count_only returns record counts; people are de-duplicated by identity like LFX Self Serve (dedupe=false returns raw records) |
 | `get_past_meeting_participant`     | Get a past meeting participant by UID                                   |
-| `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, committee, project    |
+| `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, project, name         |
 | `get_past_meeting_summary`         | Get a past meeting summary by UID                                       |
 
 ### Discord
@@ -337,11 +337,16 @@ Notes:
 
 ### LFX Lens
 
+These tools are available only to Linux Foundation staff; they do not appear in the tool list for other accounts.
+
 | Tool                         | Description                                                                                           |
 |------------------------------|-------------------------------------------------------------------------------------------------------|
 | `query_lfx_lens`             | Ask natural-language questions about a project's data (events, contributors, health, value, and more) |
 | `explore_lfx_semantic_layer` | Discover Insights metrics and the dimensions available to them                                        |
 | `query_lfx_semantic_layer`   | Run a metric query against the Insights Semantic Layer (filter, group, rank, trend)                   |
+| `query_lfx_standard_metrics` | Run a governed standard metric over LFX data, scoped by project, organization and dates |
+| `read_lfx_semantic_layer_guidance` | Read the agent guidance for the semantic layer and lens tools (routing, query syntax, scoping, recipes) |
+| `read_lfx_standard_metrics_guidance` | Read the agent guidance for the standard metrics (inventory, scoping, how to read results) |
 
 ### B2B Organizations
 

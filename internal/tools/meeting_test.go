@@ -86,3 +86,36 @@ func TestSearchMeetingsRedirectNamesServedToolsOnly(t *testing.T) {
 		}
 	}
 }
+
+// TestPastMeetingSummaryDescriptionsPreferEditedContent pins that both
+// summary tools tell the model which version to present: a summary record
+// carries the generated text in content and, once edited, the edited text in
+// edited_content. The rule has no required parameter to live on, so it must
+// stay in the tool description.
+func TestPastMeetingSummaryDescriptionsPreferEditedContent(t *testing.T) {
+	for _, tc := range []struct {
+		toolName string
+		register func(*mcp.Server)
+	}{
+		{toolName: "search_past_meeting_summaries", register: RegisterSearchPastMeetingSummaries},
+		{toolName: "get_past_meeting_summary", register: RegisterGetPastMeetingSummary},
+	} {
+		t.Run(tc.toolName, func(t *testing.T) {
+			tool := listRegisteredTool(t, tc.toolName, tc.register)
+			for _, want := range []string{"edited_content", "supersedes the generated content"} {
+				if !strings.Contains(tool.Description, want) {
+					t.Errorf("description missing %q", want)
+				}
+			}
+			if strings.Contains(tool.Description, "Insights") {
+				t.Error("description must not mention Insights")
+			}
+			if n := len(tool.Description); n > schemaDescriptionBudget {
+				t.Errorf("description is %d bytes, budget %d", n, schemaDescriptionBudget)
+			}
+			if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
+				t.Error("summary tool must stay read-only")
+			}
+		})
+	}
+}

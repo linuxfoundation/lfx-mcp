@@ -7,14 +7,14 @@ go 1.26.8
 require (
 	github.com/knadh/koanf/providers/basicflag v1.1.1
 	github.com/knadh/koanf/providers/env/v2 v2.0.1
-	github.com/knadh/koanf/v2 v2.3.6
+	github.com/knadh/koanf/v2 v2.3.7
 	github.com/lestrrat-go/jwx/v2 v2.1.7
 	github.com/linuxfoundation/lfx-v2-committee-service v0.4.51
 	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.5.12
-	github.com/linuxfoundation/lfx-v2-meeting-service v0.12.7
-	github.com/linuxfoundation/lfx-v2-member-service v0.10.23
+	github.com/linuxfoundation/lfx-v2-meeting-service v0.13.0
+	github.com/linuxfoundation/lfx-v2-member-service v0.10.24
 	github.com/linuxfoundation/lfx-v2-project-service v0.9.8
-	github.com/linuxfoundation/lfx-v2-query-service v0.4.30
+	github.com/linuxfoundation/lfx-v2-query-service v0.4.31
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/remychantenay/slog-otel v1.3.5

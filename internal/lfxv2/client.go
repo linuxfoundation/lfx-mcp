@@ -476,6 +476,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 	clients.QuerySvc = querysvc.NewClient(
 		queryHTTPClient.QueryResources(),
 		queryHTTPClient.QueryResourcesCount(),
+		queryHTTPClient.QueryMembershipSummary(),
 		queryHTTPClient.QueryOrgs(),
 		queryHTTPClient.SuggestOrgs(),
 		queryHTTPClient.Readyz(),

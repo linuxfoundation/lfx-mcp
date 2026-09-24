@@ -131,15 +131,32 @@ present in the chain. This token is also cached and shared across all M2M and AP
 LFX Self Service tools (`search_projects`, `get_committee`, member, meeting, mailing list tools,
 etc.) pass the LFX token (CTE token for end-user callers; MCP-server M2M token for M2M callers)
 directly to LFX API calls. Authorization is handled natively by LFX and its OpenFGA backend; the
-MCP server performs no explicit access-check of its own for these tools. When a tool reports an
-upstream error through `friendlyAPIError` (`internal/tools/helpers.go`), a 401 or 403 that carries
-no service-authored message (for example, a bare status with no body) shows the standard access
-message. A 401, or a 403 on an endpoint whose Goa design declares it, that carries the service's
-own message is shown as sent. On a declared status, a body without the fields the service's error
-body requires (both `code` and `message` for the meeting service) counts as carrying no message. A
-403 on an endpoint that does not declare it always shows the access message. Partial-result
-warnings, such as the recording and transcript warnings of `get_past_meeting`, print the upstream
-error unchanged.
+MCP server performs no explicit access-check of its own for these tools. A tool reports an
+upstream error through `friendlyAPIError` (`internal/tools/helpers.go`), which reads the HTTP
+status with `lfxv2.UpstreamStatus` and returns a tool error, never a JSON-RPC error:
+
+- **401**: only `Unauthorized (HTTP 401)`, with or without a service-authored message. A 401
+  means the service did not accept the credentials this server sent: the token exchanged for an
+  HTTP caller (whose own login is verified before any tool runs), the server's M2M token, or in
+  stdio mode the `-lfx_token` token. Asking for access does not fix any of these. The tool handler logs it at ERROR level with the request's
+  context, as it logs every upstream error; a Goa typed error whose `Error()` is blank is
+  written there as its name and message.
+- **403**: the standard access message when it carries no service-authored message (for example,
+  a bare status with no body) or when the endpoint's Goa design does not declare it. A 403 on an
+  endpoint that declares it, carrying the service's own message, is shown as the client's typed
+  error renders: `Forbidden: <message>` for the meeting service, the only service whose endpoints
+  the tools call that declares 403 (a typed error with its own `Error()` text would show only
+  that text). On a declared
+  status, a body without the fields the service's error body requires (both `code` and `message`
+  for the meeting service) counts as carrying no message.
+- **404**: the standard access message, from any service, since a 404 cannot tell a resource
+  that does not exist from one the caller may not see. A declared 404 whose body the client
+  cannot decode or validate keeps Goa's decoding or validation error text.
+- Any other status, decode error or network error is shown as the upstream error text.
+
+Partial-result warnings, such as the settings warnings of `get_project` and `get_committee` and
+the recording and transcript warnings of `get_past_meeting`, describe the upstream error the same
+way after their own prefix.
 
 ### MCP-brokered service APIs (per-service M2M token)
 

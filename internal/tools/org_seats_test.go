@@ -287,10 +287,12 @@ func TestOrgSeats_ForbiddenMapsToOrgGrantMessage(t *testing.T) {
 func TestOrgSeats_OtherErrorsAreFriendly(t *testing.T) {
 	api := setupOrgSeatsTest(t)
 	api.RespondStatus(seatsPath, http.StatusNotFound, `{"message":"org not found"}`)
-	// Goa's default branch wraps unknown statuses as "invalid response code N".
+	// A 404 goes through friendlyAPIError, which gives it the shared access
+	// message, not the 403 org-grant wording.
 	res, _, _ := handleGetOrgCommitteeSeats(context.Background(), stubCallToolRequest(), GetOrgCommitteeSeatsArgs{B2bOrgUID: testSFID})
-	if !res.IsError || !strings.Contains(allResultText(t, res), "404") {
-		t.Errorf("404 must pass through friendlyAPIError, got %q", allResultText(t, res))
+	want := "Failed to get organization committee seats: " + accessDeniedMessage
+	if !res.IsError || strings.TrimSuffix(allResultText(t, res), "\n") != want {
+		t.Errorf("404 must pass through friendlyAPIError: got %q, want %q", allResultText(t, res), want)
 	}
 }
 

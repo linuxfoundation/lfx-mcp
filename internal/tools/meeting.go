@@ -546,7 +546,7 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 	if len(result.Resources) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: meeting not found with UID: %s", args.UID)},
+				&mcp.TextContent{Text: lookupNotVisibleMessage("meeting", args.UID)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -721,7 +721,7 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 	if len(result.Resources) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: meeting registrant not found with UID: %s", args.UID)},
+				&mcp.TextContent{Text: lookupNotVisibleMessage("meeting registrant", args.UID)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -901,7 +901,7 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 	if len(result.Resources) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: %s not found with UID: %s", resourceLabel, uid)},
+				&mcp.TextContent{Text: lookupNotVisibleMessage(resourceLabel, uid)},
 			},
 			IsError: true,
 		}, nil, nil
@@ -1141,7 +1141,8 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 // pastMeetingGetResult is the output type for the get_past_meeting tool. It nests
 // the base past meeting alongside its recording and transcript, mirroring the
 // shape of get_project's { base, settings }. The recording and transcript are
-// omitted when absent or inaccessible.
+// omitted when absent or inaccessible; the text result then carries a note or
+// a warning saying so.
 type pastMeetingGetResult struct {
 	Meeting    *meetingservice.ITXPastZoomMeeting `json:"meeting"`
 	Recording  *querysvc.Resource                 `json:"recording,omitempty"`
@@ -1180,11 +1181,19 @@ func fetchPastMeetingChildResource(ctx context.Context, clients *lfxv2.Clients, 
 	return result.Resources[0], nil
 }
 
+// pastMeetingChildNotVisibleNote is the get_past_meeting note for a recording
+// or transcript the query service did not return. It says only that none is
+// visible to the caller, never that one exists.
+func pastMeetingChildNotVisibleNote(what string) string {
+	return "NOTE: " + notVisibleText(what+" of this past meeting") + "."
+}
+
 // handleGetPastMeeting implements the get_past_meeting tool logic. It fetches the
 // base past meeting via the meeting-service GetItxPastMeeting Goa endpoint, then
 // nests the recording and transcript sub-objects (fetched from the query service,
 // parent-ref scoped). Missing or inaccessible recording/transcript data yields a
-// partial result plus a warning rather than a hard failure, matching get_project.
+// partial result plus a note or warning rather than a hard failure, matching
+// get_project.
 func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetPastMeetingArgs) (*mcp.CallToolResult, pastMeetingGetResult, error) {
 	logger := newToolLogger(ctx, req)
 
@@ -1231,21 +1240,29 @@ func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	// the past_meeting parent ref. The input uid is the meeting_and_occurrence_id.
 	parentRef := "past_meeting:" + args.UID
 
-	// Recording (soft failure): omit silently when absent; warn when inaccessible.
+	// Recording (soft failure): warn when the fetch fails; note when the query
+	// returns none, since the query service leaves out records the caller
+	// cannot view and an absent recording may exist but not be shared.
 	recording, err := fetchPastMeetingChildResource(ctx, clients, pastMeetingRecordingResourceType, parentRef)
-	if err != nil {
-		warnings = append(warnings, fmt.Sprintf("WARNING: past meeting recording unavailable - %s", err.Error()))
+	switch {
+	case err != nil:
+		warnings = append(warnings, "WARNING: past meeting recording unavailable - "+apiErrorDetail(err))
 		logger.ErrorContext(ctx, "getting past meeting recording failed, returning without it", "error", err, "uid", args.UID)
-	} else {
+	case recording == nil:
+		warnings = append(warnings, pastMeetingChildNotVisibleNote("recording"))
+	default:
 		out.Recording = recording
 	}
 
 	// Transcript (soft failure): same handling as recording.
 	transcript, err := fetchPastMeetingChildResource(ctx, clients, pastMeetingTranscriptResourceType, parentRef)
-	if err != nil {
-		warnings = append(warnings, fmt.Sprintf("WARNING: past meeting transcript unavailable - %s", err.Error()))
+	switch {
+	case err != nil:
+		warnings = append(warnings, "WARNING: past meeting transcript unavailable - "+apiErrorDetail(err))
 		logger.ErrorContext(ctx, "getting past meeting transcript failed, returning without it", "error", err, "uid", args.UID)
-	} else {
+	case transcript == nil:
+		warnings = append(warnings, pastMeetingChildNotVisibleNote("transcript"))
+	default:
 		out.Transcript = transcript
 	}
 

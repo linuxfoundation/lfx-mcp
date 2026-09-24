@@ -405,6 +405,21 @@ its shape depends on `count_only`, so its `Out` is `any` and it publishes no
 `outputSchema`. It still returns its page as structured content, the same
 value as its JSON text, with the same `warnings` key.
 
+Lookups by UID that go through the query service (`get_meeting`,
+`get_meeting_registrant`, `get_past_meeting_participant`,
+`get_past_meeting_summary`) cannot tell a missing record from one the caller
+may not view either. On an empty answer they return the shared
+`lookupNotVisibleMessage`, never a bare "not found": no such record is
+visible to the caller, it may not exist or may not be shared with them, and
+they can check the UID or ask someone with access. A lookup that calls an
+LFX v2 service other than the query service (such as `get_past_meeting`,
+which reads the meeting service) reports that service's 404 through
+`friendlyAPIError`, which gives it the standard access message (see
+[Upstream HTTP status](#upstream-http-status)).
+`get_past_meeting` reads its recording and transcript from the query service;
+when either is absent it adds a note saying none is visible to the caller,
+next to its existing fetch-failure warnings.
+
 ### Tool Annotations
 
 All tools should include a `mcp.ToolAnnotations` struct to provide metadata hints to MCP clients (e.g., Claude). Annotations help clients decide how to present tools and whether to confirm before calling them.
@@ -566,6 +581,37 @@ return &mcp.CallToolResult{
 
 See the **Errors** rule under
 [Query-backed search results](#query-backed-search-results).
+
+### Upstream HTTP status
+
+Report an error from an LFX v2 service client (`internal/lfxv2`) with
+`friendlyAPIError(op, err)`, and describe one in a partial-result warning with
+`apiErrorDetail(err)`, never with `err.Error()`. Both read the HTTP status
+with `lfxv2.UpstreamStatus`:
+
+- **401**: `Unauthorized (HTTP 401)` and nothing else. A 401 means the service
+  did not accept the credentials this server sent: the token exchanged for an
+  HTTP caller (whose login is verified before any tool runs), the server's
+  machine token, or in stdio mode the `-lfx_token` token. Asking for access
+  does not fix any of these. The handler logs it at ERROR level with the
+  request's context, as it logs every upstream error; the helpers add no log
+  line of their own. `newToolLogger` writes a Goa typed error whose `Error()`
+  is blank as its name and message, so that record keeps the upstream text.
+- **403**: the shared `accessDeniedMessage`, unless the endpoint declares 403
+  and the response carries the service's own message. That case is shown as
+  `upstreamErrorText` renders the client's typed error: `Forbidden: <message>`
+  for the meeting service, the only service whose endpoints the tools call
+  that declares 403. A typed error with its own `Error()` text (the committee
+  client's `ForbiddenError` returns `Forbidden`) would show only that text.
+- **404**: the shared `accessDeniedMessage`, from any service: a 404 cannot
+  tell a missing resource from one the caller may not see. A declared 404
+  whose body the client cannot decode or validate keeps Goa's decoding or
+  validation error text.
+- Anything else: the upstream error text (`upstreamErrorText`).
+
+The service API tools behind `internal/serviceapi` (Discord, email, member
+onboarding, LFX Lens and the semantic layer) do not use this mapping: there
+the MCP server is the authorization gate, and a 404 means not found.
 
 ### MCP Protocol Errors
 

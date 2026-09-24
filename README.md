@@ -230,7 +230,7 @@ lfx auth login
 
 # Run the server in stdio mode, passing a fresh token from lfx-cli.
 LFXMCP_LFX_TOKEN="$(lfx auth token)" \
-  LFXMCP_LFX_API_URL="https://api.lfx.dev" \
+  LFXMCP_LFX_API_URL="https://lfx-api.v2.cluster.lfx.dev" \
   ./bin/lfx-mcp-server -mode=stdio
 ```
 

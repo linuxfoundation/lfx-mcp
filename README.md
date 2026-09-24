@@ -277,7 +277,7 @@ npx @modelcontextprotocol/inspector
 
 | Tool                         | Description                                                       |
 |------------------------------|-------------------------------------------------------------------|
-| `search_meetings`            | Search for meetings; filter by project, committee, date range     |
+| `search_meetings`            | Search meetings by project, committee, date; upcoming occurrences |
 | `get_meeting`                | Get a meeting by UID                                              |
 | `search_meeting_registrants` | Search meeting registrants; filter by meeting, committee, project |
 | `get_meeting_registrant`     | Get a meeting registrant by UID                                   |

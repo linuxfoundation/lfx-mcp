@@ -339,3 +339,48 @@ func TestDebugTransport_TransportErrorLogMasksSignedLink(t *testing.T) {
 		t.Errorf("the logged error must have its signature masked, got:\n%s", out)
 	}
 }
+
+// Below DEBUG the transport skips dumping and masking. That saving cannot be
+// seen in the log, since slog drops DEBUG records either way; what this test
+// pins is that the round trip is unchanged and failures are still logged,
+// masked, at that level.
+func TestDebugTransport_InfoLevelSkipsDumpsButLogsFailures(t *testing.T) {
+	var logs bytes.Buffer
+	info := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	ok := &debugTransport{transport: &stubRoundTripper{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Proto:      "HTTP/1.1",
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		Header:     http.Header{},
+		Body:       io.NopCloser(strings.NewReader(`{"uid":"m1"}`)),
+	}}, logger: info}
+	req, err := http.NewRequest(http.MethodGet, "https://api.example.test/meetings/m1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := ok.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+	if body, _ := io.ReadAll(resp.Body); string(body) != `{"uid":"m1"}` {
+		t.Errorf("the caller must get the body unchanged, got %q", body)
+	}
+	if logs.Len() != 0 {
+		t.Errorf("no dump may be logged below DEBUG, got:\n%s", logs.String())
+	}
+
+	failing := &debugTransport{transport: failingRoundTripper{}, logger: info}
+	req, err = http.NewRequest(http.MethodGet, "https://files.example.test/a.pdf?X-Amz-Signature="+debugTestSignature, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := failing.RoundTrip(req); err == nil {
+		t.Fatal("the transport error must be returned")
+	}
+	out := logs.String()
+	if !strings.Contains(out, "outbound request failed") || strings.Contains(out, debugTestSignature) {
+		t.Errorf("a failure must still be logged, masked, below DEBUG, got:\n%s", out)
+	}
+}

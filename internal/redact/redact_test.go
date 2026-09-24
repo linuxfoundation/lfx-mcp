@@ -169,6 +169,16 @@ func TestURL(t *testing.T) {
 			want: "https://meet.example.test/j/1234567890?pwd=" + Mask + "&from=addon",
 		},
 		{
+			name: "LFX join link password",
+			in:   "https://meet.example.test/meeting/93699735000?password=test-join-page-pw",
+			want: "https://meet.example.test/meeting/93699735000?password=" + Mask,
+		},
+		{
+			name: "names that only end in password are kept",
+			in:   "https://api.example.test/x?reset_password=r1&password_hint=h",
+			want: "https://api.example.test/x?reset_password=r1&password_hint=h",
+		},
+		{
 			name: "HTML-escaped separator",
 			in:   "https://files.example.test/a.pdf?v=1&amp;X-Amz-Signature=abc",
 			want: "https://files.example.test/a.pdf?v=1&amp;X-Amz-Signature=" + Mask,
@@ -230,7 +240,8 @@ func TestWireDump_MasksMeetingPasscodeFields(t *testing.T) {
 		`"password":"test-join-page-pw","meeting_password": "test-past-pw","other_host_key":9,` +
 		`"host_key_hint":"kept","note":"escaped \"quote\" kept"}}],"page_token":"p2"}` + "\n" +
 		`{"uid":"m-2","host_key":654321}` + "\n" +
-		`{"uid":"m-3","password":987.65,"passcode":7e9,"meeting_password":-3.5E+4,"after":"kept"}`
+		`{"uid":"m-3","password":987.65,"passcode":7e9,"meeting_password":-3.5E+4,"after":"kept"}` + "\n" +
+		`{"uid":"m-4","join_url":"https://meet.example.test/meeting/93699735000?password=test-lfx-join-pw","password":"test-lfx-join-pw"}`
 	dump := "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" + body
 
 	got := WireDump([]byte(dump))
@@ -238,6 +249,7 @@ func TestWireDump_MasksMeetingPasscodeFields(t *testing.T) {
 	for _, secret := range []string{
 		"test-join-passcode", "test-passcode", "test-host-key", "test-rec-pw",
 		"test-join-page-pw", "test-past-pw", "654321", "987", ".65", "7e9", "3.5E", "E+4",
+		"test-lfx-join-pw",
 	} {
 		if strings.Contains(got, secret) {
 			t.Errorf("secret %q must be masked, got:\n%s", secret, got)
@@ -257,6 +269,7 @@ func TestWireDump_MasksMeetingPasscodeFields(t *testing.T) {
 		`"page_token":"p2"`,
 		`{"uid":"m-2","host_key":"`+Mask+`"}`,
 		`{"uid":"m-3","password":"`+Mask+`","passcode":"`+Mask+`","meeting_password":"`+Mask+`","after":"kept"}`,
+		`{"uid":"m-4","join_url":"https://meet.example.test/meeting/93699735000?password=`+Mask+`","password":"`+Mask+`"}`,
 	)
 }
 

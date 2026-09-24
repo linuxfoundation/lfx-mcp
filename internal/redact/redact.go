@@ -41,8 +41,9 @@ var schemeHeaders = map[string]bool{
 // header, or a body. The names cover S3 pre-signed URLs, which is what the
 // meeting attachment upload and download endpoints return (X-Amz-Signature,
 // X-Amz-Credential, X-Amz-Security-Token), CDN signed URLs (Signature), the
-// generic sig, token and access_token parameters, and pwd, the passcode
-// parameter of the join_url on meeting records. The parameter must follow
+// generic sig, token and access_token parameters, and the join-link secrets
+// of meeting records: password, which LFX join links carry, and pwd, which
+// Zoom join links carry. The parameter must follow
 // "?" or "&", written plainly or in the escaped forms a body may use: JSON
 // writes "&" as "\u0026", HTML as "&amp;", "&#38;" or "&#x26;", and the two
 // stack when HTML text is serialised to JSON ("\u0026amp;") or escaped more
@@ -51,7 +52,7 @@ var schemeHeaders = map[string]bool{
 // Parameters that carry no secret, such as X-Amz-Date and X-Amz-Expires,
 // are kept because they are what explains an expired link.
 var signedLinkParam = regexp.MustCompile(
-	`(?i)((?:\?|(?:&|\\u0026)(?:amp;|#0*38;|#x0*26;)*)(?:x-amz-signature|x-amz-credential|x-amz-security-token|signature|sig|token|access_token|pwd)=)[^&#\s"'\\<>]*`,
+	`(?i)((?:\?|(?:&|\\u0026)(?:amp;|#0*38;|#x0*26;)*)(?:x-amz-signature|x-amz-credential|x-amz-security-token|signature|sig|token|access_token|pwd|password)=)[^&#\s"'\\<>]*`,
 )
 
 // passcodeField matches a JSON member whose key is one of the meeting

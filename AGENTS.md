@@ -533,7 +533,7 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 With `-debug_traffic` on, each outbound request and response is logged at DEBUG level as a wire dump, and only that logged copy is masked with `[REDACTED]` (see `internal/redact`):
 
 - the values of the `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie` and `X-Api-Key` headers (an authorization scheme such as `Bearer` is kept);
-- the secret query parameters of signed links and meeting join links (`X-Amz-Signature`, `X-Amz-Credential`, `X-Amz-Security-Token`, `Signature`, `sig`, `token`, `access_token`, `pwd`) wherever a URL appears in the dump, response bodies included;
+- the secret query parameters of signed links and meeting join links (`X-Amz-Signature`, `X-Amz-Credential`, `X-Amz-Security-Token`, `Signature`, `sig`, `token`, `access_token`, `pwd`, `password`) wherever a URL appears in the dump, response bodies included;
 - the values of the meeting passcode and password fields in JSON bodies (`passcode`, `host_key`, `recording_password`, `password`, `meeting_password`).
 
 All other header and body content is logged as is. The request sent upstream and the response returned to the tool are not modified.

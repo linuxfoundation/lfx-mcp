@@ -514,11 +514,16 @@ type debugTransport struct {
 
 // RoundTrip implements http.RoundTripper.
 func (dt *debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	reqDump, err := httputil.DumpRequestOut(req, true)
-	if err != nil {
-		dt.logger.Error("failed to dump outbound request", "error", redact.Error(err))
-	} else {
-		dt.logger.Debug("lfxv2 outbound request", "dump", redact.WireDump(reqDump))
+	// Dumping and masking are skipped when DEBUG records would be dropped
+	// (debug_traffic without debug); failures below are logged either way.
+	debug := dt.logger.Enabled(req.Context(), slog.LevelDebug)
+	if debug {
+		reqDump, err := httputil.DumpRequestOut(req, true)
+		if err != nil {
+			dt.logger.Error("failed to dump outbound request", "error", redact.Error(err))
+		} else {
+			dt.logger.Debug("lfxv2 outbound request", "dump", redact.WireDump(reqDump))
+		}
 	}
 
 	resp, err := dt.transport.RoundTrip(req)
@@ -545,11 +550,13 @@ func (dt *debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	resp.Body = io.NopCloser(bytes.NewReader(body))
 
-	respDump, err := httputil.DumpResponse(resp, true)
-	if err != nil {
-		dt.logger.Error("failed to dump inbound response", "error", redact.Error(err))
-	} else {
-		dt.logger.Debug("lfxv2 inbound response", "dump", redact.WireDump(respDump))
+	if debug {
+		respDump, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			dt.logger.Error("failed to dump inbound response", "error", redact.Error(err))
+		} else {
+			dt.logger.Debug("lfxv2 inbound response", "dump", redact.WireDump(respDump))
+		}
 	}
 	// However DumpResponse left resp.Body, hand the caller a reader over the
 	// bytes read above.

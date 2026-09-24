@@ -49,7 +49,7 @@ var schemeHeaders = map[string]bool{
 // Parameters that carry no secret, such as X-Amz-Date and X-Amz-Expires,
 // are kept because they are what explains an expired link.
 var signedLinkParam = regexp.MustCompile(
-	`(?i)((?:\?|&(?:amp;)*|\\u0026)(?:x-amz-signature|x-amz-credential|x-amz-security-token|signature|sig|token|access_token|pwd)=)[^&\s"'\\<>]*`,
+	`(?i)((?:\?|&(?:amp;)*|\\u0026)(?:x-amz-signature|x-amz-credential|x-amz-security-token|signature|sig|token|access_token|pwd)=)[^&#\s"'\\<>]*`,
 )
 
 // passcodeField matches a JSON member whose key is one of the meeting

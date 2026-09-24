@@ -177,6 +177,11 @@ func TestURL(t *testing.T) {
 			want: "https://files.example.test/a.pdf?v=1&amp;amp;token=" + Mask,
 		},
 		{
+			name: "fragment after a masked value is kept",
+			in:   "https://files.example.test/a.pdf?sig=abc#page=2",
+			want: "https://files.example.test/a.pdf?sig=" + Mask + "#page=2",
+		},
+		{
 			name: "names that only end in a secret name are kept",
 			in:   "https://api.example.test/query/resources?page_token=p1&type=meeting&next_sig=n",
 			want: "https://api.example.test/query/resources?page_token=p1&type=meeting&next_sig=n",

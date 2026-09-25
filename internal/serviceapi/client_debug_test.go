@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -318,5 +319,64 @@ func TestServiceDebugTransport_TransportErrorLogMasksSignedLink(t *testing.T) {
 	}
 	if strings.Contains(out, signature) || !strings.Contains(out, "X-Amz-Signature=[REDACTED]") {
 		t.Errorf("the logged error must have its signature masked, got:\n%s", out)
+	}
+}
+
+// TestServiceDebugTransport_MasksSecretsSplitAcrossChunks pins that a chunked response is masked
+// even when the upstream splits a secret across chunks: the transport reads
+// the whole body before dumping it, so the dump carries one chunk and no
+// chunk-size line can fall inside a masked key or value.
+func TestServiceDebugTransport_MasksSecretsSplitAcrossChunks(t *testing.T) {
+	// Test values only. The record is padded past the 32 KiB copy buffer and
+	// flushed in four parts that split the passcode key, its value and the
+	// join-link parameter.
+	const (
+		passcode     = "test-passcode"
+		joinPasscode = "test-join-passcode"
+	)
+	parts := []string{
+		`{"title":"` + strings.Repeat("a", 40*1024) + `","pass`,
+		`code":"` + passcode[:6],
+		passcode[6:] + `","join_url":"https://meet.example.test/j/1?pw`,
+		`d=` + joinPasscode + `"}`,
+	}
+	payload := strings.Join(parts, "")
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		flusher := w.(http.Flusher)
+		for _, part := range parts {
+			_, _ = io.WriteString(w, part)
+			flusher.Flush()
+		}
+	}))
+	defer upstream.Close()
+
+	var logs bytes.Buffer
+	client := wrapWithDebugTransport(&http.Client{}, slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	resp, err := client.Get(upstream.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if len(resp.TransferEncoding) == 0 || resp.TransferEncoding[0] != "chunked" {
+		t.Fatalf("the upstream response must be chunked for this test, got %v", resp.TransferEncoding)
+	}
+	got, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading the restored body: %v", err)
+	}
+	if string(got) != payload {
+		t.Error("caller must read the original body byte for byte")
+	}
+
+	out := logs.String()
+	for _, secret := range []string{passcode, joinPasscode} {
+		if strings.Contains(out, secret) {
+			t.Errorf("secret %q must not appear in the debug log", secret)
+		}
+	}
+	for _, kept := range []string{`\"passcode\":\"[REDACTED]\"`, `/j/1?pwd=[REDACTED]`} {
+		if !strings.Contains(out, kept) {
+			t.Errorf("the debug log must keep %q", kept)
+		}
 	}
 }

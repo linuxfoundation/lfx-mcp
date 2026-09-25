@@ -93,7 +93,7 @@ func RegisterSearchMeetings(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_meetings",
-			Description: "Search for LFX meetings (group calls, also called committee calls, working group sessions) using the query service. Meetings, their occurrences, registrants, attendance and summaries live HERE - prefer these tools over the semantic layer or query_lfx_lens for meeting questions. Events (conferences, registrations, attendees, speakers, sponsorships) are standard metrics: when query_lfx_standard_metrics is available to you, read read_lfx_standard_metrics_guidance and use it.",
+			Description: "Search for LFX meetings (group calls, also called committee calls, working group sessions) using the query service. Returns the meetings visible to the caller, as in LFX Self Serve. Events (conferences, registrations, attendees, speakers, sponsorships) are standard metrics: when query_lfx_standard_metrics is available to you, read read_lfx_standard_metrics_guidance and use it.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Meetings",
 				ReadOnlyHint: true,
@@ -103,7 +103,7 @@ func RegisterSearchMeetings(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_meetings",
-		Description: "Search for LFX meetings (committee calls, working group sessions) using the query service. Meetings, their occurrences, registrants, attendance and summaries live HERE - prefer these tools over the semantic layer or query_lfx_lens for meeting questions. Events (conferences, registrations, attendees, speakers, sponsorships) are standard metrics: when query_lfx_standard_metrics is available to you, read read_lfx_standard_metrics_guidance and use it.",
+		Description: "Search for LFX meetings (committee calls, working group sessions) using the query service. Returns the meetings visible to the caller, as in LFX Self Serve. Events (conferences, registrations, attendees, speakers, sponsorships) are standard metrics: when query_lfx_standard_metrics is available to you, read read_lfx_standard_metrics_guidance and use it.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Meetings",
 			ReadOnlyHint: true,
@@ -231,7 +231,7 @@ func RegisterSearchPastMeetings(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_past_meetings",
-			Description: "Search for LFX past meetings (v1_past_meeting) using the query service. Supports filtering by project, group (also known as committee), meeting ID, date range, and name. Past attendance and summaries live here, not in the semantic layer or query_lfx_lens. Filters combine with AND: a record must match every filter given.",
+			Description: "Search for LFX past meetings (v1_past_meeting) using the query service. Supports filtering by project, group (also known as committee), meeting ID, date range, and name. Returns the past meetings visible to the caller. Filters combine with AND: a record must match every filter given.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Past Meetings",
 				ReadOnlyHint: true,
@@ -241,7 +241,7 @@ func RegisterSearchPastMeetings(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meetings",
-		Description: "Search for LFX past meetings using the query service. Supports filtering by project, committee, meeting ID, date range, and name. Past attendance and summaries live here, not in the semantic layer or query_lfx_lens. Filters combine with AND: a record must match every filter given.",
+		Description: "Search for LFX past meetings using the query service. Supports filtering by project, committee, meeting ID, date range, and name. Returns the past meetings visible to the caller. Filters combine with AND: a record must match every filter given.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Past Meetings",
 			ReadOnlyHint: true,
@@ -329,7 +329,7 @@ type SearchPastMeetingParticipantsArgs struct {
 	MaxMeetings   int    `json:"max_meetings,omitempty" jsonschema:"With a date range: maximum past meetings to expand (default 50, max 200), earliest first (past meetings sort chronologically); truncated_meetings=true in the result when the cap was hit"`
 	AttendedOnly  bool   `json:"attended_only,omitempty" jsonschema:"Only participants who attended (is_attended:true)"`
 	OrgName       string `json:"org_name,omitempty" jsonschema:"Exact stored organisation name, case-sensitive (copy it from a participant record)"`
-	CountOnly     bool   `json:"count_only,omitempty" jsonschema:"Return only {count, complete, visibility, note}: the number of participant records (not distinct people) matching the filters"`
+	CountOnly     bool   `json:"count_only,omitempty" jsonschema:"Return only {count, complete, visibility, note}: the number of participant records (not people or attendances) matching the filters"`
 	Dedupe        *bool  `json:"dedupe,omitempty" jsonschema:"People are de-duplicated by identity like LFX Self Serve: LFX username when both records have one, else e-mail, else normalised name; dedupe=false returns raw records. default true; applies within the returned page (or the whole date range)"`
 	Sort          string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc; with a date range the sort applies within each meeting and meetings are listed earliest first"`
 	PageSize      int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100); ignored with a date range. truncated_records=true means the search reached the record cap before all meetings were checked"`
@@ -347,7 +347,7 @@ type SearchPastMeetingParticipantsGroupArgs struct {
 	MaxMeetings   int    `json:"max_meetings,omitempty" jsonschema:"With a date range: maximum past meetings to expand (default 50, max 200), earliest first (past meetings sort chronologically); truncated_meetings=true in the result when the cap was hit"`
 	AttendedOnly  bool   `json:"attended_only,omitempty" jsonschema:"Only participants who attended (is_attended:true)"`
 	OrgName       string `json:"org_name,omitempty" jsonschema:"Exact stored organisation name, case-sensitive (copy it from a participant record)"`
-	CountOnly     bool   `json:"count_only,omitempty" jsonschema:"Return only {count, complete, visibility, note}: the number of participant records (not distinct people) matching the filters"`
+	CountOnly     bool   `json:"count_only,omitempty" jsonschema:"Return only {count, complete, visibility, note}: the number of participant records (not people or attendances) matching the filters"`
 	Dedupe        *bool  `json:"dedupe,omitempty" jsonschema:"People are de-duplicated by identity like LFX Self Serve: LFX username when both records have one, else e-mail, else normalised name; dedupe=false returns raw records. default true; applies within the returned page (or the whole date range)"`
 	Sort          string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc; with a date range the sort applies within each meeting and meetings are listed earliest first"`
 	PageSize      int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100); ignored with a date range. truncated_records=true means the search reached the record cap before all meetings were checked"`

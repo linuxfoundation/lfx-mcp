@@ -42,8 +42,8 @@ const countLowerBoundNote = " The count stopped at the query service's access-bu
 
 // CountLFXResourcesArgs defines the input parameters for the count_lfx_resources tool.
 type CountLFXResourcesArgs struct {
-	Type       string   `json:"type" jsonschema:"(required) Resource type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member (for project counts prefer the semantic layer's project metrics: the v2 index holds only onboarded projects)"`
-	Parent     string   `json:"parent,omitempty" jsonschema:"Parent reference, e.g. project:<uid>, committee:<uid>, past_meeting:<meeting_and_occurrence_id>, meeting:<id>"`
+	Type       string   `json:"type" jsonschema:"(required) Resource type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member (the v2 index holds only onboarded projects)"`
+	Parent     string   `json:"parent,omitempty" jsonschema:"The type's own parent ref, e.g. committee:<uid> for committee_member, project:<uid> for committee"`
 	Name       string   `json:"name,omitempty" jsonschema:"Name or alias to match (typeahead)"`
 	Tags       []string `json:"tags,omitempty" jsonschema:"Tags matched with OR, e.g. is_attended:true, project_slug:cncf"`
 	TagsAll    []string `json:"tags_all,omitempty" jsonschema:"Tags that must all match"`
@@ -68,9 +68,9 @@ func RegisterCountLFXResources(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "count_lfx_resources",
 		Description: "Count LFX resources of one type via the query service, over the records visible to the caller. " +
-			"Accepts the same filters as the search tools: parent (project:<uid>, committee:<uid>, past_meeting:<meeting_and_occurrence_id>), name (typeahead), " +
-			"tags OR / tags_all AND (is_attended:true, project_slug:cncf), an inclusive date range (date_field=start_time), " +
-			"and exact stored-value filters_all (all must match) / filters_or (at least one must match), e.g. org_name:<stored value>. " +
+			"Filters: parent, the type's own ref (committee_member: committee:<uid>; committee: project:<uid>; v1_past_meeting_participant: past_meeting:<meeting_and_occurrence_id>), " +
+			"name (typeahead), tags OR / tags_all AND (is_attended:true, project_uid:<uid>), a date range (date_field=start_time), " +
+			"and stored-value filters_all / filters_or on the type's data fields; a ref or field the type lacks counts 0. " +
 			"Returns {count, complete, visibility, note}. complete=true means every record indexed in LFX v2 that the caller may see was counted; " +
 			"complete=false means the count stopped early and is a lower bound (narrow the query). Records not yet onboarded into LFX v2 are never counted. " +
 			"Use this instead of paging a search to count meetings, participants, committees and members. " +

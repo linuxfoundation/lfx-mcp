@@ -20,7 +20,7 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   counts as of a past date or by year, social listening aggregates, event,
   training and health figures, and people rankings (top contributors, top
   maintainers) are standard metrics, not lens questions.
-- Committee/board/ambassador rosters: committee tools. Meeting lists and one meeting's details: meeting tools. Counts of meetings and participants with the caller's visibility: count_lfx_resources and search_past_meeting_participants (recipe 12). Meeting TOTALS over a period (occurrences, scheduled minutes, unique attendees, attendances) are in this layer (recipe 12). "Who represents ORG at FOUNDATION" has two true answers: the membership's contact of record (get_membership_key_contacts — key-contact roles such as Representative/Voting Contact, Authorized Signatory or Billing Contact; status Active or Inactive) and who holds the seat (get_org_committee_seats or search_committee_members — roster rows with voting_status Voting Rep, Alternate Voting Rep, Observer, Emeritus or None). They are different records and can name different people: return both, labelled, never one for the other; the seats that represent the organization are Board seats and Voting Rep or Alternate Voting Rep seats on any committee, member-class rosters filed under category Other included, never Board alone; a contact carries an updated date and a seat row from the committee tools none — cite each as recorded on its side, with the date where one is returned, never as "current".
+- Committee/board/ambassador rosters: committee tools. Ranking organisations by seats: count each candidate organisation with count_lfx_resources (type=committee_member, tags_all organization_id:<SFID>, plus committee_category:Board for board seats) — seats visible to you in LFX v2. An open LF-wide ranking over every organisation is query_lfx_lens as the last resort, labelled generated SQL over the warehouse copy of the v1 committee records, active seats only (end date empty or in the future), LF staff and unaffiliated seats set aside and said; that copy differs from the LFX v2 committee service, so say which one was read and never combine or reconcile the two. Meeting lists and one meeting's details: meeting tools. Counts of meetings and participants with the caller's visibility: count_lfx_resources and search_past_meeting_participants (recipe 12). Meeting TOTALS over a period (occurrences, scheduled minutes, unique attendees, attendances) are in this layer (recipe 12). "Who represents ORG at FOUNDATION" has two true answers: the membership's contact of record (get_membership_key_contacts — key-contact roles such as Representative/Voting Contact, Authorized Signatory or Billing Contact; status Active or Inactive) and who holds the seat (get_org_committee_seats or search_committee_members — roster rows with voting_status Voting Rep, Alternate Voting Rep, Observer, Emeritus or None). They are different records and can name different people: return both, labelled, never one for the other; the seats that represent the organization are Board seats and Voting Rep or Alternate Voting Rep seats on any committee, member-class rosters filed under category Other included, never Board alone; a contact carries an updated date; a seat row carries a role or voting term date only where one is recorded (search_committee_members, get_committee_member; 0001-01-01 means none; get_org_committee_seats rows carry no date), and its created/updated stamps date the LFX v2 record, not the seat — cite a term date as recorded, never a stamp, never "current" or "member since". Without the organisation grant, get_org_committee_seats refuses and returns no contacts either: a refusal is the gate, never 'no seats'; read the contacts through search_members → get_membership_key_contacts and the seats through search_committee_members or count_lfx_resources, both "visible to you", and say an empty side is what you can see, not an absence.
 - How many projects a foundation or parent has: this layer's project metrics count the authoritative project directory; search_projects and count_lfx_resources count only projects onboarded into LFX v2 and can be lower — use the tools to resolve names and slugs, the layer for the number.
 - Where this layer and the standard metrics read differently (both are
   right; say which one you used): dates are UTC calendar days on the
@@ -112,8 +112,9 @@ dimension by what the question names:
   '%/<id>/%' for exact identity); account__account_rollup_name is ONE hop,
   for direct subsidiaries only. The whole subtree on any model is
   project__project_path LIKE '%/<slug>/%' (project__project_depth for
-  levels); project__parent_project_slug is one level. Speakers and meeting
-  attendance carry no account entity.
+  levels); project__parent_project_slug is one level. Speakers carry no account
+  entity; meeting attendance does (attendees_count, unique_attendees,
+  invited_count), meeting occurrences and scheduled minutes do not.
 
 ## Windows
 
@@ -255,15 +256,26 @@ metric maintainer_contributions (by=project or by=org; the share is over
 contributions for the same scope); "top maintainers by contributions" as
 PEOPLE is maintainer_contributions by=maintainer.
 
-12. ROSTERS AND MEETINGS. search_committees → search_committee_members (paginate;
-group-mode names: search_groups/search_group_members). Never infer a roster from
-membership or event data. A membership's key contact is the contact of record,
-not a seat; a roster row is a seat, not the contact of record — label which one
-you cite, with its date where the source returns one. The committee tools read the
-v2 committee service; this layer's committee and maintainer models read the
-warehouse mirror, which lacks rosters native to v2, so a roster question
-answered from the tools and from the layer can differ with neither wrong — say
-which one you read. Meeting LISTS and one meeting's details:
+12. ROSTERS AND MEETINGS. search_committees → search_committee_members to read
+a roster (page to the end to read every row; group-mode names:
+search_groups/search_group_members). Count members with count_lfx_resources
+type=committee_member — one committee parent=committee:<uid>, one project
+tags_all project_uid:<uid> (committee members carry no project parent:
+parent=project:<uid> counts 0), one organisation tags_all organization_id:<SFID>.
+A filter on a field the record lacks also counts 0; filters_all takes data
+fields (organization.name), tags_all takes tags (organization_name:,
+organization_id:, committee_category:). Read the complete flag; an incomplete
+count is a lower bound. Never infer a roster from membership or event data.
+A membership's key contact is the contact of record, not a seat; a roster row
+is a seat, not the contact of record — label which one you cite, with its
+recorded term date where present, never its record stamp (Routing).
+The committee tools read the LFX v2 committee service. This layer has no
+committee metric: committees appear only as slices on the meeting models
+(meeting_and_occurrence_id__committee_name / meeting_and_occurrence_id__committee_type
+on occurrences; primary_key__committee_name / primary_key__committee_type on
+attendance). The only warehouse reading of committee seats is query_lfx_lens
+over the warehouse copy of the v1 committee records, which differs from the
+v2 service (Routing) — say which one you read. Meeting LISTS and one meeting's details:
 search_meetings and search_past_meetings. Meeting TOTALS over a period are in
 this layer on two models. OCCURRENCES (one row per meeting occurrence):
 meeting_occurrences (distinct occurrences held) and scheduled_meeting_minutes
@@ -281,16 +293,22 @@ attendance rate is attendees_count over invited_count on the same slice
 on the attendance model: primary_key__meeting_type (carries both a 'None'
 literal and NULL — both are untyped), primary_key__committee_type,
 primary_key__committee_name, primary_key__meeting_name, primary_key__invitee_role,
-primary_key__invitee_voting_status. PROJECTS on both models through the
+primary_key__invitee_voting_status; on occurrences:
+meeting_and_occurrence_id__committee_type, meeting_and_occurrence_id__committee_name.
+PROJECTS on both models through the
 conformed entity: project__foundation_slug for a foundation, project__slug for
 one project, project__project_path LIKE '%/<slug>/%' for a subtree; an
 occurrence shared by several projects is attributed to one of them.
-ORGANIZATIONS (attendance model only): primary_key__account_name is the
-invitee's account as the source spelled it — there is no account entity, so no rollup,
-no subsidiaries, and recipe 6's acronym trap applies; two buckets are not
-companies: '' (no account) and 'Individual - No Account' — report both as
-unattributed. No standard metric covers meetings: compose them here with these
-names. TWO ROUTES, TWO DEFINITIONS. search_past_meetings returns a paged listing. count_lfx_resources provides meeting counts and search_past_meeting_participants with count_only=true provides participant counts; both count what the caller's identity may see, the same visibility as LFX Self Serve, and say whether the count is complete; this layer's meeting models count every meeting in the warehouse with no per-caller visibility. The two differ by design and neither is wrong. Cite a tool figure as 'meetings (or participants) visible to you' and a layer figure as 'all meetings in the warehouse'; never reconcile one against the other; prefer the tools for a project's or committee's own meeting list, details and caller-visible counts, and the layer for totals over a period — occurrences, scheduled minutes, attendees, attendances — LF-wide or by foundation, project subtree, company, committee type or meeting type. The meeting tools take date_from and date_to, inclusive, with date-only values read as UTC day boundaries; the standard metrics say the same thing as start_date and end_date. Seats for an organisation come from get_org_committee_seats, complete for the scope and gated on the organisation grant; the committee models in this layer carry no per-user access and are not the route for an organisation's seats. The membership's contact of record is get_membership_key_contacts; the two can name different people.
+ORGANIZATIONS (attendance model only): the account entity —
+account__top_parent_name for the whole company at any depth,
+account__account_name for one account (recipe 6) — beside
+primary_key__account_name, the spelling as stored. Unattributed:
+account__account_name NULL (no account, or a stored account that does not
+resolve) and account__is_placeholder_account = true ('Individual - No Account');
+report both, and treat a company figure as a floor. The occurrences model
+carries no account: distinct meetings a company's people attended has no named
+metric — query_lfx_lens, labelled generated SQL. No standard metric covers meetings: compose them here with these
+names. TWO ROUTES, TWO DEFINITIONS. search_past_meetings returns a paged listing. count_lfx_resources provides meeting counts and search_past_meeting_participants with count_only=true provides participant RECORD counts — not people and not attendances, since one person can hold more than one record at one occurrence; its listing's people field is the de-duplicated people. Both count tools count what the caller's identity may see, the same visibility as LFX Self Serve, and say whether the count is complete; this layer's meeting models count every meeting in the warehouse with no per-caller visibility. The two differ by design and neither is wrong. Cite a tool count as 'meetings (or participant records) visible to you' and a layer figure as 'all meetings in the warehouse'; never reconcile one against the other; prefer the tools for a project's or committee's own meeting list, details and caller-visible counts, and the layer for totals over a period — occurrences, scheduled minutes, attendees, attendances — LF-wide or by foundation, project subtree, company (attendance only), committee type or meeting type. An unscoped long-window count can time out: scope by project or committee and read month windows. On participant records, an unknown date_field or date_field=start_time returns a silent 0: they carry no start_time; created_at is the record's creation, not the meeting's. For a meeting-date window use search_past_meeting_participants with a project or committee and date_from/date_to. The meeting tools take date_from and date_to, inclusive, with date-only values read as UTC day boundaries; the standard metrics say the same thing as start_date and end_date. Seats for an organisation come from get_org_committee_seats, complete for the scope and gated on the organisation grant; this layer carries no committee seats. The membership's contact of record is get_membership_key_contacts; the two can name different people.
 
 13. REGIONS. country__* follows the person; organization_lf_region etc. follow the org's HQ.
 

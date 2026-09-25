@@ -256,9 +256,15 @@ committee category is Board or its voting_status is Voting Rep or Alternate
 Voting Rep on any committee — TOC/TSC and the member-class rosters filed under
 category Other included — never Board alone; Observer, Emeritus and None seats
 are read from the seat rows, not as representation. A contact carries its updated
-date; a seat row from the committee tools carries none: cite each as recorded
-on its side, with the date where one is returned, never as "current"; when the
-two name different people show both side by side, labelled, never merged.
+date; a seat row carries a term date only where recorded, never a tenure date
+from its record stamps: cite each as recorded on its side, with the date where
+one is returned, never as "current"; when the two name different people show
+both side by side, labelled, never merged. Without the organisation grant,
+get_org_committee_seats refuses with no contacts either: read contacts through
+search_members → get_membership_key_contacts and seats through
+search_committee_members or count_lfx_resources, both "visible to you";
+a refusal is the gate, never 'no seats', and an empty side is what you can see,
+not an absence.
 
 ## Projects and subprojects
 

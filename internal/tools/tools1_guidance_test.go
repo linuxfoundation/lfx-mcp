@@ -51,6 +51,63 @@ func TestTools1GuidanceDistinguishesCountsFromPagedListings(t *testing.T) {
 	}
 }
 
+func TestGuidanceCommitteeCountsAndSources(t *testing.T) {
+	text := strings.Join(strings.Fields(semanticLayerGuidance), " ")
+	for _, want := range []string{
+		"page to the end to read every row",
+		"Count members with count_lfx_resources type=committee_member",
+		"one committee parent=committee:<uid>",
+		"one project tags_all project_uid:<uid>",
+		"committee members carry no project parent: parent=project:<uid> counts 0",
+		"one organisation tags_all organization_id:<SFID>",
+		"A filter on a field the record lacks also counts 0",
+		"filters_all takes data fields (organization.name), tags_all takes tags (organization_name:, organization_id:, committee_category:)",
+		"Read the complete flag; an incomplete count is a lower bound",
+		"count each candidate organisation with count_lfx_resources (type=committee_member, tags_all organization_id:<SFID>, plus committee_category:Board for board seats)",
+		"seats visible to you in LFX v2",
+		"An open LF-wide ranking over every organisation is query_lfx_lens as the last resort, labelled generated SQL over the warehouse copy of the v1 committee records",
+		"active seats only (end date empty or in the future), LF staff and unaffiliated seats set aside",
+		"never combine or reconcile the two",
+		"This layer has no committee metric: committees appear only as slices on the meeting models",
+		"meeting_and_occurrence_id__committee_name / meeting_and_occurrence_id__committee_type on occurrences",
+		"primary_key__committee_name / primary_key__committee_type on attendance",
+		"on occurrences: meeting_and_occurrence_id__committee_type, meeting_and_occurrence_id__committee_name",
+		"this layer carries no committee seats",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("committee guidance missing %q", want)
+		}
+	}
+	for _, gone := range []string{"this layer's committee and maintainer models", "the committee models in this layer"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("committee guidance still claims %q", gone)
+		}
+	}
+}
+
+func TestGuidanceRepresentationWithoutOrganizationGrant(t *testing.T) {
+	for name, guidance := range map[string]string{
+		"semantic layer":   semanticLayerGuidance,
+		"standard metrics": standardMetricsGuidance,
+	} {
+		t.Run(name, func(t *testing.T) {
+			text := strings.Join(strings.Fields(guidance), " ")
+			for _, want := range []string{
+				"Without the organisation grant, get_org_committee_seats refuses",
+				"contacts either",
+				"search_members → get_membership_key_contacts",
+				"search_committee_members or count_lfx_resources, both \"visible to you\"",
+				"a refusal is the gate, never 'no seats'",
+				"an empty side is what you can see, not an absence",
+			} {
+				if !strings.Contains(text, want) {
+					t.Errorf("no-grant branch missing %q", want)
+				}
+			}
+		})
+	}
+}
+
 func TestGuidanceMeetingAccountCoverage(t *testing.T) {
 	text := strings.Join(strings.Fields(semanticLayerGuidance), " ")
 	for _, want := range []string{

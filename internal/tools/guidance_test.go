@@ -533,10 +533,14 @@ func TestSemanticLayerGuidanceMaintainerSplitsAndRosterSources(t *testing.T) {
 		"a split queried alone omits every group with nothing in it, so read it beside active_maintainers or use the standard metric maintainers (by=role, by=source, or the split columns on total, org and project)",
 		"never Board alone",
 		"the seats that represent the organization are Board seats and Voting Rep or Alternate Voting Rep seats on any committee",
-		"lacks rosters native to v2",
+		"This layer has no committee metric",
 		"say which one you read",
-		"with the date where one is returned",
-		"with its date where the source returns one",
+		"a contact carries an updated date",
+		"with its recorded term date where present, never its record stamp",
+		"a seat row carries a role or voting term date only where one is recorded",
+		"0001-01-01 means none; get_org_committee_seats rows carry no date",
+		"created/updated stamps date the LFX v2 record, not the seat",
+		`cite a term date as recorded, never a stamp, never "current" or "member since"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("semantic layer guidance missing %q", want)
@@ -571,6 +575,7 @@ func TestStandardMetricsGuidanceMaintainerSplitsAndRepresentation(t *testing.T) 
 		"by=role (maintainer, reviewer) and by=source (project_repo, inherited_kernel_tree, roster_repo) give one row per value",
 		"never Board alone",
 		"Observer, Emeritus and None seats are read from the seat rows",
+		"a seat row carries a term date only where recorded, never a tenure date from its record stamps",
 		`as recorded on its side, with the date where one is returned, never as "current"`,
 		"show both side by side, labelled, never merged",
 	} {

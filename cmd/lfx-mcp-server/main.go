@@ -5,18 +5,21 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"expvar"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
-	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -35,8 +38,23 @@ import (
 	slogotel "github.com/remychantenay/slog-otel"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
-	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	"go.opentelemetry.io/otel/trace"
+)
+
+// The gen_ai/mcp semantic conventions are still experimental and were dropped
+// from the stable go.opentelemetry.io/otel/semconv package as of v1.42.0. We
+// define the attribute keys locally, matching the spec at
+// https://opentelemetry.io/docs/specs/semconv/gen-ai/mcp/, until they
+// stabilize and reappear in a semconv release.
+var (
+	mcpMethodNameKey       = attribute.Key("mcp.method.name")
+	mcpSessionIDKey        = attribute.Key("mcp.session.id")
+	mcpProtocolVersionKey  = attribute.Key("mcp.protocol.version")
+	genAIToolNameKey       = attribute.Key("gen_ai.tool.name")
+	genAIOperationNameKey  = attribute.Key("gen_ai.operation.name")
+	genAIOperationExecTool = genAIOperationNameKey.String("execute_tool")
 )
 
 // Config holds all configuration for the LFX MCP server.
@@ -49,9 +67,13 @@ type Config struct {
 	ClientAssertionSigningKey string       `koanf:"client_assertion_signing_key"`
 	TokenEndpoint             string       `koanf:"token_endpoint"`
 	LFXAPIURL                 string       `koanf:"lfx_api_url"`
-	Tools                     []string     `koanf:"tools"`
-	Debug                     bool         `koanf:"debug"`
-	DebugTraffic              bool         `koanf:"debug_traffic"`
+	// LFXToken is a pre-obtained LFX bearer token (e.g. from `lfx auth
+	// token`), used directly for all API calls instead of SSO, CTE, or M2M
+	// flows. Stdio mode only; see the README for usage with lfx-cli.
+	LFXToken     string   `koanf:"lfx_token"`
+	Tools        []string `koanf:"tools"`
+	Debug        bool     `koanf:"debug"`
+	DebugTraffic bool     `koanf:"debug_traffic"`
 	// APICredentials is a consumer-key→shared-secret map for static API-key auth.
 	// TEMPORARY: stop-gap for MCP clients that cannot complete OAuth2.
 	APICredentials map[string]string `koanf:"api_credentials"`
@@ -90,6 +112,11 @@ var (
 
 const errKey = "error"
 
+// shutdownTimeout bounds how long graceful shutdown (HTTP server drain,
+// OTel span/metric/log flush) is allowed to block before the process exits
+// anyway.
+const shutdownTimeout = 10 * time.Second
+
 // committeeToGroupToolNames maps committee-mode tool names to their group-mode equivalents.
 var committeeToGroupToolNames = map[string]string{
 	"search_committees":         "search_groups",
@@ -117,6 +144,7 @@ var groupToCommitteeToolNames = func() map[string]string {
 
 // defaultTools is the list of tools enabled by default.
 var defaultTools = []string{
+	"user_info",
 	"search_projects",
 	"get_project",
 	"search_committees",
@@ -216,13 +244,14 @@ func main() {
 	f.String("http.host", "127.0.0.1", "Host to bind to for HTTP transport")
 	f.Int("http.port", 8080, "Port to listen on for HTTP transport")
 	f.String("mcp_api.public_url", "", "Public URL for MCP API (for OAuth PRM; if not set, uses http://host:port/mcp)")
-	f.String("mcp_api.auth_servers", "", "Comma-separated list of authorization server URLs for OAuth PRM")
+	f.String("mcp_api.auth_servers", "https://sso.linuxfoundation.org/", "Comma-separated list of authorization server URLs for OAuth PRM and the user_info tool's /userinfo endpoint")
 	f.String("mcp_api.scopes", "", "Comma-separated list of OAuth scopes for PRM")
 	f.String("client_id", "", "OAuth client ID for authentication")
 	f.String("client_secret", "", "OAuth client secret (ignored if client_assertion_signing_key is set)")
 	f.String("client_assertion_signing_key", "", "PEM-encoded RSA private key for client assertion (takes precedence over client_secret)")
 	f.String("token_endpoint", "", "OAuth2 token endpoint URL for token exchange")
-	f.String("lfx_api_url", "", "LFX API URL (used as token exchange audience)")
+	f.String("lfx_api_url", "", "LFX API base URL and OAuth2 audience")
+	f.String("lfx_token", "", "Pre-obtained LFX bearer token, used directly for all LFX API calls (stdio mode only; e.g. from 'lfx auth token')")
 	f.String("tools", strings.Join(defaultTools, ","), "Comma-separated list of tools to enable")
 	f.Bool("debug", false, "Enable debug logging")
 	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls")
@@ -338,32 +367,45 @@ func main() {
 		tools.SetUserInfoConfig(&tools.UserInfoConfig{
 			UserInfoEndpoint: userInfoEndpoint,
 			HTTPClient:       &http.Client{Timeout: 30 * time.Second},
+			StaticToken:      cfg.LFXToken,
 		})
 	}
 
-	// Configure project tools if token exchange is configured.
-	if cfg.LFXAPIURL != "" && cfg.TokenEndpoint != "" && cfg.ClientID != "" {
-		subjectTokenType := cfg.MCPAPI.PublicURL
-		if subjectTokenType == "" {
-			subjectTokenType = fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
+	// Configure project tools if either token exchange or a static LFX token
+	// is configured. The static token (stdio mode only) bypasses token
+	// exchange entirely, so it needs neither TokenEndpoint nor ClientID.
+	haveTokenExchange := cfg.TokenEndpoint != "" && cfg.ClientID != ""
+	haveStaticToken := cfg.LFXToken != ""
+	if cfg.LFXAPIURL != "" && (haveTokenExchange || haveStaticToken) {
+		var tokenExchangeClient *lfxv2.TokenExchangeClient
+		if haveTokenExchange {
+			subjectTokenType := cfg.MCPAPI.PublicURL
+			if subjectTokenType == "" {
+				subjectTokenType = fmt.Sprintf("http://%s:%d/mcp", cfg.HTTP.Host, cfg.HTTP.Port)
+			}
+
+			var err error
+			tokenExchangeClient, err = lfxv2.NewTokenExchangeClient(lfxv2.TokenExchangeConfig{
+				TokenEndpoint:             cfg.TokenEndpoint,
+				ClientID:                  cfg.ClientID,
+				ClientSecret:              cfg.ClientSecret,
+				ClientAssertionSigningKey: cfg.ClientAssertionSigningKey,
+				SubjectTokenType:          subjectTokenType,
+				Audience:                  cfg.LFXAPIURL,
+				// Wrap the token-exchange HTTP client with OTel tracing so token
+				// fetches appear as child spans under the active request trace.
+				HTTPClient: &http.Client{
+					Timeout:   30 * time.Second,
+					Transport: otelhttp.NewTransport(http.DefaultTransport),
+				},
+			})
+			if err != nil {
+				logger.Warn("failed to create token exchange client", errKey, err)
+			}
 		}
 
-		tokenExchangeClient, err := lfxv2.NewTokenExchangeClient(lfxv2.TokenExchangeConfig{
-			TokenEndpoint:             cfg.TokenEndpoint,
-			ClientID:                  cfg.ClientID,
-			ClientSecret:              cfg.ClientSecret,
-			ClientAssertionSigningKey: cfg.ClientAssertionSigningKey,
-			SubjectTokenType:          subjectTokenType,
-			Audience:                  cfg.LFXAPIURL,
-			// Wrap the token-exchange HTTP client with OTel tracing so token
-			// fetches appear as child spans under the active request trace.
-			HTTPClient: &http.Client{
-				Timeout:   30 * time.Second,
-				Transport: otelhttp.NewTransport(http.DefaultTransport),
-			},
-		})
-		if err != nil {
-			logger.Warn("failed to create token exchange client - project and committee tools will not be available", errKey, err)
+		if tokenExchangeClient == nil && !haveStaticToken {
+			logger.Warn("project and committee tools will not be available")
 		} else {
 			var debugLogger *slog.Logger
 			if cfg.DebugTraffic {
@@ -381,6 +423,7 @@ func main() {
 			sharedClients, err := lfxv2.NewClients(context.Background(), lfxv2.ClientConfig{
 				APIDomain:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
+				StaticLFXToken:      cfg.LFXToken,
 				DebugLogger:         debugLogger,
 				HTTPClient:          lfxHTTPClient,
 			})
@@ -415,6 +458,7 @@ func main() {
 			sharedAuth := tools.ServiceAuth{
 				LFXAPIURL:           cfg.LFXAPIURL,
 				TokenExchangeClient: tokenExchangeClient,
+				StaticLFXToken:      cfg.LFXToken,
 				DebugLogger:         debugLogger,
 				SlugResolver:        slugResolver,
 				AccessChecker:       accessChecker,
@@ -492,6 +536,10 @@ func main() {
 		if cfg.LFXAPIURL == "" {
 			logger.Warn("lfx_api_url not configured - token exchange will not be available")
 		}
+		if cfg.LFXToken != "" {
+			logger.With(errKey, fmt.Errorf("lfx_token is only supported in stdio mode")).Error("invalid configuration")
+			os.Exit(1)
+		}
 	}
 
 	// Run server based on mode.
@@ -559,8 +607,8 @@ func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middle
 			// https://opentelemetry.io/docs/specs/semconv/gen-ai/mcp/ so APM
 			// can filter and group by method and session without parsing logs.
 			span.SetAttributes(
-				semconv.McpMethodNameKey.String(method),
-				semconv.McpSessionID(sessionID),
+				mcpMethodNameKey.String(method),
+				mcpSessionIDKey.String(sessionID),
 			)
 
 			// network.transport: "pipe" for stdio (no HTTP headers), "tcp" for HTTP.
@@ -575,7 +623,7 @@ func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middle
 			// the initialize handshake and record it on the span (Recommended).
 			if ss, ok := req.GetSession().(*mcp.ServerSession); ok {
 				if initParams := ss.InitializeParams(); initParams != nil && initParams.ProtocolVersion != "" {
-					span.SetAttributes(semconv.McpProtocolVersion(initParams.ProtocolVersion))
+					span.SetAttributes(mcpProtocolVersionKey.String(initParams.ProtocolVersion))
 				}
 			}
 
@@ -584,8 +632,8 @@ func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middle
 			if method == "tools/call" {
 				if params, ok := req.GetParams().(*mcp.CallToolParamsRaw); ok && params.Name != "" {
 					span.SetAttributes(
-						semconv.GenAIToolName(params.Name),
-						semconv.GenAIOperationNameExecuteTool,
+						genAIToolNameKey.String(params.Name),
+						genAIOperationExecTool,
 					)
 				}
 			}
@@ -623,6 +671,134 @@ func mcpOTelMiddleware(serverLogger *slog.Logger, serviceName string) mcp.Middle
 	}
 }
 
+// resolveScopes derives canRead/canManage for callerToken, applying the
+// scope-blind-client fallback (see tools.IsScopeBlindClient) when the token
+// carries no MCP scope at all. A nil callerToken (stdio mode) grants both.
+func resolveScopes(cfg Config, callerToken *auth.TokenInfo) (canRead, canManage bool) {
+	var callerScopes []string
+	if callerToken != nil {
+		callerScopes = callerToken.Scopes
+	}
+	canManage = callerToken == nil || tools.HasAnyScope(callerScopes, []string{tools.ScopeManage})
+	canRead = callerToken == nil || canManage || tools.HasAnyScope(callerScopes, []string{tools.ScopeRead})
+
+	if !canRead {
+		if clientID := tools.ClientID(callerToken); tools.IsScopeBlindClient(clientID) {
+			advertised := cfg.MCPAPI.Scopes
+			if len(advertised) == 0 {
+				advertised = tools.DefaultScopes()
+			}
+			canManage = tools.HasAnyScope(advertised, []string{tools.ScopeManage})
+			canRead = canManage || tools.HasAnyScope(advertised, []string{tools.ScopeRead})
+		}
+	}
+
+	return canRead, canManage
+}
+
+// requireManageScopeHTTP returns middleware that enforces manage:all on
+// tools/call requests targeting a tool in tools.ManageScopeTools. It inspects
+// the JSON-RPC method/tool name in the request body — a single request or a
+// batch (array) of requests, since go-sdk v1.7.0 still accepts batches for
+// protocol versions negotiated below 2025-06-18 — and, when the caller lacks
+// manage:all, responds with HTTP 403 and a
+// WWW-Authenticate: Bearer error="insufficient_scope" challenge per the MCP
+// authorization spec, instead of invoking the MCP handler. It must run after
+// bearer-token verification, so auth.TokenInfoFromContext reflects the
+// caller. The body is capped at mcp.DefaultMaxRequestBodyBytes, matching the
+// limit the downstream handler itself enforces, so a caller cannot force an
+// unbounded read here before that limit would otherwise apply. Requests
+// that aren't a gated tools/call pass through unchanged, with the body
+// restored for the next handler.
+func requireManageScopeHTTP(cfg Config, resourceMetadataURL string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Match the SDK's own request-body limit so a caller cannot force an
+		// unbounded read here before the downstream handler ever applies it.
+		limited := http.MaxBytesReader(w, r.Body, mcp.DefaultMaxRequestBodyBytes)
+		body, err := io.ReadAll(limited)
+		if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			// Fail closed: a partially-read body would let this pre-parser
+			// inspect one prefix while the downstream SDK sees another.
+			// Mirror the v1.8.0 streamable handler's own behavior for this
+			// case rather than forwarding the truncated body to next.
+			http.Error(w, "failed to read request body", http.StatusBadRequest)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+
+		names, ok := manageScopeToolCallNames(body)
+		if !ok || len(names) == 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if _, canManage := resolveScopes(cfg, auth.TokenInfoFromContext(r.Context())); canManage {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		desc := fmt.Sprintf("%s requires the %s scope, which your current session does not have",
+			names[0], tools.ScopeManage)
+		w.Header().Set("WWW-Authenticate", fmt.Sprintf(
+			`Bearer error="insufficient_scope", scope="%s", resource_metadata="%s", error_description="%s"`,
+			tools.ScopeManage, resourceMetadataURL, desc,
+		))
+		w.WriteHeader(http.StatusForbidden)
+	})
+}
+
+// manageScopeToolCallNames parses body as either a single JSON-RPC request or
+// a batch (array) of requests — go-sdk v1.7.0 still accepts batches for
+// protocol versions negotiated below 2025-06-18 — and returns the original
+// (un-canonicalized) name of every tools/call target found that requires
+// manage:all. ok is false only when body isn't valid JSON in either shape; an
+// empty, non-nil slice means the body parsed but named no gated tool.
+func manageScopeToolCallNames(body []byte) (names []string, ok bool) {
+	var single json.RawMessage
+	if err := json.Unmarshal(body, &single); err != nil {
+		return nil, false
+	}
+
+	var batch []json.RawMessage
+	if err := json.Unmarshal(body, &batch); err != nil {
+		batch = []json.RawMessage{single}
+	}
+
+	for _, raw := range batch {
+		var msg struct {
+			Method string `json:"method"`
+			Params struct {
+				Name string `json:"name"`
+			} `json:"params"`
+		}
+		if err := json.Unmarshal(raw, &msg); err != nil || msg.Method != "tools/call" || msg.Params.Name == "" {
+			continue
+		}
+
+		// Group-mode aliases (create_group, etc.) map to canonical
+		// committee-mode names in ManageScopeTools.
+		name := msg.Params.Name
+		if canonical, ok := groupToCommitteeToolNames[name]; ok {
+			name = canonical
+		}
+		if tools.ManageScopeTools[name] {
+			names = append(names, msg.Params.Name)
+		}
+	}
+
+	return names, true
+}
+
 // newServer creates and configures a new MCP server with registered tools.
 //
 // callerToken, when non-nil, restricts which tools are registered to those
@@ -636,6 +812,14 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}, &mcp.ServerOptions{
 		Logger:      logger,
 		SchemaCache: schemaCache,
+		// The SDK defaults to advertising the Logging capability (client-side
+		// logging via logging/setLevel and notifications/message) whenever
+		// ServerOptions.Capabilities is nil. That feature is deprecated as of
+		// MCP protocol version 2026-07-28 (SEP-2577) and we do not implement
+		// it — tools log to stderr/OTel via newToolLogger instead — so set
+		// Capabilities explicitly to omit it. ToolCapabilities.ListChanged is
+		// still added automatically below because tools are registered.
+		Capabilities: &mcp.ServerCapabilities{},
 	})
 
 	// Add middleware for OTel instrumentation and logging of all MCP method calls.
@@ -643,40 +827,12 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 
 	// Determine which scope classes and custom claims the caller holds.
 	// A nil callerToken means no auth (stdio mode) — register everything.
-	var callerScopes []string
-	if callerToken != nil {
-		callerScopes = callerToken.Scopes
-	}
-	canManage := callerToken == nil || tools.HasAnyScope(callerScopes, []string{tools.ScopeManage})
-	canRead := callerToken == nil || canManage || tools.HasAnyScope(callerScopes, []string{tools.ScopeRead})
-
-	// Some OAuth clients ignore the scopes advertised in our protected resource
-	// metadata and in the WWW-Authenticate challenge, so their tokens arrive
-	// with no MCP scope at all. Registering nothing leaves the user with an
-	// empty tool list and no error to act on, and these clients offer no way to
-	// choose scopes, so the omission carries no intent to withhold consent.
-	// Treat them as having requested the scopes we advertise, which is what a
-	// compliant client would have sent. Advertising a narrower set therefore
-	// narrows this fallback too. The client grant already authorises those
-	// scopes, and tools still enforce per-user authorization through the
-	// caller's own exchanged token.
-	//
-	// Reaching here with canRead false already implies the token carries neither
-	// ScopeRead nor ScopeManage.
-	if !canRead {
+	canRead, _ := resolveScopes(cfg, callerToken)
+	if callerToken != nil && !canRead {
 		if clientID := tools.ClientID(callerToken); tools.IsScopeBlindClient(clientID) {
-			advertised := cfg.MCPAPI.Scopes
-			if len(advertised) == 0 {
-				advertised = tools.DefaultScopes()
-			}
-			canManage = tools.HasAnyScope(advertised, []string{tools.ScopeManage})
-			canRead = canManage || tools.HasAnyScope(advertised, []string{tools.ScopeRead})
 			// newServer runs per request, so this is logged at debug to avoid
 			// repeating a condition that is constant for the client.
-			logger.With(
-				"client_id", clientID,
-				"advertised_scopes", advertised,
-			).Debug("client requested no MCP scopes; granting the advertised scopes")
+			logger.With("client_id", clientID).Debug("client requested no MCP scopes; granting the advertised scopes")
 		}
 	}
 
@@ -686,6 +842,11 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	// server-side clients via their client_grant, so treat any M2M caller as
 	// staff-equivalent for tool registration purposes.
 	isStaff := callerToken == nil || tools.IsLFStaff(callerToken) || tools.IsMachineAccount(callerToken)
+
+	// manage:all is enforced at the HTTP layer (requireManageScopeHTTP), not
+	// here: write tools are registered below for every caller holding at
+	// least read:all so clients can discover them before completing an OAuth
+	// step-up.
 
 	// Register tools based on configuration and caller scopes.
 	enabledTools := make(map[string]bool)
@@ -699,9 +860,6 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 		enabledTools[name] = true
 	}
 
-	if enabledTools["hello_world"] && canRead {
-		tools.RegisterHelloWorld(server)
-	}
 	if enabledTools["user_info"] && canRead {
 		tools.RegisterUserInfo(server)
 	}
@@ -723,25 +881,25 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["search_committee_members"] && canRead {
 		tools.RegisterSearchCommitteeMembers(server, cfg.CommitteesAsGroups)
 	}
-	if enabledTools["create_committee"] && canManage {
+	if enabledTools["create_committee"] && canRead {
 		tools.RegisterCreateCommittee(server, cfg.CommitteesAsGroups)
 	}
-	if enabledTools["update_committee"] && canManage {
+	if enabledTools["update_committee"] && canRead {
 		tools.RegisterUpdateCommittee(server, cfg.CommitteesAsGroups)
 	}
-	if enabledTools["update_committee_settings"] && canManage {
+	if enabledTools["update_committee_settings"] && canRead {
 		tools.RegisterUpdateCommitteeSettings(server, cfg.CommitteesAsGroups)
 	}
-	if enabledTools["delete_committee"] && canManage {
+	if enabledTools["delete_committee"] && canRead {
 		tools.RegisterDeleteCommittee(server, cfg.CommitteesAsGroups)
 	}
-	if enabledTools["create_committee_member"] && canManage {
+	if enabledTools["create_committee_member"] && canRead {
 		tools.RegisterCreateCommitteeMember(server, cfg.CommitteesAsGroups)
 	}
-	if enabledTools["update_committee_member"] && canManage {
+	if enabledTools["update_committee_member"] && canRead {
 		tools.RegisterUpdateCommitteeMember(server, cfg.CommitteesAsGroups)
 	}
-	if enabledTools["delete_committee_member"] && canManage {
+	if enabledTools["delete_committee_member"] && canRead {
 		tools.RegisterDeleteCommitteeMember(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["get_mailing_list_service"] && canRead {
@@ -771,13 +929,13 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["get_membership_key_contact"] && canRead {
 		tools.RegisterGetMembershipKeyContact(server)
 	}
-	if enabledTools["create_membership_key_contact"] && canManage {
+	if enabledTools["create_membership_key_contact"] && canRead {
 		tools.RegisterCreateMembershipKeyContact(server)
 	}
-	if enabledTools["update_membership_key_contact"] && canManage {
+	if enabledTools["update_membership_key_contact"] && canRead {
 		tools.RegisterUpdateMembershipKeyContact(server)
 	}
-	if enabledTools["delete_membership_key_contact"] && canManage {
+	if enabledTools["delete_membership_key_contact"] && canRead {
 		tools.RegisterDeleteMembershipKeyContact(server)
 	}
 	if enabledTools["search_meetings"] && canRead {
@@ -831,25 +989,25 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	// if enabledTools["list_membership_actions"] && canManage {
 	// 	tools.RegisterListMembershipActions(server)
 	// }
-	if enabledTools["list_discord_roles"] && canManage {
+	if enabledTools["list_discord_roles"] && canRead {
 		tools.RegisterListDiscordRoles(server)
 	}
-	if enabledTools["find_discord_role"] && canManage {
+	if enabledTools["find_discord_role"] && canRead {
 		tools.RegisterFindDiscordRole(server)
 	}
-	if enabledTools["find_discord_user"] && canManage {
+	if enabledTools["find_discord_user"] && canRead {
 		tools.RegisterFindDiscordUser(server)
 	}
-	if enabledTools["check_discord_user_role"] && canManage {
+	if enabledTools["check_discord_user_role"] && canRead {
 		tools.RegisterCheckDiscordUserRole(server)
 	}
-	if enabledTools["assign_discord_role"] && canManage {
+	if enabledTools["assign_discord_role"] && canRead {
 		tools.RegisterAssignDiscordRole(server)
 	}
-	if enabledTools["list_email_templates"] && canManage {
+	if enabledTools["list_email_templates"] && canRead {
 		tools.RegisterListEmailTemplates(server)
 	}
-	if enabledTools["send_email"] && canManage {
+	if enabledTools["send_email"] && canRead {
 		tools.RegisterSendEmail(server)
 	}
 	if enabledTools["query_lfx_lens"] && canRead && isStaff {
@@ -889,22 +1047,84 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 func runStdioServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(context.Context) error) {
 	ctx := context.Background()
 
+	// When a static LFX token is configured, peek its exp claim (without
+	// verifying the signature — no authorization decision is ever made from
+	// this unverified peek; the LFX API itself independently verifies and
+	// authorizes every call) so we can fail fast on an already-expired token
+	// instead of getting a confusing 401 on the first tool call.
+	//
+	// The derived context's deadline is set to the token's exact expiry, not
+	// some earlier buffer: an outer loop (e.g. a wrapper script restarting
+	// this process) is expected to re-run `lfx auth token` and pass a fresh
+	// token on each restart. Cutting the deadline short would desynchronize
+	// this server's notion of "expired" from lfx-cli's own refresh logic,
+	// causing premature restarts while lfx-cli still considers the token valid.
+	if cfg.LFXToken != "" {
+		exp, err := lfxauth.PeekExpiry(cfg.LFXToken)
+		if err != nil {
+			logger.With(errKey, err).Error("invalid lfx_token")
+			os.Exit(1)
+		}
+		if !time.Now().Before(exp) {
+			logger.With("expired_at", exp).Error("lfx_token is already expired")
+			os.Exit(1)
+		}
+
+		// Warn (but don't fail startup) if the token's aud claim doesn't
+		// appear to match the configured LFX API URL. Every downstream LFX
+		// API call would otherwise fail with a confusing 401 that gives no
+		// hint the token itself was for the wrong audience.
+		if cfg.LFXAPIURL != "" {
+			if aud, err := lfxauth.PeekAudience(cfg.LFXToken); err != nil {
+				logger.With(errKey, err).Warn("could not read lfx_token audience")
+			} else if !slices.Contains(aud, strings.TrimSuffix(cfg.LFXAPIURL, "/")) &&
+				!slices.Contains(aud, strings.TrimSuffix(cfg.LFXAPIURL, "/")+"/") {
+				logger.With("token_audience", aud, "lfx_api_url", cfg.LFXAPIURL).
+					Warn("lfx_token audience does not appear to match lfx_api_url; LFX API calls may fail")
+			}
+		}
+
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, exp)
+		defer cancel()
+		logger.With("expires_at", exp).Info("static lfx_token configured; server will stop when it expires")
+	}
+
 	// Create the MCP server. Pass nil token so all enabled tools are registered
-	// without restriction (stdio has no auth context).
+	// without restriction (stdio has no MCP-level auth context; a static
+	// lfx_token, if configured, authenticates LFX API calls directly and
+	// carries no MCP scopes of its own).
 	server := newServer(cfg, otelCfg.ServiceName, nil)
 
 	// Run the server on stdio transport.
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
-		logger.With(errKey, err).Error("server failed")
-		// Flush OTel spans before exiting.
-		if serr := otelShutdown(ctx); serr != nil {
+		if cfg.LFXToken != "" && errors.Is(err, context.DeadlineExceeded) {
+			// Expected: the static token's deadline was reached. The SDK
+			// itself already logs its own generic "server run cancelled"
+			// message for the context cancellation; add a clearer one here
+			// so operators (and supervisor loops) see why the server stopped.
+			logger.Info("lfx_token expired (context deadline caught): stopping server")
+		} else {
+			logger.With(errKey, err).Error("server failed")
+		}
+		// Flush OTel spans before exiting. Use a fresh, timeout-bounded
+		// context rather than ctx: ctx may already be past its deadline (or
+		// otherwise cancelled) here, and an already-done context would make
+		// the flush a no-op right when we need it to actually run.
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		if serr := otelShutdown(flushCtx); serr != nil {
 			logger.Error("OpenTelemetry SDK shutdown failed", errKey, serr)
 		}
+		flushCancel()
 		os.Exit(1)
 	}
 
-	// Flush OTel spans on clean exit.
-	if err := otelShutdown(ctx); err != nil {
+	// Flush OTel spans on clean exit. Same reasoning as above: use a fresh
+	// context, not ctx, in case ctx's deadline was reached right as Run
+	// returned without an error.
+	flushCtx, flushCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer flushCancel()
+	if err := otelShutdown(flushCtx); err != nil {
 		logger.Error("OpenTelemetry SDK shutdown failed", errKey, err)
 	}
 }
@@ -1062,12 +1282,13 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 		authMiddleware := auth.RequireBearerToken(verifyToken, &auth.RequireBearerTokenOptions{
 			ResourceMetadataURL: resourceMetadataURL,
 		})
-		// Note: RequireBearerTokenOptions.Scopes is deliberately left unset. It is
-		// not challenge-only: the SDK requires every listed scope to be present,
-		// which would reject valid read:all-only and manage:all-only tokens and
-		// bypass the OR/implication logic in newServer(). The challenge scopes are
-		// added by withChallengeScopes instead.
-		mcpHandler = withChallengeScopes(authMiddleware(handler), scopesSupported)
+		// Note: RequireBearerTokenOptions.Scopes is deliberately left unset. The
+		// SDK requires every listed scope to be present, which would reject valid
+		// read:all-only tokens and bypass the OR/implication logic in
+		// resolveScopes(). Read access gates tool registration in newServer();
+		// manage:all is enforced per tools/call by requireManageScopeHTTP below,
+		// which runs after authMiddleware so it can read the verified TokenInfo.
+		mcpHandler = authMiddleware(requireManageScopeHTTP(cfg, resourceMetadataURL, handler))
 		logger.Info("OAuth bearer token verification enabled for /mcp endpoint", "audience", audience)
 	}
 
@@ -1147,22 +1368,26 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 		logger.With(errKey, err).Error("HTTP server failed")
 	}
 
-	// Create shutdown context with timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Attempt graceful shutdown.
-	if err := httpServer.Shutdown(ctx); err != nil {
+	// Attempt graceful shutdown, with its own fresh timeout context.
+	drainCtx, drainCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer drainCancel()
+	if err := httpServer.Shutdown(drainCtx); err != nil {
 		logger.With(errKey, err).Error("Server shutdown failed")
-		// Flush OTel spans before exiting.
-		if serr := otelShutdown(ctx); serr != nil {
+		// Flush OTel spans before exiting, using its own fresh timeout context
+		// so a slow/expired drain doesn't also starve the telemetry flush.
+		otelCtx, otelCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer otelCancel()
+		if serr := otelShutdown(otelCtx); serr != nil {
 			logger.Error("OpenTelemetry SDK shutdown failed", errKey, serr)
 		}
 		os.Exit(1)
 	}
 
-	// Flush pending OTel spans before the process exits.
-	if err := otelShutdown(ctx); err != nil {
+	// Flush pending OTel spans before the process exits, with its own fresh
+	// timeout context independent of the drain above.
+	otelCtx, otelCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer otelCancel()
+	if err := otelShutdown(otelCtx); err != nil {
 		logger.Error("OpenTelemetry SDK shutdown failed", errKey, err)
 	}
 
@@ -1187,93 +1412,4 @@ func localhostOnly(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
-}
-
-// withChallengeScopes wraps h and appends a "scope" parameter to the
-// WWW-Authenticate header on 401 and 403 responses, as recommended by RFC 6750
-// section 3 and the MCP authorization spec's scope selection strategy. Clients
-// treat this value as authoritative and fall back to the Protected Resource
-// Metadata scopes_supported field only when it is absent, so the same scope set
-// is used for both.
-//
-// This is done here rather than via RequireBearerTokenOptions.Scopes because
-// that option also enforces the scopes, requiring all of them to be present on
-// the token. The server grants read access to manage:all tokens and registers
-// tools per scope in newServer(), so enforcing both scopes at the HTTP layer
-// would reject tokens that are valid for a subset of the tools.
-func withChallengeScopes(h http.Handler, scopes []string) http.Handler {
-	if len(scopes) == 0 {
-		return h
-	}
-	scopeParam := fmt.Sprintf("scope=%q", strings.Join(scopes, " "))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h.ServeHTTP(&challengeScopeWriter{ResponseWriter: w, scopeParam: scopeParam}, r)
-	})
-}
-
-// challengeScopeWriter appends the scope parameter to any WWW-Authenticate
-// header set on an auth challenge response.
-type challengeScopeWriter struct {
-	http.ResponseWriter
-	scopeParam string
-}
-
-// scopeParamPattern matches a scope parameter at the start of an auth challenge
-// or after a parameter separator. Auth parameter names are case-insensitive.
-var scopeParamPattern = regexp.MustCompile(`(?i)(?:^|[\s,])scope\s*=`)
-
-// hasScopeParam reports whether an auth challenge already carries a scope
-// parameter. The name must start a parameter rather than appear anywhere in the
-// string, so that a quoted value such as error_description="... scope=..." does
-// not suppress the parameter we intend to add.
-func hasScopeParam(challenge string) bool {
-	// Ignore anything inside quoted parameter values.
-	var unquoted strings.Builder
-	inQuotes := false
-	for i := 0; i < len(challenge); i++ {
-		c := challenge[i]
-		switch {
-		case c == '\\' && inQuotes && i+1 < len(challenge):
-			i++ // Skip the escaped character.
-		case c == '"':
-			inQuotes = !inQuotes
-		case !inQuotes:
-			unquoted.WriteByte(c)
-		}
-	}
-	return scopeParamPattern.MatchString(unquoted.String())
-}
-
-func (w *challengeScopeWriter) WriteHeader(code int) {
-	if code == http.StatusUnauthorized || code == http.StatusForbidden {
-		header := w.Header()
-		key := http.CanonicalHeaderKey("WWW-Authenticate")
-		if challenges := header.Values(key); len(challenges) > 0 {
-			updated := make([]string, len(challenges))
-			for i, challenge := range challenges {
-				// Only Bearer challenges take a scope parameter, and it must not
-				// be added twice if an inner handler already set one.
-				if strings.HasPrefix(challenge, "Bearer") && !hasScopeParam(challenge) {
-					challenge += ", " + w.scopeParam
-				}
-				updated[i] = challenge
-			}
-			header[key] = updated
-		}
-	}
-	w.ResponseWriter.WriteHeader(code)
-}
-
-// Flush implements http.Flusher so that the streamable HTTP transport can send
-// server-sent events through this wrapper.
-func (w *challengeScopeWriter) Flush() {
-	if f, ok := w.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
-	}
-}
-
-// Unwrap returns the wrapped writer so that http.ResponseController can reach
-// the underlying implementation for deadlines and flushing.
-func (w *challengeScopeWriter) Unwrap() http.ResponseWriter {
-	return w.ResponseWriter
 }

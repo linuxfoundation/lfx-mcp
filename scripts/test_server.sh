@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 
 set -e
+set -o pipefail
 
 # Parse command line arguments
 DEBUG_FLAG=""
@@ -20,68 +21,42 @@ if [ ! -f "./bin/lfx-mcp-server" ]; then
 	make build
 fi
 
+# These tests exercise transport/protocol plumbing and schema generation
+# across every default tool (no LFXMCP_TOOLS override), not any specific
+# tool's business logic. They require no LFX credentials or OAuth config,
+# so they exercise the same startup path every tool goes through without
+# needing a bearer token. See README's "Local (stdio) mode" section for a
+# manual walkthrough that exercises real LFX API calls with `lfx auth token`.
+
 echo ""
 echo "=== Test 1: Server initialization and capabilities ==="
 (
 	echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}'
 	sleep 0.5
 ) |
-	LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server $DEBUG_FLAG |
+	./bin/lfx-mcp-server $DEBUG_FLAG |
 	grep '"id":1' |
 	jq '.'
 
 echo ""
-echo "=== Test 2: List available tools ==="
+echo "=== Test 2: List available tools (schema generation for all default tools) ==="
 (
 	echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}'
 	echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 	sleep 0.5
 ) |
-	LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server $DEBUG_FLAG |
+	./bin/lfx-mcp-server $DEBUG_FLAG |
 	grep '"id":2' |
-	jq '.result.tools'
+	jq -e 'if (.result.tools | type) == "array" and (.result.tools | length) > 0 then .result.tools else halt_error(1) end'
 
 echo ""
-echo "=== Test 3: Call hello_world tool (default greeting) ==="
-(
-	echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}'
-	echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hello_world","arguments":{}}}'
-	sleep 0.5
-) |
-	LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server $DEBUG_FLAG |
-	grep '"id":2' |
-	jq '.result.content[0].text'
-
-echo ""
-echo "=== Test 4: Call hello_world tool (with name) ==="
-(
-	echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}'
-	echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"LFX Developer"}}}'
-	sleep 0.5
-) |
-	LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server $DEBUG_FLAG |
-	grep '"id":2' |
-	jq '.result.content[0].text'
-
-echo ""
-echo "=== Test 5: Call hello_world tool (with custom message) ==="
-(
-	echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}'
-	echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"LFX Team","message":"Welcome to the platform"}}}'
-	sleep 0.5
-) |
-	LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server $DEBUG_FLAG |
-	grep '"id":2' |
-	jq '.result.content[0].text'
-
-echo ""
-echo "=== Test 6: Error handling (invalid tool name) ==="
+echo "=== Test 3: Error handling (invalid tool name) ==="
 (
 	echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}'
 	echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"invalid_tool","arguments":{}}}'
 	sleep 0.5
 ) |
-	LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server $DEBUG_FLAG |
+	./bin/lfx-mcp-server $DEBUG_FLAG |
 	grep '"id":2' |
 	jq '.error.message' || echo "\"Tool not found error handled correctly\""
 
@@ -95,8 +70,7 @@ echo ""
 echo "The LFX MCP Server is working correctly with:"
 echo "- JSON-RPC 2.0 protocol compliance"
 echo "- MCP protocol version 2024-11-05 support"
-echo "- Hello world tool with optional parameters"
+echo "- Schema generation for every default tool, without conflicts"
 echo "- Proper error handling for invalid tools"
-echo "- JSON schema validation for tool parameters"
 echo ""
 echo "Usage: $0 [--debug|-d]  # Enable debug logging during tests"

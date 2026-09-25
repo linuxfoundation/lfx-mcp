@@ -12,6 +12,7 @@ import (
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	meetingservice "github.com/linuxfoundation/lfx-v2-meeting-service/gen/meeting_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -382,13 +383,16 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		return nil, resourceSearchResult{}, toolError("Error: meeting tools not configured")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := meetingConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := meetingConfig.Clients
 
 	pageSize := args.PageSize
@@ -500,9 +504,13 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 		}, nil, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := meetingConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -511,7 +519,6 @@ func handleGetMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetMee
 		}, nil, nil
 	}
 
-	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := meetingConfig.Clients
 
 	logger.InfoContext(ctx, "fetching meeting", "uid", args.UID)
@@ -576,13 +583,16 @@ func handleSearchMeetingRegistrants(ctx context.Context, req *mcp.CallToolReques
 		return nil, resourceSearchResult{}, toolError("Error: meeting tools not configured")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := meetingConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := meetingConfig.Clients
 
 	pageSize := args.PageSize
@@ -669,9 +679,13 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := meetingConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -680,7 +694,6 @@ func handleGetMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, a
 		}, nil, nil
 	}
 
-	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := meetingConfig.Clients
 
 	logger.InfoContext(ctx, "fetching meeting registrant", "uid", args.UID)
@@ -748,13 +761,16 @@ func handleSearchPastMeetingSummaries(ctx context.Context, req *mcp.CallToolRequ
 		return nil, resourceSearchResult{}, toolError("Error: meeting tools not configured")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := meetingConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := meetingConfig.Clients
 
 	pageSize := args.PageSize
@@ -850,9 +866,13 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 		}, nil, nil
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := meetingConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -861,7 +881,6 @@ func handleGetPastMeetingResource(ctx context.Context, req *mcp.CallToolRequest,
 		}, nil, nil
 	}
 
-	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := meetingConfig.Clients
 
 	logger.InfoContext(ctx, "fetching "+resourceLabel, "uid", uid)
@@ -1013,13 +1032,16 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 		return nil, resourceSearchResult{}, toolError("Error: meeting tools not configured")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := meetingConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := meetingConfig.Clients
 
 	pageSize := args.PageSize
@@ -1175,13 +1197,16 @@ func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args Ge
 		return nil, pastMeetingGetResult{}, toolError("Error: uid is required")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := meetingConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, pastMeetingGetResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = meetingConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := meetingConfig.Clients
 
 	logger.InfoContext(ctx, "fetching past meeting", "uid", args.UID)
@@ -1216,12 +1241,6 @@ func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	}
 
 	// Transcript (soft failure): same handling as recording.
-	//
-	// GATE (LFXV2-2827): v1_past_meeting_transcript has a history of unreliable
-	// indexing (ARCH-393). This block is intentionally self-contained so it can be
-	// removed in one edit if pre-merge re-validation shows transcript indexing is
-	// still unreliable — in which case ship recording-only and track transcript as
-	// a follow-up.
 	transcript, err := fetchPastMeetingChildResource(ctx, clients, pastMeetingTranscriptResourceType, parentRef)
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("WARNING: past meeting transcript unavailable - %s", err.Error()))

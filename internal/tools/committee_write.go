@@ -12,6 +12,7 @@ import (
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -493,9 +494,13 @@ func committeeWriteClients(ctx context.Context, req *mcp.CallToolRequest) (conte
 		}
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return ctx, nil, logger, &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
@@ -504,7 +509,6 @@ func committeeWriteClients(ctx context.Context, req *mcp.CallToolRequest) (conte
 		}
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	return ctx, committeeConfig.Clients, logger, nil
 }
 
@@ -625,6 +629,7 @@ func handleUpdateCommittee(ctx context.Context, req *mcp.CallToolRequest, args U
 		Calendar:        base.Calendar,
 		DisplayName:     base.DisplayName,
 		ParentUID:       base.ParentUID,
+		ExternalSources: base.ExternalSources,
 	}
 
 	// Override with provided args.
@@ -738,8 +743,12 @@ func handleUpdateCommitteeSettings(ctx context.Context, req *mcp.CallToolRequest
 		IfMatch:               current.Etag,
 		UID:                   &args.UID,
 		BusinessEmailRequired: settings.BusinessEmailRequired,
+		LastReviewedAt:        settings.LastReviewedAt,
+		LastReviewedBy:        settings.LastReviewedBy,
 		MemberVisibility:      settings.MemberVisibility,
 		ShowMeetingAttendees:  settings.ShowMeetingAttendees,
+		Writers:               settings.Writers,
+		Auditors:              settings.Auditors,
 	}
 
 	// Override with provided args.

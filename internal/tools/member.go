@@ -12,6 +12,7 @@ import (
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	memberservice "github.com/linuxfoundation/lfx-v2-member-service/gen/membership_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -246,13 +247,16 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 		return nil, memberSearchResult{}, toolError("Error: member tools not configured")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := memberConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, memberSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := memberConfig.Clients
 
 	pageSize := args.PageSize
@@ -349,13 +353,16 @@ func handleGetMemberMembership(ctx context.Context, req *mcp.CallToolRequest, ar
 		return nil, nil, toolError("Error: membership_uid is required")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := memberConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, nil, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := memberConfig.Clients
 
 	logger.InfoContext(ctx, "fetching member membership", "membership_uid", args.MembershipUID)
@@ -399,13 +406,16 @@ func handleGetMembershipKeyContacts(ctx context.Context, req *mcp.CallToolReques
 		return nil, keyContactListResult{}, toolError("Error: membership_uid is required")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := memberConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, keyContactListResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := memberConfig.Clients
 
 	pageSize := args.PageSize
@@ -480,13 +490,16 @@ func handleGetMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequest
 		return nil, keyContactView{}, toolError("Error: contact_uid is required")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := memberConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, keyContactView{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = memberConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := memberConfig.Clients
 
 	logger.InfoContext(ctx, "fetching membership key contact", "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)

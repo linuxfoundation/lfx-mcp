@@ -13,6 +13,7 @@ import (
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -263,13 +264,16 @@ func searchCommittees(ctx context.Context, req *mcp.CallToolRequest, args Search
 		return nil, resourceSearchResult{}, toolError("Error: committee tools not configured")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	pageSize := args.PageSize
@@ -348,13 +352,16 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		return nil, committeeGetResult{}, toolError("Error: uid is required")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, committeeGetResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	logger.InfoContext(ctx, "fetching committee", "uid", args.UID)
@@ -380,14 +387,6 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		logger.ErrorContext(ctx, "getting privileged committee settings failed, returning base only", "error", err, "uid", args.UID)
 	} else {
 		committeeSettings = settingsResult.CommitteeSettings
-	}
-
-	// Strip the unreliable TotalMembers field from the committee base. The
-	// service does not populate this count reliably, so it is always zero
-	// regardless of actual membership. Removing it prevents MCP clients from
-	// incorrectly concluding that a committee has no members.
-	if baseResult.CommitteeBase != nil {
-		baseResult.CommitteeBase.TotalMembers = nil
 	}
 
 	out := committeeGetResult{
@@ -431,13 +430,16 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 		return nil, nil, toolError("Error: member_uid is required")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, nil, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	logger.InfoContext(ctx, "fetching committee member", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
@@ -484,13 +486,16 @@ func searchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args 
 		return nil, resourceSearchResult{}, toolError("Error: committee tools not configured")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
 		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	pageSize := args.PageSize

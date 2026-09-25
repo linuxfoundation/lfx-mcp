@@ -88,7 +88,7 @@ LFXMCP_MODE=http \
 	LFXMCP_HTTP_PORT=8081 \
 	LFXMCP_MCP_API_AUTH_SERVERS="https://$AUTH0_DOMAIN" \
 	LFXMCP_MCP_API_PUBLIC_URL="$LFX_MCP_API_URL" \
-	LFXMCP_TOOLS=hello_world \
+	LFXMCP_TOOLS=user_info \
 	./bin/lfx-mcp-server &
 SERVER_PID=$!
 

@@ -42,13 +42,17 @@ const (
 type ServiceAuth struct {
 	LFXAPIURL           string
 	TokenExchangeClient *lfxv2.TokenExchangeClient
-	DebugLogger         *slog.Logger
-	SlugResolver        *lfxv2.SlugResolver
-	AccessChecker       *lfxv2.AccessCheckClient
+	// StaticLFXToken, when set, is used directly for the V2 access-check call
+	// instead of exchanging an MCP token. See lfxv2.ClientConfig.StaticLFXToken.
+	StaticLFXToken string
+	DebugLogger    *slog.Logger
+	SlugResolver   *lfxv2.SlugResolver
+	AccessChecker  *lfxv2.AccessCheckClient
 }
 
 // AuthorizeProject performs the standard service tool authorization flow:
-//  1. Extract MCP token from the request
+//  1. Resolve the caller's LFX authentication (MCP token exchange, or a static
+//     LFX token in stdio mode)
 //  2. Create V2 API clients (with token exchange)
 //  3. Resolve the project slug to a V2 UUID
 //  4. Verify the user has the required relation via access-check
@@ -58,26 +62,28 @@ type ServiceAuth struct {
 // errors into a CallToolResult with IsError set, so callers can propagate
 // the error directly as the handler's error return value.
 func (s *ServiceAuth) AuthorizeProject(ctx context.Context, req *mcp.CallToolRequest, slug, relation string) (context.Context, error) {
-	logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
-
-	// Extract MCP token.
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
-	if err != nil {
-		logger.Error("failed to extract MCP token", "error", err)
-		return ctx, fmt.Errorf("failed to extract MCP token: %w", err)
-	}
-
-	ctx = lfxv2.WithMCPToken(ctx, mcpToken)
+	logger := newToolLogger(ctx, req)
 
 	// Create V2 clients.
 	clients, err := lfxv2.NewClients(ctx, lfxv2.ClientConfig{
 		APIDomain:           s.LFXAPIURL,
 		TokenExchangeClient: s.TokenExchangeClient,
+		StaticLFXToken:      s.StaticLFXToken,
 		DebugLogger:         s.DebugLogger,
 	})
 	if err != nil {
 		logger.Error("failed to create V2 clients", "error", err)
 		return ctx, fmt.Errorf("failed to create V2 clients: %w", err)
+	}
+
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err = clients.TokenFromRequest(ctx, tokenInfo)
+	if err != nil {
+		logger.Error("failed to resolve LFX authentication", "error", err)
+		return ctx, fmt.Errorf("failed to resolve LFX authentication: %w", err)
 	}
 
 	// Resolve slug → UUID.

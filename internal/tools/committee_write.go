@@ -629,6 +629,7 @@ func handleUpdateCommittee(ctx context.Context, req *mcp.CallToolRequest, args U
 		Calendar:        base.Calendar,
 		DisplayName:     base.DisplayName,
 		ParentUID:       base.ParentUID,
+		ExternalSources: base.ExternalSources,
 	}
 
 	// Override with provided args.
@@ -742,8 +743,12 @@ func handleUpdateCommitteeSettings(ctx context.Context, req *mcp.CallToolRequest
 		IfMatch:               current.Etag,
 		UID:                   &args.UID,
 		BusinessEmailRequired: settings.BusinessEmailRequired,
+		LastReviewedAt:        settings.LastReviewedAt,
+		LastReviewedBy:        settings.LastReviewedBy,
 		MemberVisibility:      settings.MemberVisibility,
 		ShowMeetingAttendees:  settings.ShowMeetingAttendees,
+		Writers:               settings.Writers,
+		Auditors:              settings.Auditors,
 	}
 
 	// Override with provided args.

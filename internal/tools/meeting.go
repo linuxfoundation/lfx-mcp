@@ -1241,12 +1241,6 @@ func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	}
 
 	// Transcript (soft failure): same handling as recording.
-	//
-	// GATE (LFXV2-2827): v1_past_meeting_transcript has a history of unreliable
-	// indexing (ARCH-393). This block is intentionally self-contained so it can be
-	// removed in one edit if pre-merge re-validation shows transcript indexing is
-	// still unreliable — in which case ship recording-only and track transcript as
-	// a follow-up.
 	transcript, err := fetchPastMeetingChildResource(ctx, clients, pastMeetingTranscriptResourceType, parentRef)
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("WARNING: past meeting transcript unavailable - %s", err.Error()))

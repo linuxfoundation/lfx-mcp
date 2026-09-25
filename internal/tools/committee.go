@@ -389,14 +389,6 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 		committeeSettings = settingsResult.CommitteeSettings
 	}
 
-	// Strip the unreliable TotalMembers field from the committee base. The
-	// service does not populate this count reliably, so it is always zero
-	// regardless of actual membership. Removing it prevents MCP clients from
-	// incorrectly concluding that a committee has no members.
-	if baseResult.CommitteeBase != nil {
-		baseResult.CommitteeBase.TotalMembers = nil
-	}
-
 	out := committeeGetResult{
 		Base:     baseResult.CommitteeBase,
 		Settings: committeeSettings,

@@ -28,6 +28,7 @@ type CreateMembershipKeyContactArgs struct {
 	Status         *string `json:"status,omitempty" jsonschema:"Role record status, e.g. 'Active'"`
 	BoardMember    *bool   `json:"board_member,omitempty" jsonschema:"Whether this contact holds a board member role"`
 	PrimaryContact *bool   `json:"primary_contact,omitempty" jsonschema:"Whether this is the primary contact for the membership"`
+	SendInvite     bool    `json:"send_invite,omitempty" jsonschema:"Whether to send a platform invite or role-assignment email"`
 }
 
 // UpdateMembershipKeyContactArgs defines the input parameters for the
@@ -36,10 +37,13 @@ type CreateMembershipKeyContactArgs struct {
 type UpdateMembershipKeyContactArgs struct {
 	MembershipUID  string  `json:"membership_uid" jsonschema:"Membership UID"`
 	ContactUID     string  `json:"contact_uid" jsonschema:"Key contact UID"`
+	Email          *string `json:"email,omitempty" jsonschema:"New contact email address; normalized to lowercase before update. Changing this resolves to a different Salesforce Contact; if the new address is unknown, a new Contact is created reusing the current contact's name, with title (if provided)"`
 	Role           *string `json:"role,omitempty" jsonschema:"Contact role designation, e.g. 'Voting Representative'"`
 	Status         *string `json:"status,omitempty" jsonschema:"Role record status, e.g. 'Active'"`
 	BoardMember    *bool   `json:"board_member,omitempty" jsonschema:"Whether this contact holds a board member role"`
 	PrimaryContact *bool   `json:"primary_contact,omitempty" jsonschema:"Whether this is the primary contact for the membership"`
+	Title          *string `json:"title,omitempty" jsonschema:"Contact job title; only persisted when email resolves to an unknown address and a new Contact is created, ignored otherwise"`
+	SendInvite     bool    `json:"send_invite,omitempty" jsonschema:"Whether to send a platform invite or role-assignment email when the email changes"`
 }
 
 // DeleteMembershipKeyContactArgs defines the input parameters for the
@@ -165,6 +169,7 @@ func handleCreateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		Status:         args.Status,
 		BoardMember:    args.BoardMember,
 		PrimaryContact: args.PrimaryContact,
+		SendInvite:     args.SendInvite,
 	}
 
 	logger.InfoContext(ctx, "creating membership key contact", "membership_uid", args.MembershipUID, "email", args.Email)
@@ -238,10 +243,13 @@ func handleUpdateMembershipKeyContact(ctx context.Context, req *mcp.CallToolRequ
 		Version:        &version,
 		MembershipUID:  args.MembershipUID,
 		UID:            args.ContactUID,
+		Email:          args.Email,
 		Role:           args.Role,
 		Status:         args.Status,
 		BoardMember:    args.BoardMember,
 		PrimaryContact: args.PrimaryContact,
+		Title:          args.Title,
+		SendInvite:     args.SendInvite,
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "UpdateKeyContact failed", "error", err, "membership_uid", args.MembershipUID, "contact_uid", args.ContactUID)

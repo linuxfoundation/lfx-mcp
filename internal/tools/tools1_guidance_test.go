@@ -156,6 +156,7 @@ func TestMemberSinceGuidance(t *testing.T) {
 			[]string{
 				"Member since is the earliest start across the organisation's membership records on that project",
 				"read whole by search_members summary=true when complete=true, with the current term, its tier and end date alongside",
+				"A call continued from a page_token holds only the summaries from that point on and its complete flag refers to the remainder; the whole answer is the earlier output plus the continuation",
 				"b2b_org_uid to the organisation's own record from search_b2b_orgs",
 				"Results cover the caller's visible records, as in LFX Self Serve",
 				"memberships family of the standard metrics counts memberships in a window or on a date and never yields a first date",

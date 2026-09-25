@@ -18,6 +18,8 @@ import (
 
 const membershipSummaryPath = "/query/memberships/summary"
 
+const wantSummaryContinuationWarning = "Continuation of an earlier summary read: this response holds the summaries from the supplied page_token onward; combine it with the earlier output. complete refers to the remainder of the read, not to the whole scope."
+
 const summaryFirst = `{"b2b_org_uid":"o","company_name":"Example","project_uid":"p","project_slug":"example","term_count":1,"first_start":"2020-01-01","last_end":"2027-01-01","current_status":"Active","current_tier_name":"Gold","current_start":"2020-01-01","current_end":"2027-01-01","current_membership_uid":"m1","tier_names":["Gold"],"statuses":["Active"],"terms":[{"membership_uid":"m1","status":"Active","tier_name":"Gold","tier":"Large","start_date":"2020-01-01","end_date":"2027-01-01"}]}`
 const summaryOther = `{"b2b_org_uid":"z","company_name":"Another","project_uid":"p","project_slug":"example","term_count":1,"tier_names":[],"statuses":[],"terms":[{"membership_uid":"m2","status":"","tier_name":""}]}`
 const summarySplit = `{"b2b_org_uid":"o","company_name":"Example","project_uid":"p","project_slug":"example","term_count":1,"first_start":"2010-01-01","last_end":"2011-01-01","current_status":"Expired","current_start":"2010-01-01","current_end":"2011-01-01","current_membership_uid":"m0","tier_names":[],"statuses":["Expired"],"terms":[{"membership_uid":"m0","status":"Expired","tier_name":"","start_date":"2010-01-01","end_date":"2011-01-01"}]}`
@@ -83,6 +85,12 @@ func TestSearchMembersSummary_Reads(t *testing.T) {
 			wantRows: []string{summaryFirst}, wantTotal: 1, complete: true,
 		},
 		{
+			name: "caller token warning precedes ignored parameters", args: SearchMembersArgs{B2bOrgUID: "o", PageToken: "start", IncludeInactive: true},
+			pages: []string{membershipSummaryPage([]string{summaryFirst}, 1, true, "")}, tokens: []string{"start"},
+			wantRows: []string{summaryFirst}, wantTotal: 1, complete: true,
+			warning: "Ignored parameters for summary=true: include_inactive.",
+		},
+		{
 			name: "bounded continuation", args: SearchMembersArgs{ProjectUID: "p"},
 			pages: capped, tokens: capTokens, wantToken: fmt.Sprintf("next-%d", maxMembershipSummaryReads),
 			wantRows: capRows, wantTotal: uint64(maxMembershipSummaryReads),
@@ -139,8 +147,11 @@ func TestSearchMembersSummary_Reads(t *testing.T) {
 				t.Error("summary must not emit list resources")
 			}
 			wantWarnings := []string(nil)
+			if tc.args.PageToken != "" {
+				wantWarnings = append(wantWarnings, wantSummaryContinuationWarning)
+			}
 			if tc.warning != "" {
-				wantWarnings = []string{tc.warning}
+				wantWarnings = append(wantWarnings, tc.warning)
 			}
 			if !reflect.DeepEqual(out.Warnings, wantWarnings) {
 				t.Errorf("warnings = %q, want %q", out.Warnings, wantWarnings)

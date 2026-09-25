@@ -102,6 +102,9 @@ func readMembershipSummaries(ctx context.Context, req *mcp.CallToolRequest, args
 		TermsTotal: &total, Complete: &complete,
 		Warnings: membershipSummaryArgumentWarnings(req, args),
 	}
+	if args.PageToken != "" {
+		out.Warnings = append([]string{"Continuation of an earlier summary read: this response holds the summaries from the supplied page_token onward; combine it with the earlier output. complete refers to the remainder of the read, not to the whole scope."}, out.Warnings...)
+	}
 	seen := make(map[[2]string]int)
 	repeated := false
 	for read := 0; read < maxMembershipSummaryReads; read++ {

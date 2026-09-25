@@ -166,6 +166,12 @@ var hostCredentialSourcePatterns = []*regexp.Regexp{
 var hostCredentialAllowedLines = map[string][]string{
 	// The meeting result field list removes host_key from meeting results.
 	"internal/tools/meeting_result_fields.go": {`"host_key": {},`},
+	// The debug-log redactor names host_key to mask its value in logged
+	// response bodies (a comment and the passcode-field pattern).
+	"internal/redact/redact.go": {
+		"// hosting a call (passcode, host_key, recording_password, and the join-page",
+		"`(\"(?:passcode|host_key|recording_password|password|meeting_password)\"\\s*:\\s*)(?:\"(?:[^\"\\\\]|\\\\.)*\"|-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)`,",
+	},
 }
 
 // meetingClientWiringFile builds the meeting-service client, wiring every

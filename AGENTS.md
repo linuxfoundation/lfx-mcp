@@ -28,6 +28,7 @@ lfx-mcp/
 │   ├── auth/               # JWT and API-key verification
 │   ├── lfxv2/              # LFX V2 API client
 │   ├── otel/               # OpenTelemetry instrumentation
+│   ├── redact/             # Masking for debug request/response logs
 │   ├── serviceapi/         # Shared service API helpers
 │   └── tools/              # MCP tool implementations
 ├── charts/                 # Helm chart for Kubernetes deployment
@@ -512,7 +513,7 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 | `-http.host`                    | `LFXMCP_HTTP_HOST`                    | `127.0.0.1`    | HTTP server bind address                                          |
 | `-http.port`                    | `LFXMCP_HTTP_PORT`                    | `8080`         | HTTP server port                                                  |
 | `-debug`                        | `LFXMCP_DEBUG`                        | `false`        | Enable debug logging with source locations                        |
-| `-debug_traffic`                | `LFXMCP_DEBUG_TRAFFIC`                | `false`        | Log outbound LFX API request/response bodies                      |
+| `-debug_traffic`                | `LFXMCP_DEBUG_TRAFFIC`                | `false`        | Log outbound LFX API requests/responses; masking listed below     |
 | `-tools`                        | `LFXMCP_TOOLS`                        | `defaultTools` | Comma-separated list of tools to enable                           |
 | `-committees_as_groups`         | `LFXMCP_COMMITTEES_AS_GROUPS`         | `false`        | Rebrand committee tools to use "group" terminology (feature flag) |
 | `-mcp_api.auth_servers`         | `LFXMCP_MCP_API_AUTH_SERVERS`         | `https://sso.linuxfoundation.org/` | OAuth authorization server URLs (comma-separated); also used as the `user_info` tool's `/userinfo` issuer |
@@ -528,6 +529,14 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 | `-onboarding_api_audience`      | `LFXMCP_ONBOARDING_API_AUDIENCE`      | —              | Auth0 resource server audience for the member onboarding API      |
 | `-lens_api_url`                 | `LFXMCP_LENS_API_URL`                 | —              | Base URL of the LFX Lens service                                  |
 | `-lens_api_audience`            | `LFXMCP_LENS_API_AUDIENCE`            | —              | Auth0 resource server audience for the LFX Lens API               |
+
+With `-debug_traffic` on, each outbound request and response is logged at DEBUG level as a wire dump, and only that logged copy is masked with `[REDACTED]` (see `internal/redact`):
+
+- the values of the `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie` and `X-Api-Key` headers (an authorization scheme such as `Bearer` is kept);
+- the secret query parameters of signed links and meeting join links (`X-Amz-Signature`, `X-Amz-Credential`, `X-Amz-Security-Token`, `Signature`, `sig`, `token`, `access_token`, `pwd`, `password`) wherever a URL appears in the dump, response bodies included;
+- the values of the meeting passcode and password fields in JSON bodies (`passcode`, `host_key`, `recording_password`, `password`, `meeting_password`).
+
+All other header and body content is logged as is. The request sent upstream and the response returned to the tool are not modified.
 
 ## MCP Client OAuth Registration (CIMD, not DCR)
 

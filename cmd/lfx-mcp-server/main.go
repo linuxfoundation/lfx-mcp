@@ -254,7 +254,7 @@ func main() {
 	f.String("lfx_token", "", "Pre-obtained LFX bearer token, used directly for all LFX API calls (stdio mode only; e.g. from 'lfx auth token')")
 	f.String("tools", strings.Join(defaultTools, ","), "Comma-separated list of tools to enable")
 	f.Bool("debug", false, "Enable debug logging")
-	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls")
+	f.Bool("debug_traffic", false, "Enable HTTP request/response debug logging for outbound LFX API calls (credential headers, signed-link parameters and meeting passcode fields are masked)")
 	f.Bool("committees_as_groups", false, "Rebrand committee tools to use 'group' terminology (feature flag)")
 	f.String("onboarding_api_url", "", "Base URL of the member onboarding service")
 	f.String("onboarding_api_audience", "", "Auth0 resource server audience for the member onboarding API")

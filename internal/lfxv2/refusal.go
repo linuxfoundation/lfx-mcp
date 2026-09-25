@@ -11,17 +11,37 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	goahttp "goa.design/goa/v3/http"
+	goa "goa.design/goa/v3/pkg"
 )
 
 // ErrAccessRefused is returned (wrapped) when an upstream LFX v2 service call
 // is answered with HTTP 401 or 403 on an endpoint that declares that status,
 // and the response carries no service-authored message. A status the endpoint
 // does not declare surfaces as Goa's invalid_response error instead; see
-// IsRefusalWithoutServiceMessage. Match it with errors.Is.
+// IsRefusalWithoutServiceMessage. Match it with errors.Is; UpstreamStatus
+// tells a 401 from a 403.
 var ErrAccessRefused = errors.New("request refused without a service message")
+
+// refusalError is the error refusalAwareDecoder returns for a 401 or 403
+// without a service-authored message. It matches ErrAccessRefused and keeps
+// the status, so UpstreamStatus can tell the two apart.
+type refusalError struct {
+	status int
+}
+
+// Error returns the ErrAccessRefused text followed by the HTTP status.
+func (e *refusalError) Error() string {
+	return fmt.Sprintf("%s (HTTP %d)", ErrAccessRefused, e.status)
+}
+
+// Is reports whether target is ErrAccessRefused.
+func (e *refusalError) Is(target error) bool {
+	return target == ErrAccessRefused
+}
 
 // IsRefusalWithoutServiceMessage reports whether err is an upstream 401 or 403
 // that carries no service-authored message. That is either ErrAccessRefused
@@ -32,23 +52,71 @@ func IsRefusalWithoutServiceMessage(err error) bool {
 	if errors.Is(err, ErrAccessRefused) {
 		return true
 	}
-	var clientErr *goahttp.ClientError
-	if !errors.As(err, &clientErr) || clientErr.Name != "invalid_response" {
+	status, body, ok := invalidResponse(err)
+	if !ok || (status != http.StatusUnauthorized && status != http.StatusForbidden) {
 		return false
 	}
-	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
-		// goahttp.ErrInvalidResponse formats the message as
-		// "invalid response code <status>" and appends ", body: <body>"
-		// only when the body is not empty.
-		prefix := fmt.Sprintf("invalid response code %d", status)
-		if clientErr.Message == prefix {
-			return true
+	return !hasServiceMessage([]byte(body))
+}
+
+// UpstreamStatus returns the HTTP status an LFX v2 service answered with when
+// err shows that status was 401, 403 or 404, and 0 otherwise. It reads the
+// three forms such an answer takes once a Goa-generated client has handled it:
+//   - a 401 or 403 without a service-authored message (ErrAccessRefused),
+//     which keeps its status;
+//   - Goa's invalid_response error, for a status the endpoint does not declare;
+//   - the service's typed error, for a status the endpoint declares, by its
+//     Goa error name: "Unauthorized", "Forbidden", or "NotFound". Every
+//     client this module uses names its typed 404 "NotFound"; only the
+//     meeting service declares "Unauthorized".
+//
+// A declared status whose body the client cannot decode or validate surfaces
+// as Goa's decoding or validation error, which does not carry the status.
+func UpstreamStatus(err error) int {
+	var refusal *refusalError
+	if errors.As(err, &refusal) {
+		return refusal.status
+	}
+	if status, _, ok := invalidResponse(err); ok {
+		switch status {
+		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+			return status
 		}
-		if body, ok := strings.CutPrefix(clientErr.Message, prefix+", body: "); ok {
-			return !hasServiceMessage([]byte(body))
+		return 0
+	}
+	var named goa.GoaErrorNamer
+	if errors.As(err, &named) {
+		switch named.GoaErrorName() {
+		case "Unauthorized":
+			return http.StatusUnauthorized
+		case "Forbidden":
+			return http.StatusForbidden
+		case "NotFound":
+			return http.StatusNotFound
 		}
 	}
-	return false
+	return 0
+}
+
+// invalidResponse returns the status and body of Goa's invalid_response error,
+// which goahttp.ErrInvalidResponse formats as "invalid response code <status>"
+// followed by ", body: <body>" only when the body is not empty. ok is false
+// when err is not such an error.
+func invalidResponse(err error) (status int, body string, ok bool) {
+	var clientErr *goahttp.ClientError
+	if !errors.As(err, &clientErr) || clientErr.Name != "invalid_response" {
+		return 0, "", false
+	}
+	rest, found := strings.CutPrefix(clientErr.Message, "invalid response code ")
+	if !found {
+		return 0, "", false
+	}
+	code, body, _ := strings.Cut(rest, ", body: ")
+	status, convErr := strconv.Atoi(code)
+	if convErr != nil {
+		return 0, "", false
+	}
+	return status, body, true
 }
 
 // refusalAwareDecoder returns the response decoder factory for a Goa-generated
@@ -73,7 +141,7 @@ func refusalAwareDecoder(extraFields ...string) func(*http.Response) goahttp.Dec
 		// Put the body back so the standard decoder can read it.
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		if !hasServiceMessage(body, extraFields...) {
-			return errDecoder{err: fmt.Errorf("%w (HTTP %d)", ErrAccessRefused, resp.StatusCode)}
+			return errDecoder{err: &refusalError{status: resp.StatusCode}}
 		}
 		return goahttp.ResponseDecoder(resp)
 	}

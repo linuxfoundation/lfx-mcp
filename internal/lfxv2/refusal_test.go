@@ -14,8 +14,12 @@ import (
 	"testing"
 
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
+	mailinglist "github.com/linuxfoundation/lfx-v2-mailing-list-service/gen/mailing_list"
 	meetingservice "github.com/linuxfoundation/lfx-v2-meeting-service/gen/meeting_service"
+	memberservice "github.com/linuxfoundation/lfx-v2-member-service/gen/membership_service"
 	projectservice "github.com/linuxfoundation/lfx-v2-project-service/api/project/v1/gen/project_service"
+	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	goahttp "goa.design/goa/v3/http"
 )
 
 // newRefusalTestClients starts a server that answers every request with the
@@ -206,6 +210,90 @@ func TestIsRefusalWithoutServiceMessage_DeclaredStatus(t *testing.T) {
 	}
 	if IsRefusalWithoutServiceMessage(nil) || IsRefusalWithoutServiceMessage(errors.New("invalid response code 401")) {
 		t.Error("nil and plain errors must not match")
+	}
+}
+
+// TestUpstreamStatus_FromClients reads the status from what the Goa clients
+// actually return: a refusal without a service message (declared status), the
+// service's typed error (declared status with a valid body), and Goa's
+// invalid_response error (undeclared status).
+func TestUpstreamStatus_FromClients(t *testing.T) {
+	uid := "00000000-0000-0000-0000-000000000000"
+	getProject := func(clients *Clients) error {
+		_, err := clients.Project.GetOneProjectBase(context.Background(), &projectservice.GetOneProjectBasePayload{UID: &uid})
+		return err
+	}
+	cases := []struct {
+		name        string
+		call        func(*Clients) error
+		status      int
+		contentType string
+		body        string
+		want        int
+	}{
+		{"meeting 401 empty body", getPastMeeting, http.StatusUnauthorized, "", "", http.StatusUnauthorized},
+		{"meeting 401 service message", getPastMeeting, http.StatusUnauthorized, "application/json", `{"code":"401","message":"token expired"}`, http.StatusUnauthorized},
+		{"meeting 403 empty body", getPastMeeting, http.StatusForbidden, "", "", http.StatusForbidden},
+		{"meeting 403 service message", getPastMeeting, http.StatusForbidden, "application/json", `{"code":"403","message":"only organizers"}`, http.StatusForbidden},
+		{"meeting 404 service message", getPastMeeting, http.StatusNotFound, "application/json", `{"code":"404","message":"past meeting not found"}`, http.StatusNotFound},
+		// A declared status whose body the client cannot decode carries no
+		// status; see UpstreamStatus.
+		{"meeting 404 empty body", getPastMeeting, http.StatusNotFound, "", "", 0},
+		{"meeting 500 service message", getPastMeeting, http.StatusInternalServerError, "application/json", `{"code":"500","message":"boom"}`, 0},
+		{"project 401 undeclared", getProject, http.StatusUnauthorized, "", "", http.StatusUnauthorized},
+		{"project 401 undeclared with message", getProject, http.StatusUnauthorized, "application/json", `{"message":"token expired"}`, http.StatusUnauthorized},
+		{"project 403 undeclared", getProject, http.StatusForbidden, "", "", http.StatusForbidden},
+		{"project 404 service message", getProject, http.StatusNotFound, "application/json", `{"code":"404","message":"project not found"}`, http.StatusNotFound},
+		{"project 409", getProject, http.StatusConflict, "", "", 0},
+		{"project 502", getProject, http.StatusBadGateway, "", "", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call(newRefusalTestClients(t, tc.status, tc.contentType, tc.body))
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			for _, e := range []error{err, fmt.Errorf("outer: %w", err)} {
+				if got := UpstreamStatus(e); got != tc.want {
+					t.Errorf("UpstreamStatus(%T %q) = %d, want %d", err, e.Error(), got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// TestUpstreamStatus_TypedErrorNames pins the Goa error names of every LFX v2
+// client this server uses: the typed errors for 401, 403 and 404, and a
+// sample of the others, which carry no status.
+func TestUpstreamStatus_TypedErrorNames(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err  error
+		want int
+	}{
+		"committee NotFound":    {&committeeservice.NotFoundError{Message: "x"}, http.StatusNotFound},
+		"committee Forbidden":   {&committeeservice.ForbiddenError{Message: "x"}, http.StatusForbidden},
+		"committee Conflict":    {&committeeservice.ConflictError{Message: "x"}, 0},
+		"mailing list NotFound": {&mailinglist.NotFoundError{Message: "x"}, http.StatusNotFound},
+		"meeting NotFound":      {&meetingservice.NotFoundError{Message: "x"}, http.StatusNotFound},
+		"meeting Unauthorized":  {&meetingservice.UnauthorizedError{Message: "x"}, http.StatusUnauthorized},
+		"meeting Forbidden":     {&meetingservice.ForbiddenError{Message: "x"}, http.StatusForbidden},
+		"meeting BadRequest":    {&meetingservice.BadRequestError{Message: "x"}, 0},
+		"member NotFound":       {memberservice.MakeNotFound(errors.New("x")), http.StatusNotFound},
+		"member BadRequest":     {memberservice.MakeBadRequest(errors.New("x")), 0},
+		"project NotFound":      {&projectservice.NotFoundError{Message: "x"}, http.StatusNotFound},
+		"project Conflict":      {&projectservice.ConflictError{Message: "x"}, 0},
+		"query NotFound":        {&querysvc.NotFoundError{Message: "x"}, http.StatusNotFound},
+		"query InternalError":   {&querysvc.InternalServerError{Message: "x"}, 0},
+		"undeclared 404":        {goahttp.ErrInvalidResponse("svc", "m", http.StatusNotFound, `{"message":"x"}`), http.StatusNotFound},
+		"decoding error":        {goahttp.ErrDecodingError("svc", "m", errors.New("EOF")), 0},
+		"plain 404 text":        {errors.New("invalid response code 404"), 0},
+		"nil":                   {nil, 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := UpstreamStatus(tc.err); got != tc.want {
+				t.Errorf("UpstreamStatus = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }
 

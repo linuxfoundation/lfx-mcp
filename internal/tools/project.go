@@ -251,7 +251,7 @@ func handleGetProject(ctx context.Context, req *mcp.CallToolRequest, args GetPro
 	})
 	var settingsWarning string
 	if err != nil {
-		settingsWarning = fmt.Sprintf("WARNING: project settings unavailable - %s", err.Error())
+		settingsWarning = "WARNING: project settings unavailable - " + apiErrorDetail(err)
 		logger.ErrorContext(ctx, "getting project settings failed, returning base only", "error", err, "uid", args.UID)
 	} else {
 		projectSettings = settingsResult.ProjectSettings

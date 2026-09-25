@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -40,11 +41,63 @@ func loggerFromContext(ctx context.Context) *slog.Logger {
 // logger.XxxContext(ctx, ...) so the active OTel span's trace_id/span_id are
 // injected into every log record.
 //
+// The returned logger writes a Goa typed error whose Error() is blank as its
+// upstreamErrorText, so the record keeps the error's name and message.
+//
 // MCP client-side logging (the logging/setLevel capability and
 // notifications/message) is a deprecated protocol feature as of the
 // 2026-07-28 revision; log to stderr/OTel instead of the client session.
 func newToolLogger(ctx context.Context, _ *mcp.CallToolRequest) *slog.Logger {
-	return loggerFromContext(ctx)
+	return slog.New(&errorTextHandler{next: loggerFromContext(ctx).Handler()})
+}
+
+// errorTextHandler is an slog.Handler that replaces an attribute holding a Goa
+// typed error with a blank Error() by that error's upstreamErrorText, then
+// forwards the record to next. Every other attribute is forwarded unchanged.
+type errorTextHandler struct {
+	next slog.Handler
+}
+
+func (h *errorTextHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.next.Enabled(ctx, level)
+}
+
+func (h *errorTextHandler) Handle(ctx context.Context, r slog.Record) error {
+	out := slog.NewRecord(r.Time, r.Level, r.Message, r.PC)
+	r.Attrs(func(a slog.Attr) bool {
+		out.AddAttrs(typedErrorAttr(a))
+		return true
+	})
+	return h.next.Handle(ctx, out)
+}
+
+func (h *errorTextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	fixed := make([]slog.Attr, len(attrs))
+	for i, a := range attrs {
+		fixed[i] = typedErrorAttr(a)
+	}
+	return &errorTextHandler{next: h.next.WithAttrs(fixed)}
+}
+
+func (h *errorTextHandler) WithGroup(name string) slog.Handler {
+	return &errorTextHandler{next: h.next.WithGroup(name)}
+}
+
+// typedErrorAttr returns a with its value replaced by upstreamErrorText when
+// the value is an error wrapping a Goa typed error whose Error() is blank.
+func typedErrorAttr(a slog.Attr) slog.Attr {
+	if a.Value.Kind() != slog.KindAny {
+		return a
+	}
+	err, ok := a.Value.Any().(error)
+	if !ok {
+		return a
+	}
+	var typed goaTypedError
+	if errors.As(err, &typed) && typed.Error() == "" {
+		return slog.String(a.Key, upstreamErrorText(err))
+	}
+	return a
 }
 
 // boolPtr returns a pointer to the given bool value. Used for optional
@@ -95,8 +148,12 @@ func chunkStrings(in []string, size int) [][]string {
 }
 
 // accessDeniedMessage is the user-facing message returned when a downstream
-// API call is rejected with HTTP 403.
+// API call is rejected with HTTP 403 or answered with HTTP 404.
 const accessDeniedMessage = "this resource may not exist or you may not have enough access to complete this operation. Request support @ https://support.lfx.dev"
+
+// unauthorizedMessage is the user-facing message returned when a downstream
+// API call is answered with HTTP 401.
+const unauthorizedMessage = "Unauthorized (HTTP 401)"
 
 // slugResolveError maps a slug resolver error to a user-facing error.
 // When the error is ErrProjectNotFound (the slug returned no results from the
@@ -174,24 +231,50 @@ func goaMessage(e goaTypedError) string {
 	return unquoted
 }
 
-// If the error is an upstream 401 or 403 with no service-authored message
-// (lfxv2.IsRefusalWithoutServiceMessage), or contains "response code 403", it
-// returns a user-friendly access-denied message instead of the raw internal
-// error string. A 401, or a 403 on an endpoint that declares it, that carries
-// the service's own message (with the fields its error body requires) is shown
-// as sent; a 403 on an endpoint that does not declare it always gets the
-// access-denied message.
-// The op argument is a short description of the operation (e.g.
-// "failed to get project") and is prefixed to both 403 and non-403 error messages.
-// Goa typed errors, whose Error() is blank, are rendered through
-// upstreamErrorText so the caller never sees an empty message.
+// friendlyAPIError returns the tool error text for err, an error from an LFX
+// v2 service call, prefixed with op, a short description of the operation
+// (e.g. "failed to get project") whose first letter is capitalised. The rest
+// is apiErrorDetail(err).
 func friendlyAPIError(op string, err error) string {
 	if len(op) > 0 {
 		op = strings.ToUpper(op[:1]) + op[1:]
 	}
+	return op + ": " + apiErrorDetail(err)
+}
+
+// apiErrorDetail describes err, an error from an LFX v2 service call, by the
+// HTTP status lfxv2.UpstreamStatus reads from it:
+//   - 401 gives unauthorizedMessage and nothing else. A 401 means the service
+//     did not accept the credentials this server sent: the token exchanged
+//     for an HTTP caller, whose own login is verified before any tool runs;
+//     the server's machine token; or, in stdio mode, the token configured
+//     with -lfx_token. Asking for access does not fix any of these. The
+//     handler logs it at ERROR level with the request's context, as it does
+//     every upstream error, so this function logs nothing itself.
+//   - 404 gives accessDeniedMessage: a 404 cannot tell a resource that does
+//     not exist from one the caller may not see.
+//   - 403 gives accessDeniedMessage when it carries no service-authored
+//     message (lfxv2.IsRefusalWithoutServiceMessage), or when the endpoint
+//     does not declare it. A 403 on an endpoint that declares it, carrying the
+//     service's own message (with the fields its error body requires), is
+//     shown as upstreamErrorText renders the client's typed error: for the
+//     meeting service, the only one whose endpoints called here declare 403,
+//     "Forbidden: <message>". A typed error with its own Error() text would
+//     show that text instead. Error text containing "response code 403" also
+//     gives accessDeniedMessage.
+//
+// Any other error is described by upstreamErrorText, so a Goa typed error
+// whose Error() is blank never yields an empty message.
+func apiErrorDetail(err error) string {
 	text := upstreamErrorText(err)
-	if lfxv2.IsRefusalWithoutServiceMessage(err) || strings.Contains(text, "response code 403") {
-		return op + ": " + accessDeniedMessage
+	switch lfxv2.UpstreamStatus(err) {
+	case http.StatusUnauthorized:
+		return unauthorizedMessage
+	case http.StatusNotFound:
+		return accessDeniedMessage
 	}
-	return op + ": " + text
+	if lfxv2.IsRefusalWithoutServiceMessage(err) || strings.Contains(text, "response code 403") {
+		return accessDeniedMessage
+	}
+	return text
 }

@@ -38,6 +38,7 @@ func SetMemberConfig(cfg *MemberConfig) {
 
 // SearchMembersArgs defines the input parameters for the search_members tool.
 type SearchMembersArgs struct {
+	Summary         bool   `json:"summary,omitempty" jsonschema:"Summarise membership terms instead of listing records: earliest start, current term and history per organisation and project; incomplete results are partial."`
 	ProjectUID      string `json:"project_uid,omitempty" jsonschema:"Filter by project UUID. At least one of project_uid or b2b_org_uid is strongly recommended."`
 	B2bOrgUID       string `json:"b2b_org_uid,omitempty" jsonschema:"Filter by B2B organization UID. At least one of project_uid or b2b_org_uid is strongly recommended."`
 	SearchName      string `json:"search_name,omitempty" jsonschema:"Search memberships by member company name (typeahead)."`
@@ -68,9 +69,15 @@ type GetMembershipKeyContactArgs struct {
 
 // memberSearchResult is the output type for the search_members tool.
 type memberSearchResult struct {
-	Resources []membershipView `json:"resources"`
-	PageToken *string          `json:"page_token,omitempty"`
-	Warnings  []string         `json:"warnings,omitempty"`
+	// Non-nil empty slices emit [] in their mode; nil omits the other mode.
+	Resources []membershipView        `json:"resources,omitzero"`
+	Summaries []membershipSummaryView `json:"summaries,omitzero"`
+	// TermsTotal is the cumulative records returned across summary reads, not
+	// a deduplicated count. Pointers retain zero/false in summary mode only.
+	TermsTotal *uint64  `json:"terms_total,omitempty"`
+	Complete   *bool    `json:"complete,omitempty"`
+	PageToken  *string  `json:"page_token,omitempty"`
+	Warnings   []string `json:"warnings,omitempty"`
 }
 
 // membershipView is a shaped view of a project_membership resource returned by
@@ -262,6 +269,10 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 	pageSize := args.PageSize
 	if pageSize <= 0 {
 		pageSize = 10
+	}
+
+	if args.Summary {
+		return readMembershipSummaries(ctx, req, args)
 	}
 
 	resourceType := memberResourceType

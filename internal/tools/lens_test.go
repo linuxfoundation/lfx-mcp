@@ -433,7 +433,7 @@ func TestCriticalGuidanceSurvivesSchemaCompaction(t *testing.T) {
 				// The family names tell a caller whether this tool covers
 				// its question at all, so the whole inventory is pinned:
 				// on the description AND on the required metric parameter.
-				{"STANDARD METRICS memberships, member_organizations, new_members, new_member_organizations, lost_member_organizations, paying_member_organizations, membership_churn, contributors, contributions, contributing_organizations, participants, maintainers, maintainer_contributions, project_health, software_value, event_registrations, event_sponsorships, speakers, training_enrollments, certifications, social_mentions, social_reach.", "the family inventory reaches the model only here"},
+				{"STANDARD METRICS memberships, member_organizations, new_members, new_member_organizations, lost_member_organizations, paying_member_organizations, membership_churn, contributors, contributions, contributing_organizations, participants, maintainers, maintainer_contributions, project_health, software_value, event_registrations, event_sponsorships, speakers, training_enrollments, certifications, social_mentions, social_reach, meetups, meetup_attendees.", "the family inventory reaches the model only here"},
 				{"search_projects", "project takes the stored slug; an everyday name silently misses"},
 				{"search_b2b_orgs", "org takes the stored legal name; a short name silently misses"},
 				{"never pass a name they have not returned", "a guessed literal is a confident wrong answer, not an error"},

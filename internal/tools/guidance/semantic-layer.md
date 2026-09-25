@@ -53,7 +53,8 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   metrics   (required) CSV, copied from explore
   group_by  dimension qualified_names; metric_time__year (or __quarter, __month,
             __week, __day) for trends
-  where     one MetricFlow expression, dates yyyy-mm-dd:
+  where     one MetricFlow expression, dates yyyy-mm-dd; a recipe's <today+1>
+            stands for the day after the query date, written as a date:
             {{ Dimension('country__lf_region') }} = 'Europe' AND {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'
   order_by  '-metric' descending — NULL rows sort FIRST; re-sort client-side
   limit     optional (10-20 top-N, 50-100 breakdowns); omitted = EVERY row,
@@ -330,8 +331,14 @@ paying_member_organizations, membership_churn, contributors, contributions,
 contributing_organizations, participants, maintainers,
 maintainer_contributions, project_health,
 software_value, event_registrations, event_sponsorships, speakers,
-training_enrollments, certifications, social_mentions, social_reach; their
-groupings (by) are in read_lfx_standard_metrics_guidance. by left out is the
+training_enrollments, certifications, social_mentions, social_reach,
+meetups, meetup_attendees; their groupings (by) are in
+read_lfx_standard_metrics_guidance. The two meetup families are the
+exception to the uniform switches: they take project only, as the
+foundation slug (cncf, not k8s) — org and subsidiaries are rejected;
+subprojects=separate is rejected since they have no by=project, and
+combined/excluded are no-ops, since chapters attach at the foundation
+(recipe 16). by left out is the
 first listed, and the scope supplies the other axis (by=project with org =
 that company's projects; by=org with project = that project's companies).
 period adds a time dimension to by: by=org with period=month is one row per
@@ -353,17 +360,52 @@ or account columns leave the result; any other by grouping keeps its rows,
 by=total is one figure). The
 DEFAULTS are the plain reading: a project name alone is its whole tree as ONE figure, an
 organization name alone is that account, and an activity family with no
-start_date is the trailing 365 days; every result carries an applied block
+start_date is the trailing 365 days (the meetup families read all history
+instead — set start_date for any comparison); every result carries an applied block
 saying which scope, dates and definition ran. A briefing usually wants the
 headline and the breakdown — two calls. DEPTH: on every standard metric,
 separate and combined cover a named node's tree and a company's subsidiaries
 at ANY depth. Results come back in the same words (account, parent_org, project,
-foundation, period), and order_by takes them.
+foundation, period), and order_by takes them (the meetup families
+excepted from DEPTH: no tree, subprojects nothing to walk).
 There is no free filter on a standard metric: a slice the switches, the dates and
 the period cannot express is an explore + query question, and its answer is
 labelled ad hoc.
 
-16. SOCIAL LISTENING. The standard metrics social_mentions (by total,
+16. MEETUPS (Open Community Groups) are the community-run chapters on
+ocgroups.dev — not LF conferences (recipe 14) and not project meetings
+(recipe 12). The governed shapes are standard metrics (recipe 15): meetups
+and meetup_attendees by community, region, group or city, with period for
+time, scoped with the foundation's slug (a community IS a foundation:
+project=cncf). Come here only for a slice those cannot express — a FILTER
+on one city, region or group with a trend over time. AVAILABILITY FIRST:
+this domain is being rolled out, so before any meetup call run list_metrics
+with search='meetup' (search is a free-text substring match, not a fixed
+list — 'meetup' is the intended term); if meetups and meetup_attendees are
+not both returned, the data is not available yet — say so and stop, do not
+substitute a query_lfx_lens guess or a different metric. METRICS: meetups
+(events on their start date, additive) and meetup_attendees (distinct
+people; never sum rows across years). DIMENSIONS: meetup_group__city,
+meetup_group__region, meetup_group__group_name,
+meetup_group__community_slug, and metric_time__year on the event start
+date. CITY OVER TIME ("is the Austin meetup scene growing"), with the
+window stated — this layer defaults to the trailing 365 days, which cannot
+give whole calendar years:
+  metrics=meetups,meetup_attendees group_by=metric_time__year
+  where={{ Dimension('meetup_group__city') }} = 'Austin' AND {{ TimeDimension('metric_time','DAY') }} >= '2023-01-01' AND {{ TimeDimension('metric_time','DAY') }} < '<today+1>'
+  order_by=metric_time__year
+— the lower bound is the first full year wanted and the upper bound is
+<today+1>, the day after the query date written as yyyy-mm-dd (exclusive),
+so the last row is year-to-date and the recipe never goes stale; the city is the chapter's home city, so verify the literal with
+get_dimension_values(dimension=meetup_group__city, metrics=meetups,
+search='Austin') first (metrics is required on that action), and scope
+with meetup_group__community_slug only if the question names a foundation.
+Read the trend from full years; call the current year year-to-date and do
+not extrapolate it. Growth is the direction of BOTH series — more events
+with fewer distinct people is a different story from fewer events with
+more people, and the answer says which.
+
+17. SOCIAL LISTENING. The standard metrics social_mentions (by total,
 project, network, sentiment) and social_reach (by total, project) cover the
 common readings — prefer them. Compose here only for a slice they lack:
 language, keyword, share of voice across foundations, trends at a grain the
@@ -389,7 +431,7 @@ The feed is young — group by metric_time__year before comparing years.
 Free-text feeds (titles, bodies, URLs, per-author lists) are not metrics;
 they are the one social question that still goes to query_lfx_lens.
 
-17. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
+18. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
 is the figure, one line on what it covers, and only the caveats that change
 how that figure is read, in the reader's words: no metric, dimension or
 column names, keys, SQL or tool names unless asked how it was made. Grain,
@@ -406,7 +448,7 @@ Kubernetes contributor trend by month:
   metrics=total_contributors group_by=metric_time__month
   where={{ Dimension('activity_project_id__project_slug') }} = 'k8s' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-03-01'
 
-Kubernetes mentions by network this year (recipe 16):
+Kubernetes mentions by network this year (recipe 17):
   metrics=social_listening_mentions,social_listening_positive_mentions,social_listening_negative_mentions
   group_by=mention_key__social_network order_by=-social_listening_mentions
   where={{ Dimension('mention_key__project_slug') }} = 'k8s' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-01-01'

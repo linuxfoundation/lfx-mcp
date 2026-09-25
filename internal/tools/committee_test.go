@@ -25,7 +25,7 @@ func TestCommitteeToolsDescribeRosters(t *testing.T) {
 			wants: []string{
 				"system of record for governance bodies",
 				"boards, TOCs/TACs, working groups, ambassador programs",
-				"Returns the committees visible to the caller.",
+				"Returns the committees visible to the caller, as in LFX Self Serve.",
 			},
 		},
 		{
@@ -34,14 +34,14 @@ func TestCommitteeToolsDescribeRosters(t *testing.T) {
 			wants: []string{
 				"system of record for governance bodies",
 				"boards, TOCs/TACs, working groups, ambassador programs",
-				"Returns the groups visible to the caller.",
+				"Returns the committees visible to the caller, as in LFX Self Serve.",
 			},
 		},
 		{
 			toolName: "search_committee_members",
 			register: func(s *mcp.Server) { RegisterSearchCommitteeMembers(s, false) },
 			wants: []string{
-				"Returns the roster rows visible to the caller.",
+				"The authoritative source for committee rosters.",
 				"Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country.",
 			},
 		},
@@ -49,7 +49,7 @@ func TestCommitteeToolsDescribeRosters(t *testing.T) {
 			toolName: "search_group_members",
 			register: func(s *mcp.Server) { RegisterSearchCommitteeMembers(s, true) },
 			wants: []string{
-				"Returns the roster rows visible to the caller.",
+				"The authoritative source for committee rosters.",
 				"Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country.",
 			},
 		},

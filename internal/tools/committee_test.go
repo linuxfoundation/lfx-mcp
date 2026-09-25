@@ -11,17 +11,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestCommitteeToolsClaimGovernanceRosters guards the routing contract from
-// the committee side. The semantic-layer and lens descriptions redirect
-// governance-roster questions here; these descriptions must claim that
-// ownership in both terminology modes, or an agent arriving from the
-// redirect finds a tool that does not say it is the right one. The eval's
-// board/ambassador questions were answered "unavailable" or fabricated when
-// no surface named the committee tools as the roster source.
-func TestCommitteeToolsClaimGovernanceRosters(t *testing.T) {
+// TestCommitteeToolsDescribeRosters pins the governance scope, caller
+// visibility, counting route and recorded dates in both terminology modes.
+func TestCommitteeToolsDescribeRosters(t *testing.T) {
 	for _, tc := range []struct {
 		toolName string
-		asGroups bool
 		register func(*mcp.Server)
 		wants    []string
 	}{
@@ -31,7 +25,7 @@ func TestCommitteeToolsClaimGovernanceRosters(t *testing.T) {
 			wants: []string{
 				"system of record for governance bodies",
 				"boards, TOCs/TACs, working groups, ambassador programs",
-				"Prefer this over the semantic layer or query_lfx_lens",
+				"Returns the committees visible to the caller.",
 			},
 		},
 		{
@@ -39,24 +33,24 @@ func TestCommitteeToolsClaimGovernanceRosters(t *testing.T) {
 			register: func(s *mcp.Server) { RegisterSearchCommittees(s, true) },
 			wants: []string{
 				"system of record for governance bodies",
-				"Prefer this over the semantic layer or query_lfx_lens",
+				"boards, TOCs/TACs, working groups, ambassador programs",
+				"Returns the groups visible to the caller.",
 			},
 		},
 		{
 			toolName: "search_committee_members",
 			register: func(s *mcp.Server) { RegisterSearchCommitteeMembers(s, false) },
 			wants: []string{
-				"authoritative source for committee rosters",
-				"paginate until page_token is absent",
-				"no country",
+				"Returns the roster rows visible to the caller.",
+				"Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country.",
 			},
 		},
 		{
 			toolName: "search_group_members",
 			register: func(s *mcp.Server) { RegisterSearchCommitteeMembers(s, true) },
 			wants: []string{
-				"authoritative source for committee rosters",
-				"paginate until page_token is absent",
+				"Returns the roster rows visible to the caller.",
+				"Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country.",
 			},
 		},
 	} {
@@ -66,6 +60,9 @@ func TestCommitteeToolsClaimGovernanceRosters(t *testing.T) {
 				if !strings.Contains(tool.Description, want) {
 					t.Errorf("%s description missing %q", tc.toolName, want)
 				}
+			}
+			if strings.Contains(tool.Description, "For counts, paginate") {
+				t.Error("a roster search must not recommend paging to count")
 			}
 		})
 	}

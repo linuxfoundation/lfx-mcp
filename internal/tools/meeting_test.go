@@ -11,16 +11,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestMeetingToolsClaimMeetingQuestions guards the routing contract from the
-// meeting side. The semantic layer has no meeting metrics and lens is not
-// the meeting lane, so the meeting tools must claim ownership in both
-// terminology modes - otherwise a meeting question bounces between tools
-// that each disclaim it. The existing events redirect (meetings tool ->
-// semantic layer for conferences/registrations) must survive alongside the
-// ownership claim: the two route in opposite directions on purpose. Events
-// are standard metrics, so the redirect names the served standard-metrics
-// tools, not unserved semantic-layer discovery actions.
-func TestMeetingToolsClaimMeetingQuestions(t *testing.T) {
+// TestMeetingToolsDescribeCallerVisibility pins both terminology modes and
+// preserves the availability-qualified events redirect. Meeting totals exist
+// on the layer; these tools describe only the records the caller can see.
+func TestMeetingToolsDescribeCallerVisibility(t *testing.T) {
 	for _, tc := range []struct {
 		toolName string
 		register func(*mcp.Server)
@@ -30,8 +24,8 @@ func TestMeetingToolsClaimMeetingQuestions(t *testing.T) {
 			toolName: "search_meetings",
 			register: func(s *mcp.Server) { RegisterSearchMeetings(s, false) },
 			wants: []string{
-				"live HERE - prefer these tools over the semantic layer or query_lfx_lens",
-				// The opposite-direction redirect applies only when available.
+				"Returns the meetings visible to the caller, as in LFX Self Serve.",
+				// The events redirect applies only when available.
 				"when query_lfx_standard_metrics is available to you, read read_lfx_standard_metrics_guidance and use it",
 			},
 		},
@@ -39,7 +33,7 @@ func TestMeetingToolsClaimMeetingQuestions(t *testing.T) {
 			toolName: "search_meetings",
 			register: func(s *mcp.Server) { RegisterSearchMeetings(s, true) },
 			wants: []string{
-				"live HERE - prefer these tools over the semantic layer or query_lfx_lens",
+				"Returns the meetings visible to the caller, as in LFX Self Serve.",
 				"when query_lfx_standard_metrics is available to you, read read_lfx_standard_metrics_guidance and use it",
 			},
 		},
@@ -47,14 +41,14 @@ func TestMeetingToolsClaimMeetingQuestions(t *testing.T) {
 			toolName: "search_past_meetings",
 			register: func(s *mcp.Server) { RegisterSearchPastMeetings(s, false) },
 			wants: []string{
-				"live here, not in the semantic layer or query_lfx_lens",
+				"Returns the past meetings visible to the caller.",
 			},
 		},
 		{
 			toolName: "search_past_meetings",
 			register: func(s *mcp.Server) { RegisterSearchPastMeetings(s, true) },
 			wants: []string{
-				"live here, not in the semantic layer or query_lfx_lens",
+				"Returns the past meetings visible to the caller.",
 			},
 		},
 	} {

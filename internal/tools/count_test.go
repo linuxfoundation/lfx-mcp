@@ -220,7 +220,7 @@ func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 	if n := len(tool.Description); n > 1000 {
 		t.Errorf("description is %d bytes, budget is 1000", n)
 	}
-	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "project:<uid>", "an inclusive date range (date_field=start_time)", "filters_all", "filters_or"} {
+	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "committee_member: committee:<uid>", "committee: project:<uid>", "a date range (date_field=start_time)", "filters_all", "filters_or", "a ref or field the type lacks counts 0"} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}
@@ -242,9 +242,9 @@ func TestCountLFXResources_IndexScopeDescriptionAndSchema(t *testing.T) {
 	if !strings.Contains(tool.Description, want) {
 		t.Error("count description must distinguish index completeness from directory coverage and route project counts to the semantic layer")
 	}
-	const wantType = "(required) Resource type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member (for project counts prefer the semantic layer's project metrics: the v2 index holds only onboarded projects)"
+	const wantType = "(required) Resource type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member (the v2 index holds only onboarded projects)"
 	if got := countTypeTag(t); got != wantType {
-		t.Errorf("type schema must retain the type list and add the project-count routing caveat: got %q", got)
+		t.Errorf("type schema must retain the type list and project index coverage caveat: got %q", got)
 	}
 }
 

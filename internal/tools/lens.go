@@ -250,7 +250,7 @@ func normalizeSlugs(slugs []string) ([]string, error) {
 // there before its first query.
 const exploreSemanticLayerDescription = `If a standard metric answers the question (inventory: read_lfx_standard_metrics_guidance), call query_lfx_standard_metrics and do not explore first.
 
-The LFX Semantic Layer is the query tool for LF data: contributor, contribution, membership, revenue, event, registration, speaker, sponsorship, enrollment, certification, maintainer, health, project, meeting (occurrences, scheduled minutes, attendees) and social listening (mentions, sentiment, reach) metrics, sliceable by country, region, parent organization or project tree. This discovers what can be measured; query_lfx_semantic_layer runs it. Start here unless exact names are known.
+The LFX Semantic Layer is the query tool for LF data: contributor, contribution, membership, revenue, event, registration, speaker, sponsorship, enrollment, certification, maintainer, health, project, meeting (occurrences, scheduled minutes, attendance) and social listening (mentions, sentiment, reach) metrics, sliceable by country, region, parent organization or project tree. This discovers what can be measured; query_lfx_semantic_layer runs it. Start here unless exact names are known.
 
 If you have not read read_lfx_semantic_layer_guidance yet this session, read it BEFORE using this tool; one read also covers query_lfx_semantic_layer.
 

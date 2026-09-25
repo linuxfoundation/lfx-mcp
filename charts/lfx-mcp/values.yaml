@@ -87,6 +87,9 @@ app:
   # debugTraffic enables HTTP request/response wire logging for outbound LFX API calls.
   debugTraffic: false
   # mcpApiAuthServers is the space-separated list of OAuth2 authorization server URLs.
+  # When left empty, this key is omitted from the deployment's environment so the
+  # server falls back to its own secure default (the production LF SSO issuer)
+  # instead of running unauthenticated.
   mcpApiAuthServers: ""
   # mcpApiScopes is the comma-separated list of OAuth2 scopes to advertise via OAuth PRM (empty advertises no scopes).
   mcpApiScopes: ""

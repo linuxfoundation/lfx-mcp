@@ -20,9 +20,11 @@ The LFX MCP Server is available as a hosted, production service at:
 https://mcp.lfx.dev/mcp
 ```
 
-You will be prompted to log in with your Linux Foundation account (LFID) the first time you connect. *All MCP permissions correspond to LFX platform permissions granted to your LFID.*
+You sign in through LFX with your Linux Foundation account (LFID) the first time you connect. Sign-in succeeds only when your account has been enabled for MCP access and you use one of the supported clients below; to request access, see [Using the LFX MCP Server as a community member](docs/community-access.md). After sign-in, what you can see and do follows your LFX permissions; some analytics tools are available only to Linux Foundation staff (see [LFX Lens](#lfx-lens)).
 
-**The following clients are set up to work with the LFX MCP Server.** Please file an issue to request additional client support. Running the LFX MCP Server as a local (stdio) MCP server is not supported at this time.
+**The following clients are set up to work with the LFX MCP Server.** Client-specific instructions (menu paths, settings names, etc.) are subject to change as vendors update their products; consult the client's own documentation if the steps below no longer match what you see. Please file an issue to request additional client support.
+
+Running the server locally in stdio mode is also supported for development and debugging; see [Local (stdio) mode](#local-stdio-mode) below.
 
 ### Goose
 
@@ -48,9 +50,9 @@ Start a new chat and Goose will open a browser window for LFID login.
 
 After it acknowledges that your configuration was saved, running `goose` will open a browser window for LFID login.
 
-### OpenCode
+### OpenCode v1
 
-*OpenCode requires a client ID. The following client ID only works with OpenCode.*
+*OpenCode v1 requires a client ID. The following client ID only works with OpenCode v1.*
 
 Add the following to your `~/.config/opencode/opencode.json`:
 
@@ -70,7 +72,27 @@ Add the following to your `~/.config/opencode/opencode.json`:
 }
 ```
 
-See the [OpenCode MCP documentation](https://opencode.ai/docs/mcp-servers) for more details.
+See the [OpenCode v1 MCP documentation](https://opencode.ai/docs/mcp-servers) for more details.
+
+### OpenCode v2
+
+OpenCode v2 supports Client ID Metadata Documents (CIMD), so no client ID is needed. Add the following to your `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "lfx": {
+        "type": "remote",
+        "url": "https://mcp.lfx.dev/mcp"
+      }
+    }
+  }
+}
+```
+
+See the [OpenCode v2 MCP documentation](https://opencode.ai/v2/docs/mcp-servers) for more details.
 
 ### Zed
 
@@ -151,6 +173,16 @@ Add the following to your `~/.cursor/mcp.json`:
 }
 ```
 
+### ChatGPT
+
+*Must have a plan that supports Developer mode and MCP access.*
+
+1. In ChatGPT, navigate to **Plugins → MCP → Add server**.
+2. Enter **LFX** as the name.
+3. Select **Streamable HTTP** as the type.
+4. Enter `https://mcp.lfx.dev/mcp` as the URL.
+5. Hit **Save**, then click the **Authenticate** button from the Servers list to open a browser window for LFID login.
+
 ### Additional clients (via mcp-remote)
 
 If your MCP client is not listed here, you may try using [mcp-remote](https://github.com/geelen/mcp-remote) as a local proxy.
@@ -182,19 +214,54 @@ A browser window will open for authentication on first use. To re-authenticate, 
 rm -rf ~/.mcp-auth
 ```
 
-### MCP Inspector (developer testing)
+### MCP Inspector
 
 *MCP Inspector requires a client ID. The following client ID only works with MCP Inspector.*
 
-[MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a browser-based tool for exploring and testing MCP servers. To connect it to the LFX MCP Server:
+Add the following to your `~/.mcp-inspector/mcp.json`:
 
-```bash
-npx @modelcontextprotocol/inspector --transport http --server-url https://mcp.lfx.dev/mcp
+```json
+{
+  "mcpServers": {
+    "lfx": {
+      "type": "streamable-http",
+      "url": "https://mcp.lfx.dev/mcp",
+      "oauth": {
+        "clientId": "4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O"
+      }
+    }
+  }
+}
 ```
 
-From the MCP Inspector sidebar, find **Authentication** → **OAuth 2.0 Flow** → **Client ID** and enter `4ibLLbnz9kwMEcE3RUCUH51F0RS3Hx3O`.
+Run:
 
-Hitting **Connect** will open a browser window for LFID login.
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+### Local (stdio) mode
+
+The server can run locally over stdio, authenticating with a bearer token supplied directly by the operator instead of the normal SSO, client-token-exchange (CTE), or M2M flows used in HTTP mode. This is intended to be used together with [`lfx-cli`](https://github.com/linuxfoundation/lfx-cli), which mints and refreshes that token on your behalf:
+
+```bash
+# Log in once (interactive device-code flow).
+lfx auth login
+
+# Run the server in stdio mode, passing a fresh token from lfx-cli.
+LFXMCP_LFX_TOKEN="$(lfx auth token)" \
+  LFXMCP_LFX_API_URL="https://lfx-api.v2.cluster.lfx.dev" \
+  ./bin/lfx-mcp-server -mode=stdio
+```
+
+Notes:
+
+- `lfx_token`/`LFXMCP_LFX_TOKEN` is only accepted in stdio mode; the server refuses to start in HTTP mode with it set, since HTTP mode is a shared, multi-tenant surface and a single static token must never be used to answer requests for arbitrary callers.
+- The token is used as-is for all LFX API calls — no token exchange, CTE, or M2M grant is performed for it. M2M flows to non-LFX downstream services (e.g. LFX Lens) are unaffected and continue to use their own configured client credentials.
+- The server reads the token's expiry without verifying its signature — no authorization decision is ever made from this unverified peek; the LFX API itself independently verifies and authorizes every call — and refuses to start if it has already expired. Otherwise, the server automatically stops when the token expires; run it under a supervisor loop that re-invokes `lfx auth token` and restarts the server so the token stays fresh.
+- The server also warns (without refusing to start) if the token's `aud` claim doesn't appear to match `-lfx_api_url`/`LFXMCP_LFX_API_URL`, since a mismatched audience would otherwise only surface as a confusing 401 on the first LFX API call.
+- Because there is no MCP-level OAuth in stdio mode, all tools enabled via `-tools`/`LFXMCP_TOOLS` are registered without the read/manage scope gating that applies to HTTP mode.
+- The `user_info` tool also accepts `-lfx_token`/`LFXMCP_LFX_TOKEN` as its `/userinfo` bearer in stdio mode (the LF identity provider issues it with `openid profile email` scope, which `/userinfo` accepts regardless of the token's LFX API audience).
 
 ## Available Tools
 
@@ -202,8 +269,14 @@ Hitting **Connect** will open a browser window for LFID login.
 
 | Tool              | Description                                                   |
 |-------------------|---------------------------------------------------------------|
-| `search_projects` | Search for LFX projects by name with typeahead and pagination |
+| `search_projects` | Search LFX projects by name (typeahead), exact slug or exact name, optionally scoped to a parent or legal parent; include_total returns the count of indexed, caller-visible projects |
 | `get_project`     | Get a project's base info and settings by UID                 |
+
+### Resource Counts
+
+| Tool                  | Description |
+|-----------------------|-------------|
+| `count_lfx_resources` | Count indexed LFX v2 records (meetings, participants, committees, members, projects) visible to the caller; complete=false means a lower bound |
 
 ### Committees
 
@@ -215,11 +288,13 @@ Hitting **Connect** will open a browser window for LFID login.
 | `update_committee`          | Update a committee's base information                                                     |
 | `update_committee_settings` | Update a committee's settings (visibility, email requirements, meeting attendee defaults) |
 | `delete_committee`          | Delete a committee by UID                                                                 |
-| `search_committee_members`  | Search committee members; filter by committee, project, or name                           |
+| `search_committee_members`  | Search committee members; filter by committee, project, organization name, or name        |
 | `get_committee_member`      | Get a specific committee member by committee and member UID                               |
 | `create_committee_member`   | Add a new member to a committee                                                           |
 | `update_committee_member`   | Update an existing committee member's information                                         |
 | `delete_committee_member`   | Remove a member from a committee                                                          |
+| `get_org_committee_seats`   | Summarise an organisation's committee seats across a foundation and its direct child projects; filter by category, optionally list the seats (seats, not the membership's contact of record); include_membership_contacts adds the membership contacts of record and a per-project representation pairing |
+| `audit_committee_coverage`  | Audit a foundation and its direct child projects for committees onboarded into LFX v2, visible member counts per committee, and projects with active memberships but no committee or an empty board |
 
 ### Mailing Lists
 
@@ -237,7 +312,7 @@ Hitting **Connect** will open a browser window for LFID login.
 |---------------------------------|---------------------------------------------------------------------------------------|
 | `search_members`                | Search and filter members (memberships) by project, tier, status, or B2B organization |
 | `get_member_membership`         | Get a single membership by membership UID                                             |
-| `get_membership_key_contacts`   | Get key contacts (primary contacts, board members) for a membership                   |
+| `get_membership_key_contacts`   | Get a membership's key contacts (contacts of record, not committee seats)             |
 | `get_membership_key_contact`    | Get a single key contact by membership UID and contact UID                            |
 | `create_membership_key_contact` | Add a key contact to a membership                                                     |
 | `update_membership_key_contact` | Update an existing key contact on a membership                                        |
@@ -247,7 +322,7 @@ Hitting **Connect** will open a browser window for LFID login.
 
 | Tool                         | Description                                                       |
 |------------------------------|-------------------------------------------------------------------|
-| `search_meetings`            | Search for meetings; filter by project, committee, date range     |
+| `search_meetings`            | Search meetings by project, committee, date; upcoming occurrences |
 | `get_meeting`                | Get a meeting by UID                                              |
 | `search_meeting_registrants` | Search meeting registrants; filter by meeting, committee, project |
 | `get_meeting_registrant`     | Get a meeting registrant by UID                                   |
@@ -258,9 +333,9 @@ Hitting **Connect** will open a browser window for LFID login.
 |------------------------------------|-------------------------------------------------------------------------|
 | `search_past_meetings`             | Search past meetings; filter by project, committee, date range          |
 | `get_past_meeting`                 | Get a past meeting by UID                                               |
-| `search_past_meeting_participants` | Search past meeting participants; filter by meeting, committee, project |
+| `search_past_meeting_participants` | Search past meeting participants; filter by meeting, committee, project, date range, attended_only or organisation name; count_only returns record counts; people are de-duplicated by identity like LFX Self Serve (dedupe=false returns raw records) |
 | `get_past_meeting_participant`     | Get a past meeting participant by UID                                   |
-| `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, committee, project    |
+| `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, project, name         |
 | `get_past_meeting_summary`         | Get a past meeting summary by UID                                       |
 
 ### Discord
@@ -282,9 +357,16 @@ Hitting **Connect** will open a browser window for LFID login.
 
 ### LFX Lens
 
-| Tool             | Description                                                                                           |
-|------------------|-------------------------------------------------------------------------------------------------------|
-| `query_lfx_lens` | Ask natural-language questions about a project's data (events, contributors, health, value, and more) |
+These tools are available only to Linux Foundation staff; they do not appear in the tool list for other accounts.
+
+| Tool                         | Description                                                                                           |
+|------------------------------|-------------------------------------------------------------------------------------------------------|
+| `query_lfx_lens`             | Ask natural-language questions about a project's data (events, contributors, health, value, and more) |
+| `explore_lfx_semantic_layer` | Discover Insights metrics and the dimensions available to them                                        |
+| `query_lfx_semantic_layer`   | Run a metric query against the Insights Semantic Layer (filter, group, rank, trend)                   |
+| `query_lfx_standard_metrics` | Run a governed standard metric over LFX data, scoped by project, organization and dates |
+| `read_lfx_semantic_layer_guidance` | Read the agent guidance for the semantic layer and lens tools (routing, query syntax, scoping, recipes) |
+| `read_lfx_standard_metrics_guidance` | Read the agent guidance for the standard metrics (inventory, scoping, how to read results) |
 
 ### B2B Organizations
 
@@ -294,10 +376,9 @@ Hitting **Connect** will open a browser window for LFID login.
 
 ### Utility
 
-| Tool          | Description                                         |
-|---------------|-----------------------------------------------------|
-| `hello_world` | Simple greeting tool for testing MCP connectivity   |
-| `user_info`   | Get the authenticated user's OpenID Connect profile |
+| Tool        | Description                                         |
+|-------------|------------------------------------------------------|
+| `user_info` | Get the authenticated user's OpenID Connect profile |
 
 ## License
 

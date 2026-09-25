@@ -8,10 +8,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	committeeservice "github.com/linuxfoundation/lfx-v2-committee-service/gen/committee_service"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -20,6 +22,19 @@ const committeeResourceType = "committee"
 
 // committeeMemberResourceType is the resource type filter for committee member queries.
 const committeeMemberResourceType = "committee_member"
+
+// rosterCoverageNoneNote is the format of the warning on an empty
+// search_committee_members result scoped by project_uid when the project has
+// no committee visible to the caller in LFX v2. Its %s is the plural noun for
+// the committees ("committees" or "groups").
+const rosterCoverageNoneNote = "Roster coverage: no %s are onboarded into LFX v2 for this project, or none are visible to you. An empty result is not evidence that the person or organization holds no seat."
+
+// rosterCoverageNoMatchNote is the format of the warning on an empty
+// search_committee_members result scoped by project_uid when the project has
+// committees visible to the caller in LFX v2. The count is access-filtered, so
+// member records of committees the caller cannot see are not ruled out. Its
+// %s is the plural noun for the committees.
+const rosterCoverageNoMatchNote = "Roster coverage: this project has %s in LFX v2 visible to you, but no member record visible to you matched these filters. name is a typeahead and organization_name must equal the stored spelling; results cover only records you can view, so an empty result is not evidence that the person or organization holds no seat."
 
 // CommitteeConfig holds configuration shared by committee tools.
 type CommitteeConfig struct {
@@ -30,22 +45,10 @@ type CommitteeConfig struct {
 
 var committeeConfig *CommitteeConfig
 
-// committeeSearchResult is the output type for search_committees / search_groups.
-type committeeSearchResult struct {
-	Resources []*querysvc.Resource `json:"resources"`
-	PageToken *string              `json:"page_token,omitempty"`
-}
-
 // committeeGetResult is the output type for get_committee / get_group.
 type committeeGetResult struct {
 	Base     *committeeservice.CommitteeBaseWithReadonlyAttributes     `json:"base"`
 	Settings *committeeservice.CommitteeSettingsWithReadonlyAttributes `json:"settings,omitempty"`
-}
-
-// committeeMemberSearchResult is the output type for search_committee_members / search_group_members.
-type committeeMemberSearchResult struct {
-	Resources []*querysvc.Resource `json:"resources"`
-	PageToken *string              `json:"page_token,omitempty"`
 }
 
 // SetCommitteeConfig sets the configuration for committee tools.
@@ -60,7 +63,7 @@ func RegisterSearchCommittees(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_groups",
-			Description: "Search for LFX groups (also called committees) by name using the LFX query service. Optionally filter by project UID.",
+			Description: "Search for LFX groups (also called committees) by name using the LFX query service. Optionally filter by project UID. Groups are the system of record for governance bodies - boards, TOCs/TACs, working groups, ambassador programs. Returns the committees visible to the caller, as in LFX Self Serve.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Groups",
 				ReadOnlyHint: true,
@@ -70,7 +73,7 @@ func RegisterSearchCommittees(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committees",
-		Description: "Search for LFX committees by name using the LFX query service. Optionally filter by project UID.",
+		Description: "Search for LFX committees by name using the LFX query service. Optionally filter by project UID. Committees are the system of record for governance bodies - boards, TOCs/TACs, working groups, ambassador programs. Returns the committees visible to the caller, as in LFX Self Serve.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Committees",
 			ReadOnlyHint: true,
@@ -135,7 +138,7 @@ func RegisterSearchCommitteeMembers(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_group_members",
-			Description: "Search for LFX group (also called committee) members. Optionally filter by group UID, project UID, and/or name. At least one filter is recommended but not required.",
+			Description: "Search for LFX group (also called committee) members. Optionally filter by group UID, project UID, and/or name. The authoritative source for committee rosters. Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid set, an empty result carries a roster-coverage note saying whether the project has any committee onboarded into LFX v2; an empty result never proves that a person or organization holds no seat.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Group Members",
 				ReadOnlyHint: true,
@@ -145,7 +148,7 @@ func RegisterSearchCommitteeMembers(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committee_members",
-		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID, and/or name. At least one filter is recommended but not required.",
+		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID, and/or name. The authoritative source for committee rosters. Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid set, an empty result carries a roster-coverage note saying whether the project has any committee onboarded into LFX v2; an empty result never proves that a person or organization holds no seat.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Committee Members",
 			ReadOnlyHint: true,
@@ -193,25 +196,29 @@ type GetGroupMemberArgs struct {
 
 // SearchCommitteeMembersArgs defines the input parameters for the search_committee_members tool.
 type SearchCommitteeMembersArgs struct {
-	CommitteeUID string `json:"committee_uid,omitempty" jsonschema:"Optional UID of the committee to filter members by"`
-	ProjectUID   string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter committee members by project"`
-	Name         string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
-	PageSize     int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken    string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	CommitteeUID     string `json:"committee_uid,omitempty" jsonschema:"Optional UID of the committee to filter members by"`
+	ProjectUID       string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter committee members by project"`
+	OrganizationName string `json:"organization_name,omitempty" jsonschema:"Exact stored organization name on the seat, as a roster row or a get_org_committee_seats row spells it; keeps one organization's members"`
+	Name             string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
+	PageSize         int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken        string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
 // SearchGroupMembersArgs defines the input parameters for the search_group_members tool (groups mode).
 type SearchGroupMembersArgs struct {
-	GroupUID   string `json:"group_uid,omitempty" jsonschema:"Optional UID of the group to filter members by"`
-	ProjectUID string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter group members by project"`
-	Name       string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
-	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
-	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
+	GroupUID         string `json:"group_uid,omitempty" jsonschema:"Optional UID of the group to filter members by"`
+	ProjectUID       string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter group members by project"`
+	OrganizationName string `json:"organization_name,omitempty" jsonschema:"Exact stored organization name on the seat, as a roster row or a get_org_committee_seats row spells it; keeps one organization's members"`
+	Name             string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
+	PageSize         int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
+	PageToken        string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
 
-// handleSearchCommitteesGroupMode adapts group-mode args to the committee handler.
-func handleSearchCommitteesGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupsArgs) (*mcp.CallToolResult, committeeSearchResult, error) {
-	return handleSearchCommittees(ctx, req, SearchCommitteesArgs(args))
+// handleSearchCommitteesGroupMode adapts group-mode args to the committee
+// handler, carrying the group-mode noun so user-facing warnings match the tool's
+// terminology contract.
+func handleSearchCommitteesGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupsArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
+	return searchCommittees(ctx, req, SearchCommitteesArgs(args), "groups")
 }
 
 // handleGetCommitteeGroupMode adapts group-mode args to the committee handler.
@@ -227,43 +234,46 @@ func handleGetCommitteeMemberGroupMode(ctx context.Context, req *mcp.CallToolReq
 	})
 }
 
-// handleSearchCommitteeMembersGroupMode adapts group-mode args to the committee members handler.
-func handleSearchCommitteeMembersGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupMembersArgs) (*mcp.CallToolResult, committeeMemberSearchResult, error) {
-	return handleSearchCommitteeMembers(ctx, req, SearchCommitteeMembersArgs{
-		CommitteeUID: args.GroupUID,
-		ProjectUID:   args.ProjectUID,
-		Name:         args.Name,
-		PageSize:     args.PageSize,
-		PageToken:    args.PageToken,
-	})
+// handleSearchCommitteeMembersGroupMode adapts group-mode args to the
+// committee members handler, carrying the group-mode noun so user-facing
+// warnings match the tool's terminology contract.
+func handleSearchCommitteeMembersGroupMode(ctx context.Context, req *mcp.CallToolRequest, args SearchGroupMembersArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
+	return searchCommitteeMembers(ctx, req, SearchCommitteeMembersArgs{
+		CommitteeUID:     args.GroupUID,
+		ProjectUID:       args.ProjectUID,
+		OrganizationName: args.OrganizationName,
+		Name:             args.Name,
+		PageSize:         args.PageSize,
+		PageToken:        args.PageToken,
+	}, "group members", "groups")
 }
 
 // handleSearchCommittees implements the search_committees tool logic.
-func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteesArgs) (*mcp.CallToolResult, committeeSearchResult, error) {
+func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteesArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
+	return searchCommittees(ctx, req, args, "committees")
+}
+
+// searchCommittees is the shared search implementation; resourceNoun is
+// "committees" or "groups" depending on which tool surface reached it, and is
+// used in user-facing warnings.
+func searchCommittees(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteesArgs, resourceNoun string) (*mcp.CallToolResult, resourceSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
 		logger.ErrorContext(ctx, "committee tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: committee tools not configured"},
-			},
-			IsError: true,
-		}, committeeSearchResult{}, nil
+		return nil, resourceSearchResult{}, toolError("Error: committee tools not configured")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, committeeSearchResult{}, nil
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	pageSize := args.PageSize
@@ -298,12 +308,7 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search committees", err)},
-			},
-			IsError: true,
-		}, committeeSearchResult{}, nil
+		return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search committees", err))
 	}
 
 	// Strip the unreliable total_members field from indexed committee data. The
@@ -316,37 +321,21 @@ func handleSearchCommittees(ctx context.Context, req *mcp.CallToolRequest, args 
 		}
 	}
 
-	out := committeeSearchResult{
-		Resources: result.Resources,
-		PageToken: result.PageToken,
-	}
-
-	// Warn if fewer results than requested were returned but more pages exist.
-	// This indicates some results on this page were excluded due to access controls.
-	var pageWarning string
-	if result.PageToken != nil && len(result.Resources) < pageSize {
-		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
-	}
+	out := newResourceSearchResult(resourceNoun, result, pageSize, args.PageToken != "")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, committeeSearchResult{}, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "search_committees succeeded", "count", len(result.Resources))
 
-	content := []mcp.Content{}
-	if pageWarning != "" {
-		content = append(content, &mcp.TextContent{Text: pageWarning})
-	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, out, nil
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(prettyJSON)},
+		},
+	}, out, nil
 }
 
 // handleGetCommittee implements the get_committee tool logic, fetching both base
@@ -356,35 +345,23 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 
 	if committeeConfig == nil {
 		logger.ErrorContext(ctx, "committee tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: committee tools not configured"},
-			},
-			IsError: true,
-		}, committeeGetResult{}, nil
+		return nil, committeeGetResult{}, toolError("Error: committee tools not configured")
 	}
 
 	if args.UID == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: uid is required"},
-			},
-			IsError: true,
-		}, committeeGetResult{}, nil
+		return nil, committeeGetResult{}, toolError("Error: uid is required")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, committeeGetResult{}, nil
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
+		return nil, committeeGetResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	logger.InfoContext(ctx, "fetching committee", "uid", args.UID)
@@ -394,12 +371,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "GetCommitteeBase failed", "error", err, "uid", args.UID)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to get committee", err)},
-			},
-			IsError: true,
-		}, committeeGetResult{}, nil
+		return nil, committeeGetResult{}, toolError(friendlyAPIError("failed to get committee", err))
 	}
 
 	// Settings may be unavailable due to insufficient permissions; treat that
@@ -411,18 +383,10 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 	})
 	var settingsWarning string
 	if err != nil {
-		settingsWarning = fmt.Sprintf("WARNING: committee settings unavailable - %s", err.Error())
+		settingsWarning = "WARNING: committee settings unavailable - " + apiErrorDetail(err)
 		logger.ErrorContext(ctx, "getting privileged committee settings failed, returning base only", "error", err, "uid", args.UID)
 	} else {
 		committeeSettings = settingsResult.CommitteeSettings
-	}
-
-	// Strip the unreliable TotalMembers field from the committee base. The
-	// service does not populate this count reliably, so it is always zero
-	// regardless of actual membership. Removing it prevents MCP clients from
-	// incorrectly concluding that a committee has no members.
-	if baseResult.CommitteeBase != nil {
-		baseResult.CommitteeBase.TotalMembers = nil
 	}
 
 	out := committeeGetResult{
@@ -433,12 +397,7 @@ func handleGetCommittee(ctx context.Context, req *mcp.CallToolRequest, args GetC
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal committee result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, committeeGetResult{}, nil
+		return nil, committeeGetResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "get_committee succeeded", "uid", args.UID)
@@ -460,44 +419,27 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 
 	if committeeConfig == nil {
 		logger.ErrorContext(ctx, "committee tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: committee tools not configured"},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, nil, toolError("Error: committee tools not configured")
 	}
 
 	if args.CommitteeUID == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: committee_uid is required"},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, nil, toolError("Error: committee_uid is required")
 	}
 
 	if args.MemberUID == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: member_uid is required"},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, nil, toolError("Error: member_uid is required")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
+		return nil, nil, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	logger.InfoContext(ctx, "fetching committee member", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
@@ -509,23 +451,13 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "GetCommitteeMember failed", "error", err, "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to get committee member", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, nil, toolError(friendlyAPIError("failed to get committee member", err))
 	}
 
 	prettyJSON, err := json.MarshalIndent(result.Member, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal committee member result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, nil, nil
+		return nil, nil, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
 	logger.InfoContext(ctx, "get_committee_member succeeded", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
@@ -538,31 +470,32 @@ func handleGetCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, arg
 }
 
 // handleSearchCommitteeMembers implements the search_committee_members tool logic.
-func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteeMembersArgs) (*mcp.CallToolResult, committeeMemberSearchResult, error) {
+func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteeMembersArgs) (*mcp.CallToolResult, resourceSearchResult, error) {
+	return searchCommitteeMembers(ctx, req, args, "committee members", "committees")
+}
+
+// searchCommitteeMembers is the shared search implementation; resourceNoun is
+// "committee members" or "group members", and committeeNoun "committees" or
+// "groups", depending on which tool surface reached it. Both are used in
+// user-facing warnings.
+func searchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args SearchCommitteeMembersArgs, resourceNoun, committeeNoun string) (*mcp.CallToolResult, resourceSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 
 	if committeeConfig == nil {
 		logger.ErrorContext(ctx, "committee tools not configured")
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: "Error: committee tools not configured"},
-			},
-			IsError: true,
-		}, committeeMemberSearchResult{}, nil
+		return nil, resourceSearchResult{}, toolError("Error: committee tools not configured")
 	}
 
-	mcpToken, err := lfxv2.ExtractMCPToken(req.Extra.TokenInfo)
+	var tokenInfo *auth.TokenInfo
+	if req.Extra != nil {
+		tokenInfo = req.Extra.TokenInfo
+	}
+	ctx, err := committeeConfig.Clients.TokenFromRequest(ctx, tokenInfo)
 	if err != nil {
-		logger.ErrorContext(ctx, "failed to extract MCP token", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to extract MCP token: %v", err)},
-			},
-			IsError: true,
-		}, committeeMemberSearchResult{}, nil
+		logger.ErrorContext(ctx, "failed to resolve LFX authentication", "error", err)
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to extract MCP token: %v", err))
 	}
 
-	ctx = committeeConfig.Clients.WithMCPToken(ctx, mcpToken)
 	clients := committeeConfig.Clients
 
 	pageSize := args.PageSize
@@ -579,6 +512,7 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 	}
 
 	// Build tag filters: committee members are tagged by the committee service indexer.
+	// Filters go through tags_all so that every given filter must match.
 	var tags []string
 	if args.CommitteeUID != "" {
 		tags = append(tags, fmt.Sprintf("committee_uid:%s", args.CommitteeUID))
@@ -586,8 +520,11 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 	if args.ProjectUID != "" {
 		tags = append(tags, fmt.Sprintf("project_uid:%s", args.ProjectUID))
 	}
+	if args.OrganizationName != "" {
+		tags = append(tags, "organization_name:"+args.OrganizationName)
+	}
 	if len(tags) > 0 {
-		payload.Tags = tags
+		payload.TagsAll = tags
 	}
 
 	if args.Name != "" {
@@ -598,48 +535,58 @@ func handleSearchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest,
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.InfoContext(ctx, "searching committee members", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "name", args.Name, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching committee members", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "organization_name", args.OrganizationName, "name", args.Name, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: friendlyAPIError("failed to search committee members", err)},
-			},
-			IsError: true,
-		}, committeeMemberSearchResult{}, nil
+		return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search committee members", err))
 	}
 
-	out := committeeMemberSearchResult{
-		Resources: result.Resources,
-		PageToken: result.PageToken,
-	}
-
-	// Warn if fewer results than requested were returned but more pages exist.
-	// This indicates some results on this page were excluded due to access controls.
-	var pageWarning string
-	if result.PageToken != nil && len(result.Resources) < pageSize {
-		pageWarning = "WARNING: some results on this page were excluded because you do not have access to them; consider continuing with the next page token, increasing the page size, or narrowing your filters"
+	out := newResourceSearchResult(resourceNoun, result, pageSize, args.PageToken != "")
+	// The roster-coverage note, when it applies, is the more specific
+	// statement of an empty first page, so it replaces the generic warning.
+	if note := rosterCoverageNote(ctx, logger, clients, args.ProjectUID, args.PageToken, committeeNoun, result); note != "" {
+		out.Warnings = []string{note}
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to marshal search result", "error", err)
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Error: failed to format result: %v", err)},
-			},
-			IsError: true,
-		}, committeeMemberSearchResult{}, nil
+		return nil, resourceSearchResult{}, toolError(fmt.Sprintf("Error: failed to format result: %v", err))
 	}
 
-	logger.InfoContext(ctx, "search_committee_members succeeded", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "count", len(result.Resources))
+	logger.InfoContext(ctx, "search_committee_members succeeded", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "organization_name", args.OrganizationName, "count", len(result.Resources))
 
-	content := []mcp.Content{}
-	if pageWarning != "" {
-		content = append(content, &mcp.TextContent{Text: pageWarning})
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(prettyJSON)},
+		},
+	}, out, nil
+}
+
+// rosterCoverageNote returns the roster-coverage note for a genuinely empty
+// search_committee_members result scoped by project_uid: the first page, with
+// no resources and no page token. A continuation page is never genuinely
+// empty. It counts the project's committees visible to the caller; when the
+// count call fails the note is dropped and the search result stands.
+// committeeNoun names the committees ("committees" or "groups").
+func rosterCoverageNote(ctx context.Context, logger *slog.Logger, clients *lfxv2.Clients, projectUID, pageToken, committeeNoun string, result *querysvc.QueryResourcesResult) string {
+	if projectUID == "" || pageToken != "" || len(result.Resources) > 0 || result.PageToken != nil {
+		return ""
 	}
-	content = append(content, &mcp.TextContent{Text: string(prettyJSON)})
-	return &mcp.CallToolResult{Content: content}, out, nil
+	committeeType := committeeResourceType
+	count, err := clients.QuerySvc.QueryResourcesCount(ctx, &querysvc.QueryResourcesCountPayload{
+		Version: "1",
+		Type:    &committeeType,
+		Parent:  strPtr("project:" + projectUID),
+	})
+	if err != nil {
+		logger.WarnContext(ctx, "roster coverage count failed", "project_uid", projectUID, "error", err)
+		return ""
+	}
+	if count.Count == 0 {
+		return fmt.Sprintf(rosterCoverageNoneNote, committeeNoun)
+	}
+	return fmt.Sprintf(rosterCoverageNoMatchNote, committeeNoun)
 }

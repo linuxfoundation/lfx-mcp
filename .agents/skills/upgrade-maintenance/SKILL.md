@@ -63,7 +63,10 @@ After running, inspect `go.mod` for version changes. The most impactful upgrades
 to watch are the **`github.com/linuxfoundation/lfx-v2-*` packages** — they
 regularly add, rename, or remove Goa-generated struct fields, which directly
 affects tool handler code in `internal/tools/` and client wiring in
-`internal/lfxv2/client.go`.
+`internal/lfxv2/client.go`. Phase 2 is the step that reviews these changes; if
+any `lfx-v2-*` bump lands without a same-session Phase 2 pass (e.g. it was
+folded into a larger commit, or maintenance was interrupted), re-run Phase 2
+retroactively against that commit — see "Finding OLD and NEW" in Step 2.1.
 
 All currently connected LFX services can be discovered from `go.mod`:
 
@@ -188,13 +191,13 @@ filter upstream response structs into MCP output (e.g. `toB2bOrgMembershipView`,
 ### Step 2.1 — Discover which services changed and what moved
 
 For each upgraded Goa CRUD service (everything except query), diff its response
-struct fields between the old and new version. The old and new versions come
-from `git diff go.mod`. Use `$(go env GOMODCACHE)` to locate modules:
+struct fields between the old and new version. Use `$(go env GOMODCACHE)` to
+locate modules:
 
 ```bash
 MODCACHE=$(go env GOMODCACHE)
 SVC=github.com/linuxfoundation/lfx-v2-SERVICENAME
-OLD=vX.Y.Z   # from git diff go.mod
+OLD=vX.Y.Z   # see "Finding OLD and NEW" below
 NEW=vX.Y.Z+1
 
 diff \
@@ -208,6 +211,42 @@ diff \
 ```
 
 Run this for every upgraded `lfx-v2-*` service (skip the query service).
+
+#### Finding OLD and NEW
+
+The straightforward source for OLD/NEW is an **uncommitted** bump from Step 1.2:
+`git diff go.mod` shows the exact before/after for every dependency that changed
+in this pass.
+
+That source only covers dependencies bumped in *this* run, though. A version
+bump that already landed in an earlier commit — on this branch, on `main`, or
+in a prior maintenance pass — leaves no working-tree diff, so it is invisible
+to this step unless you diff against that commit explicitly instead:
+
+```bash
+# Re-run Phase 2 retroactively against a specific commit that bumped go.mod,
+# instead of (or in addition to) the working tree.
+BASE_REF=<commit-ish>   # e.g. a commit hash, origin/main, or a merge-base
+
+git diff "${BASE_REF}" -- go.mod | grep 'linuxfoundation/lfx-v2-'
+```
+
+Use this whenever:
+
+- You're auditing a dependency bump that already landed (e.g. reviewing a PR's
+  base commit, or resuming maintenance on a branch where Phase 1 happened in an
+  earlier session) rather than one you just ran in Step 1.2.
+- A reviewer or CI catches a dropped/added field that Phase 2 should have
+  caught — that is a sign Phase 2 was skipped or incomplete for some prior
+  bump, not that the field is new. Find which commit changed the version (`git
+  log --oneline -S"lfx-v2-SERVICENAME vX.Y.Z" -- go.mod`) and diff from the
+  commit immediately before it.
+- You're unsure whether Phase 2 has ever been run for the versions currently in
+  `go.mod` — diff from a known-good ancestor (e.g. the last tagged release, or
+  `origin/main` if this branch has diverged) to be sure.
+
+Do not assume "no working-tree diff" means "no contract changes to check" —
+it only means none happened in the current, uncommitted pass.
 
 Also check for stale workarounds anywhere in `internal/`:
 

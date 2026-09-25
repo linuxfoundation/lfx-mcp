@@ -76,7 +76,7 @@ The HTTP server is designed to run across multiple pods without coordination:
 go version
 ```
 
-> **Note:** Stdio mode has no per-request OAuth context, so LFX data tools typically fail auth there. Use HTTP mode with OAuth configured, or enable only `hello_world` via `-tools`/`LFXMCP_TOOLS` for smoke tests. There is currently no personal access token (PAT) capability in LFX, so running the full server locally for end-to-end use is not practical without a complete OAuth setup.
+> **Note:** Stdio mode has no MCP-level OAuth context, so LFX data tools (and `user_info`) need a bearer token supplied directly via `-lfx_token`/`LFXMCP_LFX_TOKEN` (e.g. from `lfx auth token`; see README's "Local (stdio) mode" section) to authenticate.
 
 ### Common Development Tasks
 
@@ -146,41 +146,18 @@ LFXMCP_DEBUG=true ./bin/lfx-mcp-server
 ./bin/lfx-mcp-server -mode=http -debug
 ```
 
-### 2. MCP Client Logging (for tool developers)
+### 2. Tool-level logging
 
-Tools can send logs to the MCP client using `mcp.NewLoggingHandler`. These logs appear in the client's UI (e.g., Claude Desktop logs) and are controlled by the client's log level.
-
-**Usage in tools:**
-
-```go
-func handleMyTool(ctx context.Context, req *mcp.CallToolRequest, args MyToolArgs) (*mcp.CallToolResult, any, error) {
-    // Create MCP logger that sends logs to the client.
-    logger := slog.New(mcp.NewLoggingHandler(req.Session, nil))
-    
-    logger.Info("processing started", "param", args.Param)
-    logger.Debug("detailed info", "value", someValue)
-    logger.Warn("potential issue", "reason", "something unexpected")
-    
-    // ... tool implementation ...
-}
-```
-
-**How it works:**
-
-- The **client** controls the log level via the `SetLoggingLevel` MCP notification
-- Only logs at or above the client's level are sent over the protocol
-- Logs appear in the client's logging UI (not in server logs)
-- Log levels: debug, info, notice, warning, error, critical, alert, emergency
-
-**Key differences:**
-
-| Feature  | Server Logging   | MCP Client Logging         |
-|----------|------------------|----------------------------|
-| Audience | Server operators | Client users/developers    |
-| Output   | stdout/stderr    | MCP protocol notifications |
-| Control  | `-debug` flag    | Client's `SetLoggingLevel` |
-| Format   | JSON to files    | JSON over protocol         |
-| Use case | Debugging server | Debugging tool execution   |
+Tool handlers call `newToolLogger(ctx, req)` (`internal/tools/helpers.go`) to
+get a logger with `mcp.session.id`/`mcp.method.name` pre-bound. It writes to
+the same server-side sink as operational logs (stdout/stderr, JSON) — there is
+no MCP client-side logging channel. The MCP Logging capability
+(`logging/setLevel`, `notifications/message`) is deprecated as of protocol
+version 2026-07-28 (SEP-2577), and the server does not advertise or implement
+it: `newServer()` sets `ServerOptions.Capabilities` explicitly so the SDK's
+default Logging capability is omitted. Tool authors debugging a specific call
+should rely on the structured server logs (correlate via `mcp.session.id`) or
+OpenTelemetry spans, not a client-visible log stream.
 
 ### Server Log Structure
 
@@ -233,7 +210,7 @@ mcpLogger.Error("tool operation failed", "error", err)
 
 ## Adding New Tools
 
-The MCP Go SDK provides a simple pattern for adding tools. Tools are implemented in the `internal/tools` package and registered with the server. Each `Register<ToolName>` function calls `mcp.AddTool` directly. Scope enforcement happens exclusively at registration time in `newServer()` — tools the caller cannot invoke are simply not registered for that request and therefore never appear in `tools/list`.
+The MCP Go SDK provides a simple pattern for adding tools. Tools are implemented in the `internal/tools` package and registered with the server. Each `Register<ToolName>` function calls `mcp.AddTool` directly. Scope enforcement is split between registration time and call time in `newServer()` (see below) — only staff-only tools are ever absent from `tools/list`; read and write tools are always registered for an authenticated caller, and write tools additionally enforce `manage:all` at call time.
 
 ### Scope Enforcement
 
@@ -244,12 +221,22 @@ Two scope constants are defined in `internal/tools/scopes.go`:
 | `ScopeRead`   | `read:all`   | Tools with `ReadOnlyHint: true`                     |
 | `ScopeManage` | `manage:all` | Tools where `ReadOnlyHint` is `false` (the default) |
 
-`newServer()` computes two booleans from the caller's JWT scopes and gates each tool registration on the appropriate one:
+`newServer()` computes two booleans from the caller's JWT scopes:
 
 - `canManage` — true when the token holds `manage:all`.
 - `canRead` — true when `canManage` is true **or** the token holds `read:all`. A `manage:all` token implicitly has read access.
 
-In stdio mode (no auth token), both flags are `true` and all enabled tools are registered without restriction.
+Registration and enforcement then diverge by tool class:
+
+- **Read tools** are registered when `canRead`, and enforcement ends there — there is nothing further to check at call time.
+- **Write tools** (listed in `tools.ManageScopeTools`) are *also* registered when `canRead` — not gated on `canManage` — so a read-only caller can still discover the tool and its input schema. `manage:all` is enforced at the HTTP layer instead, by `requireManageScopeHTTP` in `main.go`: it inspects the JSON-RPC body of each `/mcp` POST, and a `tools/call` for a name in `tools.ManageScopeTools` from a caller without `canManage` gets an HTTP `403` with a `WWW-Authenticate: Bearer error="insufficient_scope"` challenge, without ever reaching the MCP handler. This lets an OAuth client request `read:all` up front and step up to `manage:all` only when the user actually attempts a write, rather than needing both scopes from the first consent screen. The OAuth Protected Resource Metadata document (`scopes_supported`) accordingly advertises both `read:all` and `manage:all` by default (`tools.DefaultScopes()`), so a client can request both up front if it chooses to — the per-call 403 is still what tells a caller which scope a specific tool needs, not the PRM. A client that ignores advertised scopes entirely (see `tools.IsScopeBlindClient`) is treated as having requested `tools.DefaultScopes()` (including `manage:all`): such a client offers no consent UI to withhold a scope from, so it gets the same default behavior any other client gets by requesting both scopes up front, and users rely on per-call "ask" policies for write tools regardless of how the scope was granted.
+- **Staff-only tools** (the LFX Lens-backed tools and their guidance) are gated on the `lf_staff` JWT claim in addition to `canRead`, and remain absent from `tools/list` for non-staff callers — the claim cannot be stepped up like a scope, so there is nothing to discover ahead of time.
+
+In stdio mode (no auth token), `callerToken` is `nil`, so `canRead`/`canManage`/`isStaff` are all `true` and every enabled tool is registered without restriction (there is no HTTP layer, so `requireManageScopeHTTP` never runs).
+
+Adding a new write tool means registering it under `canRead` in `newServer()` (like a read tool) and adding its name to `tools.ManageScopeTools` in `internal/tools/scopes.go`, so the step-up middleware knows to gate it at call time.
+
+**Staff-only tools.** The LFX Lens-backed tools and their guidance (the names in `staffOnlyTools`, `cmd/lfx-mcp-server/main_test.go`) are registered only when `canRead && isStaff`. `isStaff` is true for LF staff user tokens (`tools.IsLFStaff`), machine tokens (`tools.IsMachineAccount`) and a nil token (stdio, or HTTP with no `-mcp_api.auth_servers` configured); for every other caller these tools never appear in `tools/list`. A new tool of that kind uses the same gate and is added to `staffOnlyTools`, which `TestNewServer_LensToolsAreStaffOnly` checks.
 
 ### Tool Implementation Steps
 
@@ -257,7 +244,7 @@ In stdio mode (no auth token), both flags are `true` and all enabled tools are r
 2. **Define the input struct** with JSON schema tags
 3. **Implement the handler function** with tool logic
 4. **Create a registration function** calling `mcp.AddTool` directly
-5. **Call the registration function** in `main.go`, gated on the appropriate scope boolean (`canRead` or `canManage`)
+5. **Call the registration function** in `main.go`, gated on `canRead` (add write tools to `tools.ManageScopeTools` too — see Scope Enforcement above) or, for staff-only tools, `canRead && isStaff`
 
 ### Example Tool Implementation
 
@@ -335,7 +322,7 @@ func runStdioServer() {
     // ... server setup ...
     
     // Register tools.
-    tools.RegisterHelloWorld(server)
+    tools.RegisterUserInfo(server)
     tools.RegisterMyTool(server)  // Add your new tool
     
     // ... run server ...
@@ -372,6 +359,67 @@ return &mcp.CallToolResult{
 }, nil, nil
 ```
 
+### Query-backed search results
+
+The query service returns only the records the caller can view. By design,
+an empty page looks the same whether nothing matched or nothing matching is
+visible, and the service walks past pages where the caller can see nothing,
+so an empty page with a `page_token` only means more pages remain. Every
+search tool backed by the query service follows one result contract so
+agents do not read an empty page as proof of absence:
+
+- **Output type**: return a package-level result type as the handler's
+  concrete `Out`, never `any` or a function-local struct, so the tool
+  publishes an `outputSchema`. For a plain page of resources, return
+  `resourceSearchResult` built by `newResourceSearchResult`; do not add
+  another type with the same fields. Its items are `searchResource` values
+  (plain `Type`/`ID` strings and a `Data` object), not `querysvc.Resource`.
+  Prefer plain types over pointers and `any` where a plain type works: the
+  SDK's schema generator marks pointers as nullable and publishes `any` as a
+  bare `true` schema (see lfx-mcp#154).
+- **Warnings**: carry a top-level `warnings` key (`json:"warnings,omitempty"`)
+  filled only by the shared `searchWarnings` helper, passing whether the
+  request itself carried a `page_token` (a continuation).
+  A more specific statement of the same event (such as the roster-coverage
+  note on `search_committee_members`) replaces the generic warning; it is
+  not added next to it, so it must keep the generic warning's visibility
+  caveat. The one addition is `search_meetings`: when it shortens a
+  meeting's occurrence list to the occurrences that fit the query, it sets
+  `occurrences_omitted` in that meeting's `Data` and appends one occurrence
+  note, pointing to `get_meeting` for the full list, after any access
+  warning.
+- **One text block**: return exactly one `TextContent`, the indented JSON of
+  the same value returned as structured output. Do not prepend warning
+  blocks.
+- **Errors**: a handler with a typed `Out` returns a failure as
+  `nil, <zero value>, toolError(msg)`, never as an `IsError` result next to a
+  zero value: the SDK publishes any non-error output as structured content,
+  and an empty result next to an error reads as an empty page. Error results
+  carry no structured output.
+- **Wording**: say only what the caller can see and what to do next. Never
+  report counts of, or claim the existence of, records the caller cannot
+  see.
+
+`search_past_meeting_participants` is the one exception to the output type:
+its shape depends on `count_only`, so its `Out` is `any` and it publishes no
+`outputSchema`. It still returns its page as structured content, the same
+value as its JSON text, with the same `warnings` key.
+
+Lookups by UID that go through the query service (`get_meeting`,
+`get_meeting_registrant`, `get_past_meeting_participant`,
+`get_past_meeting_summary`) cannot tell a missing record from one the caller
+may not view either. On an empty answer they return the shared
+`lookupNotVisibleMessage`, never a bare "not found": no such record is
+visible to the caller, it may not exist or may not be shared with them, and
+they can check the UID or ask someone with access. A lookup that calls an
+LFX v2 service other than the query service (such as `get_past_meeting`,
+which reads the meeting service) reports that service's 404 through
+`friendlyAPIError`, which gives it the standard access message (see
+[Upstream HTTP status](#upstream-http-status)).
+`get_past_meeting` reads its recording and transcript from the query service;
+when either is absent it adds a note saying none is visible to the caller,
+next to its existing fetch-failure warnings.
+
 ### Tool Annotations
 
 All tools should include a `mcp.ToolAnnotations` struct to provide metadata hints to MCP clients (e.g., Claude). Annotations help clients decide how to present tools and whether to confirm before calling them.
@@ -403,28 +451,32 @@ Focus annotation effort on `ReadOnlyHint` and `DestructiveHint` — those have t
 
 ### Manual Testing via stdio
 
-Test the server by sending JSON-RPC messages. `hello_world` is not in `defaultTools`, so enable it explicitly:
+Test the server by sending JSON-RPC messages. In stdio mode, `user_info` accepts `-lfx_token`/`LFXMCP_LFX_TOKEN` as its `/userinfo` bearer (the same token used for LFX API calls), so it works end to end:
 
 ```bash
 # Initialize and call tool
 (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}';
- echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"Test"}}}';
- sleep 0.5) | LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server -mode=stdio
+ echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"user_info","arguments":{}}}';
+ sleep 0.5) | LFXMCP_LFX_TOKEN="$(lfx auth token)" ./bin/lfx-mcp-server -mode=stdio
 ```
+
+Without `-lfx_token`/`LFXMCP_LFX_TOKEN` set, the same command still runs (no crash), but the call fails with "Authentication token required". See README's "Local (stdio) mode" section for using `-lfx_token` with other LFX data tools.
 
 ### Manual Testing via HTTP
 
+The call below is expected to fail with 401 "no bearer token" — it has no real `Authorization` header carrying an MCP-audienced OAuth token, so this only demonstrates the transport and error handling. For an actual OAuth flow against localhost, use MCP Inspector (README's "MCP Inspector" section; localhost is only a supported target in dev, so point `-mcp_api.auth_servers`/`LFXMCP_MCP_API_AUTH_SERVERS` at the dev tenant instead of the default production issuer).
+
 ```bash
-# Start the server, enabling only hello_world.
-LFXMCP_TOOLS=hello_world ./bin/lfx-mcp-server -mode=http &
+# Start the server, enabling only user_info, against the dev auth tenant.
+LFXMCP_TOOLS=user_info LFXMCP_MCP_API_AUTH_SERVERS=https://linuxfoundation-dev.us.auth0.com ./bin/lfx-mcp-server -mode=http &
 
 # Call the tool.
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"hello_world","arguments":{"name":"Test"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"user_info","arguments":{}}}'
 ```
 
-Responses are returned as Server-Sent Events (SSE) with `event: message` and `data:` fields.
+Responses are returned as Server-Sent Events (SSE) with `event: message` and `data:` fields — except the 401 above, which the auth middleware returns as plain text before reaching the SSE-producing handler.
 
 ### Integration Test Script
 
@@ -478,35 +530,88 @@ The server supports configuration via environment variables with the `LFXMCP_` p
 | `-debug_traffic`                | `LFXMCP_DEBUG_TRAFFIC`                | `false`        | Log outbound LFX API request/response bodies                      |
 | `-tools`                        | `LFXMCP_TOOLS`                        | `defaultTools` | Comma-separated list of tools to enable                           |
 | `-committees_as_groups`         | `LFXMCP_COMMITTEES_AS_GROUPS`         | `false`        | Rebrand committee tools to use "group" terminology (feature flag) |
-| `-mcp_api.auth_servers`         | `LFXMCP_MCP_API_AUTH_SERVERS`         | —              | OAuth authorization server URLs (comma-separated)                 |
+| `-mcp_api.auth_servers`         | `LFXMCP_MCP_API_AUTH_SERVERS`         | `https://sso.linuxfoundation.org/` | OAuth authorization server URLs (comma-separated); also used as the `user_info` tool's `/userinfo` issuer |
 | `-mcp_api.public_url`           | `LFXMCP_MCP_API_PUBLIC_URL`           | —              | Public URL for MCP API (OAuth PRM)                                |
 | `-mcp_api.scopes`               | `LFXMCP_MCP_API_SCOPES`               | —              | OAuth scopes (comma-separated)                                    |
 | `-client_id`                    | `LFXMCP_CLIENT_ID`                    | —              | OAuth client ID for token exchange                                |
 | `-client_secret`                | `LFXMCP_CLIENT_SECRET`                | —              | OAuth client secret                                               |
 | `-client_assertion_signing_key` | `LFXMCP_CLIENT_ASSERTION_SIGNING_KEY` | —              | PEM-encoded RSA private key for client assertion (RFC 7523)       |
 | `-token_endpoint`               | `LFXMCP_TOKEN_ENDPOINT`               | —              | OAuth2 token endpoint URL (RFC 8693)                              |
-| `-lfx_api_url`                  | `LFXMCP_LFX_API_URL`                  | —              | LFX API base URL (token exchange audience)                        |
+| `-lfx_api_url`                  | `LFXMCP_LFX_API_URL`                  | —              | LFX API base URL and OAuth2 audience                               |
+| `-lfx_token`                    | `LFXMCP_LFX_TOKEN`                    | —              | Static LFX bearer token, used directly instead of SSO/CTE/M2M (stdio mode only; see README's "Local (stdio) mode") |
 | `-onboarding_api_url`           | `LFXMCP_ONBOARDING_API_URL`           | —              | Base URL of the member onboarding service                         |
 | `-onboarding_api_audience`      | `LFXMCP_ONBOARDING_API_AUDIENCE`      | —              | Auth0 resource server audience for the member onboarding API      |
 | `-lens_api_url`                 | `LFXMCP_LENS_API_URL`                 | —              | Base URL of the LFX Lens service                                  |
 | `-lens_api_audience`            | `LFXMCP_LENS_API_AUDIENCE`            | —              | Auth0 resource server audience for the LFX Lens API               |
 
+## MCP Client OAuth Registration (CIMD, not DCR)
+
+LFID (our Auth0-based identity provider) does **not** support Dynamic Client Registration (DCR). It **does** support **CIMD** (Client ID Metadata Documents, the modern best-practice OAuth extension where the `client_id` is itself a URL pointing to a metadata document instead of a pre-issued opaque string).
+
+- [`linuxfoundation/auth0-terraform`](https://github.com/linuxfoundation/auth0-terraform) registers each CIMD-based MCP client as an `auth0_client_cimd` resource in `clients_cimd.tf`, keyed by that client's metadata document URL (e.g., `https://claude.ai/oauth/mcp-oauth-client-metadata`).
+- In the LFX MCP Server README, clients that don't specify a `client_id`/`clientId` at all (e.g., Goose, Claude) are relying on CIMD — the client's own metadata document is already registered in auth0-terraform.
+- Clients that require a **static** `client_id` (e.g., OpenCode, Cursor) do so because their OAuth implementation doesn't support CIMD, so a conventional Auth0 client had to be created for them instead.
+- When onboarding a new MCP client that supports CIMD, the deliverable is simply: find the exact CIMD metadata document URL the client uses (check the client's own OAuth/MCP docs), then add an `auth0_client_cimd` resource for it in `clients_cimd.tf` via a PR to auth0-terraform. No new lfx-mcp code changes are needed for CIMD-only clients — just add a new client section to this repo's README (no `client_id`/`clientId` needed, following the pattern of existing CIMD-based client sections).
+
 ## Error Handling Patterns
 
 ### Tool Error Responses
 
+The SDK turns a plain Go error returned by a handler (for example
+`toolError(msg)` or `fmt.Errorf(...)`) into an `IsError` tool result whose
+text is `err.Error()` and which carries no structured content. Only a
+`*jsonrpc.Error` becomes a JSON-RPC protocol error. When the handler returns
+a nil error, the SDK publishes any non-nil output as structured content, even
+next to an `IsError` result.
+
 ```go
-// Return error in tool result (not JSON-RPC error)
+// Handler with a typed Out (such as the query-backed search tools): return
+// the failure as an error, so no zero-value output is published next to it.
+return nil, resourceSearchResult{}, toolError(friendlyAPIError("failed to search meetings", err))
+
+// Handler whose Out is `any` and which returns nil output: an IsError
+// result is equivalent (errorResult builds one).
 return &mcp.CallToolResult{
     Content: []mcp.Content{
         &mcp.TextContent{Text: "Error: " + err.Error()},
     },
     IsError: true,
 }, nil, nil
-
-// Return JSON-RPC error for invalid requests
-return nil, nil, fmt.Errorf("invalid parameter: %s", param)
 ```
+
+See the **Errors** rule under
+[Query-backed search results](#query-backed-search-results).
+
+### Upstream HTTP status
+
+Report an error from an LFX v2 service client (`internal/lfxv2`) with
+`friendlyAPIError(op, err)`, and describe one in a partial-result warning with
+`apiErrorDetail(err)`, never with `err.Error()`. Both read the HTTP status
+with `lfxv2.UpstreamStatus`:
+
+- **401**: `Unauthorized (HTTP 401)` and nothing else. A 401 means the service
+  did not accept the credentials this server sent: the token exchanged for an
+  HTTP caller (whose login is verified before any tool runs), the server's
+  machine token, or in stdio mode the `-lfx_token` token. Asking for access
+  does not fix any of these. The handler logs it at ERROR level with the
+  request's context, as it logs every upstream error; the helpers add no log
+  line of their own. `newToolLogger` writes a Goa typed error whose `Error()`
+  is blank as its name and message, so that record keeps the upstream text.
+- **403**: the shared `accessDeniedMessage`, unless the endpoint declares 403
+  and the response carries the service's own message. That case is shown as
+  `upstreamErrorText` renders the client's typed error: `Forbidden: <message>`
+  for the meeting service, the only service whose endpoints the tools call
+  that declares 403. A typed error with its own `Error()` text (the committee
+  client's `ForbiddenError` returns `Forbidden`) would show only that text.
+- **404**: the shared `accessDeniedMessage`, from any service: a 404 cannot
+  tell a missing resource from one the caller may not see. A declared 404
+  whose body the client cannot decode or validate keeps Goa's decoding or
+  validation error text.
+- Anything else: the upstream error text (`upstreamErrorText`).
+
+The service API tools behind `internal/serviceapi` (Discord, email, member
+onboarding, LFX Lens and the semantic layer) do not use this mapping: there
+the MCP server is the authorization gate, and a 404 means not found.
 
 ### MCP Protocol Errors
 
@@ -527,7 +632,7 @@ The SDK handles most protocol-level errors automatically. Tool implementation sh
 ## Contributing Guidelines
 
 1. **Add Tools**: Create new tools in `internal/tools/` following the established pattern
-2. **Tool Organization**: One tool per file (e.g., `hello_world.go`, `my_tool.go`)
+2. **Tool Organization**: One tool per file (e.g., `project.go`, `my_tool.go`)
 3. **Registration Pattern**: Each tool should have a `Register<ToolName>(server)` function that calls `mcp.AddTool` directly — never use wrapper functions for scope enforcement
 4. **Schema Tags**: Always include descriptive `jsonschema` tags
 5. **Testing**: Test new tools with the test script (`./scripts/test_server.sh`)

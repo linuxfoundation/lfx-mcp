@@ -133,6 +133,17 @@ func (v *JWTVerifier) VerifyToken(ctx context.Context, tokenString string) (jwt.
 	return token, nil
 }
 
+// machineAccountSuffix is the suffix Auth0 appends to the subject claim for
+// client-credentials (M2M) tokens, e.g. "<clientID>@clients".
+const machineAccountSuffix = "@clients"
+
+// IsMachineToken reports whether token is a machine-to-machine
+// (client-credentials) JWT, identified by Auth0's convention of a subject
+// claim ending in "@clients".
+func IsMachineToken(token jwt.Token) bool {
+	return strings.HasSuffix(token.Subject(), machineAccountSuffix)
+}
+
 // ExtractUsername extracts the LFX username from a verified JWT token.
 // It reads the http://lfx.dev/claims/username custom claim set by the
 // Auth0 custom_claims action for human users.
@@ -149,8 +160,8 @@ func ExtractUsername(token jwt.Token) string {
 		}
 	}
 	// Fallback for M2M tokens: Auth0 sets sub to "<clientID>@clients".
-	if sub := token.Subject(); strings.HasSuffix(sub, "@clients") {
-		return sub
+	if IsMachineToken(token) {
+		return token.Subject()
 	}
 	return ""
 }

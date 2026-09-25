@@ -50,9 +50,9 @@ Start a new chat and Goose will open a browser window for LFID login.
 
 After it acknowledges that your configuration was saved, running `goose` will open a browser window for LFID login.
 
-### OpenCode
+### OpenCode v1
 
-*OpenCode requires a client ID. The following client ID only works with OpenCode.*
+*OpenCode v1 requires a client ID. The following client ID only works with OpenCode v1.*
 
 Add the following to your `~/.config/opencode/opencode.json`:
 
@@ -72,7 +72,27 @@ Add the following to your `~/.config/opencode/opencode.json`:
 }
 ```
 
-See the [OpenCode MCP documentation](https://opencode.ai/docs/mcp-servers) for more details.
+See the [OpenCode v1 MCP documentation](https://opencode.ai/docs/mcp-servers) for more details.
+
+### OpenCode v2
+
+OpenCode v2 supports Client ID Metadata Documents (CIMD), so no client ID is needed. Add the following to your `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "lfx": {
+        "type": "remote",
+        "url": "https://mcp.lfx.dev/mcp"
+      }
+    }
+  }
+}
+```
+
+See the [OpenCode v2 MCP documentation](https://opencode.ai/v2/docs/mcp-servers) for more details.
 
 ### Zed
 

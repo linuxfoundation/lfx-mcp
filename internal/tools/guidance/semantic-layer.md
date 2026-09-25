@@ -112,8 +112,9 @@ dimension by what the question names:
   '%/<id>/%' for exact identity); account__account_rollup_name is ONE hop,
   for direct subsidiaries only. The whole subtree on any model is
   project__project_path LIKE '%/<slug>/%' (project__project_depth for
-  levels); project__parent_project_slug is one level. Speakers and meeting
-  attendance carry no account entity.
+  levels); project__parent_project_slug is one level. Speakers carry no account
+  entity; meeting attendance does (attendees_count, unique_attendees,
+  invited_count), meeting occurrences and scheduled minutes do not.
 
 ## Windows
 
@@ -285,12 +286,16 @@ primary_key__invitee_voting_status. PROJECTS on both models through the
 conformed entity: project__foundation_slug for a foundation, project__slug for
 one project, project__project_path LIKE '%/<slug>/%' for a subtree; an
 occurrence shared by several projects is attributed to one of them.
-ORGANIZATIONS (attendance model only): primary_key__account_name is the
-invitee's account as the source spelled it — there is no account entity, so no rollup,
-no subsidiaries, and recipe 6's acronym trap applies; two buckets are not
-companies: '' (no account) and 'Individual - No Account' — report both as
-unattributed. No standard metric covers meetings: compose them here with these
-names. TWO ROUTES, TWO DEFINITIONS. search_past_meetings returns a paged listing. count_lfx_resources provides meeting counts and search_past_meeting_participants with count_only=true provides participant counts; both count what the caller's identity may see, the same visibility as LFX Self Serve, and say whether the count is complete; this layer's meeting models count every meeting in the warehouse with no per-caller visibility. The two differ by design and neither is wrong. Cite a tool figure as 'meetings (or participants) visible to you' and a layer figure as 'all meetings in the warehouse'; never reconcile one against the other; prefer the tools for a project's or committee's own meeting list, details and caller-visible counts, and the layer for totals over a period — occurrences, scheduled minutes, attendees, attendances — LF-wide or by foundation, project subtree, company, committee type or meeting type. The meeting tools take date_from and date_to, inclusive, with date-only values read as UTC day boundaries; the standard metrics say the same thing as start_date and end_date. Seats for an organisation come from get_org_committee_seats, complete for the scope and gated on the organisation grant; the committee models in this layer carry no per-user access and are not the route for an organisation's seats. The membership's contact of record is get_membership_key_contacts; the two can name different people.
+ORGANIZATIONS (attendance model only): the account entity —
+account__top_parent_name for the whole company at any depth,
+account__account_name for one account (recipe 6) — beside
+primary_key__account_name, the spelling as stored. Unattributed:
+account__account_name NULL (no account, or a stored account that does not
+resolve) and account__is_placeholder_account = true ('Individual - No Account');
+report both, and treat a company figure as a floor. The occurrences model
+carries no account: distinct meetings a company's people attended has no named
+metric — query_lfx_lens, labelled generated SQL. No standard metric covers meetings: compose them here with these
+names. TWO ROUTES, TWO DEFINITIONS. search_past_meetings returns a paged listing. count_lfx_resources provides meeting counts and search_past_meeting_participants with count_only=true provides participant RECORD counts — not people and not attendances, since one person can hold more than one record at one occurrence; its listing's people field is the de-duplicated people. Both count tools count what the caller's identity may see, the same visibility as LFX Self Serve, and say whether the count is complete; this layer's meeting models count every meeting in the warehouse with no per-caller visibility. The two differ by design and neither is wrong. Cite a tool count as 'meetings (or participant records) visible to you' and a layer figure as 'all meetings in the warehouse'; never reconcile one against the other; prefer the tools for a project's or committee's own meeting list, details and caller-visible counts, and the layer for totals over a period — occurrences, scheduled minutes, attendees, attendances — LF-wide or by foundation, project subtree, company (attendance only), committee type or meeting type. An unscoped long-window count can time out: scope by project or committee and read month windows. On participant records, an unknown date_field or date_field=start_time returns a silent 0: they carry no start_time; created_at is the record's creation, not the meeting's. For a meeting-date window use search_past_meeting_participants with a project or committee and date_from/date_to. The meeting tools take date_from and date_to, inclusive, with date-only values read as UTC day boundaries; the standard metrics say the same thing as start_date and end_date. Seats for an organisation come from get_org_committee_seats, complete for the scope and gated on the organisation grant; the committee models in this layer carry no per-user access and are not the route for an organisation's seats. The membership's contact of record is get_membership_key_contacts; the two can name different people.
 
 13. REGIONS. country__* follows the person; organization_lf_region etc. follow the org's HQ.
 

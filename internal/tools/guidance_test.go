@@ -163,7 +163,7 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"unique_attendees (distinct PEOPLE who attended",
 		"attendees_count (attendance RECORDS where the invitee attended",
 		"'Individual - No Account'",
-		"there is no account entity, so no rollup",
+		"account__account_name for one account (recipe 6)",
 		// events/training/sponsorships account entities and tiers
 		"account__account_name",
 		"NULL bucket",
@@ -209,11 +209,11 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"has not come back from them",
 		// DBT-2: the layer reaches the whole company and the whole subtree on
 		// its own dimensions; the rollup is one hop, the parent slug one level,
-		// and the two models without an account entity are named
+		// and attendance's account entity is distinguished from occurrences
 		"REACH — how deep this layer's own dimensions go: the whole company at any\n  depth is account__top_parent_name",
 		"account__account_rollup_name is ONE hop,\n  for direct subsidiaries only",
 		"project__project_path LIKE '%/<slug>/%' (project__project_depth for\n  levels); project__parent_project_slug is one level",
-		"Speakers and meeting\n  attendance carry no account entity",
+		"Speakers carry no account\n  entity; meeting attendance does (attendees_count, unique_attendees,\n  invited_count), meeting occurrences and scheduled minutes do not",
 		"ANY DEPTH: account__top_parent_name folds every subsidiary\ninto the top parent (Red Hat LLC's own acquisitions land under IBM)",
 		"Employer: account__account_name /\naccount__top_parent_name",
 		"account__top_parent_name for the whole company (recipe 6); speakers carry no\naccount entity",

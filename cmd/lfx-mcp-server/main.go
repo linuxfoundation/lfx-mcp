@@ -727,7 +727,11 @@ func requireManageScopeHTTP(cfg Config, resourceMetadataURL string, next http.Ha
 				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
 				return
 			}
-			next.ServeHTTP(w, r)
+			// Fail closed: a partially-read body would let this pre-parser
+			// inspect one prefix while the downstream SDK sees another.
+			// Mirror the v1.8.0 streamable handler's own behavior for this
+			// case rather than forwarding the truncated body to next.
+			http.Error(w, "failed to read request body", http.StatusBadRequest)
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))

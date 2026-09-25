@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -394,6 +395,41 @@ func TestRequireManageScopeHTTP_RejectsOversizedBody(t *testing.T) {
 
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected 413, got %d", rec.Code)
+	}
+}
+
+// erroringReadCloser is an io.ReadCloser whose Read always fails, used to
+// simulate a body-read error that is not an *http.MaxBytesError.
+type erroringReadCloser struct{}
+
+func (erroringReadCloser) Read(_ []byte) (int, error) { return 0, errors.New("simulated read error") }
+func (erroringReadCloser) Close() error               { return nil }
+
+// TestRequireManageScopeHTTP_FailsClosedOnBodyReadError pins that a generic
+// body-read failure (anything other than an *http.MaxBytesError) makes
+// requireManageScopeHTTP respond with HTTP 400 itself, rather than forwarding
+// the partially-read body to next. Forwarding it would let this pre-parser
+// inspect one prefix while the downstream SDK sees another.
+func TestRequireManageScopeHTTP_FailsClosedOnBodyReadError(t *testing.T) {
+	verifyToken := func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+		return &auth.TokenInfo{Scopes: strings.Split(token, ","), Expiration: time.Now().Add(time.Hour)}, nil
+	}
+	authMiddleware := auth.RequireBearerToken(verifyToken, &auth.RequireBearerTokenOptions{
+		ResourceMetadataURL: "https://example.test/.well-known/oauth-protected-resource",
+	})
+
+	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatalf("handler must not run when the body cannot be read")
+	})
+	handler := authMiddleware(requireManageScopeHTTP(Config{}, "https://example.test/.well-known/oauth-protected-resource", next))
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", erroringReadCloser{})
+	req.Header.Set("Authorization", "Bearer "+tools.ScopeManage)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }
 

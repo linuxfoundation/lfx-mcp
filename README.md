@@ -310,7 +310,7 @@ Notes:
 
 | Tool                            | Description                                                                           |
 |---------------------------------|---------------------------------------------------------------------------------------|
-| `search_members`                | Search and filter members (memberships) by project, tier, status, or B2B organization |
+| `search_members`                | List memberships by project, tier, status, or B2B organization; summary mode reads term history and marks partial results |
 | `get_member_membership`         | Get a single membership by membership UID                                             |
 | `get_membership_key_contacts`   | Get a membership's key contacts (contacts of record, not committee seats)             |
 | `get_membership_key_contact`    | Get a single key contact by membership UID and contact UID                            |

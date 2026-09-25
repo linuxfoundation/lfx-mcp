@@ -266,6 +266,20 @@ search_committee_members or count_lfx_resources, both "visible to you";
 a refusal is the gate, never 'no seats', and an empty side is what you can see,
 not an absence.
 
+Member since is the earliest start across the organisation's membership
+records on that project, read whole by search_members summary=true when
+complete=true, with the current term, its tier and end date alongside. A call
+continued from a page_token holds only the summaries from that point on and
+its complete flag refers to the remainder; the whole answer is the earlier
+output plus the continuation. Scope b2b_org_uid to the organisation's own
+record from search_b2b_orgs, and project_uid to the project. Results cover the caller's visible records, as
+in LFX Self Serve. The memberships family of the standard metrics counts
+memberships in a window or on a date and never yields a first date. A summary
+the tool reports incomplete is partial; re-read with the organisation's uid
+as the scope, never present it as whole. Cite first_start as recorded; the
+terms list shows gaps, so disclose a lapse and return rather than presenting
+it as uninterrupted "member since".
+
 ## Projects and subprojects
 
 project takes one slug and covers, by default, its whole tree AT ANY DEPTH

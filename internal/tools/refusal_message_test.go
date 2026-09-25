@@ -30,25 +30,35 @@ func getPastMeetingText(t *testing.T, status int, body string) string {
 	return err.Error()
 }
 
-func TestGetPastMeeting_RefusalWithoutBodyShowsAccessMessage(t *testing.T) {
-	for _, status := range []int{http.StatusForbidden, http.StatusUnauthorized} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
-			got := getPastMeetingText(t, status, "")
-			want := "Failed to get past meeting: " + accessDeniedMessage
-			if got != want {
-				t.Errorf("expected %q, got %q", want, got)
-			}
-		})
+func TestGetPastMeeting_ForbiddenWithoutBodyShowsAccessMessage(t *testing.T) {
+	got := getPastMeetingText(t, http.StatusForbidden, "")
+	want := "Failed to get past meeting: " + accessDeniedMessage
+	if got != want {
+		t.Errorf("expected %q, got %q", want, got)
 	}
 }
 
-func TestGetPastMeeting_RefusalWithoutCodeShowsAccessMessage(t *testing.T) {
+func TestGetPastMeeting_ForbiddenWithoutCodeShowsAccessMessage(t *testing.T) {
 	// The meeting service's 401/403 bodies require "code" as well as
 	// "message"; without it Goa would report a validation error.
-	for _, status := range []int{http.StatusForbidden, http.StatusUnauthorized} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
-			got := getPastMeetingText(t, status, `{"message":"denied by policy"}`)
-			want := "Failed to get past meeting: " + accessDeniedMessage
+	got := getPastMeetingText(t, http.StatusForbidden, `{"message":"denied by policy"}`)
+	want := "Failed to get past meeting: " + accessDeniedMessage
+	if got != want {
+		t.Errorf("expected %q, got %q", want, got)
+	}
+}
+
+// A 401 means the service did not accept this server's credentials, whatever
+// the body says, so it is reported as that status and nothing else.
+func TestGetPastMeeting_UnauthorizedShowsStatusOnly(t *testing.T) {
+	for name, body := range map[string]string{
+		"no body":         "",
+		"message no code": `{"message":"denied by policy"}`,
+		"service message": `{"code":"401","message":"token expired"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := getPastMeetingText(t, http.StatusUnauthorized, body)
+			want := "Failed to get past meeting: Unauthorized (HTTP 401)"
 			if got != want {
 				t.Errorf("expected %q, got %q", want, got)
 			}

@@ -69,6 +69,23 @@ func newResourceSearchResult(noun string, result *querysvc.QueryResourcesResult,
 	}
 }
 
+// notVisibleText returns "no <what> is visible to you; ...": it states that no
+// such record is visible to the caller, never that one exists. The query
+// service leaves out records the caller cannot view, so an empty answer cannot
+// tell a record that does not exist from one the caller may not see.
+func notVisibleText(what string) string {
+	return fmt.Sprintf("no %s is visible to you; it may not exist, or it may not be shared with you", what)
+}
+
+// lookupNotVisibleMessage is the error text of a query-backed lookup by UID
+// that returned no record. label names the record ("meeting", "past meeting
+// summary"). A lookup that calls an LFX v2 service other than the query
+// service reports that service's 404 through friendlyAPIError, which gives it
+// accessDeniedMessage.
+func lookupNotVisibleMessage(label, uid string) string {
+	return fmt.Sprintf("Error: %s. Check the UID, or ask someone with access to confirm it.", notVisibleText(label+" with UID "+uid))
+}
+
 // hasPageToken reports whether a pagination token is present and non-empty.
 func hasPageToken(p *string) bool {
 	return p != nil && *p != ""

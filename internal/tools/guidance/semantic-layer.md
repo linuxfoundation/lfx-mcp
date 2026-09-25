@@ -337,6 +337,18 @@ by enrollment_id__course_name + enrollment_id__product_type. FLOORS: edX
 enrollments carry no account and land in the NULL bucket, and a share of
 registrations has no account either, so every org-scoped figure here is a
 floor — present "attributed registrations/enrollments" and say so.
+SPEAKERS BY COMPANY ("how many Red Hat employees gave talks at KubeCon") is
+the speakers standard metric: by=event, org=<stored legal name>,
+subsidiaries=combined, dates bracketing the edition — read the KubeCon
+row, report it as a floor (accounts resolve from the proposal's company
+field; many resolve to none) and as PEOPLE, not talks. TALKS BY TOPIC ("how
+many OpenTelemetry talks at KubeCon") has NO surface yet: the event
+metrics count people (speakers, registrants), registrations and
+sponsorships — none counts sessions — and no dimension carries a session
+title, track or topic — say the question is
+not answerable from LFX data today rather than approximating it from
+speaker counts or from the hosting project (event_id__project_name is the
+foundation that ran the event, not what a talk was about).
 
 15. STANDARD METRIC CALLS take uniform parameters on every family — metric,
 by, project + subprojects (excluded|separate|combined, default combined), org

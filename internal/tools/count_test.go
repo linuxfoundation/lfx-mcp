@@ -217,10 +217,12 @@ func TestCountLFXResources_MissingTokenFails(t *testing.T) {
 
 func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 	tool := listRegisteredTool(t, "count_lfx_resources", RegisterCountLFXResources)
-	if n := len(tool.Description); n > 1000 {
-		t.Errorf("description is %d bytes, budget is 1000", n)
+	// Keep a tight local pin while allowing the explicit participant parent type.
+	const descriptionBudget = 1005
+	if n := len(tool.Description); n > descriptionBudget {
+		t.Errorf("description is %d bytes, budget is %d", n, descriptionBudget)
 	}
-	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "committee_member: committee:<uid>", "committee: project:<uid>", "a date range (date_field=start_time)", "filters_all", "filters_or", "a ref or field the type lacks counts 0"} {
+	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "committee_member: committee:<uid>", "committee: project:<uid>", "v1_past_meeting_participant: past_meeting:<meeting_and_occurrence_id>", "a date range (date_field=start_time)", "filters_all", "filters_or", "a ref or field the type lacks counts 0"} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}

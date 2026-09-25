@@ -68,7 +68,7 @@ func RegisterCountLFXResources(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "count_lfx_resources",
 		Description: "Count LFX resources of one type via the query service, over the records visible to the caller. " +
-			"Filters: parent, the type's own ref (committee_member: committee:<uid>; committee: project:<uid>; past_meeting:<meeting_and_occurrence_id>), " +
+			"Filters: parent, the type's own ref (committee_member: committee:<uid>; committee: project:<uid>; v1_past_meeting_participant: past_meeting:<meeting_and_occurrence_id>), " +
 			"name (typeahead), tags OR / tags_all AND (is_attended:true, project_uid:<uid>), a date range (date_field=start_time), " +
 			"and stored-value filters_all / filters_or on the type's data fields; a ref or field the type lacks counts 0. " +
 			"Returns {count, complete, visibility, note}. complete=true means every record indexed in LFX v2 that the caller may see was counted; " +

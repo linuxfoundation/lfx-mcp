@@ -137,3 +137,44 @@ func TestGuidanceMeetingAccountCoverage(t *testing.T) {
 		}
 	}
 }
+
+func TestMemberSinceGuidance(t *testing.T) {
+	for _, tc := range []struct {
+		name, text string
+		wants      []string
+	}{
+		{
+			"routing", semanticLayerGuidance,
+			[]string{
+				"How long an organisation has been a member / member since: search_members summary=true",
+				"one row per organisation and project, its visible membership records read whole when complete=true",
+				"a summary the tool reports incomplete is partial; re-read with the organisation's uid as the scope",
+			},
+		},
+		{
+			"standard metrics", standardMetricsGuidance,
+			[]string{
+				"Member since is the earliest start across the organisation's membership records on that project",
+				"read whole by search_members summary=true when complete=true, with the current term, its tier and end date alongside",
+				"b2b_org_uid to the organisation's own record from search_b2b_orgs",
+				"Results cover the caller's visible records, as in LFX Self Serve",
+				"memberships family of the standard metrics counts memberships in a window or on a date and never yields a first date",
+				"A summary the tool reports incomplete is partial; re-read with the organisation's uid as the scope, never present it as whole",
+				"Cite first_start as recorded",
+				"terms list shows gaps, so disclose a lapse and return rather than presenting it as uninterrupted \"member since\"",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			text := strings.Join(strings.Fields(tc.text), " ")
+			for _, want := range tc.wants {
+				if !strings.Contains(text, want) {
+					t.Errorf("member since guidance missing %q", want)
+				}
+			}
+		})
+	}
+	if !strings.Contains(standardMetricsGuidance, "not an absence.\n\nMember since") {
+		t.Error("member since guidance must follow the representation paragraph")
+	}
+}

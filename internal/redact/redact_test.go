@@ -199,6 +199,21 @@ func TestURL(t *testing.T) {
 			want: "https://files.example.test/a.pdf?v=1&#38;sig=" + Mask + "&#x26;Signature=" + Mask,
 		},
 		{
+			name: "JSON-escaped slash inside a value",
+			in:   `https://files.example.test/x?token=header.payload\/signature&v=1`,
+			want: `https://files.example.test/x?token=` + Mask + `&v=1`,
+		},
+		{
+			name: "unicode-escaped slash inside a value",
+			in:   `https://files.example.test/x?X-Amz-Credential=AKIDEXAMPLE\u002F20260924\u002fus-east-1\u002Fs3\u002Faws4_request&v=1`,
+			want: `https://files.example.test/x?X-Amz-Credential=` + Mask + `&v=1`,
+		},
+		{
+			name: "escaped quote still ends a value",
+			in:   `https://files.example.test/x?sig=abc\"kept`,
+			want: `https://files.example.test/x?sig=` + Mask + `\"kept`,
+		},
+		{
 			name: "fragment after a masked value is kept",
 			in:   "https://files.example.test/a.pdf?sig=abc#page=2",
 			want: "https://files.example.test/a.pdf?sig=" + Mask + "#page=2",

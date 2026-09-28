@@ -138,7 +138,7 @@ func RegisterSearchCommitteeMembers(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_group_members",
-			Description: "Search LFX group (committee) members; organization_id filters by stored id. The authoritative source for committee rosters. Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid, empty results warn about roster coverage in LFX v2; they never prove a person or organization holds no seat.",
+			Description: "Search LFX group (also called committee) members. The authoritative source for committee rosters. Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_id keeps one organization's members by stored id; organization_name matches the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid, empty results warn about roster coverage in LFX v2; they never prove a person or organization holds no seat.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Group Members",
 				ReadOnlyHint: true,
@@ -148,7 +148,7 @@ func RegisterSearchCommitteeMembers(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committee_members",
-		Description: "Search LFX committee members; organization_id filters by stored id. The authoritative source for committee rosters. Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid, empty results warn about roster coverage in LFX v2; they never prove a person or organization holds no seat.",
+		Description: "Search LFX committee members. The authoritative source for committee rosters. Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_id keeps one organization's members by stored id; organization_name matches the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid, empty results warn about roster coverage in LFX v2; they never prove a person or organization holds no seat.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Committee Members",
 			ReadOnlyHint: true,

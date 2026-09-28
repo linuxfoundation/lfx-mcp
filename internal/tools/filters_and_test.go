@@ -493,10 +493,15 @@ func TestSearchCommitteeMembersDescriptionsAdvertiseOrganizationFilters(t *testi
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tool := listRegisteredTool(t, tc.name, tc.register)
-			// Pay for the new parameter without growing either tool's descriptions.
-			maxDescription, maxTotal := 679, 1075
+			// Keep the lead about the tool and the organization filters together.
+			lead := "Search LFX committee members."
+			maxDescription, maxTotal := 552, 1048
 			if tc.name == "search_group_members" {
-				maxDescription, maxTotal = 695, 1083
+				lead = "Search LFX group (also called committee) members."
+				maxDescription, maxTotal = 572, 1060
+			}
+			if !strings.HasPrefix(tool.Description, lead+" ") {
+				t.Errorf("description must lead with %q", lead)
 			}
 			total := len(tool.Description)
 			for _, property := range schemaProperties(t, tool) {
@@ -525,8 +530,7 @@ func TestSearchCommitteeMembersDescriptionsAdvertiseOrganizationFilters(t *testi
 				t.Errorf("organization_id description = %q", got)
 			}
 			for _, want := range []string{
-				"organization_id filters by stored id.",
-				"organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats).",
+				"organization_id keeps one organization's members by stored id; organization_name matches the stored spelling (copy it from a roster row or get_org_committee_seats).",
 				"With project_uid, empty results warn about roster coverage in LFX v2; they never prove a person or organization holds no seat.",
 			} {
 				if !strings.Contains(tool.Description, want) {

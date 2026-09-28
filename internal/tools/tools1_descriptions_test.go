@@ -61,7 +61,7 @@ func TestTools1Descriptions_FunctionVisibilityAndBudget(t *testing.T) {
 						t.Errorf("count description missing %q", want)
 					}
 				}
-				const parent = "The type's own parent ref, e.g. committee:<uid> for committee_member, project:<uid> for committee"
+				const parent = "Parent ref: committee:<uid> for committee_member, project:<uid> for committee, past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant"
 				if got := schemaPropertyDescription(t, tool, "parent"); got != parent {
 					t.Errorf("parent must name the type-specific ref: %q", got)
 				}

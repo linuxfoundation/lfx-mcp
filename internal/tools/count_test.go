@@ -227,6 +227,10 @@ func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 			t.Errorf("description missing %q", want)
 		}
 	}
+	const participantParent = "past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant"
+	if parent := schemaPropertyDescription(t, tool, "parent"); !strings.Contains(parent, participantParent) {
+		t.Errorf("parent description must retain the participant's past-meeting ref: %q", parent)
+	}
 	for _, banned := range []string{"Insights", "because", "Jim"} {
 		if strings.Contains(tool.Description, banned) {
 			t.Errorf("description must not contain %q (rationale or absolute figure)", banned)

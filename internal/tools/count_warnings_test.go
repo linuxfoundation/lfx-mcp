@@ -71,7 +71,7 @@ func TestBuildCountResult_Warnings(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.result.Count = 7
-			out := buildCountResult(context.Background(), slog.Default(), &tc.result, committeeMemberResourceType, tc.groupsRequested, tc.metricRequested)
+			out := buildCountResult(context.Background(), slog.Default(), &tc.result, committeeMemberResourceType, tc.groupsRequested, tc.metricRequested, false)
 			if out.Count != 7 || out.Complete != tc.complete || out.Visibility != "caller" || out.Note != callerVisibilityNote {
 				t.Errorf("unexpected count result: %+v", out)
 			}
@@ -126,7 +126,7 @@ func TestBuildCountResult_NilGroupsAreIncomplete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var logs bytes.Buffer
 			logger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn}))
-			out := buildCountResult(context.Background(), logger, &querysvc.QueryResourcesCountResult{Count: 3, HasMore: tc.hasMore, Groups: tc.groups, GroupsComplete: tc.groupsComplete, GroupCountErrorUpperBound: &zero}, committeeMemberResourceType, true, false)
+			out := buildCountResult(context.Background(), logger, &querysvc.QueryResourcesCountResult{Count: 3, HasMore: tc.hasMore, Groups: tc.groups, GroupsComplete: tc.groupsComplete, GroupCountErrorUpperBound: &zero}, committeeMemberResourceType, true, false, false)
 			if out.Count != 3 || out.Complete || out.Note != callerVisibilityNote {
 				t.Errorf("unexpected result: %+v", out)
 			}
@@ -179,26 +179,28 @@ func TestCountLFXResources_ZeroCountsAreNotProofOfAbsence(t *testing.T) {
 	}
 }
 
-func TestBuildCountResult_ZeroWarningFollowsCompletenessWarnings(t *testing.T) {
+func TestBuildCountResult_ZeroWarningRequiresExhaustiveBaseCount(t *testing.T) {
 	complete, incomplete := true, false
 	zero := uint64(0)
 	const visibilityWarning = "No committee_member records matching these filters are visible to you; results cover only records you can view, so this is not proof of absence."
 	for _, tc := range []struct {
-		name     string
-		result   querysvc.QueryResourcesCountResult
-		groups   bool
-		metric   bool
-		complete bool
-		warnings []string
+		name           string
+		result         querysvc.QueryResourcesCountResult
+		groups         bool
+		metric         bool
+		scopeTruncated bool
+		complete       bool
+		warnings       []string
 	}{
-		{"walk stopped", querysvc.QueryResourcesCountResult{HasMore: true}, false, false, false, []string{countLowerBoundWarning, visibilityWarning}},
-		{"empty groups", querysvc.QueryResourcesCountResult{GroupsComplete: &complete, GroupCountErrorUpperBound: &zero}, true, false, true, []string{visibilityWarning}},
-		{"unknown group completeness", querysvc.QueryResourcesCountResult{}, true, false, false, []string{countGroupsIncompleteWarning, countMissingGroupErrorBoundWarning, visibilityWarning}},
-		{"zero metric", querysvc.QueryResourcesCountResult{MetricValue: &zero, MetricComplete: &complete}, false, true, true, []string{visibilityWarning}},
-		{"incomplete metric", querysvc.QueryResourcesCountResult{MetricValue: &zero, MetricComplete: &incomplete}, false, true, false, []string{countMetricIncompleteWarning, visibilityWarning}},
+		{"walk stopped", querysvc.QueryResourcesCountResult{HasMore: true}, false, false, false, false, []string{countLowerBoundWarning}},
+		{"scope truncated", querysvc.QueryResourcesCountResult{}, false, false, true, false, nil},
+		{"empty groups", querysvc.QueryResourcesCountResult{GroupsComplete: &complete, GroupCountErrorUpperBound: &zero}, true, false, false, true, []string{visibilityWarning}},
+		{"unknown group completeness", querysvc.QueryResourcesCountResult{}, true, false, false, false, []string{countGroupsIncompleteWarning, countMissingGroupErrorBoundWarning, visibilityWarning}},
+		{"zero metric", querysvc.QueryResourcesCountResult{MetricValue: &zero, MetricComplete: &complete}, false, true, false, true, []string{visibilityWarning}},
+		{"incomplete metric", querysvc.QueryResourcesCountResult{MetricValue: &zero, MetricComplete: &incomplete}, false, true, false, false, []string{countMetricIncompleteWarning, visibilityWarning}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out := buildCountResult(context.Background(), slog.Default(), &tc.result, committeeMemberResourceType, tc.groups, tc.metric)
+			out := buildCountResult(context.Background(), slog.Default(), &tc.result, committeeMemberResourceType, tc.groups, tc.metric, tc.scopeTruncated)
 			if out.Count != 0 || out.Complete != tc.complete || out.Note != callerVisibilityNote {
 				t.Errorf("unexpected result: %+v", out)
 			}

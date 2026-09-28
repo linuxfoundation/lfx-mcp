@@ -120,10 +120,13 @@ func RegisterCountLFXResources(server *mcp.Server) {
 }
 
 // buildCountResult turns a query-service count into the tool's honest shape.
-func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc.QueryResourcesCountResult, resourceType string, groupsRequested, metricRequested bool) countResult {
+// scopeTruncated reports a caller-side scope cut, not a service access-bucket cap.
+// The caller appends the scope-specific truncation warning.
+func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc.QueryResourcesCountResult, resourceType string, groupsRequested, metricRequested, scopeTruncated bool) countResult {
+	baseCountComplete := !result.HasMore && !scopeTruncated
 	out := countResult{
 		Count:      result.Count,
-		Complete:   !result.HasMore,
+		Complete:   baseCountComplete,
 		Visibility: "caller",
 		Note:       callerVisibilityNote,
 	}
@@ -178,7 +181,7 @@ func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc
 			out.Warnings = append(out.Warnings, countMetricIncompleteWarning)
 		}
 	}
-	if result.Count == 0 {
+	if result.Count == 0 && baseCountComplete {
 		out.Warnings = append(out.Warnings, searchWarnings(resourceType+" records", 0, 0, false, false)...)
 	}
 	return out
@@ -288,7 +291,7 @@ func handleCountLFXResources(ctx context.Context, req *mcp.CallToolRequest, args
 		return errorResult(friendlyAPIError("failed to count resources", err)), nil, nil
 	}
 
-	out := buildCountResult(ctx, logger, result, args.Type, args.GroupBy != "", args.Metric != "")
+	out := buildCountResult(ctx, logger, result, args.Type, args.GroupBy != "", args.Metric != "", false)
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {

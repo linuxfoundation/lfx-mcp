@@ -456,6 +456,49 @@ func TestParticipants_CountOnlyStructuredResultMatchesText(t *testing.T) {
 	}
 }
 
+func TestParticipants_ZeroCountWarningRequiresFullRange(t *testing.T) {
+	const absenceWarning = "No v1_past_meeting_participant records matching these filters are visible to you; results cover only records you can view, so this is not proof of absence."
+	truncatedWarning := fmt.Sprintf(participantTruncatedNote, 1, participantHardMaxMeetings)
+	for _, tc := range []struct {
+		name      string
+		truncated bool
+		hasMore   bool
+		warnings  []string
+	}{
+		{"exhaustive", false, false, []string{absenceWarning, participantCountRecordsWarning}},
+		{"service cap", false, true, []string{countLowerBoundWarning, participantCountRecordsWarning}},
+		{"meeting cap", true, false, []string{participantCountRecordsWarning, truncatedWarning}},
+		{"both caps", true, true, []string{countLowerBoundWarning, participantCountRecordsWarning, truncatedWarning}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := setupParticipantTest(t)
+			if tc.truncated {
+				api.Respond(resourcesPath, page([]string{pastMeetingDoc("m-1"), pastMeetingDoc("m-2")}, "more"))
+			} else {
+				api.Respond(resourcesPath, page([]string{pastMeetingDoc("m-1")}, ""))
+			}
+			api.Respond(countPath, fmt.Sprintf(`{"count":0,"has_more":%t}`, tc.hasMore))
+			res, structured, err := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p", DateFrom: "2026-01-01", MaxMeetings: 1, CountOnly: true})
+			if err != nil || res == nil || res.IsError {
+				t.Fatalf("unexpected error: %v; result=%v", err, res)
+			}
+			out := resultJSON(t, res)
+			complete := !tc.truncated && !tc.hasMore
+			if out["count"] != float64(0) || out["complete"] != complete || out["note"] != callerVisibilityNote {
+				t.Errorf("unexpected result: %v", out)
+			}
+			assertCountWarnings(t, out, tc.warnings)
+			want := countResult{Complete: complete, Visibility: "caller", Note: callerVisibilityNote, Warnings: tc.warnings}
+			if !reflect.DeepEqual(structured, want) {
+				t.Errorf("structured result = %+v, want %+v", structured, want)
+			}
+			if n := len(api.RequestsTo(countPath)); n != 1 {
+				t.Errorf("expected one count for the expanded meeting, got %d", n)
+			}
+		})
+	}
+}
+
 func TestParticipants_CountOnlyErrorHasNoStructuredResult(t *testing.T) {
 	api := setupParticipantTest(t)
 	api.RespondStatus(countPath, http.StatusInternalServerError, `{"message":"count unavailable"}`)

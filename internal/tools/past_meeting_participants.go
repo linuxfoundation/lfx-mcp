@@ -347,10 +347,9 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 			total = res.Count
 			serviceHasMore = res.HasMore
 		}
-		out := buildCountResult(ctx, logger, &querysvc.QueryResourcesCountResult{Count: total, HasMore: serviceHasMore}, pastMeetingParticipantResourceType, false, false)
+		out := buildCountResult(ctx, logger, &querysvc.QueryResourcesCountResult{Count: total, HasMore: serviceHasMore}, pastMeetingParticipantResourceType, false, false, truncated)
 		out.Warnings = append(out.Warnings, participantCountRecordsWarning)
 		if truncated {
-			out.Complete = false
 			out.Warnings = append(out.Warnings, fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings))
 		}
 		result, _, err := jsonResult(ctx, logger, "search_past_meeting_participants count succeeded", out)

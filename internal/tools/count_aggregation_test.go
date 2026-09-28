@@ -15,6 +15,40 @@ import (
 	"testing"
 )
 
+func TestCountLFXResources_AggregationSchema(t *testing.T) {
+	tool := listRegisteredTool(t, "count_lfx_resources", RegisterCountLFXResources)
+	schema, ok := tool.InputSchema.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected schema: %T", tool.InputSchema)
+	}
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("schema has no properties")
+	}
+	for name, typ := range map[string]string{"group_by": "string", "group_by_size": "integer", "metric": "string"} {
+		property, ok := props[name].(map[string]any)
+		if !ok || property["type"] != typ {
+			t.Errorf("%s schema = %v, want %s", name, property, typ)
+		}
+	}
+	if !reflect.DeepEqual(schema["required"], []any{"type"}) {
+		t.Errorf("new aggregation args must be optional: required=%v", schema["required"])
+	}
+	for name, fragment := range map[string]string{"group_by": "Record tag prefix", "group_by_size": "requires group_by", "metric": "cardinality:email; not with group_by"} {
+		if !strings.Contains(schemaPropertyDescription(t, tool, name), fragment) {
+			t.Errorf("%s description missing %q", name, fragment)
+		}
+	}
+	// Compare the whole tool surface with its pre-aggregation description budget.
+	bytes := len(tool.Description)
+	for _, name := range schemaProperties(t, tool) {
+		bytes += len(schemaPropertyDescription(t, tool, name))
+	}
+	if bytes > 1862 {
+		t.Errorf("tool and parameter descriptions grew: %d bytes", bytes)
+	}
+}
+
 func TestCountLFXResources_AggregationPayloadMapping(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -88,6 +122,10 @@ func TestCountLFXResources_GroupKeyAllowlist(t *testing.T) {
 }
 
 func TestCountLFXResources_GroupedResults(t *testing.T) {
+	const noGroupsNote = " No groups came back: a zero can mean the group_by prefix is not indexed for this type."
+	if countNoGroupTagsNote != noGroupsNote {
+		t.Errorf("empty groups must not claim the prefix exists: %q", countNoGroupTagsNote)
+	}
 	for _, tc := range []struct {
 		name     string
 		response string

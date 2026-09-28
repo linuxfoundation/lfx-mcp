@@ -217,12 +217,12 @@ func TestCountLFXResources_MissingTokenFails(t *testing.T) {
 
 func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 	tool := listRegisteredTool(t, "count_lfx_resources", RegisterCountLFXResources)
-	// Keep a tight local pin while allowing the explicit participant parent type.
-	const descriptionBudget = 1005
+	// Grouping documentation is paid for by removing duplicated filter examples.
+	const descriptionBudget = 762
 	if n := len(tool.Description); n > descriptionBudget {
 		t.Errorf("description is %d bytes, budget is %d", n, descriptionBudget)
 	}
-	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "committee_member: committee:<uid>", "committee: project:<uid>", "v1_past_meeting_participant: past_meeting:<meeting_and_occurrence_id>", "a date range (date_field=start_time)", "filters_all", "filters_or", "a ref or field the type lacks counts 0"} {
+	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "parent (the type's own ref)", "groups [{key, count}] with groups_complete", "metric=cardinality:<tag prefix> returns metric_value with metric_complete", "complete=true covers all requested counts", "a date range (date_field=start_time)", "filters_all", "filters_or", "a ref or field the type lacks counts 0"} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}
@@ -240,7 +240,7 @@ func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 func TestCountLFXResources_IndexScopeDescriptionAndSchema(t *testing.T) {
 	tool := listRegisteredTool(t, "count_lfx_resources", RegisterCountLFXResources)
 	t.Logf("count_lfx_resources description: %d UTF-8 bytes", len(tool.Description))
-	const want = "Returns {count, complete, visibility, note}. complete=true means every record indexed in LFX v2 that the caller may see was counted; complete=false means the count stopped early and is a lower bound (narrow the query). Records not yet onboarded into LFX v2 are never counted. Use this instead of paging a search to count meetings, participants, committees and members. For how many projects a foundation or parent has, use the semantic layer's project metrics (the authoritative project directory), not this tool."
+	const want = "complete=true covers all requested counts; complete=false is partial. Records not yet onboarded into LFX v2 are never counted. For how many projects a foundation or parent has, use the semantic layer's project metrics (the authoritative project directory), not this tool."
 	if !strings.Contains(tool.Description, want) {
 		t.Error("count description must distinguish index completeness from directory coverage and route project counts to the semantic layer")
 	}

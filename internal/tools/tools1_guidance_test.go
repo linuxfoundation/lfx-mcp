@@ -63,10 +63,12 @@ func TestGuidanceCommitteeCountsAndSources(t *testing.T) {
 		"A filter on a field the record lacks also counts 0",
 		"filters_all takes data fields (organization.name), tags_all takes tags (organization_name:, organization_id:, committee_category:)",
 		"Read the complete flag; an incomplete count is a lower bound",
-		"count each candidate organisation with count_lfx_resources (type=committee_member, tags_all organization_id:<SFID>, plus committee_category:Board for board seats)",
-		"seats visible to you in LFX v2",
-		"An open LF-wide ranking over every organisation is query_lfx_lens as the last resort, labelled generated SQL over the warehouse copy of the v1 committee records",
-		"active seats only (end date empty or in the future), LF staff and unaffiliated seats set aside",
+		"Ranking organisations by seats: ONE grouped count — count_lfx_resources type=committee_member, group_by=organization_id, group_by_size up to 1000 (tags_all committee_category:Board for board seats; add project_uid:<uid> for one foundation)",
+		"one row per organisation id over the seats visible to you in LFX v2, seat records not people; read groups_complete",
+		"name the rows with the organization_name tag or search_b2b_orgs, never by guessing",
+		"Distinct people over a scope is metric=cardinality:email on a separate call (a number only); there is no distinct count per group",
+		"The warehouse copy of the v1 committee records read by query_lfx_lens differs from the LFX v2 committee service: never combine or reconcile the two; if it was read, say so",
+		"Several at once: group_by=organization_id (or committee_uid, committee_category, voting_status, project_uid) returns one count per tag value; group_by_size bounds the rows and groups_complete says whether every group came back",
 		"never combine or reconcile the two",
 		"This layer has no committee metric: committees appear only as slices on the meeting models",
 		"meeting_and_occurrence_id__committee_name / meeting_and_occurrence_id__committee_type on occurrences",
@@ -78,7 +80,7 @@ func TestGuidanceCommitteeCountsAndSources(t *testing.T) {
 			t.Errorf("committee guidance missing %q", want)
 		}
 	}
-	for _, gone := range []string{"this layer's committee and maintainer models", "the committee models in this layer"} {
+	for _, gone := range []string{"this layer's committee and maintainer models", "the committee models in this layer", "count each candidate organisation with count_lfx_resources", "An open LF-wide ranking over every organisation is query_lfx_lens as the last resort"} {
 		if strings.Contains(text, gone) {
 			t.Errorf("committee guidance still claims %q", gone)
 		}

@@ -56,7 +56,7 @@ func TestTools1Descriptions_FunctionVisibilityAndBudget(t *testing.T) {
 				}
 			}
 			if tc.name == "count_lfx_resources" {
-				for _, want := range []string{"committee_member: committee:<uid>", "v1_past_meeting_participant: past_meeting:<meeting_and_occurrence_id>", "a ref or field the type lacks counts 0"} {
+				for _, want := range []string{"parent (the type's own ref)", "a ref or field the type lacks counts 0", "group_by=<tag prefix> returns groups [{key, count}] with groups_complete", "metric=cardinality:<tag prefix> returns metric_value with metric_complete"} {
 					if !strings.Contains(tool.Description, want) {
 						t.Errorf("count description missing %q", want)
 					}

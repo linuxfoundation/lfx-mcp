@@ -56,7 +56,7 @@ const countLowerBoundNote = " The count stopped at the query service's access-bu
 
 const countGroupsIncompleteNote = " More groups exist than were returned; raise group_by_size or narrow the query."
 const countGroupErrorBoundNote = " Each group's count may undercount by up to group_count_error_upper_bound."
-const countNoGroupTagsNote = " No visible record carries a tag with the group_by prefix."
+const countNoGroupTagsNote = " No groups came back: a zero can mean the group_by prefix is not indexed for this type."
 const countMetricIncompleteNote = " The distinct count stopped early and is a lower bound (narrow the query)."
 
 // CountLFXResourcesArgs defines the input parameters for the count_lfx_resources tool.
@@ -100,13 +100,13 @@ type countGroup struct {
 func RegisterCountLFXResources(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "count_lfx_resources",
-		Description: "Count LFX resources of one type via the query service, over the records visible to the caller. " +
-			"Filters: parent, the type's own ref (committee_member: committee:<uid>; committee: project:<uid>; v1_past_meeting_participant: past_meeting:<meeting_and_occurrence_id>), " +
-			"name (typeahead), tags OR / tags_all AND (is_attended:true, project_uid:<uid>), a date range (date_field=start_time), " +
-			"and stored-value filters_all / filters_or on the type's data fields; a ref or field the type lacks counts 0. " +
-			"Returns {count, complete, visibility, note}. complete=true means every record indexed in LFX v2 that the caller may see was counted; " +
-			"complete=false means the count stopped early and is a lower bound (narrow the query). Records not yet onboarded into LFX v2 are never counted. " +
-			"Use this instead of paging a search to count meetings, participants, committees and members. " +
+		Description: "Count indexed LFX v2 records of one type visible to the caller. " +
+			"Filters: parent (the type's own ref), name (typeahead), tags OR / tags_all AND, a date range (date_field=start_time), " +
+			"filters_all / filters_or on data fields; a ref or field the type lacks counts 0. " +
+			"Returns {count, complete, visibility, note}; a stopped count is a lower bound. " +
+			"group_by=<tag prefix> returns groups [{key, count}] with groups_complete; " +
+			"metric=cardinality:<tag prefix> returns metric_value with metric_complete. " +
+			"complete=true covers all requested counts; complete=false is partial. Records not yet onboarded into LFX v2 are never counted. " +
 			"For how many projects a foundation or parent has, use the semantic layer's project metrics (the authoritative project directory), not this tool.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Count LFX Resources",

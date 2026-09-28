@@ -163,7 +163,7 @@ func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc
 			out.Complete = false
 			out.Warnings = append(out.Warnings, countGroupErrorBoundWarning)
 		}
-		if len(groups) == 0 && result.Count > 0 {
+		if len(groups) == 0 && result.Count > 0 && !invalidGroups {
 			out.Warnings = append(out.Warnings, countNoMatchingGroupTagWarning)
 		}
 	}

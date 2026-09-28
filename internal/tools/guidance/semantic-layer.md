@@ -267,8 +267,10 @@ Several at once: group_by=organization_id (or committee_uid, committee_category,
 voting_status, project_uid) returns one count per tag value; group_by_size bounds
 the rows and groups_complete says whether every group came back.
 filters_all takes data fields (organization.name), tags_all takes tags (organization_name:,
-organization_id:, committee_category:). Read the complete flag; an incomplete
-count is a lower bound. Never infer a roster from membership or event data.
+organization_id:, committee_category:). Read the warnings and the component flags
+(groups_complete, group_count_error_upper_bound, metric_complete); the top-level
+count is a lower bound only when the walk stopped early. Never infer a roster
+from membership or event data.
 A membership's key contact is the contact of record, not a seat; a roster row
 is a seat, not the contact of record — label which one you cite, with its
 recorded term date where present, never its record stamp (Routing).

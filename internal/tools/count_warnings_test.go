@@ -125,7 +125,7 @@ func TestBuildCountResult_NilGroupsAreIncomplete(t *testing.T) {
 		{"already incomplete", []*querysvc.CountGroup{valid[0], nil}, &incomplete, false, []countGroup{{Key: "a", Count: 2}}, []string{countGroupsIncompleteWarning}},
 		{"missing flag", []*querysvc.CountGroup{nil, valid[1]}, nil, false, []countGroup{{Key: "b", Count: 1}}, []string{countGroupsIncompleteWarning}},
 		{"access cap", []*querysvc.CountGroup{nil, valid[0]}, &incomplete, true, []countGroup{{Key: "a", Count: 2}}, []string{countLowerBoundWarning, countGroupsIncompleteWarning}},
-		{"all nil", []*querysvc.CountGroup{nil, nil}, &complete, false, []countGroup{}, []string{countGroupsIncompleteWarning, countNoMatchingGroupTagWarning}},
+		{"all nil cannot prove no tag", []*querysvc.CountGroup{nil, nil}, &complete, false, []countGroup{}, []string{countGroupsIncompleteWarning}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var logs bytes.Buffer

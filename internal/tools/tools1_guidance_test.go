@@ -61,7 +61,7 @@ func TestGuidanceCommitteeCountsAndSources(t *testing.T) {
 		"Scope projects by tag: committee members carry the committee, not the project, as their parent.",
 		"one organisation tags_all organization_id:<SFID>",
 		"filters_all takes data fields (organization.name), tags_all takes tags (organization_name:, organization_id:, committee_category:)",
-		"Read the complete flag; an incomplete count is a lower bound",
+		"Read the warnings and the component flags (groups_complete, group_count_error_upper_bound, metric_complete); the top-level count is a lower bound only when the walk stopped early",
 		"Ranking organisations by seats: ONE grouped count — count_lfx_resources type=committee_member, group_by=organization_id, group_by_size up to 1000 (tags_all committee_category:Board for board seats; add project_uid:<uid> for one foundation)",
 		"one row per organisation id over the seats visible to you in LFX v2, seat records not people; read groups_complete",
 		"name each row with ONE search_committee_members call using organization_id=<row key> and page_size=1, reading the returned row's organization name, never by guessing or joining a name-grouped count to the ids",
@@ -79,7 +79,7 @@ func TestGuidanceCommitteeCountsAndSources(t *testing.T) {
 			t.Errorf("committee guidance missing %q", want)
 		}
 	}
-	for _, gone := range []string{"this layer's committee and maintainer models", "the committee models in this layer", "count each candidate organisation with count_lfx_resources", "An open LF-wide ranking over every organisation is query_lfx_lens as the last resort", "name the rows with the organization_name tag", "organisation id through search_b2b_orgs", "Distinct people over a scope is metric=cardinality:email", "parent=project:<uid> counts 0", "A filter on a field the record lacks also counts 0"} {
+	for _, gone := range []string{"this layer's committee and maintainer models", "the committee models in this layer", "count each candidate organisation with count_lfx_resources", "An open LF-wide ranking over every organisation is query_lfx_lens as the last resort", "name the rows with the organization_name tag", "organisation id through search_b2b_orgs", "Distinct people over a scope is metric=cardinality:email", "parent=project:<uid> counts 0", "A filter on a field the record lacks also counts 0", "an incomplete count is a lower bound"} {
 		if strings.Contains(text, gone) {
 			t.Errorf("committee guidance still claims %q", gone)
 		}

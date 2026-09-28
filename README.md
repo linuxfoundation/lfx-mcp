@@ -276,7 +276,7 @@ Notes:
 
 | Tool                  | Description |
 |-----------------------|-------------|
-| `count_lfx_resources` | Count indexed LFX v2 records visible to the caller; group by a record tag or count distinct tag values; completeness covers the requested counts |
+| `count_lfx_resources` | Count indexed LFX v2 records visible to the caller; group by a tag or count distinct tag values; completeness covers the requested counts |
 
 ### Committees
 

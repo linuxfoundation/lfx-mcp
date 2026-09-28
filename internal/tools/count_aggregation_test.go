@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -34,7 +33,7 @@ func TestCountLFXResources_AggregationSchema(t *testing.T) {
 	if !reflect.DeepEqual(schema["required"], []any{"type"}) {
 		t.Errorf("new aggregation args must be optional: required=%v", schema["required"])
 	}
-	for name, fragment := range map[string]string{"group_by": "Record tag prefix", "group_by_size": "requires group_by", "metric": "cardinality:email; not with group_by"} {
+	for name, fragment := range map[string]string{"group_by": "Tag prefix", "group_by_size": "requires group_by", "metric": "cardinality:email; not with group_by"} {
 		if !strings.Contains(schemaPropertyDescription(t, tool, name), fragment) {
 			t.Errorf("%s description missing %q", name, fragment)
 		}
@@ -84,38 +83,32 @@ func TestCountLFXResources_AggregationPayloadMapping(t *testing.T) {
 	}
 }
 
-func TestCountLFXResources_GroupKeyAllowlist(t *testing.T) {
-	want := strings.Fields("audience_access category committee_category committee_uid committee_voting_status display_name group_name is_attended is_invited is_member mailing_list_uid meeting_and_occurrence_id meeting_id meeting_type organization_id organization_name parent_b2b_org_uid parent_uid project_sfid project_slug project_uid public service_uid status timezone title type visibility voting_status")
-	if !slices.Equal(countGroupKeys, want) || !slices.IsSorted(countGroupKeys) {
-		t.Fatalf("group keys = %v, want sorted %v", countGroupKeys, want)
-	}
-	for _, key := range want {
-		t.Run(key, func(t *testing.T) {
+func TestCountLFXResources_ArbitraryTagPrefixesPassThrough(t *testing.T) {
+	for _, tc := range []struct {
+		param    string
+		value    string
+		args     CountLFXResourcesArgs
+		response string
+	}{
+		{"group_by", "some_prefix", CountLFXResourcesArgs{Type: "committee_member", GroupBy: "some_prefix"}, `{"count":1,"has_more":false,"groups":[{"key":"value","count":1}],"groups_complete":true,"group_count_error_upper_bound":0}`},
+		{"metric", "cardinality:some_prefix", CountLFXResourcesArgs{Type: "committee_member", Metric: "cardinality:some_prefix"}, `{"count":1,"has_more":false,"metric_value":1,"metric_complete":true}`},
+	} {
+		t.Run(tc.param, func(t *testing.T) {
 			api := setupCountTest(t)
-			api.Respond(countPath, `{"count":0,"has_more":false,"groups_complete":true}`)
-			// A key is accepted even for a type that never emits it.
-			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "project", GroupBy: key})
-			if err != nil || res.IsError {
-				t.Fatalf("group key rejected: %v; result=%v", err, res)
+			api.Respond(countPath, tc.response)
+			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), tc.args)
+			if err != nil || res == nil || res.IsError {
+				t.Fatalf("unexpected error: %v; result=%v", err, res)
 			}
-			if requests := api.RequestsTo(countPath); len(requests) != 1 || requests[0].Query.Get("group_by") != key {
-				t.Errorf("key did not reach service unchanged: %v", requests)
+			requests := api.RequestsTo(countPath)
+			if len(requests) != 1 {
+				t.Fatalf("want one count request, got %d", len(requests))
 			}
-		})
-	}
-	for _, key := range []string{"email", "username", "committee_member_uid", "registrant_uid", "past_meeting_participant_uid", "member_uid", "project_membership_uid", "b2b_org_uid", "groupsio_mailing_list_uid", "past_meeting_id", "organization_website", "unknown", "Organization_id", "organization_id:example"} {
-		t.Run("reject_"+key, func(t *testing.T) {
-			api := setupCountTest(t)
-			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "committee_member", GroupBy: key})
-			if err != nil || !res.IsError {
-				t.Fatalf("expected error result: %v; result=%v", err, res)
-			}
-			wantMessage := fmt.Sprintf("Error: group_by %q is not a group key; group keys describe records, not people: %s", key, strings.Join(want, ", "))
-			if text := strings.TrimSuffix(allResultText(t, res), "\n"); text != wantMessage {
-				t.Errorf("error = %q, want %q", text, wantMessage)
-			}
-			if len(api.Requests()) != 0 {
-				t.Error("invalid group key must be rejected before any HTTP request")
+			r := requests[0]
+			assertExchangedAuth(t, r)
+			want := map[string][]string{"v": {"1"}, "type": {tc.args.Type}, tc.param: {tc.value}}
+			if !reflect.DeepEqual(map[string][]string(r.Query), want) {
+				t.Errorf("query = %v, want unchanged %v", r.Query, want)
 			}
 		})
 	}

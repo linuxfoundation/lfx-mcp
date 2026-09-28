@@ -5,8 +5,10 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -407,6 +409,62 @@ func TestParticipants_CountOnly(t *testing.T) {
 		t.Errorf("note must contain only the visibility sentence: %v", out["note"])
 	}
 	assertCountWarnings(t, out, []string{participantCountRecordsWarning})
+}
+
+func TestParticipants_CountOnlyStructuredResultMatchesText(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		count    uint64
+		hasMore  bool
+		warnings []string
+	}{
+		{"complete", 17, false, []string{participantCountRecordsWarning}},
+		{"incomplete", 17, true, []string{countLowerBoundWarning, participantCountRecordsWarning}},
+		{"zero", 0, false, []string{participantCountRecordsWarning}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := setupParticipantTest(t)
+			api.Respond(countPath, fmt.Sprintf(`{"count":%d,"has_more":%t}`, tc.count, tc.hasMore))
+			res, structured, err := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p", CountOnly: true})
+			if err != nil || res == nil || res.IsError {
+				t.Fatalf("unexpected error: %v; result=%v", err, res)
+			}
+			count, ok := structured.(countResult)
+			if !ok {
+				t.Fatalf("structured result must be countResult, got %T", structured)
+			}
+			want := countResult{Count: tc.count, Complete: !tc.hasMore, Visibility: "caller", Note: callerVisibilityNote, Warnings: tc.warnings}
+			if !reflect.DeepEqual(count, want) {
+				t.Errorf("structured count = %+v, want %+v", count, want)
+			}
+			if len(res.Content) != 1 {
+				t.Fatalf("expected one text block, got %d", len(res.Content))
+			}
+			text, ok := res.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("expected text content, got %T", res.Content[0])
+			}
+			raw, err := json.MarshalIndent(count, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(raw) != text.Text {
+				t.Errorf("structured count differs from JSON text: %s != %s", raw, text.Text)
+			}
+		})
+	}
+}
+
+func TestParticipants_CountOnlyErrorHasNoStructuredResult(t *testing.T) {
+	api := setupParticipantTest(t)
+	api.RespondStatus(countPath, http.StatusInternalServerError, `{"message":"count unavailable"}`)
+	res, structured, err := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p", CountOnly: true})
+	if err != nil || res == nil || !res.IsError {
+		t.Fatalf("expected error result: %v; result=%v", err, res)
+	}
+	if structured != nil {
+		t.Errorf("error must not carry a structured count: %v", structured)
+	}
 }
 
 func TestParticipants_CountOnlyWithDateRangeSumsAndTracksComplete(t *testing.T) {

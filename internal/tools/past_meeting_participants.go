@@ -354,7 +354,11 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 		if truncated {
 			out.Warnings = append(out.Warnings, fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings))
 		}
-		return jsonResult(ctx, logger, "search_past_meeting_participants count succeeded", out)
+		result, _, err := jsonResult(ctx, logger, "search_past_meeting_participants count succeeded", out)
+		if err != nil || result.IsError {
+			return result, nil, err
+		}
+		return result, out, nil
 	}
 
 	out := participantSearchResult{}

@@ -12,8 +12,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
 )
 
 const membershipSummaryPath = "/query/memberships/summary"
@@ -22,7 +20,6 @@ const wantSummaryContinuationWarning = "Continuation of an earlier summary read:
 
 const summaryFirst = `{"b2b_org_uid":"o","company_name":"Example","project_uid":"p","project_slug":"example","term_count":1,"first_start":"2020-01-01","last_end":"2027-01-01","current_status":"Active","current_tier_name":"Gold","current_start":"2020-01-01","current_end":"2027-01-01","current_membership_uid":"m1","tier_names":["Gold"],"statuses":["Active"],"terms":[{"membership_uid":"m1","status":"Active","tier_name":"Gold","tier":"Large","start_date":"2020-01-01","end_date":"2027-01-01"}]}`
 const summaryOther = `{"b2b_org_uid":"z","company_name":"Another","project_uid":"p","project_slug":"example","term_count":1,"tier_names":[],"statuses":[],"terms":[{"membership_uid":"m2","status":"","tier_name":""}]}`
-const summarySplit = `{"b2b_org_uid":"o","company_name":"Example","project_uid":"p","project_slug":"example","term_count":1,"first_start":"2010-01-01","last_end":"2011-01-01","current_status":"Expired","current_start":"2010-01-01","current_end":"2011-01-01","current_membership_uid":"m0","tier_names":[],"statuses":["Expired"],"terms":[{"membership_uid":"m0","status":"Expired","tier_name":"","start_date":"2010-01-01","end_date":"2011-01-01"}]}`
 
 func membershipSummaryPage(rows []string, total int, complete bool, token string) string {
 	body := fmt.Sprintf(`{"summaries":[%s],"terms_total":%d,"complete":%t`, strings.Join(rows, ","), total, complete)
@@ -68,16 +65,9 @@ func TestSearchMembersSummary_Reads(t *testing.T) {
 			wantRows: []string{summaryFirst, summaryOther}, wantTotal: 2, complete: true,
 		},
 		{
-			name: "split pair kept not folded and remains incomplete", args: SearchMembersArgs{ProjectUID: "p"},
-			pages: []string{membershipSummaryPage([]string{summaryFirst}, 1, false, "next"), membershipSummaryPage([]string{summarySplit}, 1, false, "last"), membershipSummaryPage([]string{summaryOther}, 1, true, "")}, tokens: []string{"", "next", "last"},
-			wantRows: []string{summaryFirst, summarySplit, summaryOther}, wantTotal: 3,
-			warning: "The service split an organisation's membership records across reads, so its summary is partial; re-read with that organisation's b2b_org_uid and project_uid as the scope to get it whole.",
-		},
-		{
-			name: "repeated records stay intact and totals are cumulative", args: SearchMembersArgs{ProjectUID: "p"},
-			pages: []string{membershipSummaryPage([]string{summaryFirst}, 1, false, "next"), membershipSummaryPage([]string{summaryFirst}, 1, false, "last"), membershipSummaryPage([]string{summaryFirst}, 1, true, "")}, tokens: []string{"", "next", "last"},
-			wantRows: []string{summaryFirst, summaryFirst, summaryFirst}, wantTotal: 3,
-			warning: "The service split an organisation's membership records across reads, so its summary is partial; re-read with that organisation's b2b_org_uid and project_uid as the scope to get it whole.",
+			name: "rows are concatenated as served and totals are cumulative", args: SearchMembersArgs{ProjectUID: "p"},
+			pages: []string{membershipSummaryPage([]string{summaryFirst}, 1, false, "next"), membershipSummaryPage([]string{summaryFirst}, 1, false, "last"), membershipSummaryPage([]string{summaryOther}, 1, true, "")}, tokens: []string{"", "next", "last"},
+			wantRows: []string{summaryFirst, summaryFirst, summaryOther}, wantTotal: 3, complete: true,
 		},
 		{
 			name: "caller token starts continuation", args: SearchMembersArgs{B2bOrgUID: "o", PageToken: "start"},
@@ -171,54 +161,6 @@ func TestSearchMembersSummary_Reads(t *testing.T) {
 						t.Errorf("unexpected summary query parameter: %s", key)
 					}
 				}
-			}
-		})
-	}
-}
-
-func TestMembershipSummaryKey(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		row  querysvc.MembershipTermSummary
-		want [2]string
-	}{
-		{"UIDs exact not normalized", querysvc.MembershipTermSummary{B2bOrgUID: " O ", ProjectUID: "P", CompanyName: "unused", ProjectSlug: "unused"}, [2]string{"uid: O ", "uid:P"}},
-		{"labels trimmed and lowercased", querysvc.MembershipTermSummary{CompanyName: " ÉXAMPLE ", ProjectSlug: " PROJECT "}, [2]string{"label:éxample", "label:project"}},
-		{"missing project UID", querysvc.MembershipTermSummary{B2bOrgUID: "o", ProjectSlug: "One"}, [2]string{"uid:o", "label:one"}},
-		{"missing organisation UID", querysvc.MembershipTermSummary{CompanyName: "One", ProjectUID: "p"}, [2]string{"label:one", "uid:p"}},
-		{"empty labels remain a key", querysvc.MembershipTermSummary{}, [2]string{"label:", "label:"}},
-		{"UID spelling in labels stays distinct", querysvc.MembershipTermSummary{CompanyName: "o", ProjectSlug: "p"}, [2]string{"label:o", "label:p"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := membershipSummaryKey(&tc.row); got != tc.want {
-				t.Errorf("key = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestSearchMembersSummary_RepeatFallbackKey(t *testing.T) {
-	for _, tc := range []struct {
-		name, org, project, company, slug string
-		repeated                          bool
-	}{
-		{"same normalized fallback", "", "", " example ", " PROJECT ", true},
-		{"different slug", "", "", "Example", "other", false},
-		{"different company", "", "", "Other", "project", false},
-		{"UID is not label", "example", "project", "Example", "project", false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			api := setupMemberTest(t)
-			first := `{"b2b_org_uid":"","project_uid":"","company_name":"Example","project_slug":"project","term_count":0,"tier_names":[],"statuses":[],"terms":[]}`
-			second := fmt.Sprintf(`{"b2b_org_uid":%q,"project_uid":%q,"company_name":%q,"project_slug":%q,"term_count":0,"tier_names":[],"statuses":[],"terms":[]}`, tc.org, tc.project, tc.company, tc.slug)
-			api.Respond(membershipSummaryPath, membershipSummaryPage([]string{first}, 0, false, "next"))
-			api.Respond(membershipSummaryPath, membershipSummaryPage([]string{second}, 0, true, ""))
-			_, out, err := handleSearchMembers(context.Background(), stubCallToolRequest(), SearchMembersArgs{Summary: true, ProjectUID: "p"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if *out.Complete == tc.repeated || len(out.Summaries) != 2 || (len(out.Warnings) == 1) != tc.repeated {
-				t.Fatalf("unexpected repeat outcome: %+v", out)
 			}
 		})
 	}

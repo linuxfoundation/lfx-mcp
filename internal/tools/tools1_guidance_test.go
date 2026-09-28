@@ -148,7 +148,7 @@ func TestMemberSinceGuidance(t *testing.T) {
 			[]string{
 				"How long an organisation has been a member / member since: search_members summary=true",
 				"one row per organisation and project, its visible membership records read whole when complete=true",
-				"a summary the tool reports incomplete is partial; re-read with the organisation's uid as the scope",
+				"a summary the tool reports incomplete is partial (its read stopped early); continue with its page_token, or re-read with the organisation's uid as the scope",
 			},
 		},
 		{
@@ -160,7 +160,7 @@ func TestMemberSinceGuidance(t *testing.T) {
 				"b2b_org_uid to the organisation's own record from search_b2b_orgs",
 				"Results cover the caller's visible records, as in LFX Self Serve",
 				"memberships family of the standard metrics counts memberships in a window or on a date and never yields a first date",
-				"A summary the tool reports incomplete is partial; re-read with the organisation's uid as the scope, never present it as whole",
+				"A summary the tool reports incomplete is partial (its read stopped at the read bound, without a token or on a token that did not advance): continue with its page_token, or re-read with the organisation's uid as the scope, never present it as whole",
 				"Cite first_start as recorded",
 				"terms list shows gaps, so disclose a lapse and return rather than presenting it as uninterrupted \"member since\"",
 			},

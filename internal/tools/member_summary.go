@@ -67,21 +67,9 @@ func toMembershipSummaryView(s *querysvc.MembershipTermSummary) membershipSummar
 	}
 }
 
-// membershipSummaryKey mirrors query-service's membershipIdentityKey, separately
-// on each side: nonempty UIDs are exact; fallback labels are trimmed and folded.
-// Namespaces prevent a UID from colliding with a label of the same spelling.
-func membershipSummaryKey(s *querysvc.MembershipTermSummary) [2]string {
-	identity := func(uid, label string) string {
-		if uid != "" {
-			return "uid:" + uid
-		}
-		return "label:" + strings.ToLower(strings.TrimSpace(label))
-	}
-	return [2]string{identity(s.B2bOrgUID, s.CompanyName), identity(s.ProjectUID, s.ProjectSlug)}
-}
-
 // readMembershipSummaries uses the caller context already authenticated by
-// handleSearchMembers. It never refolds terms: the source owns that definition.
+// handleSearchMembers. It never refolds terms: the service returns each
+// organisation and project whole, so rows are concatenated in service order.
 func readMembershipSummaries(ctx context.Context, req *mcp.CallToolRequest, args SearchMembersArgs) (*mcp.CallToolResult, memberSearchResult, error) {
 	logger := newToolLogger(ctx, req)
 	payload := &querysvc.QueryMembershipSummaryPayload{Version: "1"}
@@ -105,8 +93,6 @@ func readMembershipSummaries(ctx context.Context, req *mcp.CallToolRequest, args
 	if args.PageToken != "" {
 		out.Warnings = append([]string{"Continuation of an earlier summary read: this response holds the summaries from the supplied page_token onward; combine it with the earlier output. complete refers to the remainder of the read, not to the whole scope."}, out.Warnings...)
 	}
-	seen := make(map[[2]string]int)
-	repeated := false
 	for read := 0; read < maxMembershipSummaryReads; read++ {
 		result, err := memberConfig.Clients.QuerySvc.QueryMembershipSummary(ctx, payload)
 		if err != nil {
@@ -114,11 +100,6 @@ func readMembershipSummaries(ctx context.Context, req *mcp.CallToolRequest, args
 			return nil, memberSearchResult{}, toolError(friendlyAPIError("failed to search members", err))
 		}
 		for _, summary := range result.Summaries {
-			key := membershipSummaryKey(summary)
-			if previousRead, exists := seen[key]; exists && previousRead != read {
-				repeated = true
-			}
-			seen[key] = read
 			out.Summaries = append(out.Summaries, toMembershipSummaryView(summary))
 		}
 		total += result.TermsTotal
@@ -140,12 +121,6 @@ func readMembershipSummaries(ctx context.Context, req *mcp.CallToolRequest, args
 			break
 		}
 		payload.PageToken = result.PageToken
-	}
-	// Until the source guarantees whole pairs at read boundaries, keep split
-	// rows intact and flag them instead of manufacturing a combined summary.
-	if repeated {
-		complete = false
-		out.Warnings = append(out.Warnings, "The service split an organisation's membership records across reads, so its summary is partial; re-read with that organisation's b2b_org_uid and project_uid as the scope to get it whole.")
 	}
 	if complete && len(out.Summaries) == 0 {
 		out.Warnings = append(out.Warnings, searchWarnings("membership summaries", 0, 0, false, args.PageToken != "")...)

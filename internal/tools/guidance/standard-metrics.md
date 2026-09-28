@@ -275,8 +275,10 @@ output plus the continuation. Scope b2b_org_uid to the organisation's own
 record from search_b2b_orgs, and project_uid to the project. Results cover the caller's visible records, as
 in LFX Self Serve. The memberships family of the standard metrics counts
 memberships in a window or on a date and never yields a first date. A summary
-the tool reports incomplete is partial; re-read with the organisation's uid
-as the scope, never present it as whole. Cite first_start as recorded; the
+the tool reports incomplete is partial (its read stopped at the read bound,
+without a token or on a token that did not advance): continue with its
+page_token, or re-read with the organisation's uid as the scope, never present
+it as whole. Cite first_start as recorded; the
 terms list shows gaps, so disclose a lapse and return rather than presenting
 it as uninterrupted "member since".
 

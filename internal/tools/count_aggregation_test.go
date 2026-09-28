@@ -24,10 +24,10 @@ func TestCountLFXResources_AggregationSchema(t *testing.T) {
 	if !ok {
 		t.Fatal("schema has no properties")
 	}
-	for name, typ := range map[string]string{"group_by": "string", "group_by_size": "integer", "metric": "string"} {
+	for name, typ := range map[string]any{"group_by": "string", "group_by_size": []any{"null", "integer"}, "metric": "string"} {
 		property, ok := props[name].(map[string]any)
-		if !ok || property["type"] != typ {
-			t.Errorf("%s schema = %v, want %s", name, property, typ)
+		if !ok || !reflect.DeepEqual(property["type"], typ) {
+			t.Errorf("%s schema = %v, want %v", name, property, typ)
 		}
 	}
 	if !reflect.DeepEqual(schema["required"], []any{"type"}) {
@@ -48,14 +48,53 @@ func TestCountLFXResources_AggregationSchema(t *testing.T) {
 	}
 }
 
+func TestCountLFXResources_GroupBySizePresence(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		input   string
+		present bool
+	}{
+		{"omitted", `{"type":"committee_member","group_by":"category"}`, false},
+		{"zero with group", `{"type":"committee_member","group_by":"category","group_by_size":0}`, true},
+		{"zero without group", `{"type":"committee_member","group_by_size":0}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var args CountLFXResourcesArgs
+			if err := json.Unmarshal([]byte(tc.input), &args); err != nil {
+				t.Fatal(err)
+			}
+			payload := buildCountPayload(args)
+			if (payload.GroupBySize != nil) != tc.present {
+				t.Fatalf("group_by_size presence lost: %v", payload.GroupBySize)
+			}
+			if tc.present && *payload.GroupBySize != 0 {
+				t.Errorf("explicit zero was rewritten: %d", *payload.GroupBySize)
+			}
+			raw, err := json.Marshal(args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var roundTrip map[string]any
+			if err := json.Unmarshal(raw, &roundTrip); err != nil {
+				t.Fatal(err)
+			}
+			value, present := roundTrip["group_by_size"]
+			if present != tc.present || (present && value != float64(0)) {
+				t.Errorf("group_by_size JSON presence/value changed: %s", raw)
+			}
+		})
+	}
+}
+
 func TestCountLFXResources_AggregationPayloadMapping(t *testing.T) {
+	maxSize := 1000
 	for _, tc := range []struct {
 		name string
 		args CountLFXResourcesArgs
 		want map[string][]string
 	}{
 		{"group", CountLFXResourcesArgs{GroupBy: "organization_id"}, map[string][]string{"group_by": {"organization_id"}}},
-		{"size", CountLFXResourcesArgs{GroupBy: "committee_uid", GroupBySize: 1000}, map[string][]string{"group_by": {"committee_uid"}, "group_by_size": {"1000"}}},
+		{"size", CountLFXResourcesArgs{GroupBy: "committee_uid", GroupBySize: &maxSize}, map[string][]string{"group_by": {"committee_uid"}, "group_by_size": {"1000"}}},
 		{"email metric", CountLFXResourcesArgs{Metric: "cardinality:email"}, map[string][]string{"metric": {"cardinality:email"}}},
 		{"username metric", CountLFXResourcesArgs{Metric: "cardinality:username"}, map[string][]string{"metric": {"cardinality:username"}}},
 		{"unset", CountLFXResourcesArgs{}, map[string][]string{}},
@@ -231,17 +270,20 @@ func TestCountLFXResources_MetricResults(t *testing.T) {
 }
 
 func TestCountLFXResources_AggregationServiceErrorsPassThrough(t *testing.T) {
+	size, zeroSize, negativeSize, oversizedSize := 5, 0, -1, 1001
 	for _, tc := range []struct {
 		name    string
 		args    CountLFXResourcesArgs
 		message string
 	}{
 		{"metric per group", CountLFXResourcesArgs{GroupBy: "organization_id", Metric: "cardinality:email"}, "metric per group is not supported; group first, then count each group with tags"},
-		{"size without group", CountLFXResourcesArgs{GroupBySize: 5}, "group_by_size requires group_by; omit group_by_size for plain counts or metrics"},
+		{"size without group", CountLFXResourcesArgs{GroupBySize: &size}, "group_by_size requires group_by; omit group_by_size for plain counts or metrics"},
+		{"zero size with group", CountLFXResourcesArgs{GroupBy: "category", GroupBySize: &zeroSize}, "group_by_size must be at least 1"},
+		{"zero size without group", CountLFXResourcesArgs{GroupBySize: &zeroSize}, "group_by_size requires group_by; omit group_by_size for plain counts or metrics"},
 		{"sum", CountLFXResourcesArgs{Metric: "sum:amount"}, "metric must be cardinality:<tag_prefix>; sum is not available on this index (data fields are flat_object)"},
 		{"untrimmed metric", CountLFXResourcesArgs{Metric: " cardinality:email "}, "invalid metric"},
-		{"negative size", CountLFXResourcesArgs{GroupBy: "category", GroupBySize: -1}, "group_by_size must be at least 1"},
-		{"oversized", CountLFXResourcesArgs{GroupBy: "category", GroupBySize: 1001}, "group_by_size must be at most 1000"},
+		{"negative size", CountLFXResourcesArgs{GroupBy: "category", GroupBySize: &negativeSize}, "group_by_size must be at least 1"},
+		{"oversized", CountLFXResourcesArgs{GroupBy: "category", GroupBySize: &oversizedSize}, "group_by_size must be at most 1000"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			api := setupCountTest(t)
@@ -266,8 +308,12 @@ func TestCountLFXResources_AggregationServiceErrorsPassThrough(t *testing.T) {
 			if q.Get("group_by") != tc.args.GroupBy || q.Get("metric") != tc.args.Metric {
 				t.Errorf("request rewritten: %v", q)
 			}
-			if tc.args.GroupBySize != 0 && q.Get("group_by_size") != fmt.Sprint(tc.args.GroupBySize) {
-				t.Errorf("size rewritten: %v", q)
+			if tc.args.GroupBySize != nil {
+				if !q.Has("group_by_size") || q.Get("group_by_size") != fmt.Sprint(*tc.args.GroupBySize) {
+					t.Errorf("size rewritten or omitted: %v", q)
+				}
+			} else if q.Has("group_by_size") {
+				t.Errorf("unset size must be omitted: %v", q)
 			}
 		})
 	}

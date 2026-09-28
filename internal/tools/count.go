@@ -61,7 +61,7 @@ type CountLFXResourcesArgs struct {
 	FiltersOr   []string `json:"filters_or,omitempty" jsonschema:"Exact field filters field:value on data fields, at least one must match"`
 	FiltersAll  []string `json:"filters_all,omitempty" jsonschema:"Exact field filters field:value on data fields that must all match"`
 	GroupBy     string   `json:"group_by,omitempty" jsonschema:"Tag prefix; one row per value"`
-	GroupBySize int      `json:"group_by_size,omitempty" jsonschema:"Maximum groups (default 100, max 1000); requires group_by"`
+	GroupBySize *int     `json:"group_by_size,omitempty" jsonschema:"Maximum groups (default 100, max 1000); requires group_by"`
 	Metric      string   `json:"metric,omitempty" jsonschema:"Distinct tag values: cardinality:<tag_prefix>, e.g. cardinality:email; not with group_by"`
 }
 
@@ -212,8 +212,8 @@ func buildCountPayload(args CountLFXResourcesArgs) *querysvc.QueryResourcesCount
 	if args.GroupBy != "" {
 		payload.GroupBy = strPtr(args.GroupBy)
 	}
-	if args.GroupBySize != 0 {
-		payload.GroupBySize = &args.GroupBySize
+	if args.GroupBySize != nil {
+		payload.GroupBySize = args.GroupBySize
 	}
 	if args.Metric != "" {
 		payload.Metric = strPtr(args.Metric)

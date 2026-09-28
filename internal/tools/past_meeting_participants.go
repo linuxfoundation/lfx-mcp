@@ -70,8 +70,8 @@ const participantRecordsCapNote = "The record cap (%d) was reached before every 
 // participantPerPageNote explains dedup scope on a paged call.
 const participantPerPageNote = "people and records describe this page only; a person whose records straddle pages can appear on more than one page."
 
-// participantCountRecordsNote distinguishes counted records from people.
-const participantCountRecordsNote = " This counts participant records, not distinct people; use count_only=false for de-duplicated people."
+// participantCountRecordsWarning distinguishes counted records from people.
+const participantCountRecordsWarning = "This counts participant records, not distinct people; use count_only=false for de-duplicated people."
 
 // participantSearchResult is the output shape of search_past_meeting_participants.
 type participantSearchResult struct {
@@ -350,9 +350,9 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 			complete = !res.HasMore
 		}
 		out := buildCountResult(&querysvc.QueryResourcesCountResult{Count: total, HasMore: !complete}, false, false)
-		out.Note += participantCountRecordsNote
+		out.Warnings = append(out.Warnings, participantCountRecordsWarning)
 		if truncated {
-			out.Note += " " + fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings)
+			out.Warnings = append(out.Warnings, fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings))
 		}
 		return jsonResult(ctx, logger, "search_past_meeting_participants count succeeded", out)
 	}

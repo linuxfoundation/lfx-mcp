@@ -50,14 +50,14 @@ var countGroupKeys = []string{
 // number is never mistaken for an LF-wide total.
 const callerVisibilityNote = "Counts only the records indexed in LFX v2 and visible to your identity; records you cannot see, or not yet onboarded into LFX v2, are not counted."
 
-// countLowerBoundNote is appended when the query service stopped counting
+// countLowerBoundWarning is returned when the query service stopped counting
 // at its access-bucket limit.
-const countLowerBoundNote = " The count stopped at the query service's access-bucket limit and is a lower bound; narrow the query (parent, date range, tags) or count per project."
+const countLowerBoundWarning = "The count stopped at the query service's access-bucket limit and is a lower bound; narrow the query (parent, date range, tags) or count per project."
 
-const countGroupsIncompleteNote = " More groups exist than were returned; raise group_by_size or narrow the query."
-const countGroupErrorBoundNote = " Each group's count may undercount by up to group_count_error_upper_bound."
-const countNoGroupTagsNote = " No groups came back: a zero can mean the group_by prefix is not indexed for this type."
-const countMetricIncompleteNote = " The distinct count stopped early and is a lower bound (narrow the query)."
+const countGroupsIncompleteWarning = "More groups exist than were returned; raise group_by_size or narrow the query."
+const countGroupErrorBoundWarning = "Each group's count may undercount by up to group_count_error_upper_bound."
+const countNoGroupTagsWarning = "No groups came back: a zero can mean the group_by prefix is not indexed for this type."
+const countMetricIncompleteWarning = "The distinct count stopped early and is a lower bound (narrow the query)."
 
 // CountLFXResourcesArgs defines the input parameters for the count_lfx_resources tool.
 type CountLFXResourcesArgs struct {
@@ -83,6 +83,7 @@ type countResult struct {
 	Complete                  bool          `json:"complete"`
 	Visibility                string        `json:"visibility"`
 	Note                      string        `json:"note"`
+	Warnings                  []string      `json:"warnings,omitempty"`
 	Groups                    *[]countGroup `json:"groups,omitempty"`
 	GroupsComplete            *bool         `json:"groups_complete,omitempty"`
 	GroupCountErrorUpperBound *uint64       `json:"group_count_error_upper_bound,omitempty"`
@@ -103,7 +104,7 @@ func RegisterCountLFXResources(server *mcp.Server) {
 		Description: "Count indexed LFX v2 records of one type visible to the caller. " +
 			"Filters: parent (the type's own ref), name (typeahead), tags OR / tags_all AND, a date range (date_field=start_time), " +
 			"filters_all / filters_or on data fields; a ref or field the type lacks counts 0. " +
-			"Returns {count, complete, visibility, note}; a stopped count is a lower bound. " +
+			"Returns {count, complete, visibility, note, warnings}. " +
 			"group_by=<tag prefix> returns groups [{key, count}] with groups_complete; " +
 			"metric=cardinality:<tag prefix> returns metric_value with metric_complete. " +
 			"complete=true covers all requested counts; complete=false is partial. Records not yet onboarded into LFX v2 are never counted. " +
@@ -124,7 +125,7 @@ func buildCountResult(result *querysvc.QueryResourcesCountResult, groupsRequeste
 		Note:       callerVisibilityNote,
 	}
 	if result.HasMore {
-		out.Note += countLowerBoundNote
+		out.Warnings = append(out.Warnings, countLowerBoundWarning)
 	}
 	if groupsRequested {
 		// A pointer distinguishes an unrequested field from a requested empty
@@ -138,13 +139,13 @@ func buildCountResult(result *querysvc.QueryResourcesCountResult, groupsRequeste
 		out.GroupCountErrorUpperBound = result.GroupCountErrorUpperBound
 		if result.GroupsComplete == nil || !*result.GroupsComplete {
 			out.Complete = false
-			out.Note += countGroupsIncompleteNote
+			out.Warnings = append(out.Warnings, countGroupsIncompleteWarning)
 		}
 		if result.GroupCountErrorUpperBound != nil && *result.GroupCountErrorUpperBound > 0 {
-			out.Note += countGroupErrorBoundNote
+			out.Warnings = append(out.Warnings, countGroupErrorBoundWarning)
 		}
 		if len(groups) == 0 {
-			out.Note += countNoGroupTagsNote
+			out.Warnings = append(out.Warnings, countNoGroupTagsWarning)
 		}
 	}
 	if metricRequested {
@@ -152,7 +153,7 @@ func buildCountResult(result *querysvc.QueryResourcesCountResult, groupsRequeste
 		out.MetricComplete = result.MetricComplete
 		if result.MetricComplete == nil || !*result.MetricComplete {
 			out.Complete = false
-			out.Note += countMetricIncompleteNote
+			out.Warnings = append(out.Warnings, countMetricIncompleteWarning)
 		}
 	}
 	return out

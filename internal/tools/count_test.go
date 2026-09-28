@@ -125,10 +125,10 @@ func TestCountLFXResources_HasMoreIsLowerBound(t *testing.T) {
 	if out["complete"] != false {
 		t.Errorf("has_more:true must yield complete:false, got %v", out["complete"])
 	}
-	note, _ := out["note"].(string)
-	if !strings.Contains(note, "lower bound") || !strings.Contains(note, callerVisibilityNote) {
-		t.Errorf("lower-bound note missing or missing visibility sentence: %q", note)
+	if note, _ := out["note"].(string); note != callerVisibilityNote {
+		t.Errorf("note must contain only the visibility sentence: %q", note)
 	}
+	assertCountWarnings(t, out, []string{countLowerBoundWarning})
 	if out["count"] != float64(100) {
 		t.Errorf("count must still be reported, got %v", out["count"])
 	}
@@ -218,11 +218,11 @@ func TestCountLFXResources_MissingTokenFails(t *testing.T) {
 func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 	tool := listRegisteredTool(t, "count_lfx_resources", RegisterCountLFXResources)
 	// Grouping documentation is paid for by removing duplicated filter examples.
-	const descriptionBudget = 762
+	const descriptionBudget = 738
 	if n := len(tool.Description); n > descriptionBudget {
 		t.Errorf("description is %d bytes, budget is %d", n, descriptionBudget)
 	}
-	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "parent (the type's own ref)", "groups [{key, count}] with groups_complete", "metric=cardinality:<tag prefix> returns metric_value with metric_complete", "complete=true covers all requested counts", "a date range (date_field=start_time)", "filters_all", "filters_or", "a ref or field the type lacks counts 0"} {
+	for _, want := range []string{"visible to the caller", "complete=false", "Returns {count, complete, visibility, note, warnings}.", "parent (the type's own ref)", "groups [{key, count}] with groups_complete", "metric=cardinality:<tag prefix> returns metric_value with metric_complete", "complete=true covers all requested counts", "a date range (date_field=start_time)", "filters_all", "filters_or", "a ref or field the type lacks counts 0"} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}
@@ -260,10 +260,10 @@ func TestCountLFXResources_IndexScopeNoteAndCompleteness(t *testing.T) {
 		name     string
 		response string
 		complete bool
-		note     string
+		warnings []string
 	}{
-		{"exhausted_index", `{"count":3,"has_more":false}`, true, wantNote},
-		{"stopped_early", `{"count":3,"has_more":true}`, false, wantNote + countLowerBoundNote},
+		{"exhausted_index", `{"count":3,"has_more":false}`, true, nil},
+		{"stopped_early", `{"count":3,"has_more":true}`, false, []string{countLowerBoundWarning}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			api := setupCountTest(t)
@@ -278,9 +278,10 @@ func TestCountLFXResources_IndexScopeNoteAndCompleteness(t *testing.T) {
 			if out["count"] != float64(3) || out["complete"] != tc.complete || out["visibility"] != "caller" {
 				t.Errorf("index-scope disclosure must not change count/completeness/visibility: %v", out)
 			}
-			if got := out["note"]; got != tc.note {
-				t.Errorf("index coverage caveat missing from runtime note: got %q, want %q", got, tc.note)
+			if got := out["note"]; got != wantNote {
+				t.Errorf("runtime note must be only the index coverage sentence: got %q, want %q", got, wantNote)
 			}
+			assertCountWarnings(t, out, tc.warnings)
 			assertExchangedAuth(t, api.LastRequest())
 		})
 	}

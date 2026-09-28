@@ -403,9 +403,10 @@ func TestParticipants_CountOnly(t *testing.T) {
 	if out["count"] != float64(17) || out["complete"] != true || out["visibility"] != "caller" {
 		t.Errorf("unexpected count result: %v", out)
 	}
-	if !strings.Contains(out["note"].(string), "not distinct people") {
-		t.Errorf("records-not-people caveat missing: %v", out["note"])
+	if out["note"] != callerVisibilityNote {
+		t.Errorf("note must contain only the visibility sentence: %v", out["note"])
 	}
+	assertCountWarnings(t, out, []string{participantCountRecordsWarning})
 }
 
 func TestParticipants_CountOnlyWithDateRangeSumsAndTracksComplete(t *testing.T) {
@@ -424,6 +425,10 @@ func TestParticipants_CountOnlyWithDateRangeSumsAndTracksComplete(t *testing.T) 
 	if out["complete"] != false {
 		t.Error("one incomplete per-meeting count must make the total incomplete")
 	}
+	if out["note"] != callerVisibilityNote {
+		t.Errorf("note must contain only the visibility sentence: %v", out["note"])
+	}
+	assertCountWarnings(t, out, []string{countLowerBoundWarning, participantCountRecordsWarning})
 	counts := api.RequestsTo(countPath)
 	if len(counts) != 2 || counts[0].Query.Get("parent") != "past_meeting:m-1" || counts[1].Query.Get("parent") != "past_meeting:m-2" {
 		t.Errorf("expected one count per resolved meeting, got %v", counts)
@@ -581,9 +586,14 @@ func TestParticipants_CountOnlyTruncatedMeetingsIsIncomplete(t *testing.T) {
 	if out["count"] != float64(10) || out["complete"] != false {
 		t.Errorf("want count=10 complete=false, got %v", out)
 	}
-	if !strings.Contains(out["note"].(string), "max_meetings") || !strings.Contains(out["note"].(string), "lower bound") {
-		t.Errorf("note must explain both the truncation and the lower bound: %v", out["note"])
+	if out["note"] != callerVisibilityNote {
+		t.Errorf("note must contain only the visibility sentence: %v", out["note"])
 	}
+	assertCountWarnings(t, out, []string{
+		countLowerBoundWarning,
+		participantCountRecordsWarning,
+		fmt.Sprintf(participantTruncatedNote, 2, participantHardMaxMeetings),
+	})
 	if n := len(api.RequestsTo(countPath)); n != 2 {
 		t.Errorf("expected exactly 2 count calls (the expanded meetings), got %d", n)
 	}

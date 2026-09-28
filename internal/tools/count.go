@@ -54,6 +54,11 @@ const callerVisibilityNote = "Counts only the records indexed in LFX v2 and visi
 // at its access-bucket limit.
 const countLowerBoundNote = " The count stopped at the query service's access-bucket limit and is a lower bound; narrow the query (parent, date range, tags) or count per project."
 
+const countGroupsIncompleteNote = " More groups exist than were returned; raise group_by_size or narrow the query."
+const countGroupErrorBoundNote = " Each group's count may undercount by up to group_count_error_upper_bound."
+const countNoGroupTagsNote = " No visible record carries a tag with the group_by prefix."
+const countMetricIncompleteNote = " The distinct count stopped early and is a lower bound (narrow the query)."
+
 // CountLFXResourcesArgs defines the input parameters for the count_lfx_resources tool.
 type CountLFXResourcesArgs struct {
 	Type        string   `json:"type" jsonschema:"(required) Resource type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member (the v2 index holds only onboarded projects)"`
@@ -74,10 +79,21 @@ type CountLFXResourcesArgs struct {
 // countResult is the output shape of count_lfx_resources. The count is never
 // returned bare: complete and visibility travel with it.
 type countResult struct {
-	Count      uint64 `json:"count"`
-	Complete   bool   `json:"complete"`
-	Visibility string `json:"visibility"`
-	Note       string `json:"note"`
+	Count                     uint64        `json:"count"`
+	Complete                  bool          `json:"complete"`
+	Visibility                string        `json:"visibility"`
+	Note                      string        `json:"note"`
+	Groups                    *[]countGroup `json:"groups,omitempty"`
+	GroupsComplete            *bool         `json:"groups_complete,omitempty"`
+	GroupCountErrorUpperBound *uint64       `json:"group_count_error_upper_bound,omitempty"`
+	MetricValue               *uint64       `json:"metric_value,omitempty"`
+	MetricComplete            *bool         `json:"metric_complete,omitempty"`
+}
+
+// countGroup is a tag value and its visible record count, in service order.
+type countGroup struct {
+	Key   string `json:"key"`
+	Count uint64 `json:"count"`
 }
 
 // RegisterCountLFXResources registers the count_lfx_resources tool with the MCP server.
@@ -100,15 +116,44 @@ func RegisterCountLFXResources(server *mcp.Server) {
 }
 
 // buildCountResult turns a query-service count into the tool's honest shape.
-func buildCountResult(count uint64, hasMore bool) countResult {
+func buildCountResult(result *querysvc.QueryResourcesCountResult, groupsRequested, metricRequested bool) countResult {
 	out := countResult{
-		Count:      count,
-		Complete:   !hasMore,
+		Count:      result.Count,
+		Complete:   !result.HasMore,
 		Visibility: "caller",
 		Note:       callerVisibilityNote,
 	}
-	if hasMore {
+	if result.HasMore {
 		out.Note += countLowerBoundNote
+	}
+	if groupsRequested {
+		// A pointer distinguishes an unrequested field from a requested empty
+		// array; a non-nil empty slice encodes as [] rather than null.
+		groups := make([]countGroup, 0, len(result.Groups))
+		for _, group := range result.Groups {
+			groups = append(groups, countGroup{Key: group.Key, Count: group.Count})
+		}
+		out.Groups = &groups
+		out.GroupsComplete = result.GroupsComplete
+		out.GroupCountErrorUpperBound = result.GroupCountErrorUpperBound
+		if result.GroupsComplete == nil || !*result.GroupsComplete {
+			out.Complete = false
+			out.Note += countGroupsIncompleteNote
+		}
+		if result.GroupCountErrorUpperBound != nil && *result.GroupCountErrorUpperBound > 0 {
+			out.Note += countGroupErrorBoundNote
+		}
+		if len(groups) == 0 {
+			out.Note += countNoGroupTagsNote
+		}
+	}
+	if metricRequested {
+		out.MetricValue = result.MetricValue
+		out.MetricComplete = result.MetricComplete
+		if result.MetricComplete == nil || !*result.MetricComplete {
+			out.Complete = false
+			out.Note += countMetricIncompleteNote
+		}
 	}
 	return out
 }
@@ -217,7 +262,7 @@ func handleCountLFXResources(ctx context.Context, req *mcp.CallToolRequest, args
 		return errorResult(friendlyAPIError("failed to count resources", err)), nil, nil
 	}
 
-	out := buildCountResult(result.Count, result.HasMore)
+	out := buildCountResult(result, args.GroupBy != "", args.Metric != "")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {

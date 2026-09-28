@@ -349,7 +349,7 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 			total = res.Count
 			complete = !res.HasMore
 		}
-		out := buildCountResult(total, !complete)
+		out := buildCountResult(&querysvc.QueryResourcesCountResult{Count: total, HasMore: !complete}, false, false)
 		out.Note += participantCountRecordsNote
 		if truncated {
 			out.Note += " " + fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings)

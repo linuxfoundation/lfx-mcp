@@ -87,6 +87,106 @@ func TestCountLFXResources_GroupKeyAllowlist(t *testing.T) {
 	}
 }
 
+func TestCountLFXResources_GroupedResults(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		response string
+		groups   string
+		complete bool
+		note     string
+	}{
+		{"exact", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30},{"key":"P2","count":12}],"groups_complete":true,"group_count_error_upper_bound":0}`, `[{"key":"P1","count":30},{"key":"P2","count":12}]`, true, ""},
+		{"truncated", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30}],"groups_complete":false,"group_count_error_upper_bound":0}`, `[{"key":"P1","count":30}]`, false, countGroupsIncompleteNote},
+		{"error bound", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30}],"groups_complete":true,"group_count_error_upper_bound":2}`, `[{"key":"P1","count":30}]`, true, countGroupErrorBoundNote},
+		{"access cap", `{"count":42,"has_more":true,"groups":[{"key":"P1","count":30}],"groups_complete":false,"group_count_error_upper_bound":2}`, `[{"key":"P1","count":30}]`, false, countLowerBoundNote + countGroupsIncompleteNote + countGroupErrorBoundNote},
+		{"has_more dominates", `{"count":42,"has_more":true,"groups":[{"key":"P1","count":30}],"groups_complete":true}`, `[{"key":"P1","count":30}]`, false, countLowerBoundNote},
+		{"no match", `{"count":42,"has_more":false,"groups_complete":true,"group_count_error_upper_bound":0}`, `[]`, true, countNoGroupTagsNote},
+		{"missing completeness", `{"count":42,"has_more":false}`, `[]`, false, countGroupsIncompleteNote + countNoGroupTagsNote},
+		{"service order", `{"count":42,"has_more":false,"groups":[{"key":"Z","count":30},{"key":"A","count":12}],"groups_complete":true}`, `[{"key":"Z","count":30},{"key":"A","count":12}]`, true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := setupCountTest(t)
+			api.Respond(countPath, tc.response)
+			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "committee_member", GroupBy: "organization_id"})
+			if err != nil || res.IsError {
+				t.Fatalf("unexpected error: %v; result=%v", err, res)
+			}
+			out := resultJSON(t, res)
+			if out["count"] != float64(42) || out["complete"] != tc.complete || out["visibility"] != "caller" || out["note"] != callerVisibilityNote+tc.note {
+				t.Errorf("unexpected result: %v", out)
+			}
+			var wantGroups any
+			if err := json.Unmarshal([]byte(tc.groups), &wantGroups); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(out["groups"], wantGroups) {
+				t.Errorf("groups = %v, want %v", out["groups"], wantGroups)
+			}
+			var upstream map[string]any
+			if err := json.Unmarshal([]byte(tc.response), &upstream); err != nil {
+				t.Fatal(err)
+			}
+			for _, key := range []string{"groups_complete", "group_count_error_upper_bound"} {
+				if !reflect.DeepEqual(out[key], upstream[key]) {
+					t.Errorf("%s = %v, want %v", key, out[key], upstream[key])
+				}
+			}
+			for _, key := range []string{"metric_value", "metric_complete"} {
+				if _, ok := out[key]; ok {
+					t.Errorf("unrequested %s present", key)
+				}
+			}
+		})
+	}
+}
+
+func TestCountLFXResources_MetricResults(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		response string
+		metric   string
+		complete bool
+		note     string
+	}{
+		{"exact", `{"count":42,"has_more":false,"metric_value":17,"metric_complete":true}`, "cardinality:email", true, ""},
+		{"early stop", `{"count":42,"has_more":false,"metric_value":17,"metric_complete":false}`, "cardinality:email", false, countMetricIncompleteNote},
+		{"access cap", `{"count":42,"has_more":true,"metric_value":17,"metric_complete":false}`, "cardinality:username", false, countLowerBoundNote + countMetricIncompleteNote},
+		{"zero", `{"count":42,"has_more":false,"metric_value":0,"metric_complete":true}`, "cardinality:email", true, ""},
+		{"missing completeness", `{"count":42,"has_more":false,"metric_value":17}`, "cardinality:email", false, countMetricIncompleteNote},
+		{"has_more dominates", `{"count":42,"has_more":true,"metric_value":17,"metric_complete":true}`, "cardinality:email", false, countLowerBoundNote},
+		{"plain", `{"count":42,"has_more":false}`, "", true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := setupCountTest(t)
+			api.Respond(countPath, tc.response)
+			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "committee_member", Metric: tc.metric})
+			if err != nil || res.IsError {
+				t.Fatalf("unexpected error: %v; result=%v", err, res)
+			}
+			out := resultJSON(t, res)
+			if out["count"] != float64(42) || out["complete"] != tc.complete || out["visibility"] != "caller" || out["note"] != callerVisibilityNote+tc.note {
+				t.Errorf("unexpected result: %v", out)
+			}
+			var upstream map[string]any
+			if err := json.Unmarshal([]byte(tc.response), &upstream); err != nil {
+				t.Fatal(err)
+			}
+			for _, key := range []string{"metric_value", "metric_complete"} {
+				got, present := out[key]
+				want, wanted := upstream[key]
+				if present != wanted || !reflect.DeepEqual(got, want) {
+					t.Errorf("%s = %v (present %v), want %v (present %v)", key, got, present, want, wanted)
+				}
+			}
+			for _, key := range []string{"groups", "groups_complete", "group_count_error_upper_bound"} {
+				if _, ok := out[key]; ok {
+					t.Errorf("unrequested %s present", key)
+				}
+			}
+		})
+	}
+}
+
 func TestCountLFXResources_AggregationServiceErrorsPassThrough(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

@@ -147,8 +147,7 @@ func TestMemberSinceGuidance(t *testing.T) {
 			"routing", semanticLayerGuidance,
 			[]string{
 				"How long an organisation has been a member / member since: search_members summary=true",
-				"one row per organisation and project, its visible membership records read whole when complete=true",
-				"a summary the tool reports incomplete is partial (its read stopped early); continue with its page_token, or re-read with the organisation's uid as the scope",
+				"one row per organisation and project, its visible membership records read whole when complete=true.",
 			},
 		},
 		{
@@ -174,6 +173,9 @@ func TestMemberSinceGuidance(t *testing.T) {
 				}
 			}
 		})
+	}
+	if routing := strings.Join(strings.Fields(semanticLayerGuidance), " "); strings.Contains(routing, "member since: search_members summary=true, one row per organisation and project, its visible membership records read whole when complete=true; a summary") {
+		t.Error("the routing line must route only; partiality is defined once, in the standard-metrics paragraph")
 	}
 	if !strings.Contains(standardMetricsGuidance, "not an absence.\n\nMember since") {
 		t.Error("member since guidance must follow the representation paragraph")

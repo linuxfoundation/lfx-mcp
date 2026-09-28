@@ -193,6 +193,7 @@ func TestCountLFXResources_MetricResults(t *testing.T) {
 		{"missing completeness", `{"count":42,"has_more":false,"metric_value":17}`, "cardinality:email", false, []string{countMetricIncompleteWarning}},
 		{"missing value", `{"count":42,"has_more":false,"metric_complete":true}`, "cardinality:email", false, []string{countMetricIncompleteWarning}},
 		{"missing value and incomplete flag", `{"count":42,"has_more":false,"metric_complete":false}`, "cardinality:email", false, []string{countMetricIncompleteWarning}},
+		{"missing value and flag", `{"count":42,"has_more":false}`, "cardinality:email", false, []string{countMetricIncompleteWarning}},
 		{"has_more dominates", `{"count":42,"has_more":true,"metric_value":17,"metric_complete":true}`, "cardinality:email", false, []string{countLowerBoundWarning}},
 		{"plain", `{"count":42,"has_more":false}`, "", true, nil},
 	} {
@@ -211,6 +212,10 @@ func TestCountLFXResources_MetricResults(t *testing.T) {
 			var upstream map[string]any
 			if err := json.Unmarshal([]byte(tc.response), &upstream); err != nil {
 				t.Fatal(err)
+			}
+			// A missing value overrides even a true or omitted upstream flag.
+			if _, hasValue := upstream["metric_value"]; tc.metric != "" && !hasValue {
+				upstream["metric_complete"] = false
 			}
 			for _, key := range []string{"metric_value", "metric_complete"} {
 				got, present := out[key]

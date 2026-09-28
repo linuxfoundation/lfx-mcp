@@ -140,13 +140,14 @@ func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc
 			}
 			groups = append(groups, countGroup{Key: group.Key, Count: group.Count})
 		}
-		if invalidGroups {
-			logger.WarnContext(ctx, "discarded nil groups in query service count response")
-		}
 		out.Groups = &groups
 		out.GroupsComplete = result.GroupsComplete
+		if invalidGroups {
+			out.GroupsComplete = boolPtr(false)
+			logger.WarnContext(ctx, "discarded nil groups in query service count response")
+		}
 		out.GroupCountErrorUpperBound = result.GroupCountErrorUpperBound
-		if invalidGroups || result.GroupsComplete == nil || !*result.GroupsComplete {
+		if out.GroupsComplete == nil || !*out.GroupsComplete {
 			out.Complete = false
 			out.Warnings = append(out.Warnings, countGroupsIncompleteWarning)
 		}
@@ -161,7 +162,10 @@ func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc
 	if metricRequested {
 		out.MetricValue = result.MetricValue
 		out.MetricComplete = result.MetricComplete
-		if result.MetricValue == nil || result.MetricComplete == nil || !*result.MetricComplete {
+		if result.MetricValue == nil {
+			out.MetricComplete = boolPtr(false)
+		}
+		if out.MetricComplete == nil || !*out.MetricComplete {
 			out.Complete = false
 			out.Warnings = append(out.Warnings, countMetricIncompleteWarning)
 		}

@@ -67,6 +67,12 @@ func TestBuildCountResult_Warnings(t *testing.T) {
 			if out.Count != 7 || out.Complete != tc.complete || out.Visibility != "caller" || out.Note != callerVisibilityNote {
 				t.Errorf("unexpected count result: %+v", out)
 			}
+			if tc.metricRequested && tc.result.MetricValue == nil && (out.MetricComplete == nil || *out.MetricComplete) {
+				t.Errorf("missing metric value must emit metric_complete=false: %+v", out)
+			}
+			if !complete || incomplete {
+				t.Error("output flags must not mutate the service's flags")
+			}
 			if !reflect.DeepEqual(out.Warnings, tc.warnings) {
 				t.Errorf("warnings = %#v, want %#v", out.Warnings, tc.warnings)
 			}
@@ -115,6 +121,23 @@ func TestBuildCountResult_NilGroupsAreIncomplete(t *testing.T) {
 			out := buildCountResult(context.Background(), logger, &querysvc.QueryResourcesCountResult{Count: 3, HasMore: tc.hasMore, Groups: tc.groups, GroupsComplete: tc.groupsComplete, GroupCountErrorUpperBound: &zero}, committeeMemberResourceType, true, false)
 			if out.Count != 3 || out.Complete || out.Note != callerVisibilityNote {
 				t.Errorf("unexpected result: %+v", out)
+			}
+			if out.GroupsComplete == nil || *out.GroupsComplete {
+				t.Errorf("discarded groups must emit groups_complete=false: %+v", out)
+			}
+			if !complete || incomplete {
+				t.Error("output flags must not mutate the service's flags")
+			}
+			raw, err := json.Marshal(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wire map[string]any
+			if err := json.Unmarshal(raw, &wire); err != nil {
+				t.Fatal(err)
+			}
+			if wire["groups_complete"] != false {
+				t.Errorf("groups_complete must be present and false on the wire: %s", raw)
 			}
 			if out.Groups == nil || !reflect.DeepEqual(*out.Groups, tc.wantGroups) {
 				t.Errorf("mapped groups = %v, want %v", out.Groups, tc.wantGroups)

@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"reflect"
 	"strings"
@@ -46,7 +47,7 @@ func TestBuildCountResult_Warnings(t *testing.T) {
 		{"access cap alone", querysvc.QueryResourcesCountResult{HasMore: true}, false, false, false, []string{countLowerBoundWarning}},
 		{"group cap alone", querysvc.QueryResourcesCountResult{Groups: groups, GroupsComplete: &incomplete, GroupCountErrorUpperBound: &zero}, true, false, false, []string{countGroupsIncompleteWarning}},
 		{"group error alone", querysvc.QueryResourcesCountResult{Groups: groups, GroupsComplete: &complete, GroupCountErrorUpperBound: &bound}, true, false, false, []string{countGroupErrorBoundWarning}},
-		{"empty groups alone", querysvc.QueryResourcesCountResult{GroupsComplete: &complete, GroupCountErrorUpperBound: &zero}, true, false, true, []string{countNoGroupTagsWarning}},
+		{"empty groups", querysvc.QueryResourcesCountResult{GroupsComplete: &complete, GroupCountErrorUpperBound: &zero}, true, false, true, nil},
 		{"metric cap alone", querysvc.QueryResourcesCountResult{MetricValue: &zero, MetricComplete: &incomplete}, false, true, false, []string{countMetricIncompleteWarning}},
 		{"missing group completeness", querysvc.QueryResourcesCountResult{Groups: groups, GroupCountErrorUpperBound: &zero}, true, false, false, []string{countGroupsIncompleteWarning}},
 		{"missing group bound", querysvc.QueryResourcesCountResult{Groups: groups, GroupsComplete: &complete}, true, false, false, []string{countMissingGroupErrorBoundWarning}},
@@ -57,12 +58,12 @@ func TestBuildCountResult_Warnings(t *testing.T) {
 		{"access and group caps", querysvc.QueryResourcesCountResult{HasMore: true, Groups: groups, GroupsComplete: &incomplete, GroupCountErrorUpperBound: &bound}, true, false, false, []string{countLowerBoundWarning, countGroupsIncompleteWarning, countGroupErrorBoundWarning}},
 		// The helper's ordering is independent of request validation, which
 		// delegates rejection of simultaneous groups and metrics to the service.
-		{"all warnings in order", querysvc.QueryResourcesCountResult{HasMore: true, GroupsComplete: &incomplete, GroupCountErrorUpperBound: &bound, MetricComplete: &incomplete}, true, true, false, []string{countLowerBoundWarning, countGroupsIncompleteWarning, countGroupErrorBoundWarning, countNoGroupTagsWarning, countMetricIncompleteWarning}},
+		{"all warnings in order", querysvc.QueryResourcesCountResult{HasMore: true, GroupsComplete: &incomplete, GroupCountErrorUpperBound: &bound, MetricComplete: &incomplete}, true, true, false, []string{countLowerBoundWarning, countGroupsIncompleteWarning, countGroupErrorBoundWarning, countMetricIncompleteWarning}},
 		{"unrequested aggregates", querysvc.QueryResourcesCountResult{GroupsComplete: &incomplete, GroupCountErrorUpperBound: &bound, MetricComplete: &incomplete}, false, false, true, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.result.Count = 7
-			out := buildCountResult(context.Background(), slog.Default(), &tc.result, tc.groupsRequested, tc.metricRequested)
+			out := buildCountResult(context.Background(), slog.Default(), &tc.result, committeeMemberResourceType, tc.groupsRequested, tc.metricRequested)
 			if out.Count != 7 || out.Complete != tc.complete || out.Visibility != "caller" || out.Note != callerVisibilityNote {
 				t.Errorf("unexpected count result: %+v", out)
 			}
@@ -106,12 +107,12 @@ func TestBuildCountResult_NilGroupsAreIncomplete(t *testing.T) {
 		{"already incomplete", []*querysvc.CountGroup{valid[0], nil}, &incomplete, false, []countGroup{{Key: "a", Count: 2}}, []string{countGroupsIncompleteWarning}},
 		{"missing flag", []*querysvc.CountGroup{nil, valid[1]}, nil, false, []countGroup{{Key: "b", Count: 1}}, []string{countGroupsIncompleteWarning}},
 		{"access cap", []*querysvc.CountGroup{nil, valid[0]}, &incomplete, true, []countGroup{{Key: "a", Count: 2}}, []string{countLowerBoundWarning, countGroupsIncompleteWarning}},
-		{"all nil", []*querysvc.CountGroup{nil, nil}, &complete, false, []countGroup{}, []string{countGroupsIncompleteWarning, countNoGroupTagsWarning}},
+		{"all nil", []*querysvc.CountGroup{nil, nil}, &complete, false, []countGroup{}, []string{countGroupsIncompleteWarning}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var logs bytes.Buffer
 			logger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn}))
-			out := buildCountResult(context.Background(), logger, &querysvc.QueryResourcesCountResult{Count: 3, HasMore: tc.hasMore, Groups: tc.groups, GroupsComplete: tc.groupsComplete, GroupCountErrorUpperBound: &zero}, true, false)
+			out := buildCountResult(context.Background(), logger, &querysvc.QueryResourcesCountResult{Count: 3, HasMore: tc.hasMore, Groups: tc.groups, GroupsComplete: tc.groupsComplete, GroupCountErrorUpperBound: &zero}, committeeMemberResourceType, true, false)
 			if out.Count != 3 || out.Complete || out.Note != callerVisibilityNote {
 				t.Errorf("unexpected result: %+v", out)
 			}
@@ -123,6 +124,55 @@ func TestBuildCountResult_NilGroupsAreIncomplete(t *testing.T) {
 			}
 			if strings.Count(logs.String(), "level=WARN") != 1 || !strings.Contains(logs.String(), "discarded nil groups") {
 				t.Errorf("missing single warning log: %s", logs.String())
+			}
+		})
+	}
+}
+
+func TestCountLFXResources_ZeroCountsAreNotProofOfAbsence(t *testing.T) {
+	for _, resourceType := range countableResourceTypes {
+		t.Run(resourceType, func(t *testing.T) {
+			api := setupCountTest(t)
+			api.Respond(countPath, `{"count":0,"has_more":false}`)
+			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: resourceType})
+			if err != nil || res == nil || res.IsError {
+				t.Fatalf("unexpected error: %v; result=%v", err, res)
+			}
+			out := resultJSON(t, res)
+			if out["count"] != float64(0) || out["complete"] != true || out["note"] != callerVisibilityNote {
+				t.Errorf("unexpected result: %v", out)
+			}
+			want := fmt.Sprintf("No %s records matching these filters are visible to you; results cover only records you can view, so this is not proof of absence.", resourceType)
+			assertCountWarnings(t, out, []string{want})
+		})
+	}
+}
+
+func TestBuildCountResult_ZeroWarningFollowsCompletenessWarnings(t *testing.T) {
+	complete, incomplete := true, false
+	zero := uint64(0)
+	const visibilityWarning = "No committee_member records matching these filters are visible to you; results cover only records you can view, so this is not proof of absence."
+	for _, tc := range []struct {
+		name     string
+		result   querysvc.QueryResourcesCountResult
+		groups   bool
+		metric   bool
+		complete bool
+		warnings []string
+	}{
+		{"walk stopped", querysvc.QueryResourcesCountResult{HasMore: true}, false, false, false, []string{countLowerBoundWarning, visibilityWarning}},
+		{"empty groups", querysvc.QueryResourcesCountResult{GroupsComplete: &complete, GroupCountErrorUpperBound: &zero}, true, false, true, []string{visibilityWarning}},
+		{"unknown group completeness", querysvc.QueryResourcesCountResult{}, true, false, false, []string{countGroupsIncompleteWarning, countMissingGroupErrorBoundWarning, visibilityWarning}},
+		{"zero metric", querysvc.QueryResourcesCountResult{MetricValue: &zero, MetricComplete: &complete}, false, true, true, []string{visibilityWarning}},
+		{"incomplete metric", querysvc.QueryResourcesCountResult{MetricValue: &zero, MetricComplete: &incomplete}, false, true, false, []string{countMetricIncompleteWarning, visibilityWarning}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := buildCountResult(context.Background(), slog.Default(), &tc.result, committeeMemberResourceType, tc.groups, tc.metric)
+			if out.Count != 0 || out.Complete != tc.complete || out.Note != callerVisibilityNote {
+				t.Errorf("unexpected result: %+v", out)
+			}
+			if !reflect.DeepEqual(out.Warnings, tc.warnings) {
+				t.Errorf("warnings = %q, want %q", out.Warnings, tc.warnings)
 			}
 		})
 	}

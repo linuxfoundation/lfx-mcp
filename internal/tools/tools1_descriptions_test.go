@@ -56,10 +56,13 @@ func TestTools1Descriptions_FunctionVisibilityAndBudget(t *testing.T) {
 				}
 			}
 			if tc.name == "count_lfx_resources" {
-				for _, want := range []string{"parent (the type's own ref)", "a ref or field the type lacks counts 0", "group_by=<tag prefix> returns groups [{key, count}] with groups_complete", "metric=cardinality:<tag prefix> returns metric_value with metric_complete"} {
+				for _, want := range []string{"parent (the type's own ref)", "filters_all / filters_or on data fields.", "group_by=<tag prefix> returns groups [{key, count}] with groups_complete", "metric=cardinality:<tag prefix> returns metric_value with metric_complete"} {
 					if !strings.Contains(tool.Description, want) {
 						t.Errorf("count description missing %q", want)
 					}
+				}
+				if strings.Contains(tool.Description, "type lacks counts 0") {
+					t.Error("count description must not promise zero for unsupported filters")
 				}
 				const parent = "Parent ref: committee:<uid> for committee_member, project:<uid> for committee, past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant"
 				if got := schemaPropertyDescription(t, tool, "parent"); got != parent {

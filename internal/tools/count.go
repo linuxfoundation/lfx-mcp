@@ -49,7 +49,7 @@ var countGroupKeys = []string{
 
 // callerVisibilityNote is the sentence attached to every count so a bare
 // number is never mistaken for an LF-wide total.
-const callerVisibilityNote = "Counts only the records indexed in LFX v2 and visible to your identity; records you cannot see, or not yet onboarded into LFX v2, are not counted."
+const callerVisibilityNote = "Counts only the records indexed in LFX v2 and visible to you; records you cannot see, or not yet onboarded into LFX v2, are not counted."
 
 // countLowerBoundWarning is returned when the query service stopped counting
 // at its access-bucket limit.
@@ -58,7 +58,6 @@ const countLowerBoundWarning = "The count stopped at the query service's access-
 const countGroupsIncompleteWarning = "Not every group is guaranteed to be present: more groups may exist than group_by_size, or the count stopped early; raise group_by_size or narrow the query."
 const countGroupErrorBoundWarning = "Each group's count may undercount by up to group_count_error_upper_bound within the records the service walked, or by more if the count stopped early."
 const countMissingGroupErrorBoundWarning = "The service reported no error bound for the returned group counts."
-const countNoGroupTagsWarning = "No groups came back: a zero can mean the group_by prefix is not indexed for this type."
 const countMetricIncompleteWarning = "The distinct count stopped early and is a lower bound (narrow the query)."
 
 // CountLFXResourcesArgs defines the input parameters for the count_lfx_resources tool.
@@ -105,7 +104,7 @@ func RegisterCountLFXResources(server *mcp.Server) {
 		Name: "count_lfx_resources",
 		Description: "Count indexed LFX v2 records of one type visible to the caller. " +
 			"Filters: parent (the type's own ref), name (typeahead), tags OR / tags_all AND, a date range (date_field=start_time), " +
-			"filters_all / filters_or on data fields; a ref or field the type lacks counts 0. " +
+			"filters_all / filters_or on data fields. " +
 			"Returns {count, complete, visibility, note, warnings}. " +
 			"group_by=<tag prefix> returns groups [{key, count}] with groups_complete; " +
 			"metric=cardinality:<tag prefix> returns metric_value with metric_complete. " +
@@ -119,7 +118,7 @@ func RegisterCountLFXResources(server *mcp.Server) {
 }
 
 // buildCountResult turns a query-service count into the tool's honest shape.
-func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc.QueryResourcesCountResult, groupsRequested, metricRequested bool) countResult {
+func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc.QueryResourcesCountResult, resourceType string, groupsRequested, metricRequested bool) countResult {
 	out := countResult{
 		Count:      result.Count,
 		Complete:   !result.HasMore,
@@ -158,9 +157,6 @@ func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc
 			out.Complete = false
 			out.Warnings = append(out.Warnings, countGroupErrorBoundWarning)
 		}
-		if len(groups) == 0 {
-			out.Warnings = append(out.Warnings, countNoGroupTagsWarning)
-		}
 	}
 	if metricRequested {
 		out.MetricValue = result.MetricValue
@@ -169,6 +165,9 @@ func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc
 			out.Complete = false
 			out.Warnings = append(out.Warnings, countMetricIncompleteWarning)
 		}
+	}
+	if result.Count == 0 {
+		out.Warnings = append(out.Warnings, searchWarnings(resourceType+" records", 0, 0, false, false)...)
 	}
 	return out
 }
@@ -277,7 +276,7 @@ func handleCountLFXResources(ctx context.Context, req *mcp.CallToolRequest, args
 		return errorResult(friendlyAPIError("failed to count resources", err)), nil, nil
 	}
 
-	out := buildCountResult(ctx, logger, result, args.GroupBy != "", args.Metric != "")
+	out := buildCountResult(ctx, logger, result, args.Type, args.GroupBy != "", args.Metric != "")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {

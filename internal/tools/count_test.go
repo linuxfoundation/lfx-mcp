@@ -218,14 +218,17 @@ func TestCountLFXResources_MissingTokenFails(t *testing.T) {
 func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 	tool := listRegisteredTool(t, "count_lfx_resources", RegisterCountLFXResources)
 	// Grouping documentation is paid for by removing duplicated filter examples.
-	const descriptionBudget = 738
+	const descriptionBudget = 698
 	if n := len(tool.Description); n > descriptionBudget {
 		t.Errorf("description is %d bytes, budget is %d", n, descriptionBudget)
 	}
-	for _, want := range []string{"visible to the caller", "complete=false", "Returns {count, complete, visibility, note, warnings}.", "parent (the type's own ref)", "groups [{key, count}] with groups_complete", "metric=cardinality:<tag prefix> returns metric_value with metric_complete", "complete=true covers all requested counts", "a date range (date_field=start_time)", "filters_all", "filters_or", "a ref or field the type lacks counts 0"} {
+	for _, want := range []string{"visible to the caller", "complete=false", "Returns {count, complete, visibility, note, warnings}.", "parent (the type's own ref)", "groups [{key, count}] with groups_complete", "metric=cardinality:<tag prefix> returns metric_value with metric_complete", "complete=true covers all requested counts", "a date range (date_field=start_time)", "filters_all / filters_or on data fields."} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}
+	}
+	if strings.Contains(tool.Description, "type lacks counts 0") {
+		t.Error("description must not promise zero for unsupported filters")
 	}
 	const participantParent = "past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant"
 	if parent := schemaPropertyDescription(t, tool, "parent"); !strings.Contains(parent, participantParent) {
@@ -255,7 +258,7 @@ func TestCountLFXResources_IndexScopeDescriptionAndSchema(t *testing.T) {
 }
 
 func TestCountLFXResources_IndexScopeNoteAndCompleteness(t *testing.T) {
-	const wantNote = "Counts only the records indexed in LFX v2 and visible to your identity; records you cannot see, or not yet onboarded into LFX v2, are not counted."
+	const wantNote = "Counts only the records indexed in LFX v2 and visible to you; records you cannot see, or not yet onboarded into LFX v2, are not counted."
 	for _, tc := range []struct {
 		name     string
 		response string

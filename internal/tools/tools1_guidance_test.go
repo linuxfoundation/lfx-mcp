@@ -58,9 +58,8 @@ func TestGuidanceCommitteeCountsAndSources(t *testing.T) {
 		"Count members with count_lfx_resources type=committee_member",
 		"one committee parent=committee:<uid>",
 		"one project tags_all project_uid:<uid>",
-		"committee members carry no project parent: parent=project:<uid> counts 0",
+		"Scope projects by tag: committee members carry the committee, not the project, as their parent.",
 		"one organisation tags_all organization_id:<SFID>",
-		"A filter on a field the record lacks also counts 0",
 		"filters_all takes data fields (organization.name), tags_all takes tags (organization_name:, organization_id:, committee_category:)",
 		"Read the complete flag; an incomplete count is a lower bound",
 		"Ranking organisations by seats: ONE grouped count — count_lfx_resources type=committee_member, group_by=organization_id, group_by_size up to 1000 (tags_all committee_category:Board for board seats; add project_uid:<uid> for one foundation)",
@@ -80,7 +79,7 @@ func TestGuidanceCommitteeCountsAndSources(t *testing.T) {
 			t.Errorf("committee guidance missing %q", want)
 		}
 	}
-	for _, gone := range []string{"this layer's committee and maintainer models", "the committee models in this layer", "count each candidate organisation with count_lfx_resources", "An open LF-wide ranking over every organisation is query_lfx_lens as the last resort", "name the rows with the organization_name tag", "organisation id through search_b2b_orgs", "Distinct people over a scope is metric=cardinality:email"} {
+	for _, gone := range []string{"this layer's committee and maintainer models", "the committee models in this layer", "count each candidate organisation with count_lfx_resources", "An open LF-wide ranking over every organisation is query_lfx_lens as the last resort", "name the rows with the organization_name tag", "organisation id through search_b2b_orgs", "Distinct people over a scope is metric=cardinality:email", "parent=project:<uid> counts 0", "A filter on a field the record lacks also counts 0"} {
 		if strings.Contains(text, gone) {
 			t.Errorf("committee guidance still claims %q", gone)
 		}

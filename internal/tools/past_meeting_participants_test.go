@@ -412,6 +412,7 @@ func TestParticipants_CountOnly(t *testing.T) {
 }
 
 func TestParticipants_CountOnlyStructuredResultMatchesText(t *testing.T) {
+	const zeroCountWarning = "No v1_past_meeting_participant records matching these filters are visible to you; results cover only records you can view, so this is not proof of absence."
 	for _, tc := range []struct {
 		name     string
 		count    uint64
@@ -420,7 +421,7 @@ func TestParticipants_CountOnlyStructuredResultMatchesText(t *testing.T) {
 	}{
 		{"complete", 17, false, []string{participantCountRecordsWarning}},
 		{"incomplete", 17, true, []string{countLowerBoundWarning, participantCountRecordsWarning}},
-		{"zero", 0, false, []string{participantCountRecordsWarning}},
+		{"zero", 0, false, []string{zeroCountWarning, participantCountRecordsWarning}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			api := setupParticipantTest(t)

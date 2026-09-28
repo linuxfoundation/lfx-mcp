@@ -122,10 +122,6 @@ func TestCountLFXResources_GroupKeyAllowlist(t *testing.T) {
 }
 
 func TestCountLFXResources_GroupedResults(t *testing.T) {
-	const noGroupsWarning = "No groups came back: a zero can mean the group_by prefix is not indexed for this type."
-	if countNoGroupTagsWarning != noGroupsWarning {
-		t.Errorf("empty groups must not claim the prefix exists: %q", countNoGroupTagsWarning)
-	}
 	for _, tc := range []struct {
 		name     string
 		response string
@@ -138,8 +134,8 @@ func TestCountLFXResources_GroupedResults(t *testing.T) {
 		{"error bound", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30}],"groups_complete":true,"group_count_error_upper_bound":2}`, `[{"key":"P1","count":30}]`, false, []string{countGroupErrorBoundWarning}},
 		{"access cap", `{"count":42,"has_more":true,"groups":[{"key":"P1","count":30}],"groups_complete":false,"group_count_error_upper_bound":2}`, `[{"key":"P1","count":30}]`, false, []string{countLowerBoundWarning, countGroupsIncompleteWarning, countGroupErrorBoundWarning}},
 		{"has_more dominates", `{"count":42,"has_more":true,"groups":[{"key":"P1","count":30}],"groups_complete":true,"group_count_error_upper_bound":0}`, `[{"key":"P1","count":30}]`, false, []string{countLowerBoundWarning}},
-		{"no match", `{"count":42,"has_more":false,"groups_complete":true,"group_count_error_upper_bound":0}`, `[]`, true, []string{countNoGroupTagsWarning}},
-		{"missing metadata", `{"count":42,"has_more":false}`, `[]`, false, []string{countGroupsIncompleteWarning, countMissingGroupErrorBoundWarning, countNoGroupTagsWarning}},
+		{"no match", `{"count":42,"has_more":false,"groups_complete":true,"group_count_error_upper_bound":0}`, `[]`, true, nil},
+		{"missing metadata", `{"count":42,"has_more":false}`, `[]`, false, []string{countGroupsIncompleteWarning, countMissingGroupErrorBoundWarning}},
 		{"missing bound", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30}],"groups_complete":true}`, `[{"key":"P1","count":30}]`, false, []string{countMissingGroupErrorBoundWarning}},
 		{"service order", `{"count":42,"has_more":false,"groups":[{"key":"Z","count":30},{"key":"A","count":12}],"groups_complete":true,"group_count_error_upper_bound":0}`, `[{"key":"Z","count":30},{"key":"A","count":12}]`, true, nil},
 	} {

@@ -260,13 +260,13 @@ PEOPLE is maintainer_contributions by=maintainer.
 a roster (page to the end to read every row; group-mode names:
 search_groups/search_group_members). Count members with count_lfx_resources
 type=committee_member — one committee parent=committee:<uid>, one project
-tags_all project_uid:<uid> (committee members carry no project parent:
-parent=project:<uid> counts 0), one organisation tags_all organization_id:<SFID>.
+tags_all project_uid:<uid>, one organisation tags_all organization_id:<SFID>.
+Scope projects by tag: committee members carry the committee, not the project,
+as their parent.
 Several at once: group_by=organization_id (or committee_uid, committee_category,
 voting_status, project_uid) returns one count per tag value; group_by_size bounds
 the rows and groups_complete says whether every group came back.
-A filter on a field the record lacks also counts 0; filters_all takes data
-fields (organization.name), tags_all takes tags (organization_name:,
+filters_all takes data fields (organization.name), tags_all takes tags (organization_name:,
 organization_id:, committee_category:). Read the complete flag; an incomplete
 count is a lower bound. Never infer a roster from membership or event data.
 A membership's key contact is the contact of record, not a seat; a roster row

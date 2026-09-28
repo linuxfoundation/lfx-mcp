@@ -128,7 +128,10 @@ func TestCountLFXResources_GroupedResults(t *testing.T) {
 		{"access cap", `{"count":42,"has_more":true,"groups":[{"key":"P1","count":30}],"groups_complete":false,"group_count_error_upper_bound":2}`, `[{"key":"P1","count":30}]`, false, []string{countLowerBoundWarning, countGroupsIncompleteWarning, countGroupErrorBoundWarning}},
 		{"has_more dominates", `{"count":42,"has_more":true,"groups":[{"key":"P1","count":30}],"groups_complete":true,"group_count_error_upper_bound":0}`, `[{"key":"P1","count":30}]`, false, []string{countLowerBoundWarning}},
 		{"no match", `{"count":42,"has_more":false,"groups_complete":true,"group_count_error_upper_bound":0}`, `[]`, true, []string{countNoMatchingGroupTagWarning}},
-		{"missing metadata", `{"count":42,"has_more":false}`, `[]`, false, []string{countGroupsIncompleteWarning, countMissingGroupErrorBoundWarning, countNoMatchingGroupTagWarning}},
+		{"empty groups after service stop", `{"count":42,"has_more":true,"groups_complete":true,"group_count_error_upper_bound":0}`, `[]`, false, []string{countLowerBoundWarning}},
+		{"empty incomplete groups", `{"count":42,"has_more":false,"groups_complete":false,"group_count_error_upper_bound":0}`, `[]`, false, []string{countGroupsIncompleteWarning}},
+		{"empty groups with missing flag", `{"count":42,"has_more":false,"group_count_error_upper_bound":0}`, `[]`, false, []string{countGroupsIncompleteWarning}},
+		{"missing metadata", `{"count":42,"has_more":false}`, `[]`, false, []string{countGroupsIncompleteWarning, countMissingGroupErrorBoundWarning}},
 		{"missing bound", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30}],"groups_complete":true}`, `[{"key":"P1","count":30}]`, false, []string{countMissingGroupErrorBoundWarning}},
 		{"service order", `{"count":42,"has_more":false,"groups":[{"key":"Z","count":30},{"key":"A","count":12}],"groups_complete":true,"group_count_error_upper_bound":0}`, `[{"key":"Z","count":30},{"key":"A","count":12}]`, true, nil},
 	} {

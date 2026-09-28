@@ -60,6 +60,9 @@ func TestBuildCountResult_Warnings(t *testing.T) {
 		{"group cap alone", querysvc.QueryResourcesCountResult{Groups: groups, GroupsComplete: &incomplete, GroupCountErrorUpperBound: &zero}, true, false, false, []string{countGroupsIncompleteWarning}},
 		{"group error alone", querysvc.QueryResourcesCountResult{Groups: groups, GroupsComplete: &complete, GroupCountErrorUpperBound: &bound}, true, false, false, []string{countGroupErrorBoundWarning}},
 		{"positive count with empty groups", querysvc.QueryResourcesCountResult{GroupsComplete: &complete, GroupCountErrorUpperBound: &zero}, true, false, true, []string{countNoMatchingGroupTagWarning}},
+		{"empty groups after service stop", querysvc.QueryResourcesCountResult{HasMore: true, GroupsComplete: &complete, GroupCountErrorUpperBound: &zero}, true, false, false, []string{countLowerBoundWarning}},
+		{"empty groups incomplete", querysvc.QueryResourcesCountResult{GroupsComplete: &incomplete, GroupCountErrorUpperBound: &zero}, true, false, false, []string{countGroupsIncompleteWarning}},
+		{"empty groups with missing flag", querysvc.QueryResourcesCountResult{GroupCountErrorUpperBound: &zero}, true, false, false, []string{countGroupsIncompleteWarning}},
 		{"metric cap alone", querysvc.QueryResourcesCountResult{MetricValue: &zero, MetricComplete: &incomplete}, false, true, false, []string{countMetricIncompleteWarning}},
 		{"missing group completeness", querysvc.QueryResourcesCountResult{Groups: groups, GroupCountErrorUpperBound: &zero}, true, false, false, []string{countGroupsIncompleteWarning}},
 		{"missing group bound", querysvc.QueryResourcesCountResult{Groups: groups, GroupsComplete: &complete}, true, false, false, []string{countMissingGroupErrorBoundWarning}},
@@ -70,7 +73,7 @@ func TestBuildCountResult_Warnings(t *testing.T) {
 		{"access and group caps", querysvc.QueryResourcesCountResult{HasMore: true, Groups: groups, GroupsComplete: &incomplete, GroupCountErrorUpperBound: &bound}, true, false, false, []string{countLowerBoundWarning, countGroupsIncompleteWarning, countGroupErrorBoundWarning}},
 		// The helper's ordering is independent of request validation, which
 		// delegates rejection of simultaneous groups and metrics to the service.
-		{"all warnings in order", querysvc.QueryResourcesCountResult{HasMore: true, GroupsComplete: &incomplete, GroupCountErrorUpperBound: &bound, MetricComplete: &incomplete}, true, true, false, []string{countLowerBoundWarning, countGroupsIncompleteWarning, countGroupErrorBoundWarning, countNoMatchingGroupTagWarning, countMissingMetricWarning}},
+		{"all warnings in order", querysvc.QueryResourcesCountResult{HasMore: true, GroupsComplete: &incomplete, GroupCountErrorUpperBound: &bound, MetricComplete: &incomplete}, true, true, false, []string{countLowerBoundWarning, countGroupsIncompleteWarning, countGroupErrorBoundWarning, countMissingMetricWarning}},
 		{"unrequested aggregates", querysvc.QueryResourcesCountResult{GroupsComplete: &incomplete, GroupCountErrorUpperBound: &bound, MetricComplete: &incomplete}, false, false, true, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

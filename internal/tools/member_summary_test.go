@@ -84,23 +84,23 @@ func TestSearchMembersSummary_Reads(t *testing.T) {
 			name: "bounded continuation", args: SearchMembersArgs{ProjectUID: "p"},
 			pages: capped, tokens: capTokens, wantToken: fmt.Sprintf("next-%d", maxMembershipSummaryReads),
 			wantRows: capRows, wantTotal: uint64(maxMembershipSummaryReads),
-			warning: "This membership summary is partial; continue with summary=true and the returned page_token using the same project_uid and b2b_org_uid scope.",
+			warning: "This membership summary is partial; continue with summary=true and the returned page_token using the same project_uid and b2b_org_uid scope; results cover only records you can view, so this is not the whole underlying set.",
 		},
 		{
 			name: "same token stops", args: SearchMembersArgs{ProjectUID: "p"},
 			pages: []string{membershipSummaryPage([]string{summaryFirst}, 1, false, "stuck"), membershipSummaryPage([]string{summaryOther}, 1, false, "stuck")}, tokens: []string{"", "stuck"},
 			wantRows: []string{summaryFirst, summaryOther}, wantTotal: 2, wantToken: "stuck",
-			warning: "This membership summary is partial because its page_token did not advance; re-read with the organisation's b2b_org_uid and project_uid as the scope.",
+			warning: "This membership summary is partial because its page_token did not advance; re-read with the organisation's b2b_org_uid and project_uid as the scope; results cover only records you can view, so this is not the whole underlying set.",
 		},
 		{
 			name: "same as caller token stops immediately", args: SearchMembersArgs{B2bOrgUID: "o", PageToken: "stuck"},
 			pages: []string{membershipSummaryPage(nil, 0, false, "stuck")}, tokens: []string{"stuck"}, wantToken: "stuck",
-			warning: "This membership summary is partial because its page_token did not advance; re-read with the organisation's b2b_org_uid and project_uid as the scope.",
+			warning: "This membership summary is partial because its page_token did not advance; re-read with the organisation's b2b_org_uid and project_uid as the scope; results cover only records you can view, so this is not the whole underlying set.",
 		},
 		{
 			name: "incomplete without token stops", args: SearchMembersArgs{B2bOrgUID: "o"},
 			pages: []string{membershipSummaryPage([]string{summaryFirst}, 1, false, "")}, tokens: []string{""}, wantRows: []string{summaryFirst}, wantTotal: 1,
-			warning: "This membership summary is partial and has no continuation token; re-read with the organisation's b2b_org_uid and project_uid as the scope.",
+			warning: "This membership summary is partial and has no continuation token; re-read with the organisation's b2b_org_uid and project_uid as the scope; results cover only records you can view, so this is not the whole underlying set.",
 		},
 		{
 			name: "empty first read visibility warning", args: SearchMembersArgs{B2bOrgUID: "o"},

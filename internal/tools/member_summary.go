@@ -109,15 +109,15 @@ func readMembershipSummaries(ctx context.Context, req *mcp.CallToolRequest, args
 			break
 		}
 		if !hasPageToken(result.PageToken) {
-			out.Warnings = append(out.Warnings, "This membership summary is partial and has no continuation token; re-read with the organisation's b2b_org_uid and project_uid as the scope.")
+			out.Warnings = append(out.Warnings, "This membership summary is partial and has no continuation token; re-read with the organisation's b2b_org_uid and project_uid as the scope; results cover only records you can view, so this is not the whole underlying set.")
 			break
 		}
 		if derefStr(result.PageToken) == derefStr(payload.PageToken) {
-			out.Warnings = append(out.Warnings, "This membership summary is partial because its page_token did not advance; re-read with the organisation's b2b_org_uid and project_uid as the scope.")
+			out.Warnings = append(out.Warnings, "This membership summary is partial because its page_token did not advance; re-read with the organisation's b2b_org_uid and project_uid as the scope; results cover only records you can view, so this is not the whole underlying set.")
 			break
 		}
 		if read+1 == maxMembershipSummaryReads {
-			out.Warnings = append(out.Warnings, "This membership summary is partial; continue with summary=true and the returned page_token using the same project_uid and b2b_org_uid scope.")
+			out.Warnings = append(out.Warnings, "This membership summary is partial; continue with summary=true and the returned page_token using the same project_uid and b2b_org_uid scope; results cover only records you can view, so this is not the whole underlying set.")
 			break
 		}
 		payload.PageToken = result.PageToken

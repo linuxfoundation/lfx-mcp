@@ -137,10 +137,11 @@ func TestCountLFXResources_GroupedResults(t *testing.T) {
 		{"truncated", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30}],"groups_complete":false,"group_count_error_upper_bound":0}`, `[{"key":"P1","count":30}]`, false, []string{countGroupsIncompleteWarning}},
 		{"error bound", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30}],"groups_complete":true,"group_count_error_upper_bound":2}`, `[{"key":"P1","count":30}]`, false, []string{countGroupErrorBoundWarning}},
 		{"access cap", `{"count":42,"has_more":true,"groups":[{"key":"P1","count":30}],"groups_complete":false,"group_count_error_upper_bound":2}`, `[{"key":"P1","count":30}]`, false, []string{countLowerBoundWarning, countGroupsIncompleteWarning, countGroupErrorBoundWarning}},
-		{"has_more dominates", `{"count":42,"has_more":true,"groups":[{"key":"P1","count":30}],"groups_complete":true}`, `[{"key":"P1","count":30}]`, false, []string{countLowerBoundWarning}},
+		{"has_more dominates", `{"count":42,"has_more":true,"groups":[{"key":"P1","count":30}],"groups_complete":true,"group_count_error_upper_bound":0}`, `[{"key":"P1","count":30}]`, false, []string{countLowerBoundWarning}},
 		{"no match", `{"count":42,"has_more":false,"groups_complete":true,"group_count_error_upper_bound":0}`, `[]`, true, []string{countNoGroupTagsWarning}},
-		{"missing completeness", `{"count":42,"has_more":false}`, `[]`, false, []string{countGroupsIncompleteWarning, countNoGroupTagsWarning}},
-		{"service order", `{"count":42,"has_more":false,"groups":[{"key":"Z","count":30},{"key":"A","count":12}],"groups_complete":true}`, `[{"key":"Z","count":30},{"key":"A","count":12}]`, true, nil},
+		{"missing metadata", `{"count":42,"has_more":false}`, `[]`, false, []string{countGroupsIncompleteWarning, countMissingGroupErrorBoundWarning, countNoGroupTagsWarning}},
+		{"missing bound", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30}],"groups_complete":true}`, `[{"key":"P1","count":30}]`, false, []string{countMissingGroupErrorBoundWarning}},
+		{"service order", `{"count":42,"has_more":false,"groups":[{"key":"Z","count":30},{"key":"A","count":12}],"groups_complete":true,"group_count_error_upper_bound":0}`, `[{"key":"Z","count":30},{"key":"A","count":12}]`, true, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			api := setupCountTest(t)
@@ -166,8 +167,10 @@ func TestCountLFXResources_GroupedResults(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, key := range []string{"groups_complete", "group_count_error_upper_bound"} {
-				if !reflect.DeepEqual(out[key], upstream[key]) {
-					t.Errorf("%s = %v, want %v", key, out[key], upstream[key])
+				got, present := out[key]
+				want, wanted := upstream[key]
+				if present != wanted || !reflect.DeepEqual(got, want) {
+					t.Errorf("%s = %v (present %v), want %v (present %v)", key, got, present, want, wanted)
 				}
 			}
 			for _, key := range []string{"metric_value", "metric_complete"} {
@@ -192,6 +195,8 @@ func TestCountLFXResources_MetricResults(t *testing.T) {
 		{"access cap", `{"count":42,"has_more":true,"metric_value":17,"metric_complete":false}`, "cardinality:username", false, []string{countLowerBoundWarning, countMetricIncompleteWarning}},
 		{"zero", `{"count":42,"has_more":false,"metric_value":0,"metric_complete":true}`, "cardinality:email", true, nil},
 		{"missing completeness", `{"count":42,"has_more":false,"metric_value":17}`, "cardinality:email", false, []string{countMetricIncompleteWarning}},
+		{"missing value", `{"count":42,"has_more":false,"metric_complete":true}`, "cardinality:email", false, []string{countMetricIncompleteWarning}},
+		{"missing value and incomplete flag", `{"count":42,"has_more":false,"metric_complete":false}`, "cardinality:email", false, []string{countMetricIncompleteWarning}},
 		{"has_more dominates", `{"count":42,"has_more":true,"metric_value":17,"metric_complete":true}`, "cardinality:email", false, []string{countLowerBoundWarning}},
 		{"plain", `{"count":42,"has_more":false}`, "", true, nil},
 	} {

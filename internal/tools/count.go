@@ -56,7 +56,8 @@ const callerVisibilityNote = "Counts only the records indexed in LFX v2 and visi
 const countLowerBoundWarning = "The count stopped at the query service's access-bucket limit and is a lower bound; narrow the query (parent, date range, tags) or count per project."
 
 const countGroupsIncompleteWarning = "Not every group is guaranteed to be present: more groups may exist than group_by_size, or the count stopped early; raise group_by_size or narrow the query."
-const countGroupErrorBoundWarning = "Each group's count may undercount by up to group_count_error_upper_bound."
+const countGroupErrorBoundWarning = "Each group's count may undercount by up to group_count_error_upper_bound within the records the service walked, or by more if the count stopped early."
+const countMissingGroupErrorBoundWarning = "The service reported no error bound for the returned group counts."
 const countNoGroupTagsWarning = "No groups came back: a zero can mean the group_by prefix is not indexed for this type."
 const countMetricIncompleteWarning = "The distinct count stopped early and is a lower bound (narrow the query)."
 
@@ -150,7 +151,10 @@ func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc
 			out.Complete = false
 			out.Warnings = append(out.Warnings, countGroupsIncompleteWarning)
 		}
-		if result.GroupCountErrorUpperBound != nil && *result.GroupCountErrorUpperBound > 0 {
+		if result.GroupCountErrorUpperBound == nil {
+			out.Complete = false
+			out.Warnings = append(out.Warnings, countMissingGroupErrorBoundWarning)
+		} else if *result.GroupCountErrorUpperBound > 0 {
 			out.Complete = false
 			out.Warnings = append(out.Warnings, countGroupErrorBoundWarning)
 		}
@@ -161,7 +165,7 @@ func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc
 	if metricRequested {
 		out.MetricValue = result.MetricValue
 		out.MetricComplete = result.MetricComplete
-		if result.MetricComplete == nil || !*result.MetricComplete {
+		if result.MetricValue == nil || result.MetricComplete == nil || !*result.MetricComplete {
 			out.Complete = false
 			out.Warnings = append(out.Warnings, countMetricIncompleteWarning)
 		}

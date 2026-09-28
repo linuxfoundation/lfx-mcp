@@ -18,6 +18,10 @@ import (
 )
 
 func TestBuildCountResult_Warnings(t *testing.T) {
+	const lowerBound = "The count is not guaranteed exhaustive: the service stopped counting early, so it is a lower bound; narrow the query (parent, date range, tags) or count per project."
+	if countLowerBoundWarning != lowerBound {
+		t.Errorf("lower-bound warning must not infer the service's stopping cause: %q", countLowerBoundWarning)
+	}
 	const incompleteGroups = "Not every group is guaranteed to be present: more groups may exist than group_by_size, or the count stopped early; raise group_by_size or narrow the query."
 	if countGroupsIncompleteWarning != incompleteGroups {
 		t.Errorf("group warning must describe both causes without claiming missing groups: %q", countGroupsIncompleteWarning)

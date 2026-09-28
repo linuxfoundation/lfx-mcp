@@ -51,9 +51,9 @@ var countGroupKeys = []string{
 // number is never mistaken for an LF-wide total.
 const callerVisibilityNote = "Counts only the records indexed in LFX v2 and visible to you; records you cannot see, or not yet onboarded into LFX v2, are not counted."
 
-// countLowerBoundWarning is returned when the query service stopped counting
-// at its access-bucket limit.
-const countLowerBoundWarning = "The count stopped at the query service's access-bucket limit and is a lower bound; narrow the query (parent, date range, tags) or count per project."
+// countLowerBoundWarning is returned when the query service cannot guarantee
+// an exhaustive count.
+const countLowerBoundWarning = "The count is not guaranteed exhaustive: the service stopped counting early, so it is a lower bound; narrow the query (parent, date range, tags) or count per project."
 
 const countGroupsIncompleteWarning = "Not every group is guaranteed to be present: more groups may exist than group_by_size, or the count stopped early; raise group_by_size or narrow the query."
 const countGroupErrorBoundWarning = "Each group's count may undercount by up to group_count_error_upper_bound within the records the service walked, or by more if the count stopped early."
@@ -120,7 +120,7 @@ func RegisterCountLFXResources(server *mcp.Server) {
 }
 
 // buildCountResult turns a query-service count into the tool's honest shape.
-// scopeTruncated reports a caller-side scope cut, not a service access-bucket cap.
+// scopeTruncated reports a caller-side scope cut, not an early stop in the service's count walk.
 // The caller appends the scope-specific truncation warning.
 func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc.QueryResourcesCountResult, resourceType string, groupsRequested, metricRequested, scopeTruncated bool) countResult {
 	baseCountComplete := !result.HasMore && !scopeTruncated

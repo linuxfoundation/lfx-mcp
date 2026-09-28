@@ -58,6 +58,8 @@ const countLowerBoundWarning = "The count stopped at the query service's access-
 const countGroupsIncompleteWarning = "Not every group is guaranteed to be present: more groups may exist than group_by_size, or the count stopped early; raise group_by_size or narrow the query."
 const countGroupErrorBoundWarning = "Each group's count may undercount by up to group_count_error_upper_bound within the records the service walked, or by more if the count stopped early."
 const countMissingGroupErrorBoundWarning = "The service reported no error bound for the returned group counts."
+const countNoMatchingGroupTagWarning = "No matching visible record carried the group_by tag."
+const countMissingMetricWarning = "The service reported no distinct count for the requested metric."
 const countMetricIncompleteWarning = "The distinct count stopped early and is a lower bound (narrow the query)."
 
 // CountLFXResourcesArgs defines the input parameters for the count_lfx_resources tool.
@@ -158,6 +160,9 @@ func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc
 			out.Complete = false
 			out.Warnings = append(out.Warnings, countGroupErrorBoundWarning)
 		}
+		if len(groups) == 0 && result.Count > 0 {
+			out.Warnings = append(out.Warnings, countNoMatchingGroupTagWarning)
+		}
 	}
 	if metricRequested {
 		out.MetricValue = result.MetricValue
@@ -165,7 +170,10 @@ func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc
 		if result.MetricValue == nil {
 			out.MetricComplete = boolPtr(false)
 		}
-		if out.MetricComplete == nil || !*out.MetricComplete {
+		if result.MetricValue == nil || result.MetricComplete == nil {
+			out.Complete = false
+			out.Warnings = append(out.Warnings, countMissingMetricWarning)
+		} else if !*out.MetricComplete {
 			out.Complete = false
 			out.Warnings = append(out.Warnings, countMetricIncompleteWarning)
 		}

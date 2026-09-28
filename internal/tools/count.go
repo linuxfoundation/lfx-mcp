@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
@@ -32,6 +33,19 @@ var countableResourceTypes = []string{
 	mailingListMemberResourceType,
 }
 
+// countGroupKeys follows D-4: group keys describe records, not people or
+// individual record IDs. Source: the countable services' indexer contracts.
+// Keep this shared allowlist sorted; there is deliberately no per-type registry.
+var countGroupKeys = []string{
+	"audience_access", "category", "committee_category", "committee_uid",
+	"committee_voting_status", "display_name", "group_name", "is_attended",
+	"is_invited", "is_member", "mailing_list_uid", "meeting_and_occurrence_id",
+	"meeting_id", "meeting_type", "organization_id", "organization_name",
+	"parent_b2b_org_uid", "parent_uid", "project_sfid", "project_slug", "project_uid",
+	"public", "service_uid", "status", "timezone", "title", "type", "visibility",
+	"voting_status",
+}
+
 // callerVisibilityNote is the sentence attached to every count so a bare
 // number is never mistaken for an LF-wide total.
 const callerVisibilityNote = "Counts only the records indexed in LFX v2 and visible to your identity; records you cannot see, or not yet onboarded into LFX v2, are not counted."
@@ -42,16 +56,19 @@ const countLowerBoundNote = " The count stopped at the query service's access-bu
 
 // CountLFXResourcesArgs defines the input parameters for the count_lfx_resources tool.
 type CountLFXResourcesArgs struct {
-	Type       string   `json:"type" jsonschema:"(required) Resource type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member (the v2 index holds only onboarded projects)"`
-	Parent     string   `json:"parent,omitempty" jsonschema:"The type's own parent ref, e.g. committee:<uid> for committee_member, project:<uid> for committee"`
-	Name       string   `json:"name,omitempty" jsonschema:"Name or alias to match (typeahead)"`
-	Tags       []string `json:"tags,omitempty" jsonschema:"Tags matched with OR, e.g. is_attended:true, project_slug:cncf"`
-	TagsAll    []string `json:"tags_all,omitempty" jsonschema:"Tags that must all match"`
-	DateField  string   `json:"date_field,omitempty" jsonschema:"Data field for the date range, e.g. start_time, updated_at (required with date_from or date_to)"`
-	DateFrom   string   `json:"date_from,omitempty" jsonschema:"Inclusive start, ISO 8601 date or datetime (date-only = start of day UTC)"`
-	DateTo     string   `json:"date_to,omitempty" jsonschema:"Inclusive end, ISO 8601 date or datetime (date-only = end of day UTC)"`
-	FiltersOr  []string `json:"filters_or,omitempty" jsonschema:"Exact field filters field:value on data fields, at least one must match"`
-	FiltersAll []string `json:"filters_all,omitempty" jsonschema:"Exact field filters field:value on data fields that must all match"`
+	Type        string   `json:"type" jsonschema:"(required) Resource type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member (the v2 index holds only onboarded projects)"`
+	Parent      string   `json:"parent,omitempty" jsonschema:"The type's own parent ref, e.g. committee:<uid> for committee_member, project:<uid> for committee"`
+	Name        string   `json:"name,omitempty" jsonschema:"Name or alias to match (typeahead)"`
+	Tags        []string `json:"tags,omitempty" jsonschema:"Tags matched with OR, e.g. is_attended:true, project_slug:cncf"`
+	TagsAll     []string `json:"tags_all,omitempty" jsonschema:"Tags that must all match"`
+	DateField   string   `json:"date_field,omitempty" jsonschema:"Data field for the date range, e.g. start_time, updated_at (required with date_from or date_to)"`
+	DateFrom    string   `json:"date_from,omitempty" jsonschema:"Inclusive start, ISO 8601 date or datetime (date-only = start of day UTC)"`
+	DateTo      string   `json:"date_to,omitempty" jsonschema:"Inclusive end, ISO 8601 date or datetime (date-only = end of day UTC)"`
+	FiltersOr   []string `json:"filters_or,omitempty" jsonschema:"Exact field filters field:value on data fields, at least one must match"`
+	FiltersAll  []string `json:"filters_all,omitempty" jsonschema:"Exact field filters field:value on data fields that must all match"`
+	GroupBy     string   `json:"group_by,omitempty" jsonschema:"Record tag prefix (e.g. organization_id, committee_uid, project_uid, category); one row per value"`
+	GroupBySize int      `json:"group_by_size,omitempty" jsonschema:"Maximum groups (default 100, max 1000); requires group_by"`
+	Metric      string   `json:"metric,omitempty" jsonschema:"Distinct tag values: cardinality:<tag_prefix>, e.g. cardinality:email; not with group_by"`
 }
 
 // countResult is the output shape of count_lfx_resources. The count is never
@@ -131,6 +148,15 @@ func buildCountPayload(args CountLFXResourcesArgs) *querysvc.QueryResourcesCount
 	if len(args.FiltersAll) > 0 {
 		payload.FiltersAll = args.FiltersAll
 	}
+	if args.GroupBy != "" {
+		payload.GroupBy = strPtr(args.GroupBy)
+	}
+	if args.GroupBySize != 0 {
+		payload.GroupBySize = &args.GroupBySize
+	}
+	if args.Metric != "" {
+		payload.Metric = strPtr(args.Metric)
+	}
 	return payload
 }
 
@@ -149,6 +175,9 @@ func validateCountArgs(args CountLFXResourcesArgs) string {
 	}
 	if (args.DateFrom != "" || args.DateTo != "") && args.DateField == "" {
 		return "Error: date_field is required when date_from or date_to is set (e.g. start_time, updated_at)"
+	}
+	if args.GroupBy != "" && !slices.Contains(countGroupKeys, args.GroupBy) {
+		return fmt.Sprintf("Error: group_by %q is not a group key; group keys describe records, not people: %s", args.GroupBy, strings.Join(countGroupKeys, ", "))
 	}
 	return ""
 }

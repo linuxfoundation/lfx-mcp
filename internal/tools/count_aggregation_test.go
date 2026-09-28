@@ -135,7 +135,7 @@ func TestCountLFXResources_GroupedResults(t *testing.T) {
 	}{
 		{"exact", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30},{"key":"P2","count":12}],"groups_complete":true,"group_count_error_upper_bound":0}`, `[{"key":"P1","count":30},{"key":"P2","count":12}]`, true, nil},
 		{"truncated", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30}],"groups_complete":false,"group_count_error_upper_bound":0}`, `[{"key":"P1","count":30}]`, false, []string{countGroupsIncompleteWarning}},
-		{"error bound", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30}],"groups_complete":true,"group_count_error_upper_bound":2}`, `[{"key":"P1","count":30}]`, true, []string{countGroupErrorBoundWarning}},
+		{"error bound", `{"count":42,"has_more":false,"groups":[{"key":"P1","count":30}],"groups_complete":true,"group_count_error_upper_bound":2}`, `[{"key":"P1","count":30}]`, false, []string{countGroupErrorBoundWarning}},
 		{"access cap", `{"count":42,"has_more":true,"groups":[{"key":"P1","count":30}],"groups_complete":false,"group_count_error_upper_bound":2}`, `[{"key":"P1","count":30}]`, false, []string{countLowerBoundWarning, countGroupsIncompleteWarning, countGroupErrorBoundWarning}},
 		{"has_more dominates", `{"count":42,"has_more":true,"groups":[{"key":"P1","count":30}],"groups_complete":true}`, `[{"key":"P1","count":30}]`, false, []string{countLowerBoundWarning}},
 		{"no match", `{"count":42,"has_more":false,"groups_complete":true,"group_count_error_upper_bound":0}`, `[]`, true, []string{countNoGroupTagsWarning}},

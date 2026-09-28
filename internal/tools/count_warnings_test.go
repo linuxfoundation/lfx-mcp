@@ -14,6 +14,10 @@ import (
 )
 
 func TestBuildCountResult_Warnings(t *testing.T) {
+	const incompleteGroups = "Not every group is guaranteed to be present: more groups may exist than group_by_size, or the count stopped early; raise group_by_size or narrow the query."
+	if countGroupsIncompleteWarning != incompleteGroups {
+		t.Errorf("group warning must describe both causes without claiming missing groups: %q", countGroupsIncompleteWarning)
+	}
 	complete, incomplete := true, false
 	zero, bound := uint64(0), uint64(2)
 	groups := []*querysvc.CountGroup{{Key: "project-a", Count: 7}}
@@ -26,11 +30,11 @@ func TestBuildCountResult_Warnings(t *testing.T) {
 		warnings        []string
 	}{
 		{"none", querysvc.QueryResourcesCountResult{}, false, false, true, nil},
-		{"complete groups", querysvc.QueryResourcesCountResult{Groups: groups, GroupsComplete: &complete, GroupCountErrorUpperBound: &zero}, true, false, true, nil},
+		{"zero group error bound", querysvc.QueryResourcesCountResult{Groups: groups, GroupsComplete: &complete, GroupCountErrorUpperBound: &zero}, true, false, true, nil},
 		{"complete metric", querysvc.QueryResourcesCountResult{MetricValue: &zero, MetricComplete: &complete}, false, true, true, nil},
 		{"access cap alone", querysvc.QueryResourcesCountResult{HasMore: true}, false, false, false, []string{countLowerBoundWarning}},
 		{"group cap alone", querysvc.QueryResourcesCountResult{Groups: groups, GroupsComplete: &incomplete}, true, false, false, []string{countGroupsIncompleteWarning}},
-		{"group error alone", querysvc.QueryResourcesCountResult{Groups: groups, GroupsComplete: &complete, GroupCountErrorUpperBound: &bound}, true, false, true, []string{countGroupErrorBoundWarning}},
+		{"group error alone", querysvc.QueryResourcesCountResult{Groups: groups, GroupsComplete: &complete, GroupCountErrorUpperBound: &bound}, true, false, false, []string{countGroupErrorBoundWarning}},
 		{"empty groups alone", querysvc.QueryResourcesCountResult{GroupsComplete: &complete}, true, false, true, []string{countNoGroupTagsWarning}},
 		{"metric cap alone", querysvc.QueryResourcesCountResult{MetricComplete: &incomplete}, false, true, false, []string{countMetricIncompleteWarning}},
 		{"missing group completeness", querysvc.QueryResourcesCountResult{Groups: groups}, true, false, false, []string{countGroupsIncompleteWarning}},

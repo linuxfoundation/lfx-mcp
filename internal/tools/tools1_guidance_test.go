@@ -65,7 +65,7 @@ func TestGuidanceCommitteeCountsAndSources(t *testing.T) {
 		"Read the complete flag; an incomplete count is a lower bound",
 		"Ranking organisations by seats: ONE grouped count — count_lfx_resources type=committee_member, group_by=organization_id, group_by_size up to 1000 (tags_all committee_category:Board for board seats; add project_uid:<uid> for one foundation)",
 		"one row per organisation id over the seats visible to you in LFX v2, seat records not people; read groups_complete",
-		"name each row by its organisation id through search_b2b_orgs, never by guessing or joining an organization_name grouped count to the grouped ids",
+		"name each row with ONE search_committee_members call using organization_id=<row key> and page_size=1, reading the returned row's organization name, never by guessing or joining a name-grouped count to the ids",
 		"Distinct people over a scope is metric=cardinality:email on a separate call (a number only); there is no distinct count per group",
 		"The warehouse copy of the v1 committee records read by query_lfx_lens differs from the LFX v2 committee service: never combine or reconcile the two; if it was read, say so",
 		"Several at once: group_by=organization_id (or committee_uid, committee_category, voting_status, project_uid) returns one count per tag value; group_by_size bounds the rows and groups_complete says whether every group came back",
@@ -80,7 +80,7 @@ func TestGuidanceCommitteeCountsAndSources(t *testing.T) {
 			t.Errorf("committee guidance missing %q", want)
 		}
 	}
-	for _, gone := range []string{"this layer's committee and maintainer models", "the committee models in this layer", "count each candidate organisation with count_lfx_resources", "An open LF-wide ranking over every organisation is query_lfx_lens as the last resort", "name the rows with the organization_name tag"} {
+	for _, gone := range []string{"this layer's committee and maintainer models", "the committee models in this layer", "count each candidate organisation with count_lfx_resources", "An open LF-wide ranking over every organisation is query_lfx_lens as the last resort", "name the rows with the organization_name tag", "organisation id through search_b2b_orgs"} {
 		if strings.Contains(text, gone) {
 			t.Errorf("committee guidance still claims %q", gone)
 		}

@@ -54,7 +54,7 @@ const callerVisibilityNote = "Counts only the records indexed in LFX v2 and visi
 // at its access-bucket limit.
 const countLowerBoundWarning = "The count stopped at the query service's access-bucket limit and is a lower bound; narrow the query (parent, date range, tags) or count per project."
 
-const countGroupsIncompleteWarning = "More groups exist than were returned; raise group_by_size or narrow the query."
+const countGroupsIncompleteWarning = "Not every group is guaranteed to be present: more groups may exist than group_by_size, or the count stopped early; raise group_by_size or narrow the query."
 const countGroupErrorBoundWarning = "Each group's count may undercount by up to group_count_error_upper_bound."
 const countNoGroupTagsWarning = "No groups came back: a zero can mean the group_by prefix is not indexed for this type."
 const countMetricIncompleteWarning = "The distinct count stopped early and is a lower bound (narrow the query)."
@@ -142,6 +142,7 @@ func buildCountResult(result *querysvc.QueryResourcesCountResult, groupsRequeste
 			out.Warnings = append(out.Warnings, countGroupsIncompleteWarning)
 		}
 		if result.GroupCountErrorUpperBound != nil && *result.GroupCountErrorUpperBound > 0 {
+			out.Complete = false
 			out.Warnings = append(out.Warnings, countGroupErrorBoundWarning)
 		}
 		if len(groups) == 0 {

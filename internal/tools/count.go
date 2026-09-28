@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 
@@ -117,7 +118,7 @@ func RegisterCountLFXResources(server *mcp.Server) {
 }
 
 // buildCountResult turns a query-service count into the tool's honest shape.
-func buildCountResult(result *querysvc.QueryResourcesCountResult, groupsRequested, metricRequested bool) countResult {
+func buildCountResult(ctx context.Context, logger *slog.Logger, result *querysvc.QueryResourcesCountResult, groupsRequested, metricRequested bool) countResult {
 	out := countResult{
 		Count:      result.Count,
 		Complete:   !result.HasMore,
@@ -131,13 +132,21 @@ func buildCountResult(result *querysvc.QueryResourcesCountResult, groupsRequeste
 		// A pointer distinguishes an unrequested field from a requested empty
 		// array; a non-nil empty slice encodes as [] rather than null.
 		groups := make([]countGroup, 0, len(result.Groups))
+		invalidGroups := false
 		for _, group := range result.Groups {
+			if group == nil {
+				invalidGroups = true
+				continue
+			}
 			groups = append(groups, countGroup{Key: group.Key, Count: group.Count})
+		}
+		if invalidGroups {
+			logger.WarnContext(ctx, "discarded nil groups in query service count response")
 		}
 		out.Groups = &groups
 		out.GroupsComplete = result.GroupsComplete
 		out.GroupCountErrorUpperBound = result.GroupCountErrorUpperBound
-		if result.GroupsComplete == nil || !*result.GroupsComplete {
+		if invalidGroups || result.GroupsComplete == nil || !*result.GroupsComplete {
 			out.Complete = false
 			out.Warnings = append(out.Warnings, countGroupsIncompleteWarning)
 		}
@@ -264,7 +273,7 @@ func handleCountLFXResources(ctx context.Context, req *mcp.CallToolRequest, args
 		return errorResult(friendlyAPIError("failed to count resources", err)), nil, nil
 	}
 
-	out := buildCountResult(result, args.GroupBy != "", args.Metric != "")
+	out := buildCountResult(ctx, logger, result, args.GroupBy != "", args.Metric != "")
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {

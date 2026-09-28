@@ -327,7 +327,7 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 	// count_only: sum the count route over the scope(s).
 	if args.CountOnly {
 		var total uint64
-		complete := !truncated
+		serviceHasMore := false
 		if hasDateRange {
 			for _, p := range parents {
 				res, err := countParticipants(ctx, clients, p, args)
@@ -336,9 +336,7 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 					return errorResult(friendlyAPIError("failed to count past meeting participants", err)), nil, nil
 				}
 				total += res.Count
-				if res.HasMore {
-					complete = false
-				}
+				serviceHasMore = serviceHasMore || res.HasMore
 			}
 		} else {
 			res, err := countParticipants(ctx, clients, parent, args)
@@ -347,11 +345,12 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 				return errorResult(friendlyAPIError("failed to count past meeting participants", err)), nil, nil
 			}
 			total = res.Count
-			complete = !res.HasMore
+			serviceHasMore = res.HasMore
 		}
-		out := buildCountResult(&querysvc.QueryResourcesCountResult{Count: total, HasMore: !complete}, false, false)
+		out := buildCountResult(ctx, logger, &querysvc.QueryResourcesCountResult{Count: total, HasMore: serviceHasMore}, false, false)
 		out.Warnings = append(out.Warnings, participantCountRecordsWarning)
 		if truncated {
+			out.Complete = false
 			out.Warnings = append(out.Warnings, fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings))
 		}
 		result, _, err := jsonResult(ctx, logger, "search_past_meeting_participants count succeeded", out)

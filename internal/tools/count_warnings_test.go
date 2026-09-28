@@ -5,7 +5,10 @@
 package tools
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
@@ -47,7 +50,7 @@ func TestBuildCountResult_Warnings(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.result.Count = 7
-			out := buildCountResult(&tc.result, tc.groupsRequested, tc.metricRequested)
+			out := buildCountResult(context.Background(), slog.Default(), &tc.result, tc.groupsRequested, tc.metricRequested)
 			if out.Count != 7 || out.Complete != tc.complete || out.Visibility != "caller" || out.Note != callerVisibilityNote {
 				t.Errorf("unexpected count result: %+v", out)
 			}
@@ -71,6 +74,43 @@ func TestBuildCountResult_Warnings(t *testing.T) {
 				t.Errorf("note changed on wire: %v", wire["note"])
 			}
 			assertCountWarnings(t, wire, tc.warnings)
+		})
+	}
+}
+
+func TestBuildCountResult_NilGroupsAreIncomplete(t *testing.T) {
+	complete, incomplete := true, false
+	valid := []*querysvc.CountGroup{{Key: "a", Count: 2}, {Key: "b", Count: 1}}
+	for _, tc := range []struct {
+		name           string
+		groups         []*querysvc.CountGroup
+		groupsComplete *bool
+		hasMore        bool
+		wantGroups     []countGroup
+		warnings       []string
+	}{
+		{"mixed", []*querysvc.CountGroup{nil, valid[0], nil, valid[1]}, &complete, false, []countGroup{{Key: "a", Count: 2}, {Key: "b", Count: 1}}, []string{countGroupsIncompleteWarning}},
+		{"already incomplete", []*querysvc.CountGroup{valid[0], nil}, &incomplete, false, []countGroup{{Key: "a", Count: 2}}, []string{countGroupsIncompleteWarning}},
+		{"missing flag", []*querysvc.CountGroup{nil, valid[1]}, nil, false, []countGroup{{Key: "b", Count: 1}}, []string{countGroupsIncompleteWarning}},
+		{"access cap", []*querysvc.CountGroup{nil, valid[0]}, &incomplete, true, []countGroup{{Key: "a", Count: 2}}, []string{countLowerBoundWarning, countGroupsIncompleteWarning}},
+		{"all nil", []*querysvc.CountGroup{nil, nil}, &complete, false, []countGroup{}, []string{countGroupsIncompleteWarning, countNoGroupTagsWarning}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			logger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn}))
+			out := buildCountResult(context.Background(), logger, &querysvc.QueryResourcesCountResult{Count: 3, HasMore: tc.hasMore, Groups: tc.groups, GroupsComplete: tc.groupsComplete}, true, false)
+			if out.Count != 3 || out.Complete || out.Note != callerVisibilityNote {
+				t.Errorf("unexpected result: %+v", out)
+			}
+			if out.Groups == nil || !reflect.DeepEqual(*out.Groups, tc.wantGroups) {
+				t.Errorf("mapped groups = %v, want %v", out.Groups, tc.wantGroups)
+			}
+			if !reflect.DeepEqual(out.Warnings, tc.warnings) {
+				t.Errorf("warnings = %q, want exactly %q", out.Warnings, tc.warnings)
+			}
+			if strings.Count(logs.String(), "level=WARN") != 1 || !strings.Contains(logs.String(), "discarded nil groups") {
+				t.Errorf("missing single warning log: %s", logs.String())
+			}
 		})
 	}
 }

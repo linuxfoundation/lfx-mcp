@@ -38,7 +38,7 @@ func TestTools1GuidanceDistinguishesCountsFromPagedListings(t *testing.T) {
 		"Both count tools count what the caller's identity may see",
 		"and say whether the count is complete",
 		"An unscoped long-window count can time out: scope by project or committee and read month windows",
-		"On participant records, an unknown date_field or date_field=start_time returns a silent 0",
+		"On participant records, an unknown date_field or date_field=start_time is rejected with an error naming the field",
 		"created_at is the record's creation, not the meeting's",
 		"For a meeting-date window use search_past_meeting_participants with a project or committee and date_from/date_to",
 	} {

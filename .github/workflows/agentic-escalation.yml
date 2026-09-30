@@ -1,0 +1,196 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+#
+# On PR open AND on every new head: fire the needs-human escalation as an Agent
+# Tasks API task pinned to gpt-5.5. It runs the escalation and posts its
+# needs-human verdict comment via the writable GitHub MCP (add_issue_comment).
+# Re-running per head is what keeps a human override honest: an unlabel vouches
+# only for the code that existed when the human looked, and a PR whose scope
+# grows mid-review (auth, schema, send-path) gets re-judged instead of riding
+# the opening verdict. EXCEPT while the needs-human label is already set: the
+# label is sticky and add-only, so a re-run could only re-add what is already
+# there — the task is skipped and the model run saved. Every skip is recorded
+# as a per-head marker status (agentic-review/escalation), and the gate covers
+# the verdict gap this creates (heads pushed while labeled have none) by
+# honoring an authorized unlabel that postdates the current head's round start
+# — but only for marker-carrying heads, because a missing verdict without the
+# marker just means the judge is still in flight. Once a human removes the
+# label, the next push resumes these runs, so new code after an override is
+# re-judged. The native review is requested by
+# agentic-conductor, which also waits for it before firing its own per-round
+# reconcile task.
+#
+# We do NOT poll or wait here. The agent posts its verdict via the MCP PAT, so the
+# comment is attributed to lfx-reviewer (not a Copilot actor) and triggers
+# agentic-apply.yml un-gated, which reads the verdict and sets the sticky
+# needs-human label. Fire and forget.
+#
+# Runs as the lfx-reviewer machine account (write + a Copilot seat, to request the
+# reviewer and start the task). The PAT is fetched at runtime from AWS Secrets
+# Manager via OIDC — the same pattern lfx-v2-argocd uses for the lfx-one PAT — so
+# no GitHub secret is provisioned per repo.
+---
+name: Agentic Escalation
+
+# pull_request_target, not pull_request: this job holds id-token: write and
+# fetches the lfx-reviewer PAT, so its definition must come from the DEFAULT
+# branch — a pull_request trigger would run the PR's modified copy of this file
+# with those privileges, letting a same-repo PR exfiltrate the credential.
+# pull_request_target is safe here because the job never checks out or executes
+# PR code; it only reads the GitHub API and starts an agent task.
+"on":
+  pull_request_target:
+    # "edited" covers base retargeting: changing a PR's base can change the
+    # reviewed diff materially while keeping the same head SHA, so no
+    # synchronize fires; without a fresh round the head's stale verdicts and
+    # clean status would keep vouching for a diff nobody reviewed. The job
+    # condition below narrows edited events to actual base changes.
+    types: [opened, reopened, synchronize, edited]
+
+# id-token is what lets the job assume the AWS role via OIDC; everything the job
+# writes on GitHub goes through the fetched PAT, not the workflow token.
+permissions:
+  id-token: write
+
+concurrency:
+  group: agentic-escalation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  escalate:
+    # Same-repo PRs only: pull_request_target CAN mint an id-token for fork PRs
+    # (it runs in the base-repo context), and a fork's branch name is not a valid
+    # head_ref in this repository — so forks are skipped explicitly, not assumed
+    # to fail soft.
+    # Skip title/body edits: an edited event matters only when the base moved.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'edited' || github.event.changes.base)
+    runs-on: ubuntu-latest
+    env:
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450  # v2.19.1
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      # Fail soft: until the OIDC role trust covers this repo, these steps error
+      # and the guard below skips the job green, so the setup can merge before
+      # the wiring exists.
+      - name: Configure AWS credentials
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
+        with:
+          role-to-assume: arn:aws:iam::788942260905:role/github-actions-deploy
+          aws-region: us-east-2
+
+      - name: Get lfx-reviewer token from AWS Secrets Manager
+        continue-on-error: true
+        uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa # v3
+        with:
+          secret-ids: |
+            GH, /cloudops/managed-secrets/cloud/github/linuxfoundation/lfx-reviewer-pat
+          parse-json-secrets: true
+
+      - name: Check reviewer PAT
+        id: cfg
+        run: |
+          # The Secrets Manager step exports the secret's `PAT` key as GH_PAT.
+          # Map it to GH_TOKEN (what gh reads) for the remaining steps, and skip
+          # (green) when it is not available.
+          if [ -z "${GH_PAT:-}" ]; then
+            echo "lfx-reviewer PAT unavailable (OIDC role or secret not wired); agentic escalation skipped." >> "$GITHUB_STEP_SUMMARY"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "GH_TOKEN=$GH_PAT" >> "$GITHUB_ENV"
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip when the needs-human label is already set
+        id: label
+        if: steps.cfg.outputs.present == 'true'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # The label is sticky and add-only: while it is set, a re-run could
+          # only conclude "yes" again and re-add what is already there. Skip the
+          # task; the gate handles heads without a verdict via the authorized
+          # unlabel timing rule, and runs resume on the first push after a
+          # human removes the label. A failed label read fails this run (loud)
+          # rather than guessing.
+          #
+          # ORDERING GUARANTEE: before deciding to skip, wait for the
+          # conductor's pending stamp on this head — the gate's round marker
+          # for the unlabel-timing rule. This makes the marker precede every
+          # skip: an unlabel BEFORE this check means the label is already
+          # absent, so no skip happens and the task produces a normal per-head
+          # verdict; an unlabel AFTER a skip necessarily postdates the marker
+          # and is honored by the gate. Without the wait, an unlabel landing
+          # between a skip and a late stamp would be rejected with no verdict
+          # ever coming. The gate additionally requires the skip marker to be
+          # NEWER (by numeric status id) than the round's pending stamp — the
+          # marker-after-stamp order this wait guarantees for fresh heads. On
+          # a reused SHA an OLD stamp can satisfy this wait before the current
+          # round's stamp lands; the resulting too-early marker simply fails
+          # closed at the gate (withhold). Deterministic recovery is a push
+          # of a NEW SHA (a fresh head has no old stamps to race) or a
+          # manual rerun of this workflow after the current pending stamp
+          # exists; a reopen is only a best-effort retry — it re-runs this
+          # workflow but the same old-stamp race can recur — and a label
+          # toggle merely re-runs the gate. If the stamp never appears (conductor failed early),
+          # fire the task rather than skip — fail open toward running the
+          # judge, never toward silence.
+          MARKED=false
+          for _ in $(seq 1 12); do   # ~60s at 5s
+            S="$(gh api "repos/$REPO/commits/$HEAD_SHA/statuses" --paginate \
+                  --jq ".[] | select(.context==\"agentic-review/clean\" and ((.description // \"\") | contains(\"pr=#$PR:\"))) | .id" \
+                  2>/dev/null | head -1 || true)"
+            if [ -n "$S" ]; then MARKED=true; break; fi
+            sleep 5
+          done
+          if [ "$MARKED" != "true" ]; then
+            echo "::notice::no conductor stamp for this head yet; not skipping (the judge runs)"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Paginate: the label could sit past the first page on a label-heavy
+          # PR. Capture first so a SIGPIPE from an early-exiting grep can never
+          # skew the pipeline status under pipefail; grep -qx matches the whole
+          # line only.
+          LABELS="$(gh api "repos/$REPO/issues/$PR/labels" --paginate --jq '.[].name')"
+          if printf '%s\n' "$LABELS" | grep -qx "needs-human"; then
+            # Record the skip as a per-head marker status. The gate's
+            # verdict-less fallback honors an authorized unlabel ONLY for
+            # heads that carry this marker: a missing verdict alone is
+            # ambiguous — the judge could be running right now, and an unlabel
+            # must never approve ahead of its inbound "yes". SHA-bound like
+            # every other trusted artifact here; written once per skipped
+            # push, far below the per-SHA/context status cap. A failed write
+            # fails this step loud — no marker and no verdict simply withholds
+            # the gate until a push or reopen re-runs this workflow.
+            gh api "repos/$REPO/statuses/$HEAD_SHA" \
+              -f state=success -f context=agentic-review/escalation \
+              -f description="skipped pr=#$PR: needs-human label set" > /dev/null
+            echo "needs-human already set; escalation task skipped (sticky label, nothing to add); skip marker status recorded on $HEAD_SHA." >> "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fire escalation task (gpt-5.5) — posts the needs-human verdict
+        if: steps.cfg.outputs.present == 'true' && steps.label.outputs.skip != 'true'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          TID=$(gh api "/agents/repos/$REPO/tasks" \
+            -H "X-GitHub-Api-Version: 2026-03-10" --method POST \
+            -f model=gpt-5.5 -F create_pull_request=false \
+            -f base_ref="$BASE_REF" -f head_ref="$HEAD_REF" \
+            -f prompt="Run the needs-human escalation for pull request #$PR in $REPO against head $HEAD_SHA (base branch $BASE_REF), following the repository instructions exactly. Immediately before posting, re-read the pull request: if its head no longer equals $HEAD_SHA or its base branch no longer equals $BASE_REF, post nothing — a newer push or retarget owns the next verdict. Post your machine-readable needs-human verdict comment using the add_issue_comment tool, carrying head: $HEAD_SHA and base: $BASE_REF in the hidden markers exactly." \
+            --jq '.id')
+          echo "escalation task: $TID (seeds the gpt-5.5 session; agentic-apply reacts to its comment)"

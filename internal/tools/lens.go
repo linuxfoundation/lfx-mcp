@@ -250,28 +250,28 @@ func normalizeSlugs(slugs []string) ([]string, error) {
 // there before its first query.
 const exploreSemanticLayerDescription = `If a standard metric answers the question (inventory: read_lfx_standard_metrics_guidance), call query_lfx_standard_metrics and do not explore first.
 
-The LFX Semantic Layer is the query tool for LF data: contributor, contribution, membership, revenue, event, registration, speaker, sponsorship, enrollment, certification, maintainer, health, project, meeting (occurrences, scheduled minutes, attendance) and social listening (mentions, sentiment, reach) metrics, sliceable by country, region, parent organization or project tree. This discovers what can be measured; query_lfx_semantic_layer runs it. Start here unless exact names are known.
+The LFX Semantic Layer covers contributor, contribution, membership, revenue, event, registration, speaker, sponsorship, enrollment, certification, maintainer, health, engagement score, project, meeting (occurrences, scheduled minutes, attendance), survey (NPS), web session, paid ads and social listening (mentions, sentiment, reach) metrics, sliceable by country, region, parent organization or project tree. This finds what can be measured; query_lfx_semantic_layer runs it. Start here unless exact names are known.
 
 If you have not read read_lfx_semantic_layer_guidance yet this session, read it BEFORE using this tool; one read also covers query_lfx_semantic_layer.
 
 ACTIONS
-- list_metrics(search): search by one topic word from the list above
-- get_dimensions(metrics, search): a metric's group_by/filter surface; several metrics return only their shared dimensions
-- get_dimension_values(dimension, metrics, search): stored literals - call before filtering on any unseen value; unknowns return zero rows, not an error ('Asia Pacific' not 'APAC')
+- list_metrics(search): one topic word from above
+- get_dimensions(metrics, search): a metric's group_by/filter surface; several metrics return shared dimensions only
+- get_dimension_values(dimension, metrics, search): stored literals - call before filtering on unseen values; unknowns return zero rows, not an error ('Asia Pacific' not 'APAC')
 
 Names are entity__field with per-metric prefixes - copy qualified_names, never assemble. Resolve project slugs via search_projects, org legal names via search_b2b_orgs. query_lfx_lens is ONLY for cross-domain joins or guidance-sanctioned fallback. Board/committee/ambassador rosters: committee tools.`
 
 const querySemanticLayerDescription = `If a standard metric answers the question (inventory: read_lfx_standard_metrics_guidance), call query_lfx_standard_metrics and do not explore first.
 
-Run governed LFX Semantic Layer metric queries: contributions, memberships, events, sponsorships, education, maintainers, health, social listening, country/region. ALWAYS explore_lfx_semantic_layer first unless exact names are known; never guess.
+Run governed metric queries: contributions, memberships, events, sponsorships, education, maintainers, health, engagement, surveys, web sessions, paid ads, social listening, country/region. ALWAYS explore_lfx_semantic_layer first unless exact names are known; never guess.
 
-If you have not read read_lfx_semantic_layer_guidance yet this session, read it BEFORE querying; one read also covers explore.
+If you have not read read_lfx_semantic_layer_guidance yet this session, read it BEFORE querying; it also covers explore.
 
-SYNTAX: metrics (required), CSV. group_by: dimension qualified_names copied from explore; add metric_time__year (or __quarter, __month) for trends. where is MetricFlow: {{ Dimension('country__lf_region') }} = 'Europe'; {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'; dates yyyy-mm-dd. limit optional.
+SYNTAX: metrics (required), CSV. group_by: qualified_names copied from explore; add metric_time__year (or __quarter, __month) for trends. where is MetricFlow: {{ Dimension('country__lf_region') }} = 'Europe'; {{ TimeDimension('metric_time','DAY') }} >= '2024-01-01'; dates yyyy-mm-dd. limit optional.
 
-SCOPE lives in where (no project parameter). Foundation: {{ Dimension('project__foundation_slug') }} = '<slug>' (resolve via search_projects); NEVER scope a foundation with project_slug - its catch-all bucket, a silent undercount. LF-wide ('the Linux Foundation' as a whole) = no project filter at all; 'tlf' is the LF's own membership programme and a tree root, not the LF-wide scope. Org/account filters take FULL LEGAL names - search_b2b_orgs first.
+SCOPE lives in where (no project parameter). Foundation: {{ Dimension('project__foundation_slug') }} = '<slug>' (via search_projects); NEVER scope a foundation with project_slug - its catch-all bucket, a silent undercount. LF-wide ('the Linux Foundation' as a whole) = no project filter; 'tlf' is the LF's own membership programme and a tree root, not the LF-wide scope. Org/account filters take FULL LEGAL names - search_b2b_orgs first.
 
-0 rows = misspelled literal or wrong scope: get_dimension_values, then the guidance recipes, BEFORE any query_lfx_lens fallback. State definition and window with every answer.`
+0 rows = misspelled literal or wrong scope: get_dimension_values, then guidance recipes, BEFORE any query_lfx_lens fallback. State definition and window with every answer.`
 
 // The two semantic layer tools register independently so that LFXMCP_TOOLS can
 // select either by name. They are meant to be enabled together — each

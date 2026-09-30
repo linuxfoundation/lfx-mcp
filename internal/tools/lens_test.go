@@ -239,6 +239,9 @@ func TestExploreSemanticLayerDescription(t *testing.T) {
 	for _, want := range []string{
 		// The covered domains, named so routing works from this tool.
 		"contributor, contribution, membership, revenue, event, registration, speaker, sponsorship, enrollment, certification, maintainer, health",
+		"engagement score", "survey (NPS)", "web session", "paid ads",
+		// Scheduled, not actual, duration: the data cannot measure time spent.
+		"meeting (occurrences, scheduled minutes, attendance)",
 		"country, region, parent organization or project tree",
 		// Guidance-first, once per session, shared with the query tool.
 		"read_lfx_semantic_layer_guidance",
@@ -303,6 +306,8 @@ func TestQuerySemanticLayerDescription(t *testing.T) {
 		"query_lfx_lens",
 		// The answer contract.
 		"State definition and window",
+		// The covered domains, named so routing works from this tool.
+		"engagement, surveys, web sessions, paid ads, social listening",
 		"country/region",
 	} {
 		if !strings.Contains(querySemanticLayerDescription, want) {

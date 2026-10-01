@@ -276,7 +276,7 @@ Notes:
 
 | Tool                  | Description |
 |-----------------------|-------------|
-| `count_lfx_resources` | Count indexed LFX v2 records (meetings, participants, committees, members, projects) visible to the caller; complete=false means a lower bound |
+| `count_lfx_resources` | Count indexed LFX v2 records visible to the caller; group by a tag or count distinct tag values; completeness covers the requested counts |
 
 ### Committees
 

@@ -5,8 +5,10 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -403,8 +405,109 @@ func TestParticipants_CountOnly(t *testing.T) {
 	if out["count"] != float64(17) || out["complete"] != true || out["visibility"] != "caller" {
 		t.Errorf("unexpected count result: %v", out)
 	}
-	if !strings.Contains(out["note"].(string), "not distinct people") {
-		t.Errorf("records-not-people caveat missing: %v", out["note"])
+	if out["note"] != callerVisibilityNote {
+		t.Errorf("note must contain only the visibility sentence: %v", out["note"])
+	}
+	assertCountWarnings(t, out, []string{participantCountRecordsWarning})
+}
+
+func TestParticipants_CountOnlyStructuredResultMatchesText(t *testing.T) {
+	const zeroCountWarning = "No v1_past_meeting_participant records matching these filters are visible to you; results cover only records you can view, so this is not proof of absence."
+	for _, tc := range []struct {
+		name     string
+		count    uint64
+		hasMore  bool
+		warnings []string
+	}{
+		{"complete", 17, false, []string{participantCountRecordsWarning}},
+		{"incomplete", 17, true, []string{countLowerBoundWarning, participantCountRecordsWarning}},
+		{"zero", 0, false, []string{zeroCountWarning, participantCountRecordsWarning}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := setupParticipantTest(t)
+			api.Respond(countPath, fmt.Sprintf(`{"count":%d,"has_more":%t}`, tc.count, tc.hasMore))
+			res, structured, err := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p", CountOnly: true})
+			if err != nil || res == nil || res.IsError {
+				t.Fatalf("unexpected error: %v; result=%v", err, res)
+			}
+			count, ok := structured.(countResult)
+			if !ok {
+				t.Fatalf("structured result must be countResult, got %T", structured)
+			}
+			want := countResult{Count: tc.count, Complete: !tc.hasMore, Visibility: "caller", Note: callerVisibilityNote, Warnings: tc.warnings}
+			if !reflect.DeepEqual(count, want) {
+				t.Errorf("structured count = %+v, want %+v", count, want)
+			}
+			if len(res.Content) != 1 {
+				t.Fatalf("expected one text block, got %d", len(res.Content))
+			}
+			text, ok := res.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("expected text content, got %T", res.Content[0])
+			}
+			raw, err := json.MarshalIndent(count, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(raw) != text.Text {
+				t.Errorf("structured count differs from JSON text: %s != %s", raw, text.Text)
+			}
+		})
+	}
+}
+
+func TestParticipants_ZeroCountWarningRequiresFullRange(t *testing.T) {
+	const absenceWarning = "No v1_past_meeting_participant records matching these filters are visible to you; results cover only records you can view, so this is not proof of absence."
+	truncatedWarning := fmt.Sprintf(participantTruncatedNote, 1, participantHardMaxMeetings)
+	for _, tc := range []struct {
+		name      string
+		truncated bool
+		hasMore   bool
+		warnings  []string
+	}{
+		{"exhaustive", false, false, []string{absenceWarning, participantCountRecordsWarning}},
+		{"service cap", false, true, []string{countLowerBoundWarning, participantCountRecordsWarning}},
+		{"meeting cap", true, false, []string{participantCountRecordsWarning, truncatedWarning}},
+		{"both caps", true, true, []string{countLowerBoundWarning, participantCountRecordsWarning, truncatedWarning}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := setupParticipantTest(t)
+			if tc.truncated {
+				api.Respond(resourcesPath, page([]string{pastMeetingDoc("m-1"), pastMeetingDoc("m-2")}, "more"))
+			} else {
+				api.Respond(resourcesPath, page([]string{pastMeetingDoc("m-1")}, ""))
+			}
+			api.Respond(countPath, fmt.Sprintf(`{"count":0,"has_more":%t}`, tc.hasMore))
+			res, structured, err := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p", DateFrom: "2026-01-01", MaxMeetings: 1, CountOnly: true})
+			if err != nil || res == nil || res.IsError {
+				t.Fatalf("unexpected error: %v; result=%v", err, res)
+			}
+			out := resultJSON(t, res)
+			complete := !tc.truncated && !tc.hasMore
+			if out["count"] != float64(0) || out["complete"] != complete || out["note"] != callerVisibilityNote {
+				t.Errorf("unexpected result: %v", out)
+			}
+			assertCountWarnings(t, out, tc.warnings)
+			want := countResult{Complete: complete, Visibility: "caller", Note: callerVisibilityNote, Warnings: tc.warnings}
+			if !reflect.DeepEqual(structured, want) {
+				t.Errorf("structured result = %+v, want %+v", structured, want)
+			}
+			if n := len(api.RequestsTo(countPath)); n != 1 {
+				t.Errorf("expected one count for the expanded meeting, got %d", n)
+			}
+		})
+	}
+}
+
+func TestParticipants_CountOnlyErrorHasNoStructuredResult(t *testing.T) {
+	api := setupParticipantTest(t)
+	api.RespondStatus(countPath, http.StatusInternalServerError, `{"message":"count unavailable"}`)
+	res, structured, err := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "p", CountOnly: true})
+	if err != nil || res == nil || !res.IsError {
+		t.Fatalf("expected error result: %v; result=%v", err, res)
+	}
+	if structured != nil {
+		t.Errorf("error must not carry a structured count: %v", structured)
 	}
 }
 
@@ -424,6 +527,10 @@ func TestParticipants_CountOnlyWithDateRangeSumsAndTracksComplete(t *testing.T) 
 	if out["complete"] != false {
 		t.Error("one incomplete per-meeting count must make the total incomplete")
 	}
+	if out["note"] != callerVisibilityNote {
+		t.Errorf("note must contain only the visibility sentence: %v", out["note"])
+	}
+	assertCountWarnings(t, out, []string{countLowerBoundWarning, participantCountRecordsWarning})
 	counts := api.RequestsTo(countPath)
 	if len(counts) != 2 || counts[0].Query.Get("parent") != "past_meeting:m-1" || counts[1].Query.Get("parent") != "past_meeting:m-2" {
 		t.Errorf("expected one count per resolved meeting, got %v", counts)
@@ -568,24 +675,50 @@ func TestParticipants_PerPageDedupeIsDisclosed(t *testing.T) {
 	}
 }
 
-func TestParticipants_CountOnlyTruncatedMeetingsIsIncomplete(t *testing.T) {
-	// Step 1 hits max_meetings with a token left: the summed count is a lower bound.
-	api := setupParticipantTest(t)
-	api.Respond(resourcesPath, page([]string{pastMeetingDoc("m-1"), pastMeetingDoc("m-2"), pastMeetingDoc("m-3")}, "more"))
-	api.Respond(countPath, `{"count": 4, "has_more": false}`)
-	api.Respond(countPath, `{"count": 6, "has_more": false}`)
-	res, _, _ := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{
-		ProjectUID: "p", DateFrom: "2026-01-01", MaxMeetings: 2, CountOnly: true,
-	})
-	out := resultJSON(t, res)
-	if out["count"] != float64(10) || out["complete"] != false {
-		t.Errorf("want count=10 complete=false, got %v", out)
-	}
-	if !strings.Contains(out["note"].(string), "max_meetings") || !strings.Contains(out["note"].(string), "lower bound") {
-		t.Errorf("note must explain both the truncation and the lower bound: %v", out["note"])
-	}
-	if n := len(api.RequestsTo(countPath)); n != 2 {
-		t.Errorf("expected exactly 2 count calls (the expanded meetings), got %d", n)
+func TestParticipants_CountOnlyTruncationWarnings(t *testing.T) {
+	truncatedWarning := fmt.Sprintf(participantTruncatedNote, 2, participantHardMaxMeetings)
+	for _, tc := range []struct {
+		name      string
+		truncated bool
+		hasMore   [2]bool
+		warnings  []string
+	}{
+		{"complete", false, [2]bool{false, false}, []string{participantCountRecordsWarning}},
+		{"meeting cap only", true, [2]bool{false, false}, []string{participantCountRecordsWarning, truncatedWarning}},
+		{"first service count incomplete", false, [2]bool{true, false}, []string{countLowerBoundWarning, participantCountRecordsWarning}},
+		{"last service count incomplete", false, [2]bool{false, true}, []string{countLowerBoundWarning, participantCountRecordsWarning}},
+		{"both caps", true, [2]bool{true, false}, []string{countLowerBoundWarning, participantCountRecordsWarning, truncatedWarning}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := setupParticipantTest(t)
+			docs := []string{pastMeetingDoc("m-1"), pastMeetingDoc("m-2")}
+			if tc.truncated {
+				api.Respond(resourcesPath, page(append(docs, pastMeetingDoc("m-3")), "more"))
+			} else {
+				api.Respond(resourcesPath, page(docs, ""))
+			}
+			api.Respond(countPath, fmt.Sprintf(`{"count":4,"has_more":%t}`, tc.hasMore[0]))
+			api.Respond(countPath, fmt.Sprintf(`{"count":6,"has_more":%t}`, tc.hasMore[1]))
+			res, structured, err := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{
+				ProjectUID: "p", DateFrom: "2026-01-01", MaxMeetings: 2, CountOnly: true,
+			})
+			if err != nil || res == nil || res.IsError {
+				t.Fatalf("unexpected error: %v; result=%v", err, res)
+			}
+			out := resultJSON(t, res)
+			complete := !tc.truncated && !tc.hasMore[0] && !tc.hasMore[1]
+			if out["count"] != float64(10) || out["complete"] != complete || out["note"] != callerVisibilityNote {
+				t.Errorf("unexpected count result: %v", out)
+			}
+			assertCountWarnings(t, out, tc.warnings)
+			count, ok := structured.(countResult)
+			if !ok || count.Complete != complete || !reflect.DeepEqual(count.Warnings, tc.warnings) {
+				t.Errorf("unexpected structured result: %v", structured)
+			}
+			if n := len(api.RequestsTo(countPath)); n != 2 {
+				t.Errorf("expected exactly 2 count calls (the expanded meetings), got %d", n)
+			}
+		})
 	}
 }
 

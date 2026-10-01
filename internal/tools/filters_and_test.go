@@ -153,6 +153,68 @@ func committeeMemberDoc(uid, orgName string) string {
 	return `{"type": "committee_member", "id": "` + uid + `", "data": {"uid": "` + uid + `", "username": "test-user", "organization": {"name": "` + orgName + `"}, "voting": {"status": "Voting Rep"}}}`
 }
 
+func TestSearchCommitteeMembers_OrganizationIDFilter(t *testing.T) {
+	for _, asGroups := range []bool{false, true} {
+		for _, tc := range []struct {
+			name string
+			args SearchCommitteeMembersArgs
+			want []string
+		}{
+			{"id lookup", SearchCommitteeMembersArgs{OrganizationID: "org-1", PageSize: 1}, []string{"organization_id:org-1"}},
+			{"combined", SearchCommitteeMembersArgs{CommitteeUID: "C1", ProjectUID: "P1", OrganizationID: "org-1", OrganizationName: "Example Org", Name: "Test", PageSize: 1, PageToken: "next"}, []string{"committee_uid:C1", "project_uid:P1", "organization_id:org-1", "organization_name:Example Org"}},
+			{"empty id", SearchCommitteeMembersArgs{}, nil},
+			{"empty id with other filters", SearchCommitteeMembersArgs{CommitteeUID: "C1", ProjectUID: "P1", OrganizationName: "Example Org"}, []string{"committee_uid:C1", "project_uid:P1", "organization_name:Example Org"}},
+		} {
+			t.Run(fmt.Sprintf("groups=%t/%s", asGroups, tc.name), func(t *testing.T) {
+				api := setupCommitteeTest(t)
+				api.Respond(resourcesPath, page([]string{committeeMemberDoc("member-1", "Example Org")}, ""))
+				var res *mcp.CallToolResult
+				var out resourceSearchResult
+				var err error
+				if asGroups {
+					res, out, err = handleSearchCommitteeMembersGroupMode(context.Background(), stubCallToolRequest(), SearchGroupMembersArgs{
+						GroupUID: tc.args.CommitteeUID, ProjectUID: tc.args.ProjectUID,
+						OrganizationID: tc.args.OrganizationID, OrganizationName: tc.args.OrganizationName,
+						Name: tc.args.Name, PageSize: tc.args.PageSize, PageToken: tc.args.PageToken,
+					})
+				} else {
+					res, out, err = handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), tc.args)
+				}
+				if err != nil || res == nil || res.IsError {
+					t.Fatalf("unexpected error: %v; result=%v", err, res)
+				}
+				reqs := api.RequestsTo(resourcesPath)
+				if len(reqs) != 1 {
+					t.Fatalf("want one request, got %d", len(reqs))
+				}
+				r := reqs[0]
+				assertTagsAllQuery(t, r, tc.want)
+				if tc.want == nil && r.Query.Has("tags_all") {
+					t.Errorf("empty filters must omit tags_all: %v", r.Query)
+				}
+				for _, key := range []string{"organization_id", "filters", "filters_all"} {
+					if r.Query.Has(key) {
+						t.Errorf("organization id must only use tags_all, got %s", key)
+					}
+				}
+				if r.Query.Get("name") != tc.args.Name || r.Query.Get("page_token") != tc.args.PageToken {
+					t.Errorf("other filters changed: %v", r.Query)
+				}
+				if tc.args.PageSize != 0 && r.Query.Get("page_size") != fmt.Sprint(tc.args.PageSize) {
+					t.Errorf("page size changed: %v", r.Query)
+				}
+				if len(out.Resources) != 1 {
+					t.Fatalf("lookup did not return the seat row: %+v", out)
+				}
+				org, ok := out.Resources[0].Data["organization"].(map[string]any)
+				if !ok || org["name"] != "Example Org" {
+					t.Errorf("stored organization name missing: %v", out.Resources[0].Data)
+				}
+			})
+		}
+	}
+}
+
 func TestSearchCommitteeMembers_OrganizationNameFilter(t *testing.T) {
 	api := setupCommitteeTest(t)
 	api.Respond(resourcesPath, page(nil, ""))
@@ -419,9 +481,9 @@ func TestSearchCommitteeMembers_CountFailureDropsNote(t *testing.T) {
 	}
 }
 
-// TestSearchCommitteeMembersDescriptionsAdvertiseOrganizationName pins the
-// organization_name clause and the roster-coverage sentence on both modes.
-func TestSearchCommitteeMembersDescriptionsAdvertiseOrganizationName(t *testing.T) {
+// TestSearchCommitteeMembersDescriptionsAdvertiseOrganizationFilters pins
+// both organization filters and the roster-coverage sentence on both modes.
+func TestSearchCommitteeMembersDescriptionsAdvertiseOrganizationFilters(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		register func(*mcp.Server)
@@ -431,9 +493,45 @@ func TestSearchCommitteeMembersDescriptionsAdvertiseOrganizationName(t *testing.
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tool := listRegisteredTool(t, tc.name, tc.register)
+			// Keep the lead about the tool and the organization filters together.
+			lead := "Search LFX committee members."
+			maxDescription, maxTotal := 552, 1048
+			if tc.name == "search_group_members" {
+				lead = "Search LFX group (also called committee) members."
+				maxDescription, maxTotal = 572, 1060
+			}
+			if !strings.HasPrefix(tool.Description, lead+" ") {
+				t.Errorf("description must lead with %q", lead)
+			}
+			total := len(tool.Description)
+			for _, property := range schemaProperties(t, tool) {
+				total += len(schemaPropertyDescription(t, tool, property))
+			}
+			if len(tool.Description) > maxDescription || total > maxTotal {
+				t.Errorf("description budget exceeded: tool=%d total=%d", len(tool.Description), total)
+			}
+			schema, ok := tool.InputSchema.(map[string]any)
+			if !ok {
+				t.Fatalf("unexpected schema type: %T", tool.InputSchema)
+			}
+			properties, _ := schema["properties"].(map[string]any)
+			id, _ := properties["organization_id"].(map[string]any)
+			if id["type"] != "string" {
+				t.Errorf("organization_id must be a string: %v", id)
+			}
+			required, _ := schema["required"].([]any)
+			for _, field := range required {
+				if field == "organization_id" {
+					t.Error("organization_id must be optional")
+				}
+			}
+			const idDescription = "Exact stored organization id on the seat (the organization_id tag); keeps one organization's members"
+			if got := schemaPropertyDescription(t, tool, "organization_id"); got != idDescription {
+				t.Errorf("organization_id description = %q", got)
+			}
 			for _, want := range []string{
-				"organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats).",
-				"With project_uid set, an empty result carries a roster-coverage note saying whether the project has any committee onboarded into LFX v2; an empty result never proves that a person or organization holds no seat.",
+				"organization_id keeps one organization's members by stored id; organization_name matches the stored spelling (copy it from a roster row or get_org_committee_seats).",
+				"With project_uid, empty results warn about roster coverage in LFX v2; they never prove a person or organization holds no seat.",
 			} {
 				if !strings.Contains(tool.Description, want) {
 					t.Errorf("%s description missing %q", tc.name, want)

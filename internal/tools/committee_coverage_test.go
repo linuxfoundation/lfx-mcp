@@ -134,8 +134,9 @@ func TestCoverage_RequestMapping(t *testing.T) {
 	if out["foundation_uid"] != "f" || out["projects_in_scope"] != float64(3) || out["complete"] != true || out["visibility"] != "caller" {
 		t.Errorf("result envelope wrong: %v", out)
 	}
-	if !strings.Contains(out["note"].(string), "never report a project as having no seats from this result alone") {
-		t.Errorf("note: %v", out["note"])
+	const wantNote = "Counts cover committees, members and memberships indexed in LFX v2 and visible to you; a zero can be an access effect or a roster not yet onboarded — never report a project as having no seats from this result alone. Run under an identity with project-level audit rights for a program view."
+	if out["note"] != wantNote {
+		t.Errorf("note = %v, want %s", out["note"], wantNote)
 	}
 	projects := out["projects"].([]any)
 	if len(projects) != 3 || projects[0].(map[string]any)["project_uid"] != "f" || projects[1].(map[string]any)["project_uid"] != "a" || projects[2].(map[string]any)["project_uid"] != "b" {

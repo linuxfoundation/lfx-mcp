@@ -125,10 +125,10 @@ func TestCountLFXResources_HasMoreIsLowerBound(t *testing.T) {
 	if out["complete"] != false {
 		t.Errorf("has_more:true must yield complete:false, got %v", out["complete"])
 	}
-	note, _ := out["note"].(string)
-	if !strings.Contains(note, "lower bound") || !strings.Contains(note, callerVisibilityNote) {
-		t.Errorf("lower-bound note missing or missing visibility sentence: %q", note)
+	if note, _ := out["note"].(string); note != callerVisibilityNote {
+		t.Errorf("note must contain only the visibility sentence: %q", note)
 	}
+	assertCountWarnings(t, out, []string{countLowerBoundWarning})
 	if out["count"] != float64(100) {
 		t.Errorf("count must still be reported, got %v", out["count"])
 	}
@@ -217,15 +217,22 @@ func TestCountLFXResources_MissingTokenFails(t *testing.T) {
 
 func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 	tool := listRegisteredTool(t, "count_lfx_resources", RegisterCountLFXResources)
-	// Keep a tight local pin while allowing the explicit participant parent type.
-	const descriptionBudget = 1005
+	// Grouping documentation is paid for by removing duplicated filter examples.
+	const descriptionBudget = 698
 	if n := len(tool.Description); n > descriptionBudget {
 		t.Errorf("description is %d bytes, budget is %d", n, descriptionBudget)
 	}
-	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "committee_member: committee:<uid>", "committee: project:<uid>", "v1_past_meeting_participant: past_meeting:<meeting_and_occurrence_id>", "a date range (date_field=start_time)", "filters_all", "filters_or", "a ref or field the type lacks counts 0"} {
+	for _, want := range []string{"visible to the caller", "complete=false", "Returns {count, complete, visibility, note, warnings}.", "parent (the type's own ref)", "groups [{key, count}] with groups_complete", "metric=cardinality:<tag prefix> returns metric_value with metric_complete", "complete=true covers all requested counts", "a date range (date_field=start_time)", "filters_all / filters_or on data fields."} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}
+	}
+	if strings.Contains(tool.Description, "type lacks counts 0") {
+		t.Error("description must not promise zero for unsupported filters")
+	}
+	const participantParent = "past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant"
+	if parent := schemaPropertyDescription(t, tool, "parent"); !strings.Contains(parent, participantParent) {
+		t.Errorf("parent description must retain the participant's past-meeting ref: %q", parent)
 	}
 	for _, banned := range []string{"Insights", "because", "Jim"} {
 		if strings.Contains(tool.Description, banned) {
@@ -240,7 +247,7 @@ func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 func TestCountLFXResources_IndexScopeDescriptionAndSchema(t *testing.T) {
 	tool := listRegisteredTool(t, "count_lfx_resources", RegisterCountLFXResources)
 	t.Logf("count_lfx_resources description: %d UTF-8 bytes", len(tool.Description))
-	const want = "Returns {count, complete, visibility, note}. complete=true means every record indexed in LFX v2 that the caller may see was counted; complete=false means the count stopped early and is a lower bound (narrow the query). Records not yet onboarded into LFX v2 are never counted. Use this instead of paging a search to count meetings, participants, committees and members. For how many projects a foundation or parent has, use the semantic layer's project metrics (the authoritative project directory), not this tool."
+	const want = "complete=true covers all requested counts; complete=false is partial. Records not yet onboarded into LFX v2 are never counted. For how many projects a foundation or parent has, use the semantic layer's project metrics (the authoritative project directory), not this tool."
 	if !strings.Contains(tool.Description, want) {
 		t.Error("count description must distinguish index completeness from directory coverage and route project counts to the semantic layer")
 	}
@@ -251,15 +258,15 @@ func TestCountLFXResources_IndexScopeDescriptionAndSchema(t *testing.T) {
 }
 
 func TestCountLFXResources_IndexScopeNoteAndCompleteness(t *testing.T) {
-	const wantNote = "Counts only the records indexed in LFX v2 and visible to your identity; records you cannot see, or not yet onboarded into LFX v2, are not counted."
+	const wantNote = "Counts only the records indexed in LFX v2 and visible to you; records you cannot see, or not yet onboarded into LFX v2, are not counted."
 	for _, tc := range []struct {
 		name     string
 		response string
 		complete bool
-		note     string
+		warnings []string
 	}{
-		{"exhausted_index", `{"count":3,"has_more":false}`, true, wantNote},
-		{"stopped_early", `{"count":3,"has_more":true}`, false, wantNote + countLowerBoundNote},
+		{"exhausted_index", `{"count":3,"has_more":false}`, true, nil},
+		{"stopped_early", `{"count":3,"has_more":true}`, false, []string{countLowerBoundWarning}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			api := setupCountTest(t)
@@ -274,9 +281,10 @@ func TestCountLFXResources_IndexScopeNoteAndCompleteness(t *testing.T) {
 			if out["count"] != float64(3) || out["complete"] != tc.complete || out["visibility"] != "caller" {
 				t.Errorf("index-scope disclosure must not change count/completeness/visibility: %v", out)
 			}
-			if got := out["note"]; got != tc.note {
-				t.Errorf("index coverage caveat missing from runtime note: got %q, want %q", got, tc.note)
+			if got := out["note"]; got != wantNote {
+				t.Errorf("runtime note must be only the index coverage sentence: got %q, want %q", got, wantNote)
 			}
+			assertCountWarnings(t, out, tc.warnings)
 			assertExchangedAuth(t, api.LastRequest())
 		})
 	}

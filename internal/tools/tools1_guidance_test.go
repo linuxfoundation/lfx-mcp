@@ -38,7 +38,7 @@ func TestTools1GuidanceDistinguishesCountsFromPagedListings(t *testing.T) {
 		"Both count tools count what the caller's identity may see",
 		"and say whether the count is complete",
 		"An unscoped long-window count can time out: scope by project or committee and read month windows",
-		"On participant records, an unknown date_field or date_field=start_time returns a silent 0",
+		"On participant records, an unknown date_field or date_field=start_time is rejected with an error naming the field",
 		"created_at is the record's creation, not the meeting's",
 		"For a meeting-date window use search_past_meeting_participants with a project or committee and date_from/date_to",
 	} {
@@ -58,15 +58,16 @@ func TestGuidanceCommitteeCountsAndSources(t *testing.T) {
 		"Count members with count_lfx_resources type=committee_member",
 		"one committee parent=committee:<uid>",
 		"one project tags_all project_uid:<uid>",
-		"committee members carry no project parent: parent=project:<uid> counts 0",
+		"Scope projects by tag: committee members carry the committee, not the project, as their parent.",
 		"one organisation tags_all organization_id:<SFID>",
-		"A filter on a field the record lacks also counts 0",
 		"filters_all takes data fields (organization.name), tags_all takes tags (organization_name:, organization_id:, committee_category:)",
-		"Read the complete flag; an incomplete count is a lower bound",
-		"count each candidate organisation with count_lfx_resources (type=committee_member, tags_all organization_id:<SFID>, plus committee_category:Board for board seats)",
-		"seats visible to you in LFX v2",
-		"An open LF-wide ranking over every organisation is query_lfx_lens as the last resort, labelled generated SQL over the warehouse copy of the v1 committee records",
-		"active seats only (end date empty or in the future), LF staff and unaffiliated seats set aside",
+		"Read the warnings and the component flags (groups_complete, group_count_error_upper_bound, metric_complete); the top-level count is a lower bound only when the walk stopped early",
+		"Ranking organisations by seats: ONE grouped count — count_lfx_resources type=committee_member, group_by=organization_id, group_by_size up to 1000 (tags_all committee_category:Board for board seats; add project_uid:<uid> for one foundation)",
+		"one row per organisation id over the seats visible to you in LFX v2, seat records not people; read groups_complete",
+		"name each row with ONE search_committee_members call using organization_id=<row key> and page_size=1, reading the returned row's organization name, never by guessing or joining a name-grouped count to the ids",
+		"Count distinct e-mail values over a scope with metric=cardinality:email on a separate call (a number only; a proxy for people, not an identity-aware count); there is no distinct count per group",
+		"The warehouse copy of the v1 committee records read by query_lfx_lens differs from the LFX v2 committee service: never combine or reconcile the two; if it was read, say so",
+		"Several at once: group_by=organization_id (or committee_uid, committee_category, voting_status, project_uid) returns one count per tag value; group_by_size bounds the rows and groups_complete says whether every group came back",
 		"never combine or reconcile the two",
 		"This layer has no committee metric: committees appear only as slices on the meeting models",
 		"meeting_and_occurrence_id__committee_name / meeting_and_occurrence_id__committee_type on occurrences",
@@ -78,7 +79,7 @@ func TestGuidanceCommitteeCountsAndSources(t *testing.T) {
 			t.Errorf("committee guidance missing %q", want)
 		}
 	}
-	for _, gone := range []string{"this layer's committee and maintainer models", "the committee models in this layer"} {
+	for _, gone := range []string{"this layer's committee and maintainer models", "the committee models in this layer", "count each candidate organisation with count_lfx_resources", "An open LF-wide ranking over every organisation is query_lfx_lens as the last resort", "name the rows with the organization_name tag", "organisation id through search_b2b_orgs", "Distinct people over a scope is metric=cardinality:email", "parent=project:<uid> counts 0", "A filter on a field the record lacks also counts 0", "an incomplete count is a lower bound"} {
 		if strings.Contains(text, gone) {
 			t.Errorf("committee guidance still claims %q", gone)
 		}

@@ -70,8 +70,8 @@ const participantRecordsCapNote = "The record cap (%d) was reached before every 
 // participantPerPageNote explains dedup scope on a paged call.
 const participantPerPageNote = "people and records describe this page only; a person whose records straddle pages can appear on more than one page."
 
-// participantCountRecordsNote distinguishes counted records from people.
-const participantCountRecordsNote = " This counts participant records, not distinct people; use count_only=false for de-duplicated people."
+// participantCountRecordsWarning distinguishes counted records from people.
+const participantCountRecordsWarning = "This counts participant records, not distinct people; use count_only=false for de-duplicated people."
 
 // participantSearchResult is the output shape of search_past_meeting_participants.
 type participantSearchResult struct {
@@ -327,7 +327,7 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 	// count_only: sum the count route over the scope(s).
 	if args.CountOnly {
 		var total uint64
-		complete := !truncated
+		serviceHasMore := false
 		if hasDateRange {
 			for _, p := range parents {
 				res, err := countParticipants(ctx, clients, p, args)
@@ -336,9 +336,7 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 					return errorResult(friendlyAPIError("failed to count past meeting participants", err)), nil, nil
 				}
 				total += res.Count
-				if res.HasMore {
-					complete = false
-				}
+				serviceHasMore = serviceHasMore || res.HasMore
 			}
 		} else {
 			res, err := countParticipants(ctx, clients, parent, args)
@@ -347,14 +345,18 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 				return errorResult(friendlyAPIError("failed to count past meeting participants", err)), nil, nil
 			}
 			total = res.Count
-			complete = !res.HasMore
+			serviceHasMore = res.HasMore
 		}
-		out := buildCountResult(total, !complete)
-		out.Note += participantCountRecordsNote
+		out := buildCountResult(ctx, logger, &querysvc.QueryResourcesCountResult{Count: total, HasMore: serviceHasMore}, pastMeetingParticipantResourceType, false, false, truncated)
+		out.Warnings = append(out.Warnings, participantCountRecordsWarning)
 		if truncated {
-			out.Note += " " + fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings)
+			out.Warnings = append(out.Warnings, fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings))
 		}
-		return jsonResult(ctx, logger, "search_past_meeting_participants count succeeded", out)
+		result, _, err := jsonResult(ctx, logger, "search_past_meeting_participants count succeeded", out)
+		if err != nil || result.IsError {
+			return result, nil, err
+		}
+		return result, out, nil
 	}
 
 	out := participantSearchResult{}

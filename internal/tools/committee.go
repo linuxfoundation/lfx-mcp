@@ -138,7 +138,7 @@ func RegisterSearchCommitteeMembers(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_group_members",
-			Description: "Search for LFX group (also called committee) members. Optionally filter by group UID, project UID, and/or name. The authoritative source for committee rosters. Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid set, an empty result carries a roster-coverage note saying whether the project has any committee onboarded into LFX v2; an empty result never proves that a person or organization holds no seat.",
+			Description: "Search LFX group (also called committee) members. The authoritative source for committee rosters. Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_id keeps one organization's members by stored id; organization_name matches the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid, empty results warn about roster coverage in LFX v2; they never prove a person or organization holds no seat.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Group Members",
 				ReadOnlyHint: true,
@@ -148,7 +148,7 @@ func RegisterSearchCommitteeMembers(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committee_members",
-		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID, and/or name. The authoritative source for committee rosters. Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid set, an empty result carries a roster-coverage note saying whether the project has any committee onboarded into LFX v2; an empty result never proves that a person or organization holds no seat.",
+		Description: "Search LFX committee members. The authoritative source for committee rosters. Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_id keeps one organization's members by stored id; organization_name matches the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid, empty results warn about roster coverage in LFX v2; they never prove a person or organization holds no seat.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Committee Members",
 			ReadOnlyHint: true,
@@ -198,6 +198,7 @@ type GetGroupMemberArgs struct {
 type SearchCommitteeMembersArgs struct {
 	CommitteeUID     string `json:"committee_uid,omitempty" jsonschema:"Optional UID of the committee to filter members by"`
 	ProjectUID       string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter committee members by project"`
+	OrganizationID   string `json:"organization_id,omitempty" jsonschema:"Exact stored organization id on the seat (the organization_id tag); keeps one organization's members"`
 	OrganizationName string `json:"organization_name,omitempty" jsonschema:"Exact stored organization name on the seat, as a roster row or a get_org_committee_seats row spells it; keeps one organization's members"`
 	Name             string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
 	PageSize         int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
@@ -208,6 +209,7 @@ type SearchCommitteeMembersArgs struct {
 type SearchGroupMembersArgs struct {
 	GroupUID         string `json:"group_uid,omitempty" jsonschema:"Optional UID of the group to filter members by"`
 	ProjectUID       string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter group members by project"`
+	OrganizationID   string `json:"organization_id,omitempty" jsonschema:"Exact stored organization id on the seat (the organization_id tag); keeps one organization's members"`
 	OrganizationName string `json:"organization_name,omitempty" jsonschema:"Exact stored organization name on the seat, as a roster row or a get_org_committee_seats row spells it; keeps one organization's members"`
 	Name             string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
 	PageSize         int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
@@ -241,6 +243,7 @@ func handleSearchCommitteeMembersGroupMode(ctx context.Context, req *mcp.CallToo
 	return searchCommitteeMembers(ctx, req, SearchCommitteeMembersArgs{
 		CommitteeUID:     args.GroupUID,
 		ProjectUID:       args.ProjectUID,
+		OrganizationID:   args.OrganizationID,
 		OrganizationName: args.OrganizationName,
 		Name:             args.Name,
 		PageSize:         args.PageSize,
@@ -519,6 +522,9 @@ func searchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args 
 	}
 	if args.ProjectUID != "" {
 		tags = append(tags, fmt.Sprintf("project_uid:%s", args.ProjectUID))
+	}
+	if args.OrganizationID != "" {
+		tags = append(tags, "organization_id:"+args.OrganizationID)
 	}
 	if args.OrganizationName != "" {
 		tags = append(tags, "organization_name:"+args.OrganizationName)

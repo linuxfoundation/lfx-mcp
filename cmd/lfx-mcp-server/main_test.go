@@ -111,6 +111,66 @@ var staffOnlyTools = []string{
 	"read_lfx_standard_metrics_guidance",
 }
 
+// nonPeopleTools are the tools newServer may register whose results carry no
+// people data under the people rule (AGENTS.md "People data for non-staff
+// callers"), or whose people data is out of that rule's scope for a stated
+// reason. A new tool must be added here or to tools.PeopleToolNames;
+// TestNewServer_EveryToolDecidesOnPeopleData fails until it is.
+var nonPeopleTools = []string{
+	// No people records.
+	"audit_committee_coverage", "search_committees", "search_groups", "search_projects",
+	"search_b2b_orgs", "get_mailing_list", "get_mailing_list_service", "search_mailing_lists",
+	"list_email_templates", "list_discord_roles", "find_discord_role",
+	// The caller's own profile.
+	"user_info",
+	// count_lfx_resources has its own gate (peopleCountGate).
+	"count_lfx_resources",
+	// Write tools echo what the writer sent; only a writer reaches them.
+	"create_committee", "update_committee", "delete_committee", "update_committee_settings",
+	"create_committee_member", "update_committee_member", "delete_committee_member",
+	"create_group", "update_group", "delete_group", "update_group_settings",
+	"create_group_member", "update_group_member", "delete_group_member",
+	"create_membership_key_contact", "update_membership_key_contact", "delete_membership_key_contact",
+	"send_email", "assign_discord_role",
+	// Discord lookups: gated per project to its writers by AuthorizeProject
+	// (RelationWriter); outside this rule's scope.
+	"find_discord_user", "check_discord_user_role",
+	// Staff-only Lens tools: registered for isStaff callers only.
+	"query_lfx_lens", "explore_lfx_semantic_layer", "query_lfx_semantic_layer",
+	"query_lfx_standard_metrics", "read_lfx_semantic_layer_guidance", "read_lfx_standard_metrics_guidance",
+	// Out of the rule's scope until the product decides what LFX Self Serve
+	// shows for them (README "People data"): mailing-list members, member
+	// records, membership key contacts, org committee seats, and project
+	// settings (writers, auditors, meeting_coordinators).
+	"search_mailing_list_members", "get_mailing_list_member", "search_members", "get_member_membership",
+	"get_membership_key_contacts", "get_membership_key_contact", "get_org_committee_seats", "get_project",
+}
+
+// TestNewServer_EveryToolDecidesOnPeopleData pins that every tool newServer
+// registers, in either terminology mode and with every tool enabled, is
+// either in tools.PeopleToolNames (and so walked by the people-tool tests)
+// or declared in nonPeopleTools with its reason.
+func TestNewServer_EveryToolDecidesOnPeopleData(t *testing.T) {
+	decided := map[string]bool{}
+	for _, name := range tools.PeopleToolNames {
+		decided[name] = true
+	}
+	for _, name := range nonPeopleTools {
+		if decided[name] {
+			t.Errorf("%s is in both tools.PeopleToolNames and nonPeopleTools", name)
+		}
+		decided[name] = true
+	}
+	for _, groups := range []bool{false, true} {
+		cfg := Config{Tools: append(append([]string{}, defaultTools...), staffOnlyTools...), CommitteesAsGroups: groups}
+		for name := range listedToolsForConfig(t, cfg, nil) {
+			if !decided[name] {
+				t.Errorf("%s (groups=%v) is registered but neither in tools.PeopleToolNames nor in nonPeopleTools; decide which", name, groups)
+			}
+		}
+	}
+}
+
 // listedTools is the tools/list a caller holding token sees from a server
 // with every name in staffOnlyTools enabled.
 func listedTools(t *testing.T, token *auth.TokenInfo) map[string]bool {

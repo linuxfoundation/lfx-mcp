@@ -1,0 +1,1 @@
+GET /query/resources page_size=25&sort=name_asc&tags_all=committee_uid:66666666-6666-4666-8666-666666666666&type=committee_member&v=1

@@ -28,7 +28,7 @@ func TestCountLFXResources_PayloadMapping(t *testing.T) {
 	api := setupCountTest(t)
 	api.Respond(countPath, `{"count": 42, "has_more": false}`)
 
-	res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{
+	res, _, err := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{
 		Type:       "v1_past_meeting",
 		Parent:     "project:a09410000182dD2AAI",
 		Name:       "TOC",
@@ -117,7 +117,7 @@ func TestCountLFXResources_HasMoreIsLowerBound(t *testing.T) {
 	api := setupCountTest(t)
 	api.Respond(countPath, `{"count": 100, "has_more": true}`)
 
-	res, _, _ := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "v1_past_meeting_participant"})
+	res, _, _ := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "v1_past_meeting_participant"})
 	if res.IsError {
 		t.Fatalf("unexpected error result: %s", allResultText(t, res))
 	}
@@ -156,7 +156,7 @@ func TestCountLFXResources_EveryListedTypeIsAccepted(t *testing.T) {
 	api := setupCountTest(t)
 	for _, typ := range countableResourceTypes {
 		api.Respond(countPath, `{"count": 1, "has_more": false}`)
-		res, _, _ := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: typ})
+		res, _, _ := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{Type: typ})
 		if res.IsError {
 			t.Errorf("type %s rejected: %s", typ, allResultText(t, res))
 		}

@@ -1,0 +1,1 @@
+GET /query/resources/count date_field=updated_at&date_from=2026-01-01&filters_or=created_by.email:editor@example.test&filters_or=organizers:someone&type=v1_meeting&v=1

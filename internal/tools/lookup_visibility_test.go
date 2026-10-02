@@ -55,14 +55,14 @@ func TestQueryBackedLookups_EmptyPageSaysNotVisible(t *testing.T) {
 			name:  "get_meeting_registrant",
 			label: "meeting registrant",
 			call: func() (*mcp.CallToolResult, any, error) {
-				return handleGetMeetingRegistrant(context.Background(), stubCallToolRequest(), GetMeetingRegistrantArgs{UID: "id-1"})
+				return handleGetMeetingRegistrant(fullViewCtx(), stubCallToolRequest(), GetMeetingRegistrantArgs{UID: "id-1"})
 			},
 		},
 		{
 			name:  "get_past_meeting_participant",
 			label: "past meeting participant",
 			call: func() (*mcp.CallToolResult, any, error) {
-				return handleGetPastMeetingParticipant(context.Background(), stubCallToolRequest(), GetPastMeetingParticipantArgs{UID: "id-1"})
+				return handleGetPastMeetingParticipant(fullViewCtx(), stubCallToolRequest(), GetPastMeetingParticipantArgs{UID: "id-1"})
 			},
 		},
 		{

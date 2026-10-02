@@ -1,0 +1,1 @@
+GET /query/resources name=Pat&page_size=10&sort=name_asc&tags_all=project_uid:P1&tags_all=organization_name:Example Org&type=committee_member&v=1

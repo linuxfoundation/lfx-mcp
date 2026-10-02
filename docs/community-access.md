@@ -2,23 +2,68 @@
 
 ## What it is
 
-The LFX MCP Server lets an AI assistant you already use (Claude, Cursor, Goose, GitHub Copilot and others)
-interact with LFX Self Serve functionality on your behalf, with your own LFX login: projects, groups, meetings,
-membership, and the actions your role allows.
+The LFX MCP Server lets an AI assistant you already use (Claude, Cursor, Goose, OpenCode, Zed, ChatGPT and others)
+interact with LFX Self Serve functionality on your behalf, with your own LFX login: projects, committees, meetings,
+membership, and the actions your role allows. See the [README](../README.md#connecting-to-the-lfx-mcp-server) for
+the current list of supported clients; if yours is not listed, say so on the access request below and we will
+follow up.
 
 ## Who can request access
 
-Access is for people who take part in a Linux Foundation project or foundation that uses LFX Self Serve, whether
-as a member or manager of a group (a committee, working group, TSC or board), a meeting host or guest, a project
-or foundation administrator, or an organization admin. Through the MCP you see and do what LFX Self Serve lets
-you see and do.
+This form is for project leadership: staff, board members, technical leads, or others in the community with
+established operational responsibilities. It is also for organization leadership: a key contact (one of the named
+contacts on a project's membership agreement) or an OSPO administrator, requesting access to their organization's
+own data.
+
+## What you can see and do
+
+If your request is approved, Linux Foundation staff will grant you the appropriate permission within the LFX
+Platform itself, as well as add you to the allowlist of community users allowed to interact with the LFX Platform
+via our MCP server. The LFX MCP Server works like the GitHub MCP server: it lets your AI agent connect using the
+level of access you already have, rather than granting anything new on its own. Pick the access level (read,
+write, or revoke) and scope (entire project, one committee, or organization) closest to what you need.
+
+Seeing data from other projects and organizations besides your own is expected and is not a bug: anyone signed in
+sees public records across all of LFX, the same information published at
+[the LFX Project Landscape](https://landscape.linuxfoundation.org/?group=projects) and elsewhere — public project
+calendars, meeting recordings set to public by their organizers, and the public-record names of a project's staff and
+governance bodies. If you believe you are seeing something that was marked public by mistake, report it through
+the [LF Help Center chatbot](https://helpcenter.linuxfoundation.org/en/articles/9798558-introducing-the-lf-service-desk-chatbot)
+rather than treating it as an MCP access problem.
+
+**You can, based on your access level:**
+
+- find projects, and the committees, meetings and mailing lists you take part in or have a role on;
+- look up committee members, meeting registrants and attendees, under the same access rules as LFX Self Serve;
+- get past meeting summaries, and links to recordings and transcripts shared with you;
+- get counts and overviews across the projects, committees and meetings you can see;
+- see what other projects, committees and meetings have made public, including those in other foundations, as
+  anyone signed in to LFX Self Serve can;
+- manage a committee and its members, or create and manage committees across a project;
+- send emails from a project's templates and give people roles on its Discord server, where the project has
+  these set up (these two are MCP features that LFX Self Serve does not have);
+- see an organization's memberships, key contacts and committee seats.
+
+**You cannot:**
+
+- see a private committee, meeting, mailing list, or organization's membership data unless you take part in it,
+  or have been granted explicit access to the project or committee it belongs to;
+- access LFX Insights or other Linux Foundation analytics and reporting data;
+- make changes your LFX roles do not allow.
+
+If you sign in with a Linux Foundation staff account, you will also see internal reporting and data tools. They
+are not available to non-staff community accounts.
 
 ## How to request
 
 Open a new issue in this repository with the
 [LFX MCP access request](https://github.com/linuxfoundation/lfx-mcp/issues/new?template=access_request.yml)
-form. It asks whether to grant or remove access, the LFID username, and what you plan to do with the assistant;
-the rest is optional.
+form. It asks what you're requesting (read, write, or a removal), the scope and location it applies to, the LFID
+username, and what you plan to do with the assistant; the rest is optional.
+
+**This repository, and the issue you file, are public.** Do not include passwords, tokens, or any private or
+confidential project, meeting or member information in the request — a public name, your LFID, and a general
+description of your intended use are all that is needed.
 
 ## What happens next
 
@@ -56,9 +101,3 @@ your issue.
 
 Comment on your issue. For account problems, use
 [support.linuxfoundation.org](https://support.linuxfoundation.org). Please do not post access requests in Slack.
-
-## Appendix: sponsoring and removing access
-
-For chairs, administrators and executive directors. We may ask someone in the requester's group to confirm their
-participation; do that by commenting on the issue, or open the form on the person's behalf. To remove someone's
-access, open the form and choose **Remove access**.

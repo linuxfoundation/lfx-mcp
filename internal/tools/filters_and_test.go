@@ -55,7 +55,7 @@ func TestSearchCommitteeMembers_FiltersCombineWithAND(t *testing.T) {
 	api := setupCommitteeTest(t)
 	api.Respond(resourcesPath, page(nil, ""))
 
-	res, _, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{
+	res, _, err := handleSearchCommitteeMembers(fullViewCtx(), stubCallToolRequest(), SearchCommitteeMembersArgs{
 		CommitteeUID: "C1",
 		ProjectUID:   "P1",
 	})
@@ -72,7 +72,7 @@ func TestSearchGroupMembers_ForwardsFiltersAsAND(t *testing.T) {
 	api := setupCommitteeTest(t)
 	api.Respond(resourcesPath, page(nil, ""))
 
-	res, _, err := handleSearchCommitteeMembersGroupMode(context.Background(), stubCallToolRequest(), SearchGroupMembersArgs{
+	res, _, err := handleSearchCommitteeMembersGroupMode(fullViewCtx(), stubCallToolRequest(), SearchGroupMembersArgs{
 		GroupUID:   "C1",
 		ProjectUID: "P1",
 	})
@@ -157,7 +157,7 @@ func TestSearchCommitteeMembers_OrganizationNameFilter(t *testing.T) {
 	api := setupCommitteeTest(t)
 	api.Respond(resourcesPath, page(nil, ""))
 
-	res, _, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{
+	res, _, err := handleSearchCommitteeMembers(fullViewCtx(), stubCallToolRequest(), SearchCommitteeMembersArgs{
 		ProjectUID:       "P1",
 		OrganizationName: "Oracle America, Inc.",
 	})
@@ -175,7 +175,7 @@ func TestSearchGroupMembers_ForwardsOrganizationName(t *testing.T) {
 	api := setupCommitteeTest(t)
 	api.Respond(resourcesPath, page([]string{committeeMemberDoc("m1", "Oracle America, Inc.")}, ""))
 
-	res, _, err := handleSearchCommitteeMembersGroupMode(context.Background(), stubCallToolRequest(), SearchGroupMembersArgs{
+	res, _, err := handleSearchCommitteeMembersGroupMode(fullViewCtx(), stubCallToolRequest(), SearchGroupMembersArgs{
 		GroupUID:         "C1",
 		OrganizationName: "Oracle America, Inc.",
 	})
@@ -214,7 +214,7 @@ func TestSearchCommitteeMembers_EmptyWithProjectNotesNoCommittees(t *testing.T) 
 	api.Respond(resourcesPath, page(nil, ""))
 	api.Respond(countPath, `{"count": 0, "has_more": false}`)
 
-	res, out, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{
+	res, out, err := handleSearchCommitteeMembers(fullViewCtx(), stubCallToolRequest(), SearchCommitteeMembersArgs{
 		ProjectUID: "P1",
 		Name:       "Test User",
 	})
@@ -264,7 +264,7 @@ func TestSearchCommitteeMembers_EmptyWithProjectNotesNoMatch(t *testing.T) {
 	api.Respond(resourcesPath, page(nil, ""))
 	api.Respond(countPath, `{"count": 3, "has_more": false}`)
 
-	res, out, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{
+	res, out, err := handleSearchCommitteeMembers(fullViewCtx(), stubCallToolRequest(), SearchCommitteeMembersArgs{
 		ProjectUID:       "P1",
 		OrganizationName: "Oracle",
 	})
@@ -299,7 +299,7 @@ func TestSearchGroupMembers_RosterNoteSaysGroups(t *testing.T) {
 	api.Respond(resourcesPath, page(nil, ""))
 	api.Respond(countPath, `{"count": 3, "has_more": false}`)
 
-	res, out, err := handleSearchCommitteeMembersGroupMode(context.Background(), stubCallToolRequest(), SearchGroupMembersArgs{ProjectUID: "P1"})
+	res, out, err := handleSearchCommitteeMembersGroupMode(fullViewCtx(), stubCallToolRequest(), SearchGroupMembersArgs{ProjectUID: "P1"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestSearchCommitteeMembers_EmptyWithoutProjectHasNoNote(t *testing.T) {
 	} {
 		api.Respond(resourcesPath, page(nil, ""))
 		before := len(api.Requests())
-		res, _, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), args)
+		res, _, err := handleSearchCommitteeMembers(fullViewCtx(), stubCallToolRequest(), args)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -348,7 +348,7 @@ func TestSearchCommitteeMembers_NonEmptyWithProjectHasNoNote(t *testing.T) {
 	api.Respond(resourcesPath, page([]string{committeeMemberDoc("m1", "Oracle America, Inc.")}, ""))
 	api.Respond(countPath, `{"count": 0, "has_more": false}`)
 
-	res, _, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{ProjectUID: "P1"})
+	res, _, err := handleSearchCommitteeMembers(fullViewCtx(), stubCallToolRequest(), SearchCommitteeMembersArgs{ProjectUID: "P1"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -368,7 +368,7 @@ func TestSearchCommitteeMembers_EmptyPageWithTokenHasNoNote(t *testing.T) {
 	api.Respond(resourcesPath, page(nil, "next"))
 	api.Respond(countPath, `{"count": 0, "has_more": false}`)
 
-	res, _, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{ProjectUID: "P1"})
+	res, _, err := handleSearchCommitteeMembers(fullViewCtx(), stubCallToolRequest(), SearchCommitteeMembersArgs{ProjectUID: "P1"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -385,7 +385,7 @@ func TestSearchCommitteeMembers_EmptyContinuationPageHasNoNote(t *testing.T) {
 	api.Respond(resourcesPath, page(nil, ""))
 	api.Respond(countPath, `{"count": 0, "has_more": false}`)
 
-	res, _, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{ProjectUID: "P1", PageToken: "next"})
+	res, _, err := handleSearchCommitteeMembers(fullViewCtx(), stubCallToolRequest(), SearchCommitteeMembersArgs{ProjectUID: "P1", PageToken: "next"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -402,7 +402,7 @@ func TestSearchCommitteeMembers_CountFailureDropsNote(t *testing.T) {
 	api.Respond(resourcesPath, page(nil, ""))
 	// countPath unscripted: the stub answers 404.
 
-	res, out, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{ProjectUID: "P1"})
+	res, out, err := handleSearchCommitteeMembers(fullViewCtx(), stubCallToolRequest(), SearchCommitteeMembersArgs{ProjectUID: "P1"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

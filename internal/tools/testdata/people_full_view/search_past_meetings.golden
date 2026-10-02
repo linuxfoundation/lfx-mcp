@@ -1,0 +1,37 @@
+{
+  "resources": [
+    {
+      "Type": "v1_past_meeting",
+      "ID": "77777777777-1771596000000",
+      "Data": {
+        "committees": [],
+        "created_by": {
+          "email": "creator@example.test",
+          "name": "Creator",
+          "profile_picture": "p",
+          "user_id": "u1",
+          "username": "creator"
+        },
+        "meeting_and_occurrence_id": "77777777777-1771596000000",
+        "meeting_id": "91461158520",
+        "project_uid": "a0941000002wBz4AAE",
+        "restricted": false,
+        "start_time": "2026-06-10T15:00:00Z",
+        "title": "CNCF TOC",
+        "updated_by": {
+          "email": "editor@example.test",
+          "name": "Editor",
+          "user_id": "u2",
+          "username": "editor"
+        },
+        "updated_by_list": [
+          {
+            "email": "editor@example.test",
+            "name": "Editor"
+          }
+        ],
+        "visibility": "private"
+      }
+    }
+  ]
+}

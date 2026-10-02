@@ -6,6 +6,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -53,6 +54,46 @@ type stubLFXAPI struct {
 	queues  map[string][]stubAPIResponse
 	reqs    []stubAPIRequest
 	Clients *lfxv2.Clients
+
+	// accessGrants, when non-nil, makes the fake answer POST /access-check
+	// from the request body: each relation request maps to its granted flag
+	// (absent means false), in the service's "<request>@user:u\ttrue" line
+	// format. accessStatus, when non-zero, makes it answer that status with
+	// an empty body instead. Queued responses for the path take precedence.
+	accessGrants map[string]bool
+	accessStatus int
+	accessBodies [][]string
+}
+
+// accessCheckPath is the V2 access-check route.
+const accessCheckPath = "/access-check"
+
+// GrantRelations makes POST /access-check grant exactly the given relation
+// requests ("object:id#relation") and deny every other one asked.
+func (s *stubLFXAPI) GrantRelations(granted ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.accessGrants = make(map[string]bool, len(granted))
+	for _, g := range granted {
+		s.accessGrants[g] = true
+	}
+}
+
+// FailAccessCheck makes POST /access-check answer status with no body.
+func (s *stubLFXAPI) FailAccessCheck(status int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.accessStatus = status
+}
+
+// AccessCheckBodies returns the relation requests of every access-check
+// call seen, one slice per call.
+func (s *stubLFXAPI) AccessCheckBodies() [][]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([][]string, len(s.accessBodies))
+	copy(out, s.accessBodies)
+	return out
 }
 
 // newStubLFXAPI starts the fake API and builds a real lfxv2.Clients against
@@ -106,10 +147,27 @@ func (s *stubLFXAPI) serve(w http.ResponseWriter, r *http.Request) {
 	})
 	queue := s.queues[r.URL.Path]
 	var resp stubAPIResponse
-	if len(queue) > 0 {
+	switch {
+	case len(queue) > 0:
 		resp = queue[0]
 		s.queues[r.URL.Path] = queue[1:]
-	} else {
+	case r.URL.Path == accessCheckPath && (s.accessGrants != nil || s.accessStatus != 0):
+		var body struct {
+			Requests []string `json:"requests"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		s.accessBodies = append(s.accessBodies, body.Requests)
+		if s.accessStatus != 0 {
+			resp = stubAPIResponse{Status: s.accessStatus, Body: ""}
+			break
+		}
+		lines := make([]string, 0, len(body.Requests))
+		for _, req := range body.Requests {
+			lines = append(lines, fmt.Sprintf("%s@user:stub-user\t%t", req, s.accessGrants[req]))
+		}
+		encoded, _ := json.Marshal(map[string]any{"results": lines})
+		resp = stubAPIResponse{Status: http.StatusOK, Body: string(encoded)}
+	default:
 		resp = stubAPIResponse{Status: http.StatusNotFound, Body: `{"message":"no stubbed response for ` + r.URL.Path + `"}`}
 	}
 	s.mu.Unlock()
@@ -162,16 +220,36 @@ func (s *stubLFXAPI) LastRequest() stubAPIRequest {
 	return reqs[len(reqs)-1]
 }
 
+// stubCallerUsername and stubCallerEmail are the identity of the caller
+// stubCallToolRequest presents: a signed-in person without full view.
+const (
+	stubCallerUsername = "stub-user"
+	stubCallerEmail    = "Stub.User@example.test"
+)
+
 // stubCallToolRequest builds a CallToolRequest carrying stubMCPToken the way
-// the HTTP auth middleware does, so lfxv2.ExtractMCPToken succeeds.
+// the HTTP auth middleware does, so lfxv2.ExtractMCPToken succeeds. The
+// caller is a plain signed-in person: no staff claim, so handlers reached
+// with a bare context treat it as a caller without full view.
 func stubCallToolRequest() *mcp.CallToolRequest {
 	return &mcp.CallToolRequest{
 		Extra: &mcp.RequestExtra{
 			TokenInfo: &auth.TokenInfo{
-				Extra: map[string]any{"raw_token": stubMCPToken},
+				Extra: map[string]any{
+					"raw_token": stubMCPToken,
+					"username":  stubCallerUsername,
+					ClaimEmail:  stubCallerEmail,
+				},
 			},
 		},
 	}
+}
+
+// fullViewCtx is the context a handler runs under for a caller with full
+// view: what the receiving middleware sets for staff, machine and API-key
+// callers.
+func fullViewCtx() context.Context {
+	return WithFullView(context.Background(), true)
 }
 
 // assertExchangedAuth fails unless the request reached the API with the

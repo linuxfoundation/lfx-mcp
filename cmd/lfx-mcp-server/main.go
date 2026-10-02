@@ -841,7 +841,19 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	// to the LFX MCP API is already restricted to a small set of trusted
 	// server-side clients via their client_grant, so treat any M2M caller as
 	// staff-equivalent for tool registration purposes.
-	isStaff := callerToken == nil || tools.IsLFStaff(callerToken) || tools.IsMachineAccount(callerToken)
+	isStaff := tools.IsStaffCaller(callerToken)
+
+	// People data for callers without full view follows what LFX Self Serve
+	// shows them on screen. The decision is taken once here, from the same
+	// token that drives registration, and handed to handlers through the
+	// context (the tools.WithLogger pattern); handlers reached without the
+	// flag behave as if it were false.
+	fullView := tools.IsFullViewCaller(callerToken)
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			return next(tools.WithFullView(ctx, fullView), method, req)
+		}
+	})
 
 	// manage:all is enforced at the HTTP layer (requireManageScopeHTTP), not
 	// here: write tools are registered below for every caller holding at
@@ -1264,6 +1276,14 @@ func runHTTPServer(cfg Config, otelCfg localOtel.Config, otelShutdown func(conte
 			// Extract lf_staff custom claim for service tool authorization (LFX Lens).
 			if staffClaim, ok := token.Get(tools.ClaimLFStaff); ok {
 				extra[tools.ClaimLFStaff] = staffClaim
+			}
+
+			// Extract the e-mail claim: people tools match the caller's own
+			// registrant and participant records on it, as LFX Self Serve does.
+			if emailClaim, ok := token.Get(tools.ClaimEmail); ok {
+				if email, ok := emailClaim.(string); ok && email != "" {
+					extra[tools.ClaimEmail] = email
+				}
 			}
 
 			// Extract client_id to identify clients that ignore advertised scopes.

@@ -1,0 +1,58 @@
+{
+  "base": {
+    "UID": "66666666-6666-4666-8666-666666666666",
+    "ProjectUID": null,
+    "Name": "TSC",
+    "Category": null,
+    "Description": null,
+    "Website": null,
+    "MailingList": null,
+    "ChatChannel": null,
+    "EnableVoting": false,
+    "SsoGroupEnabled": false,
+    "RequiresReview": false,
+    "Public": false,
+    "Calendar": null,
+    "DisplayName": null,
+    "ParentUID": null,
+    "JoinMode": "invite_only",
+    "Repository": null,
+    "Scope": null,
+    "Deliverables": null,
+    "KeyDates": null,
+    "ExternalSources": null,
+    "ProjectName": null,
+    "SsoGroupName": null,
+    "TotalMembers": null,
+    "TotalVotingRepos": null,
+    "HasMailingList": false,
+    "Charter": null
+  },
+  "settings": {
+    "UID": "66666666-6666-4666-8666-666666666666",
+    "BusinessEmailRequired": false,
+    "LastReviewedAt": null,
+    "LastReviewedBy": "reviewer-sub",
+    "MemberVisibility": "hidden",
+    "ShowMeetingAttendees": false,
+    "Writers": [
+      {
+        "Avatar": null,
+        "Email": "writer@example.test",
+        "Name": "W",
+        "Username": "w"
+      }
+    ],
+    "Auditors": [
+      {
+        "Avatar": null,
+        "Email": "auditor@example.test",
+        "Name": "A",
+        "Username": "a"
+      }
+    ],
+    "HasChatWebhook": false,
+    "CreatedAt": null,
+    "UpdatedAt": null
+  }
+}

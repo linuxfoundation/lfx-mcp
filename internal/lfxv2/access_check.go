@@ -105,7 +105,7 @@ func (c *AccessCheckClient) CheckAccess(ctx context.Context, token string, reque
 
 	parsed := make(map[string]bool, len(result.Results))
 	for _, r := range result.Results {
-		req, allowed, err := parseAccessResult(r)
+		req, allowed, err := parseAccessResult(r, requests)
 		if err != nil {
 			return nil, err
 		}
@@ -113,6 +113,60 @@ func (c *AccessCheckClient) CheckAccess(ctx context.Context, token string, reque
 	}
 
 	return parsed, nil
+}
+
+// accessCheckBatchSize is the largest number of relation checks sent in one
+// access-check POST. It matches LFX Self Serve's ACCESS_CHECK_BATCH_SIZE so
+// the two clients put the same load shape on the service.
+const accessCheckBatchSize = 100
+
+// CheckRelations evaluates relation requests ("object:id#relation") as the
+// caller whose MCP token is on ctx, with that caller's exchanged LFX token.
+// Requests are de-duplicated and sent in batches of accessCheckBatchSize. The
+// result holds one answer per distinct request; it is strict: a request the
+// service did not answer is an error, never a silent false, so callers that
+// narrow what they return can fail closed on a transport or contract fault
+// rather than treat a missing answer as a denial that reads as absence.
+func (c *Clients) CheckRelations(ctx context.Context, requests []string) (map[string]bool, error) {
+	if c.AccessCheck == nil {
+		return nil, fmt.Errorf("access-check client not configured")
+	}
+	distinct := make([]string, 0, len(requests))
+	seen := make(map[string]struct{}, len(requests))
+	for _, r := range requests {
+		if _, dup := seen[r]; dup {
+			continue
+		}
+		seen[r] = struct{}{}
+		distinct = append(distinct, r)
+	}
+	out := make(map[string]bool, len(distinct))
+	if len(distinct) == 0 {
+		return out, nil
+	}
+	token, err := c.GetExchangedToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get V2 token for access-check: %w", err)
+	}
+	for start := 0; start < len(distinct); start += accessCheckBatchSize {
+		end := start + accessCheckBatchSize
+		if end > len(distinct) {
+			end = len(distinct)
+		}
+		batch := distinct[start:end]
+		results, err := c.AccessCheck.CheckAccess(ctx, token, batch)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range batch {
+			allowed, ok := results[r]
+			if !ok {
+				return nil, fmt.Errorf("access-check did not return a result for %s", r)
+			}
+			out[r] = allowed
+		}
+	}
+	return out, nil
 }
 
 // CheckProjectAccess verifies the user has the specified relation to a project.
@@ -144,21 +198,34 @@ func (c *AccessCheckClient) CheckProjectAccess(ctx context.Context, token string
 //	<request>@<user>\t<true|false>
 //
 // For example: "project:uuid#writer@user:alice\ttrue"
-func parseAccessResult(result string) (request string, allowed bool, err error) {
+//
+// The result is matched against the requests that were sent: the line must
+// start with one of them followed by "@". Splitting on the last "@" instead
+// would misread a principal that itself contains "@", such as the
+// "<client_id>@clients" subject of a client-credentials token, and report a
+// request that was never sent. A request string never contains "@" itself.
+func parseAccessResult(result string, requests []string) (request string, allowed bool, err error) {
 	parts := strings.SplitN(result, "\t", 2)
 	if len(parts) != 2 {
 		return "", false, fmt.Errorf("unexpected access-check result format (no tab delimiter): %q", result)
 	}
 
-	// The left side is "<request>@<user_type>:<user_id>".
-	// Split on the last "@" to extract the original request.
-	atIdx := strings.LastIndex(parts[0], "@")
-	if atIdx < 0 {
-		return "", false, fmt.Errorf("unexpected access-check result format (no @ delimiter): %q", result)
+	// The contract allows only "true" or "false"; any other status is a
+	// failed check, so it is an error rather than a denial.
+	switch parts[1] {
+	case "true":
+		allowed = true
+	case "false":
+	default:
+		return "", false, fmt.Errorf("unexpected access-check status %q in result: %q", parts[1], result)
 	}
 
-	request = parts[0][:atIdx]
-	allowed = parts[1] == "true"
+	// The left side is "<request>@<user_type>:<user_id>".
+	for _, r := range requests {
+		if strings.HasPrefix(parts[0], r+"@") {
+			return r, allowed, nil
+		}
+	}
 
-	return request, allowed, nil
+	return "", false, fmt.Errorf("access-check result does not match any request sent: %q", result)
 }

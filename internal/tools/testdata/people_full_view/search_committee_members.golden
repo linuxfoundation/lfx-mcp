@@ -1,0 +1,40 @@
+{
+  "resources": [
+    {
+      "Type": "committee_member",
+      "ID": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "Data": {
+        "appointed_by": "Community",
+        "avatar": "https://avatars.example.test/cccccccc.png",
+        "committee_category": "Technical",
+        "committee_name": "Technical Steering Committee",
+        "committee_uid": "66666666-6666-4666-8666-666666666666",
+        "created_at": "2026-01-01T00:00:00Z",
+        "email": "member@example.test",
+        "first_name": "Pat",
+        "job_title": "Engineer",
+        "last_name": "Member",
+        "linkedin_profile": "https://example.test/in/pat",
+        "organization": {
+          "id": "org-1",
+          "name": "Example Org",
+          "website": "https://example.test"
+        },
+        "project_slug": "cncf",
+        "project_uid": "a0941000002wBz4AAE",
+        "role": {
+          "name": "None",
+          "start_date": "2026-01-01"
+        },
+        "status": "Active",
+        "uid": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "username": "member-cccccccc",
+        "voting": {
+          "start_date": "2026-01-01",
+          "status": "Voting Rep"
+        }
+      }
+    }
+  ]
+}

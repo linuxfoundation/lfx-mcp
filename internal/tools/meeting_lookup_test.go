@@ -138,14 +138,14 @@ func TestGetRegistrantAndParticipant_StillLookUpByUIDFilter(t *testing.T) {
 			name: "get_meeting_registrant",
 			typ:  "v1_meeting_registrant",
 			call: func() (*mcp.CallToolResult, any, error) {
-				return handleGetMeetingRegistrant(context.Background(), stubCallToolRequest(), GetMeetingRegistrantArgs{UID: "reg-1"})
+				return handleGetMeetingRegistrant(fullViewCtx(), stubCallToolRequest(), GetMeetingRegistrantArgs{UID: "reg-1"})
 			},
 		},
 		{
 			name: "get_past_meeting_participant",
 			typ:  "v1_past_meeting_participant",
 			call: func() (*mcp.CallToolResult, any, error) {
-				return handleGetPastMeetingParticipant(context.Background(), stubCallToolRequest(), GetPastMeetingParticipantArgs{UID: "reg-1"})
+				return handleGetPastMeetingParticipant(fullViewCtx(), stubCallToolRequest(), GetPastMeetingParticipantArgs{UID: "reg-1"})
 			},
 		},
 	} {

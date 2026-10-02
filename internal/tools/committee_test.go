@@ -42,7 +42,7 @@ func TestCommitteeToolsDescribeRosters(t *testing.T) {
 			register: func(s *mcp.Server) { RegisterSearchCommitteeMembers(s, false) },
 			wants: []string{
 				"The authoritative source for committee rosters.",
-				"Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country.",
+				"Count with count_lfx_resources; full-list records carry organization, role, voting status, term dates if recorded, no country.",
 			},
 		},
 		{
@@ -50,7 +50,7 @@ func TestCommitteeToolsDescribeRosters(t *testing.T) {
 			register: func(s *mcp.Server) { RegisterSearchCommitteeMembers(s, true) },
 			wants: []string{
 				"The authoritative source for committee rosters.",
-				"Count with count_lfx_resources; records carry organization, role, voting status, term dates if recorded, no country.",
+				"Count with count_lfx_resources; full-list records carry organization, role, voting status, term dates if recorded, no country.",
 			},
 		},
 	} {

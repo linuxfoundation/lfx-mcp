@@ -1,0 +1,6 @@
+{
+  "count": 4,
+  "complete": false,
+  "visibility": "caller",
+  "note": "Counts only the records indexed in LFX v2 and visible to your identity; records you cannot see, or not yet onboarded into LFX v2, are not counted. The count stopped at the query service's access-bucket limit and is a lower bound; narrow the query (parent, date range, tags) or count per project."
+}

@@ -4,8 +4,11 @@
 package lfxv2
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -264,10 +267,36 @@ func TestParseAccessResult(t *testing.T) {
 			input:   "something\ttrue",
 			wantErr: true,
 		},
+		{
+			// A client-credentials principal is "<client_id>@clients": the
+			// last "@" is inside the principal, so matching on the sent
+			// request's prefix is the only reading that yields the request.
+			name:    "principal containing an at sign",
+			input:   "project:abc-123#writer@user:client-id@clients\ttrue",
+			wantReq: "project:abc-123#writer",
+			wantOK:  true,
+		},
+		{
+			name:    "result for a request that was not sent",
+			input:   "project:other#writer@user:alice\ttrue",
+			wantErr: true,
+		}, {
+			// The contract allows only true or false; any other status is a
+			// failed check, never a denial.
+			name:    "status neither true nor false",
+			input:   "project:abc-123#writer@user:alice\tgarbage",
+			wantErr: true,
+		},
+		{
+			name:    "empty status",
+			input:   "project:abc-123#writer@user:alice\t",
+			wantErr: true,
+		},
 	}
+	requests := []string{"project:abc-123#writer", "project:abc-123#owner"}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, allowed, err := parseAccessResult(tt.input)
+			req, allowed, err := parseAccessResult(tt.input, requests)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error")
@@ -292,5 +321,118 @@ func TestNewAccessCheckClient_TrailingSlash(t *testing.T) {
 	client := NewAccessCheckClient("https://api.example.com/", nil)
 	if client.apiURL != "https://api.example.com" {
 		t.Errorf("expected trailing slash stripped, got %q", client.apiURL)
+	}
+}
+
+// TestCheckRelations_DedupesChunksAndIsStrict pins the Clients-level helper:
+// repeated requests are sent once, more than accessCheckBatchSize distinct
+// requests go out in several POSTs, every request gets an answer, and the
+// exchanged (static, here) token is the bearer.
+func TestCheckRelations_DedupesChunksAndIsStrict(t *testing.T) {
+	var batches [][]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer static-token-value" {
+			t.Errorf("expected the LFX token as bearer, got %q", r.Header.Get("Authorization"))
+		}
+		var req accessCheckRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		batches = append(batches, req.Requests)
+		results := make([]string, 0, len(req.Requests))
+		for _, q := range req.Requests {
+			results = append(results, q+"@user:client-id@clients\t"+map[bool]string{true: "true", false: "false"}[q == "committee:c1#writer"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(accessCheckResponse{Results: results}) //nolint:errcheck // test handler
+	}))
+	defer server.Close()
+
+	c := &Clients{staticLFXToken: "static-token-value", AccessCheck: NewAccessCheckClient(server.URL, server.Client())}
+	requests := []string{"committee:c1#writer", "committee:c1#auditor", "committee:c1#writer"}
+	for i := 0; i < accessCheckBatchSize; i++ {
+		requests = append(requests, fmt.Sprintf("v1_meeting:m%d#organizer", i))
+	}
+	got, err := c.CheckRelations(context.Background(), requests)
+	if err != nil {
+		t.Fatalf("CheckRelations: %v", err)
+	}
+	if len(got) != accessCheckBatchSize+2 {
+		t.Errorf("expected %d distinct answers, got %d", accessCheckBatchSize+2, len(got))
+	}
+	if !got["committee:c1#writer"] || got["committee:c1#auditor"] {
+		t.Errorf("answers not mapped back to requests: %v %v", got["committee:c1#writer"], got["committee:c1#auditor"])
+	}
+	if len(batches) != 2 || len(batches[0]) != accessCheckBatchSize || len(batches[1]) != 2 {
+		sizes := make([]int, len(batches))
+		for i, b := range batches {
+			sizes[i] = len(b)
+		}
+		t.Errorf("expected batches of [%d 2], got %v", accessCheckBatchSize, sizes)
+	}
+}
+
+// TestCheckRelations_MissingAnswerIsAnError pins strictness: an answer the
+// service left out is an error, never a silent false.
+func TestCheckRelations_MissingAnswerIsAnError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// One answer for two requests: the count check and the per-request
+		// lookup both have to notice.
+		_ = json.NewEncoder(w).Encode(accessCheckResponse{Results: []string{"committee:c1#writer@user:u\ttrue", "committee:c1#writer@user:u\ttrue"}}) //nolint:errcheck // test handler
+	}))
+	defer server.Close()
+	c := &Clients{staticLFXToken: "t", AccessCheck: NewAccessCheckClient(server.URL, server.Client())}
+	if _, err := c.CheckRelations(context.Background(), []string{"committee:c1#writer", "committee:c1#auditor"}); err == nil {
+		t.Fatal("expected an error when a request has no answer")
+	}
+}
+
+// TestCheckRelations_EmptyIsNoCall pins that nothing is sent for no requests.
+func TestCheckRelations_EmptyIsNoCall(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("no request expected")
+	}))
+	defer server.Close()
+	c := &Clients{staticLFXToken: "t", AccessCheck: NewAccessCheckClient(server.URL, server.Client())}
+	got, err := c.CheckRelations(context.Background(), nil)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("expected an empty answer and no error, got %v %v", got, err)
+	}
+}
+
+// TestNewClients_AccessCheckBypassesDebugAndAuthWrappers pins the
+// construction shape: the access-check client built by NewClients sends the
+// token CheckRelations passes explicitly and nothing of its traffic reaches
+// the debug logger, which would otherwise dump the bearer and the body.
+func TestNewClients_AccessCheckBypassesDebugAndAuthWrappers(t *testing.T) {
+	var logs bytes.Buffer
+	debugLogger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer static-token-value" {
+			t.Errorf("expected the explicit token as bearer, got %q", r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(accessCheckResponse{Results: []string{"committee:c1#writer@user:u\ttrue"}}) //nolint:errcheck // test handler
+	}))
+	defer server.Close()
+
+	clients, err := NewClients(context.Background(), ClientConfig{
+		APIDomain:      server.URL,
+		StaticLFXToken: "static-token-value",
+		DebugLogger:    debugLogger,
+	})
+	if err != nil {
+		t.Fatalf("NewClients: %v", err)
+	}
+	if clients.AccessCheck == nil {
+		t.Fatal("NewClients must construct the AccessCheck client")
+	}
+	got, err := clients.CheckRelations(context.Background(), []string{"committee:c1#writer"})
+	if err != nil || !got["committee:c1#writer"] {
+		t.Fatalf("CheckRelations = %v, %v", got, err)
+	}
+	if logs.Len() != 0 {
+		t.Errorf("access-check traffic must not reach the debug transport, got logs:\n%s", logs.String())
 	}
 }

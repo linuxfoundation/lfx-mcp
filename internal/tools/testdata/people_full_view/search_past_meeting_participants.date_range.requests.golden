@@ -1,0 +1,3 @@
+GET /query/resources date_field=start_time&date_from=2026-06-01&date_to=2026-06-30&page_size=100&parent=project:P1&sort=name_asc&type=v1_past_meeting&v=1
+GET /query/resources page_size=100&parent=past_meeting:m-1&sort=name_asc&type=v1_past_meeting_participant&v=1
+GET /query/resources page_size=100&parent=past_meeting:m-2&sort=name_asc&type=v1_past_meeting_participant&v=1

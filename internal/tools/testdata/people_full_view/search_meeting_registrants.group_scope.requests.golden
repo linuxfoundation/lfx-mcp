@@ -1,0 +1,1 @@
+GET /query/resources name=Reg&page_size=10&parent=committee:66666666-6666-4666-8666-666666666666&sort=name_asc&type=v1_meeting_registrant&v=1

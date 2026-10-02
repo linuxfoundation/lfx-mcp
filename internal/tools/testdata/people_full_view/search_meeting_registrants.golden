@@ -1,0 +1,36 @@
+{
+  "resources": [
+    {
+      "Type": "v1_meeting_registrant",
+      "ID": "reg",
+      "Data": {
+        "avatar_url": "https://avatars.example.test/reg.png",
+        "case_insensitive_email": "registrant@example.test",
+        "committee_uid": "9f0c2e6a-6b1e-4c3e-9d1a-0c1b2a3d4e5f",
+        "created_by": {
+          "email": "creator@example.test",
+          "name": "Creator"
+        },
+        "email": "registrant@example.test",
+        "first_name": "Reg",
+        "host": true,
+        "job_title": "Engineer",
+        "last_invite_delivery_status": "delivered",
+        "last_invite_sent_at": "2026-06-01T00:00:00Z",
+        "last_name": "Istrant",
+        "meeting_id": "77777777777",
+        "occurrence": "1771596000000",
+        "org_is_member": true,
+        "org_name": "Example Org",
+        "type": "committee",
+        "uid": "reg",
+        "updated_by": {
+          "email": "editor@example.test",
+          "name": "Editor"
+        },
+        "user_id": "auth0|reg",
+        "username": "user-reg"
+      }
+    }
+  ]
+}

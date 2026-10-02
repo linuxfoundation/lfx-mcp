@@ -1,0 +1,55 @@
+{
+  "Type": "v1_meeting",
+  "ID": "meeting-1",
+  "Data": {
+    "created_by": {
+      "email": "creator@example.test",
+      "name": "Creator",
+      "profile_picture": "p",
+      "user_id": "u1",
+      "username": "creator"
+    },
+    "id": "meeting-1",
+    "occurrences": [
+      {
+        "occurrence_id": "1",
+        "registrant_count": 7,
+        "response_count_yes": 3,
+        "start_time": "2026-07-01T15:00:00Z"
+      },
+      {
+        "occurrence_id": "2",
+        "registrant_count": 8,
+        "start_time": "2026-07-08T15:00:00Z"
+      }
+    ],
+    "organizers": [
+      "auth0|a",
+      "auth0|b"
+    ],
+    "owner": {
+      "email": "owner@example.test",
+      "name": "Owner",
+      "profile_picture": "p",
+      "user_id": "u1",
+      "username": "creator"
+    },
+    "password": "join-page-password",
+    "project_uid": "11111111-1111-1111-1111-111111111111",
+    "registrant_count": 12,
+    "title": "Weekly sync",
+    "updated_by": {
+      "email": "editor@example.test",
+      "name": "Editor",
+      "user_id": "u2",
+      "username": "editor"
+    },
+    "updated_by_list": [
+      {
+        "email": "editor@example.test",
+        "name": "Editor"
+      }
+    ],
+    "user_id": "auth0|owner"
+  }
+}

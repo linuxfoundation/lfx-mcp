@@ -1,0 +1,22 @@
+{
+  "Type": "v1_past_meeting_summary",
+  "ID": "sum-1",
+  "Data": {
+    "approved": true,
+    "content": "Discussed the roadmap.",
+    "created_by": {
+      "email": "creator@example.test",
+      "name": "Creator"
+    },
+    "edited_content": "",
+    "past_meeting_uid": "pm-1",
+    "summary_title": "Weekly sync summary",
+    "uid": "sum-1",
+    "updated_by": {
+      "email": "editor@example.test",
+      "name": "Editor"
+    },
+    "zoom_meeting_host_email": "host@example.test",
+    "zoom_meeting_host_id": "zh1"
+  }
+}

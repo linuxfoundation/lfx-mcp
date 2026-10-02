@@ -1,0 +1,19 @@
+{
+  "resources": [
+    {
+      "Type": "v1_meeting_registrant",
+      "ID": "reg-1",
+      "Data": {
+        "committee_uid": "66666666-6666-4666-8666-666666666666",
+        "email": "registrant@example.test",
+        "first_name": "Reg",
+        "host": false,
+        "last_name": "Istrant",
+        "meeting_id": "77777777777",
+        "org_name": "Example Org",
+        "uid": "reg-1",
+        "username": "registrant"
+      }
+    }
+  ]
+}

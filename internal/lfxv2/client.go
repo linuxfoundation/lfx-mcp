@@ -162,6 +162,7 @@ type Clients struct {
 	Member      *memberservice.Client
 	Project     *projectservice.Client
 	QuerySvc    *querysvc.Client
+	AccessCheck *AccessCheckClient
 
 	tokenExchangeClient *TokenExchangeClient
 
@@ -190,6 +191,9 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 	// Wrap HTTP client with auth interceptor if token exchange, or a static
 	// token, is enabled.
 	clients := &Clients{
+		// Access-check receives the exchanged token explicitly. Keep its client
+		// outside the auth/debug wrappers so no bearer is dumped to logs.
+		AccessCheck:         NewAccessCheckClient(cfg.APIDomain, httpClient),
 		tokenExchangeClient: cfg.TokenExchangeClient,
 		staticLFXToken:      cfg.StaticLFXToken,
 		// No default expiration (TTL is set per item); run cleanup every 10 minutes.

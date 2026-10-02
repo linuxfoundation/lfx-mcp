@@ -13,6 +13,11 @@ body:
 
         [playbook]: https://github.com/linuxfoundation/lfx-mcp/blob/main/docs/community-access.md
         [readme]: https://github.com/linuxfoundation/lfx-mcp/blob/main/README.md
+
+        **This issue is public.** This repository, and every issue filed in it, is visible to anyone on the
+        internet. Give only your LFID username, the public name of the project/committee you take part in, and a
+        general description of what you plan to do. Do not paste tokens, passwords, private project or meeting
+        details, or anything else you would not post on a public forum.
   - type: input
     id: lfid
     attributes:
@@ -27,14 +32,42 @@ body:
     id: request_type
     attributes:
       label: Request
-      options: ["Grant access", "Remove access"]
+      options:
+        - Request read access
+        - Request write access
+        - Remove access
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Applies to
+      description: >-
+        A project, one committee within a project, or a member company/organization? Name it below in
+        "Where". Required for a revocation too, so we know what to remove.
+      options:
+        - Entire project
+        - One committee
+        - Organization (member company or OSPO)
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: >-
+        The foundation and project, the committee name, or the organization name, matching what "Applies
+        to" above says.
+      placeholder: CNCF, TAG Security
     validations:
       required: true
   - type: textarea
     id: intended_use
     attributes:
       label: What you plan to do with it
-      description: For a removal, give the reason instead.
+      description: >-
+        For a removal, give the reason instead. Keep this general — this issue is public, so do not paste
+        private project, meeting or member details.
       placeholder: Draft minutes from the summaries and transcripts of the SIG meetings I attend.
     validations:
       required: true
@@ -43,34 +76,27 @@ body:
       value: |
         ### Additional data (optional)
         It may make approval faster if you can provide it.
-  - type: input
-    id: where
-    attributes:
-      label: Where you take part
-      description: Foundation, project or group (committee), if you know it.
-      placeholder: CNCF, TAG Security
   - type: dropdown
     id: role
     attributes:
       label: Your role in it
       options:
         - Not sure
-        - Group (committee) member
-        - Group (committee) manager or chair
+        - Committee manager or chair
         - Project or foundation administrator
-        - Meeting host or guest
-        - Organization admin
+        - Organization key contact (one of the named contacts on a membership agreement)
+        - OSPO administrator
         - Other
   - type: input
     id: sponsor
     attributes:
       label: Who can confirm your participation
       description: A role is enough; we can check on our side.
-      placeholder: Group chair
+      placeholder: Committee chair
   - type: dropdown
     id: client
     attributes:
       label: AI client(s)
-      description: Select all that apply.
+      description: Select all that apply. Not listed? Pick Other and name it in "What you plan to do with it" above.
       multiple: true
-      options: [Claude, Cursor, Goose, GitHub Copilot, OpenCode, Other]
+      options: [Claude, Cursor, Goose, OpenCode, Visual Studio Code, Zed, ChatGPT, Other]

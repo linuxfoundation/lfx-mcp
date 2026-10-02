@@ -1,0 +1,6 @@
+{
+  "count": 2,
+  "complete": true,
+  "visibility": "caller",
+  "note": "Counts only the records indexed in LFX v2 and visible to your identity; records you cannot see, or not yet onboarded into LFX v2, are not counted. This counts participant records, not distinct people; use count_only=false for de-duplicated people."
+}

@@ -130,8 +130,11 @@ present in the chain. This token is also cached and shared across all M2M and AP
 
 LFX Self Service tools (`search_projects`, `get_committee`, member, meeting, mailing list tools,
 etc.) pass the LFX token (CTE token for end-user callers; MCP-server M2M token for M2M callers)
-directly to LFX API calls. Authorization is handled natively by LFX and its OpenFGA backend; the
-MCP server performs no explicit access-check of its own for these tools. A tool reports an
+directly to LFX API calls. Authorization is handled natively by LFX and its OpenFGA backend. The
+people tools additionally call the V2 access-check (and the committee settings and query-service
+endpoints) with the same caller token to decide, per record, what LFX Self Serve would show that
+caller on screen, and narrow their results to it (see "People data for non-staff callers" in
+`AGENTS.md`); that shaping never widens what LFX returned. A tool reports an
 upstream error through `friendlyAPIError` (`internal/tools/helpers.go`), which reads the HTTP
 status with `lfxv2.UpstreamStatus` and returns a tool error, never a JSON-RPC error:
 

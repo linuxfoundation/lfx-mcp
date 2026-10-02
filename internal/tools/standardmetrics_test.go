@@ -42,11 +42,11 @@ const standardMetricsDescriptionCeiling = 1000
 // this tool. since, until and as_of are gone, not aliased.
 var standardMetricParameters = []string{
 	"metric", "by", "project", "subprojects", "org", "subsidiaries",
-	"start_date", "end_date", "period", "order_by", "limit",
+	"topic", "start_date", "end_date", "period", "order_by", "limit",
 }
 
 // standardMetricNames is the whole inventory, in the order the guidance lists
-// it: the lens registry exposes exactly these twenty-two families (each with
+// it: the lens registry exposes exactly these twenty-three families (each with
 // its own groupings under by), so this list is what the routing surface must
 // name — no more, and none of them missing.
 var standardMetricNames = []string{
@@ -72,6 +72,7 @@ var standardMetricNames = []string{
 	"certifications",
 	"social_mentions",
 	"social_reach",
+	"talks",
 }
 
 // standardMetricKinds is each family's kind as the guidance lists it: a
@@ -101,6 +102,7 @@ var standardMetricKinds = map[string]string{
 	"certifications":              "window",
 	"social_mentions":             "window",
 	"social_reach":                "window",
+	"talks":                       "window",
 }
 
 // standardMetricGroupings is each family's groupings as the GUIDANCE lists
@@ -131,6 +133,7 @@ var standardMetricGroupings = map[string]string{
 	"certifications":              "total, org",
 	"social_mentions":             "total, project, network, sentiment",
 	"social_reach":                "total, project",
+	"talks":                       "total, event, track, topic, format, org, speaker",
 }
 
 // TestStandardMetricsDescription_FitsSchemaBudget holds the tool to the same budget as
@@ -261,6 +264,7 @@ func TestStandardMetrics_RequiredParamSurvivesCompaction(t *testing.T) {
 	for _, want := range append([]string{
 		"metrics/group_by", "read_lfx_standard_metrics_guidance", "start_date, end_date and period",
 		"WINDOW", "AT-DATE family (" + strings.Join(atDate, ", ") + ")", "state on end_date",
+		"talks counts accepted SESSIONS (talks), not people", "talks takes a topic filter, the only family with one",
 	}, standardMetricNames...) {
 		if !strings.Contains(desc, want) {
 			t.Errorf("metric description does not mention %q — the contract must survive schema compaction", want)
@@ -348,6 +352,27 @@ func TestStandardMetrics_SendsTheArgumentsAsGiven(t *testing.T) {
 		`"order_by":["-total_contributors"],"limit":10}`
 	if got := string(captured.Body); got != want {
 		t.Errorf("request body =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// topic is the talks family's own filter and the only free-text one on the
+// tool; it travels as given and is absent when unset, so the lens's
+// "topic is talks-only" rejection reaches callers on other families.
+func TestStandardMetrics_SendsTopicAsGiven(t *testing.T) {
+	captured := setupLensTest(t)
+
+	if _, _, err := handleStandardMetrics(context.Background(), &mcp.CallToolRequest{}, StandardMetricsArgs{
+		Metric:    "talks",
+		By:        "event",
+		Topic:     "OpenTelemetry",
+		StartDate: "2025-01-01",
+		EndDate:   "2025-12-31",
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := `{"metric":"talks","by":"event","topic":"OpenTelemetry","start_date":"2025-01-01","end_date":"2025-12-31"}`
+	if got := string(captured.Body); got != want {
+		t.Errorf("request body = %s, want %s", got, want)
 	}
 }
 

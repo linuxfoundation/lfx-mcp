@@ -35,7 +35,7 @@ import (
 // so a rejection is the lens's own message, returned verbatim.
 const standardMetricsDescription = `Run a governed standard metric over LFX data: one figure or one row per grouping, scoped by project, organization and dates, with the applied scope echoed.
 
-STANDARD METRICS memberships, member_organizations, new_members, new_member_organizations, lost_member_organizations, paying_member_organizations, membership_churn, contributors, contributions, contributing_organizations, participants, maintainers, maintainer_contributions, project_health, software_value, event_registrations, event_sponsorships, speakers, training_enrollments, certifications, social_mentions, social_reach.
+STANDARD METRICS memberships, member_organizations, new_members, new_member_organizations, lost_member_organizations, paying_member_organizations, membership_churn, contributors, contributions, contributing_organizations, participants, maintainers, maintainer_contributions, project_health, software_value, event_registrations, event_sponsorships, speakers, training_enrollments, certifications, social_mentions, social_reach, talks.
 
 Read read_lfx_standard_metrics_guidance BEFORE the first call, and whenever in doubt: it defines every grouping (by), switch, default and caveat.
 
@@ -57,8 +57,10 @@ func RegisterStandardMetrics(server *mcp.Server) {
 // StandardMetricsArgs defines the input for query_lfx_standard_metrics. Every
 // field travels to the lens standard-metric endpoint unchanged in meaning;
 // standardMetricRequest below is the body it becomes. There is deliberately
-// no free-form filter: the scope switches and the window are the only ways
-// to slice a governed figure, so a result is always the recipe as defined.
+// no general free-form filter: the scope switches and the window are the
+// ways to slice a governed figure, so a result is always the recipe as
+// defined. The one exception is Topic, a keyword filter the talks family
+// alone accepts; the lens rejects it on every other family.
 //
 // Metric is the only required field, so under the schema compaction described
 // on QuerySemanticLayerArgs its description is the one that survives intact
@@ -71,16 +73,17 @@ func RegisterStandardMetrics(server *mcp.Server) {
 // value: omitted means every row, and 0 rows is not a question anyone asks,
 // so the lens rejects it rather than silently reading it as "no limit".
 type StandardMetricsArgs struct {
-	Metric       string `json:"metric" jsonschema:"Required. The family: memberships, member_organizations, new_members, new_member_organizations, lost_member_organizations, paying_member_organizations, membership_churn, contributors, contributions, contributing_organizations, participants, maintainers, maintainer_contributions, project_health, software_value, event_registrations, event_sponsorships, speakers, training_enrollments, certifications, social_mentions or social_reach. Each is a fixed set of metrics; by picks its grouping - there are no metrics/group_by parameters. Every family takes start_date, end_date and period: a WINDOW family counts what happened between the two dates, an AT-DATE family (memberships, member_organizations, paying_member_organizations, maintainers, project_health, software_value) reports the state on end_date. maintainers is the exception: today's roster only; with period, one row per period of today's maintainers active in it, not the roster at that time. read_lfx_standard_metrics_guidance lists every grouping, default and caveat."`
-	By           string `json:"by,omitempty" jsonschema:"Exactly one grouping from the family's list (read_lfx_standard_metrics_guidance): total = ONE figure for the scope; org, project, tier, country, region, event, course, type, platform, org_region, foundation, category, population, network, sentiment = one row each, as the family offers; contributor, maintainer = people by GitHub identity or the roster. Omitted = the family's first grouping (total). A grouping the family does not offer returns an error naming the valid ones."`
+	Metric       string `json:"metric" jsonschema:"Required. The family: memberships, member_organizations, new_members, new_member_organizations, lost_member_organizations, paying_member_organizations, membership_churn, contributors, contributions, contributing_organizations, participants, maintainers, maintainer_contributions, project_health, software_value, event_registrations, event_sponsorships, speakers, training_enrollments, certifications, social_mentions, social_reach or talks. Each is a fixed set of metrics; by picks its grouping - there are no metrics/group_by parameters. Every family takes start_date, end_date and period: a WINDOW family counts what happened between the two dates, an AT-DATE family (memberships, member_organizations, paying_member_organizations, maintainers, project_health, software_value) reports the state on end_date. maintainers is the exception: today's roster only; with period, one row per period of today's maintainers active in it, not the roster at that time. talks counts accepted SESSIONS (talks), not people - speakers counts people; talks takes a topic filter, the only family with one. read_lfx_standard_metrics_guidance lists every grouping, default and caveat."`
+	By           string `json:"by,omitempty" jsonschema:"Exactly one grouping from the family's list (read_lfx_standard_metrics_guidance): total = ONE figure for the scope; org, project, tier, country, region, event, course, type, platform, org_region, foundation, category, population, network, sentiment, track, topic, format = one row each, as the family offers; contributor, maintainer = people by GitHub identity or the roster; speaker (talks) = one row per person per event with their talk count. Omitted = the family's first grouping (total). A grouping the family does not offer returns an error naming the valid ones."`
 	Project      string `json:"project,omitempty" jsonschema:"Optional project scope: ONE slug from search_projects, exact (e.g. cncf, k8s). Omitted = LF-wide, which is what 'the Linux Foundation' as a whole means: do not pass tlf for it, that slug is the LF's own membership programme and a root of the project tree, not the LF-wide scope, and the result says so. An unknown slug is rejected with candidate slugs; never guess one."`
 	Subprojects  string `json:"subprojects,omitempty" jsonschema:"What the project name covers: combined (default) = the project plus everything under it, any depth, folded together: the project columns leave the result, and the rows are whatever by groups (by=total is one figure, by=org is one row per organization); separate = one row per project, the breakdown; excluded = that project's own bucket only."`
 	Org          string `json:"org,omitempty" jsonschema:"Optional organization scope: ONE stored legal account name from search_b2b_orgs, exact (e.g. Red Hat LLC). A name matching no data-bearing account is rejected with candidates; never guess one. Families whose model carries no account reject org."`
 	Subsidiaries string `json:"subsidiaries,omitempty" jsonschema:"What the org name covers: excluded (default) = that account only; separate = the account plus every subsidiary at any depth, one row each; combined = those folded together: the org columns leave the result, and the rows are whatever by groups (by=total is one figure, by=project is one row per project). Without org, combined on by=org is one row per parent organization."`
+	Topic        string `json:"topic,omitempty" jsonschema:"talks only: a project or technology the session is about, matched case-insensitively against the session's title, track, abstract and any tags the event captured (e.g. OpenTelemetry). One term; the lens rejects it on every other family. A keyword match, not a taxonomy: say so in the answer."`
 	StartDate    string `json:"start_date,omitempty" jsonschema:"yyyy-mm-dd, a UTC calendar day. On a window family the first day counted; on an at-date family only with period, the first period. Omitted = the family's window: the trailing 365 days before end_date on the activity, event, training and social families and on any day/week series; all history on new_members, membership_churn and the new_/lost_member_organizations families. The applied block says which ran."`
 	EndDate      string `json:"end_date,omitempty" jsonschema:"yyyy-mm-dd, a UTC calendar day. On a window family the last day counted; on an at-date family the day the state is reported on. Omitted = today (UTC). A future end_date is honoured and flagged. maintainers takes today only unless period is set."`
 	Period       string `json:"period,omitempty" jsonschema:"day, week, month, quarter or year: adds a time dimension to by; by=org with period=month is one row per organization per month. Window families bucket their dates; at-date families report the state at each period end from start_date to end_date, the last row partial when end_date falls inside a period. maintainers is the exception: today's roster only; with period, one row per period of today's maintainers active in it, not the roster at that time. Omitted = no time series; the rows are whatever by groups, one figure on by=total."`
-	OrderBy      string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields, prefix with - for descending, e.g. -total_contributors. Only the family's own result columns, as listed in read_lfx_standard_metrics_guidance: its metric name(s), its grouping columns (account, parent_org, project, foundation, event...) and period on a series. A column the call folds away cannot be ordered on."`
+	OrderBy      string `json:"order_by,omitempty" jsonschema:"Comma-separated sort fields, prefix with - for descending, e.g. -total_contributors. Only the family's own result columns, as listed in read_lfx_standard_metrics_guidance: its metric name(s), its grouping columns (account, parent_org, project, foundation, event, track, topic, format...) and period on a series. A column the call folds away cannot be ordered on."`
 	Limit        *int   `json:"limit,omitempty" jsonschema:"Maximum rows to return. Use 10-20 for top-N questions. Omitting it returns EVERY row; the applied block's truncated flag says whether a limit cut rows off."`
 }
 
@@ -97,6 +100,7 @@ type standardMetricRequest struct {
 	Subprojects  string   `json:"subprojects,omitempty"`
 	Org          string   `json:"org,omitempty"`
 	Subsidiaries string   `json:"subsidiaries,omitempty"`
+	Topic        string   `json:"topic,omitempty"`
 	StartDate    string   `json:"start_date,omitempty"`
 	EndDate      string   `json:"end_date,omitempty"`
 	Period       string   `json:"period,omitempty"`
@@ -116,6 +120,7 @@ func newStandardMetricRequest(args StandardMetricsArgs) standardMetricRequest {
 		Subprojects:  args.Subprojects,
 		Org:          args.Org,
 		Subsidiaries: args.Subsidiaries,
+		Topic:        args.Topic,
 		StartDate:    args.StartDate,
 		EndDate:      args.EndDate,
 		Period:       args.Period,

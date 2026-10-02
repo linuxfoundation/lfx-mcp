@@ -344,6 +344,16 @@ not under this rule yet and are returned as the services return them, pending pr
 | `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, project, name         |
 | `get_past_meeting_summary`         | Get a past meeting summary by UID                                       |
 
+### Open Community Groups
+
+*Staff-only, and not enabled by default: these tools are backed by LFX Lens
+endpoints and are turned on by name via `LFXMCP_TOOLS` once those are live.*
+
+| Tool                         | Description                                                                                 |
+|------------------------------|---------------------------------------------------------------------------------------------|
+| `search_lfx_meetups`         | List Open Community Group meetup events; filter by community, group, country, date, title   |
+| `query_lfx_meetup_analytics` | Meetups, registrants and check-ins per community, group, city, country or region, over time |
+
 ### Discord
 
 | Tool                      | Description                                              |

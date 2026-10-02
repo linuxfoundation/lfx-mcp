@@ -1040,6 +1040,14 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	if enabledTools["query_lfx_standard_metrics"] && canRead && isStaff {
 		tools.RegisterStandardMetrics(server)
 	}
+	// Not in defaultTools for the same reason: the meetup routes are
+	// lens-side, so a deployment enables these by name once they are live.
+	if enabledTools["search_lfx_meetups"] && canRead && isStaff {
+		tools.RegisterSearchMeetups(server)
+	}
+	if enabledTools["query_lfx_meetup_analytics"] && canRead && isStaff {
+		tools.RegisterMeetupAnalytics(server)
+	}
 	// Guidance tools carry the query doctrine as tool results (no byte budget)
 	// and are gated exactly like the tools they document — staff-only, one
 	// name per audience so a deployment enables exactly the guidance its

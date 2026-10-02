@@ -109,6 +109,8 @@ var staffOnlyTools = []string{
 	"query_lfx_standard_metrics",
 	"read_lfx_semantic_layer_guidance",
 	"read_lfx_standard_metrics_guidance",
+	"search_lfx_meetups",
+	"query_lfx_meetup_analytics",
 }
 
 // nonPeopleTools are the tools newServer may register whose results carry no
@@ -138,6 +140,8 @@ var nonPeopleTools = []string{
 	// Staff-only Lens tools: registered for isStaff callers only.
 	"query_lfx_lens", "explore_lfx_semantic_layer", "query_lfx_semantic_layer",
 	"query_lfx_standard_metrics", "read_lfx_semantic_layer_guidance", "read_lfx_standard_metrics_guidance",
+	// Meetup tools: events and aggregates, no person records.
+	"search_lfx_meetups", "query_lfx_meetup_analytics",
 	// Out of the rule's scope until the product decides what LFX Self Serve
 	// shows for them (README "People data"): mailing-list members, member
 	// records, membership key contacts, org committee seats, and project
@@ -261,6 +265,24 @@ func TestNewServer_LensToolsAreStaffOnly_MachineAccounts(t *testing.T) {
 		}
 		if forMachineNoScope[name] {
 			t.Errorf("%s is listed for a machine account with no read/manage scope; the machine marker must not bypass scope checks", name)
+		}
+	}
+}
+
+// TestNewServer_MeetupToolsAreNotInDefaults pins the deployment-safety
+// invariant on the meetup tools: their lens routes are not live, so a staff
+// caller on a server built from defaultTools must not see them. They come on
+// by name once the routes exist. Without this, adding a name to defaultTools
+// by mistake would expose a tool that returns 404s.
+func TestNewServer_MeetupToolsAreNotInDefaults(t *testing.T) {
+	staff := &auth.TokenInfo{
+		Scopes: []string{tools.ScopeRead},
+		Extra:  map[string]any{tools.ClaimLFStaff: true},
+	}
+	forStaffDefaults := listedToolsFor(t, defaultTools, staff)
+	for _, name := range []string{"search_lfx_meetups", "query_lfx_meetup_analytics"} {
+		if forStaffDefaults[name] {
+			t.Errorf("%s is listed on a defaultTools server; it must stay opt-in until its lens route is live", name)
 		}
 	}
 }

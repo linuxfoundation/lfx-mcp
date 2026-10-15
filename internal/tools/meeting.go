@@ -102,7 +102,7 @@ func RegisterSearchMeetings(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_meetings",
-			Description: "Search for LFX meetings (group calls, also called committee calls, working group sessions) using the query service. Returns the meetings visible to the caller, as in LFX Self Serve. Events (conferences, registrations, attendees, speakers, sponsorships) are standard metrics: when query_lfx_standard_metrics is available to you, read read_lfx_standard_metrics_guidance and use it.",
+			Description: "Search for LFX meetings (group calls, also called committee calls, working group sessions) using the query service. Returns the meetings visible to the caller, as in LFX Self Serve. Set only_mine for the meetings you are registered for, as in LFX Self Serve's My Meetings. Events (conferences, registrations, attendees, speakers, sponsorships) are standard metrics: when query_lfx_standard_metrics is available to you, read read_lfx_standard_metrics_guidance and use it.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Meetings",
 				ReadOnlyHint: true,
@@ -112,7 +112,7 @@ func RegisterSearchMeetings(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_meetings",
-		Description: "Search for LFX meetings (committee calls, working group sessions) using the query service. Returns the meetings visible to the caller, as in LFX Self Serve. Events (conferences, registrations, attendees, speakers, sponsorships) are standard metrics: when query_lfx_standard_metrics is available to you, read read_lfx_standard_metrics_guidance and use it.",
+		Description: "Search for LFX meetings (committee calls, working group sessions) using the query service. Returns the meetings visible to the caller, as in LFX Self Serve. Set only_mine for the meetings you are registered for, as in LFX Self Serve's My Meetings. Events (conferences, registrations, attendees, speakers, sponsorships) are standard metrics: when query_lfx_standard_metrics is available to you, read read_lfx_standard_metrics_guidance and use it.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Meetings",
 			ReadOnlyHint: true,
@@ -240,7 +240,7 @@ func RegisterSearchPastMeetings(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_past_meetings",
-			Description: "Search for LFX past meetings (v1_past_meeting) using the query service. Supports filtering by project, group (also known as committee), meeting ID, date range, and name. Returns the past meetings visible to the caller. Filters combine with AND: a record must match every filter given.",
+			Description: "Search for LFX past meetings (v1_past_meeting) using the query service. Supports filtering by project, group (also known as committee), meeting ID, date range, and name. Returns the past meetings visible to the caller. Set only_mine for the past meetings you were invited to or attended, as in LFX Self Serve's My Meetings. Filters combine with AND: a record must match every filter given.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Past Meetings",
 				ReadOnlyHint: true,
@@ -250,7 +250,7 @@ func RegisterSearchPastMeetings(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_past_meetings",
-		Description: "Search for LFX past meetings using the query service. Supports filtering by project, committee, meeting ID, date range, and name. Returns the past meetings visible to the caller. Filters combine with AND: a record must match every filter given.",
+		Description: "Search for LFX past meetings using the query service. Supports filtering by project, committee, meeting ID, date range, and name. Returns the past meetings visible to the caller. Set only_mine for the past meetings you were invited to or attended, as in LFX Self Serve's My Meetings. Filters combine with AND: a record must match every filter given.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Past Meetings",
 			ReadOnlyHint: true,
@@ -279,6 +279,7 @@ type SearchMeetingsArgs struct {
 	DateFrom     string `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo       string `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
 	Sort         string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
+	OnlyMine     bool   `json:"only_mine,omitempty" jsonschema:"When true, return only the meetings you are registered for (as host or participant) under your LFX login, as LFX Self Serve's My Meetings lists them. Needs a personal login. An empty page means none of them matches the other filters or this page, not that none exist; follow page_token when present"`
 	PageSize     int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -292,6 +293,7 @@ type SearchMeetingsGroupArgs struct {
 	DateFrom   string `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo     string `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order for results (default name_asc),enum=name_asc,enum=name_desc,enum=updated_asc,enum=updated_desc"`
+	OnlyMine   bool   `json:"only_mine,omitempty" jsonschema:"When true, return only the meetings you are registered for (as host or participant) under your LFX login, as LFX Self Serve's My Meetings lists them. Needs a personal login. An empty page means none of them matches the other filters or this page, not that none exist; follow page_token when present"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -454,7 +456,13 @@ func handleSearchMeetings(ctx context.Context, req *mcp.CallToolRequest, args Se
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.InfoContext(ctx, "searching meetings", "name", args.Name, "project_uid", args.ProjectUID, "committee_uid", args.CommitteeUID, "page_size", pageSize)
+	if args.OnlyMine {
+		if err := applyOnlyMine(payload, tokenInfo); err != nil {
+			return nil, resourceSearchResult{}, err
+		}
+	}
+
+	logger.InfoContext(ctx, "searching meetings", "name", args.Name, "project_uid", args.ProjectUID, "committee_uid", args.CommitteeUID, "only_mine", args.OnlyMine, "page_size", pageSize)
 
 	result, err := clients.QuerySvc.QueryResources(ctx, payload)
 	if err != nil {
@@ -1024,6 +1032,7 @@ type SearchPastMeetingsArgs struct {
 	DateFrom     string `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo       string `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
 	Sort         string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
+	OnlyMine     bool   `json:"only_mine,omitempty" jsonschema:"When true, return only the past meetings you were invited to or attended (as host, invitee or attendee) under your LFX login, as LFX Self Serve's My Meetings lists them. Needs a personal login. An empty page means none of them matches the other filters or this page, not that none exist; follow page_token when present"`
 	PageSize     int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken    string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -1043,6 +1052,7 @@ type SearchPastMeetingsGroupArgs struct {
 	DateFrom   string `json:"date_from,omitempty" jsonschema:"Start date inclusive in ISO 8601 format (e.g. 2025-01-01)"`
 	DateTo     string `json:"date_to,omitempty" jsonschema:"End date inclusive in ISO 8601 format (e.g. 2025-12-31)"`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order: name_asc (default), name_desc, updated_asc, updated_desc"`
+	OnlyMine   bool   `json:"only_mine,omitempty" jsonschema:"When true, return only the past meetings you were invited to or attended (as host, invitee or attendee) under your LFX login, as LFX Self Serve's My Meetings lists them. Needs a personal login. An empty page means none of them matches the other filters or this page, not that none exist; follow page_token when present"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response"`
 }
@@ -1057,6 +1067,7 @@ func handleSearchMeetingsGroupMode(ctx context.Context, req *mcp.CallToolRequest
 		DateFrom:     args.DateFrom,
 		DateTo:       args.DateTo,
 		Sort:         args.Sort,
+		OnlyMine:     args.OnlyMine,
 		PageSize:     args.PageSize,
 		PageToken:    args.PageToken,
 	})
@@ -1105,6 +1116,7 @@ func handleSearchPastMeetingsGroupMode(ctx context.Context, req *mcp.CallToolReq
 		DateFrom:     args.DateFrom,
 		DateTo:       args.DateTo,
 		Sort:         args.Sort,
+		OnlyMine:     args.OnlyMine,
 		PageSize:     args.PageSize,
 		PageToken:    args.PageToken,
 	})
@@ -1188,11 +1200,18 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 		payload.PageToken = &args.PageToken
 	}
 
+	if args.OnlyMine {
+		if err := applyOnlyMine(payload, tokenInfo); err != nil {
+			return nil, resourceSearchResult{}, err
+		}
+	}
+
 	logger.InfoContext(ctx, "searching past meetings",
 		"name", args.Name,
 		"project_uid", args.ProjectUID,
 		"committee_uid", args.CommitteeUID,
 		"meeting_id", args.MeetingID,
+		"only_mine", args.OnlyMine,
 		"page_size", pageSize,
 	)
 

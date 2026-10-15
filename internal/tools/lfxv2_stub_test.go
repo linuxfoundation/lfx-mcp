@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -35,12 +36,16 @@ type stubAPIRequest struct {
 	Path          string
 	Query         url.Values
 	Authorization string
+	Header        http.Header
+	Body          []byte
 }
 
 // stubAPIResponse is a canned response for one API request.
 type stubAPIResponse struct {
 	Status int
 	Body   string
+	// Header carries extra response headers (an ETag, for example).
+	Header map[string]string
 }
 
 // stubLFXAPI is a fake LFX API domain plus token endpoint. It records every
@@ -48,12 +53,15 @@ type stubAPIResponse struct {
 // FIFO order; when a path has no queued response it replies 404 so a test
 // that forgot to script a call fails loudly rather than silently succeeding.
 type stubLFXAPI struct {
-	t       *testing.T
-	mu      sync.Mutex
-	server  *httptest.Server
-	queues  map[string][]stubAPIResponse
-	reqs    []stubAPIRequest
-	Clients *lfxv2.Clients
+	t      *testing.T
+	mu     sync.Mutex
+	server *httptest.Server
+	queues map[string][]stubAPIResponse
+	// handlers answer requests keyed by "METHOD path" from the request itself
+	// (see Handle); a queued response for the path takes precedence.
+	handlers map[string]func(r stubAPIRequest) stubAPIResponse
+	reqs     []stubAPIRequest
+	Clients  *lfxv2.Clients
 
 	// accessGrants, when non-nil, makes the fake answer POST /access-check
 	// from the request body: each relation request maps to its granted flag
@@ -138,24 +146,35 @@ func (s *stubLFXAPI) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.mu.Lock()
-	s.reqs = append(s.reqs, stubAPIRequest{
+	rawBody, _ := io.ReadAll(r.Body)
+	seen := stubAPIRequest{
 		Method:        r.Method,
 		Path:          r.URL.Path,
 		Query:         r.URL.Query(),
 		Authorization: r.Header.Get("Authorization"),
-	})
+		Header:        r.Header.Clone(),
+		Body:          rawBody,
+	}
+
+	s.mu.Lock()
+	s.reqs = append(s.reqs, seen)
 	queue := s.queues[r.URL.Path]
+	handler := s.handlers[r.Method+" "+r.URL.Path]
 	var resp stubAPIResponse
 	switch {
 	case len(queue) > 0:
 		resp = queue[0]
 		s.queues[r.URL.Path] = queue[1:]
+	case handler != nil:
+		// Run the handler outside the lock so it may inspect the fake.
+		s.mu.Unlock()
+		resp = handler(seen)
+		s.mu.Lock()
 	case r.URL.Path == accessCheckPath && (s.accessGrants != nil || s.accessStatus != 0):
 		var body struct {
 			Requests []string `json:"requests"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
+		_ = json.Unmarshal(rawBody, &body)
 		s.accessBodies = append(s.accessBodies, body.Requests)
 		if s.accessStatus != 0 {
 			resp = stubAPIResponse{Status: s.accessStatus, Body: ""}
@@ -173,6 +192,9 @@ func (s *stubLFXAPI) serve(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
+	for k, v := range resp.Header {
+		w.Header().Set(k, v)
+	}
 	w.WriteHeader(resp.Status)
 	_, _ = w.Write([]byte(resp.Body))
 }
@@ -180,6 +202,18 @@ func (s *stubLFXAPI) serve(w http.ResponseWriter, r *http.Request) {
 // Respond queues a 200 response for path.
 func (s *stubLFXAPI) Respond(path, body string) {
 	s.RespondStatus(path, http.StatusOK, body)
+}
+
+// Handle answers every request with the given method and path from the
+// request itself, so a fake can validate a body the way a real service would.
+// Queued responses for the path still take precedence.
+func (s *stubLFXAPI) Handle(method, path string, fn func(r stubAPIRequest) stubAPIResponse) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.handlers == nil {
+		s.handlers = map[string]func(r stubAPIRequest) stubAPIResponse{}
+	}
+	s.handlers[method+" "+path] = fn
 }
 
 // RespondStatus queues a response with an explicit status for path.

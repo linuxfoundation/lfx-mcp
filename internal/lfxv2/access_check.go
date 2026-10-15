@@ -177,18 +177,20 @@ type MyGrant struct {
 	Role string
 }
 
-// accessCheckStatusError preserves the HTTP status and body for diagnostics.
+// myGrantsStatusError preserves the HTTP status and body of a non-200
+// /my-grants answer for diagnostics. Only MyGrants returns it: CheckAccess
+// keeps its plain formatted errors, which carry no status for UpstreamStatus.
 // MyGrants does not expose service text for authorization refusals.
-type accessCheckStatusError struct {
+type myGrantsStatusError struct {
 	status int
 	body   string
 }
 
-func (e *accessCheckStatusError) Error() string {
+func (e *myGrantsStatusError) Error() string {
 	return fmt.Sprintf("my-grants returned status %d: %s", e.status, e.body)
 }
 
-func (e *accessCheckStatusError) Is(target error) bool {
+func (e *myGrantsStatusError) Is(target error) bool {
 	return target == ErrAccessRefused && (e.status == http.StatusUnauthorized || e.status == http.StatusForbidden)
 }
 
@@ -217,7 +219,7 @@ func (c *AccessCheckClient) MyGrants(ctx context.Context, token, objectType stri
 		if len(body) > maxErrorBody {
 			body = append(body[:maxErrorBody], []byte(" [truncated]")...)
 		}
-		return nil, 0, &accessCheckStatusError{status: resp.StatusCode, body: string(body)}
+		return nil, 0, &myGrantsStatusError{status: resp.StatusCode, body: string(body)}
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

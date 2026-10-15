@@ -24,8 +24,7 @@ import (
 // does not declare surfaces as Goa's invalid_response error instead; see
 // IsRefusalWithoutServiceMessage. The non-Goa MyGrants client also matches
 // this sentinel for all 401/403 responses: their bodies are diagnostic only.
-// Match it with errors.Is; UpstreamStatus
-// tells a 401 from a 403.
+// Match it with errors.Is; UpstreamStatus tells a 401 from a 403.
 var ErrAccessRefused = errors.New("request refused without a service message")
 
 // refusalError is the error refusalAwareDecoder returns for a 401 or 403
@@ -63,8 +62,9 @@ func IsRefusalWithoutServiceMessage(err error) bool {
 
 // UpstreamStatus returns the HTTP status an LFX v2 service answered with when
 // err shows that status was 401, 403 or 404, and 0 otherwise. It reads the
-// forms such an answer takes in the access-check or Goa-generated clients:
-//   - the access-check client's typed HTTP status error;
+// forms such an answer takes in the MyGrants or Goa-generated clients:
+//   - the MyGrants client's typed HTTP status error (CheckAccess returns
+//     plain formatted errors, which carry no status);
 //   - a 401 or 403 without a service-authored message (ErrAccessRefused),
 //     which keeps its status;
 //   - Goa's invalid_response error, for a status the endpoint does not declare;
@@ -76,11 +76,11 @@ func IsRefusalWithoutServiceMessage(err error) bool {
 // A declared status whose body the client cannot decode or validate surfaces
 // as Goa's decoding or validation error, which does not carry the status.
 func UpstreamStatus(err error) int {
-	var accessCheck *accessCheckStatusError
-	if errors.As(err, &accessCheck) {
-		switch accessCheck.status {
+	var myGrants *myGrantsStatusError
+	if errors.As(err, &myGrants) {
+		switch myGrants.status {
 		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
-			return accessCheck.status
+			return myGrants.status
 		}
 		return 0
 	}

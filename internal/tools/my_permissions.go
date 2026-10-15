@@ -21,9 +21,18 @@ import (
 // Keep the supported types and their ordering in one place. Organisation
 // roles are read as the b2b_org type; the access-check service must accept
 // that type on /my-grants for the organisation rows to be listed.
-const myPermissionTypes = projectResourceType + "," + committeeResourceType + ",project_membership," + b2bOrgResourceType
+var myPermissionTypes = []string{projectResourceType, committeeResourceType, "project_membership", b2bOrgResourceType}
 
 const myPermissionsCoverage = "Only direct grants on projects, %s, project memberships and organisations are listed. Roles inherited from a parent project or from a parent or connected organisation, team-based roles, public access and access implied by higher roles are not listed; a missing entry does not mean you lack access. Names are best-effort and may be omitted when unavailable, not visible to you, or beyond the lookup limit."
+
+// committeeFamilyLabel names the committee type, in the plural, in the tool
+// description and the coverage note, following the committees-as-groups flag.
+func committeeFamilyLabel(groups bool) string {
+	if groups {
+		return "groups"
+	}
+	return "committees"
+}
 
 // permissionTypeLabel names an object type in caller-facing text.
 func permissionTypeLabel(typ string, groups bool) string {
@@ -58,13 +67,9 @@ type myPermission struct {
 
 // RegisterListMyPermissions registers the signed-in person's direct roles tool.
 func RegisterListMyPermissions(server *mcp.Server, committeesAsGroups bool) {
-	committeeLabel := "committees"
-	if committeesAsGroups {
-		committeeLabel = "groups"
-	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_my_permissions",
-		Description: fmt.Sprintf("Lists the roles granted directly to you on projects, %s, project memberships (key contact) and organisations. Roles inherited from a parent project or a parent or connected organisation, held through a team, or implied by a higher role are not listed, so a missing entry does not mean you lack access.", committeeLabel),
+		Description: fmt.Sprintf("Lists the roles granted directly to you on projects, %s, project memberships (key contact) and organisations. Roles inherited from a parent project or a parent or connected organisation, held through a team, or implied by a higher role are not listed, so a missing entry does not mean you lack access.", committeeFamilyLabel(committeesAsGroups)),
 		Annotations: &mcp.ToolAnnotations{Title: "List My Permissions", ReadOnlyHint: true},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ ListMyPermissionsArgs) (*mcp.CallToolResult, myPermissionsResult, error) {
 		return handleListMyPermissions(ctx, req, committeesAsGroups)
@@ -95,12 +100,8 @@ func handleListMyPermissions(ctx context.Context, req *mcp.CallToolRequest, grou
 		logger.ErrorContext(ctx, "failed to get LFX token", "error", err)
 		return nil, myPermissionsResult{}, toolError(friendlyAPIError("failed to get LFX token", err))
 	}
-	committeeLabel := "committees"
-	if groups {
-		committeeLabel = "groups"
-	}
-	out := myPermissionsResult{Permissions: []myPermission{}, Coverage: fmt.Sprintf(myPermissionsCoverage, committeeLabel)}
-	types := strings.Split(myPermissionTypes, ",")
+	out := myPermissionsResult{Permissions: []myPermission{}, Coverage: fmt.Sprintf(myPermissionsCoverage, committeeFamilyLabel(groups))}
+	types := myPermissionTypes
 	var failures []error
 	counts := make(map[string]int, len(types))
 	for _, typ := range types {

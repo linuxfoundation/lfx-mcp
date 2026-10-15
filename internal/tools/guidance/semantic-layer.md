@@ -339,7 +339,7 @@ registrations has no account either, so every org-scoped figure here is a
 floor — present "attributed registrations/enrollments" and say so.
 SPEAKERS BY COMPANY ("how many Red Hat employees gave talks at KubeCon") is
 the speakers standard metric: by=event, org=<stored legal name>,
-subsidiaries=combined, dates bracketing the edition — read the KubeCon
+subsidiaries=excluded, dates bracketing the edition — read the KubeCon
 row, report it as a floor (accounts resolve from the proposal's company
 field; many resolve to none) and as PEOPLE, not talks. TALKS BY TOPIC ("how
 many OpenTelemetry talks at KubeCon") is this layer, by session title:
@@ -348,10 +348,11 @@ total_accepted_proposals grouped by speaker_key__session_title, where
 get_dimension_values>' AND {{ Dimension('speaker_key__speaker_status') }} =
 'Accepted' AND ({{ Dimension('speaker_key__session_title') }} ILIKE
 '%OpenTelemetry%' OR {{ Dimension('speaker_key__session_title') }} ILIKE
-'%OTel%'). Each row is one talk and the metric is its accepted speaker
-slots: count rows for talks, never sum the metric. Report it as a FLOOR:
-"at least N accepted talks from the event's call for proposals whose title
-mentions X". The data holds the call-for-proposals sessions only (keynotes,
+'%OTel%'). Each row is one distinct title, not necessarily one talk:
+different sessions with the same title collapse into one row. The metric
+counts accepted speaker slots, not talks; never sum it as a talk count.
+Report the distinct matching titles as a FLOOR for talks, not an exact
+session count. The data holds the call-for-proposals sessions only (keynotes,
 maintainer-track and co-located-event talks may be missing), a title
 keyword stands in for the topic (there is no track, abstract or tag), so
 read the titles back and drop false matches ('OTel' also matches 'hotel');

@@ -413,7 +413,7 @@ member organizations across the LF today", and the offer of memberships
   under its display name, never as a match.
 - A company's speakers at an event ("how many Red Hat employees gave talks
   at KubeCon"): speakers, by=event, org=<Red Hat's stored legal name from
-  search_b2b_orgs>, subsidiaries=combined, start_date/end_date bracketing
+  search_b2b_orgs>, subsidiaries=excluded, start_date/end_date bracketing
   the edition → one row per event the company spoke at; read the KubeCon
   row(s). The figure is people, not talks (a person with two sessions
   counts once; a session with three speakers counts three), and it is a

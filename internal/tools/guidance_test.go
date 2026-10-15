@@ -218,12 +218,15 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"Employer: account__account_name /\naccount__top_parent_name",
 		"account__top_parent_name for the whole company (recipe 6); speakers carry no\naccount entity",
 		"SPEAKERS BY COMPANY",
+		"the speakers standard metric: by=event, org=<stored legal name>,\nsubsidiaries=excluded, dates bracketing the edition",
 		"report it as a floor",
 		"as PEOPLE, not talks",
 		"TALKS BY TOPIC",
 		"total_accepted_proposals grouped by speaker_key__session_title",
-		"count rows for talks, never sum the metric",
-		"Report it as a FLOOR",
+		"Each row is one distinct title, not necessarily one talk",
+		"different sessions with the same title collapse into one row",
+		"The metric\ncounts accepted speaker slots, not talks; never sum it as a talk count",
+		"Report the distinct matching titles as a FLOOR for talks, not an exact\nsession count",
 		"The data holds the call-for-proposals sessions only",
 		"the Accepted filter is required",
 		"Bevy events carry no session titles",
@@ -272,6 +275,11 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("semantic layer guidance missing %q", want)
+		}
+	}
+	for _, gone := range []string{"Each row is one talk", "count rows for talks"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("semantic layer guidance still equates titles with sessions: %q", gone)
 		}
 	}
 }
@@ -439,6 +447,7 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"## Worked calls",
 		"One figure, window: contributors, project=cncf, start_date=2025-01-01",
 		"how many Red Hat employees gave talks\n  at KubeCon",
+		"search_b2b_orgs>, subsidiaries=excluded, start_date/end_date bracketing",
 		"The figure is people, not talks",
 		"FLOOR: the account is resolved from the proposal's company field",
 		"There is\n  no event filter: by=event and a window is how one event is isolated",

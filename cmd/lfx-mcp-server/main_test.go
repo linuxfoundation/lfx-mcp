@@ -303,6 +303,25 @@ func TestNewServer_MyPermissionsIsReadScopedAndDefault(t *testing.T) {
 	if tools.ManageScopeTools[name] {
 		t.Error("list_my_permissions must not require manage scope")
 	}
+	// The naming mode is passed through to the tool: its description names
+	// the committee family the way the flag says.
+	for _, tc := range []struct {
+		groups bool
+		word   string
+	}{{false, "projects, committees, "}, {true, "projects, groups, "}} {
+		var found bool
+		for _, tool := range listAllToolsForStaff(t, Config{Tools: []string{name}, CommitteesAsGroups: tc.groups}) {
+			if tool.Name == name {
+				found = true
+				if !strings.Contains(tool.Description, tc.word) {
+					t.Errorf("groups=%v: description does not follow the naming mode: %q", tc.groups, tool.Description)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("groups=%v: %s not listed", tc.groups, name)
+		}
+	}
 }
 
 // TestNewServer_ManageToolsAreListedForReaders pins the step-up model: write

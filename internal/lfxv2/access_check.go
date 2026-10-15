@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -195,17 +194,19 @@ func (e *accessCheckStatusError) Is(target error) bool {
 
 // MyGrants lists the authenticated person's direct grants for one object type.
 // token is the caller's exchanged LFX token (or static LFX token in stdio).
-// Malformed or wrong-type tuples are skipped without logging their contents.
-func (c *AccessCheckClient) MyGrants(ctx context.Context, token, objectType string) ([]MyGrant, error) {
+// Malformed or wrong-type tuples are skipped and counted in skipped, so the
+// caller can log the count with its request-bound logger; their contents are
+// never logged.
+func (c *AccessCheckClient) MyGrants(ctx context.Context, token, objectType string) (grants []MyGrant, skipped int, err error) {
 	query := url.Values{"v": {"1"}, "object_type": {objectType}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.apiURL+"/my-grants?"+query.Encode(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create my-grants request: %w", err)
+		return nil, 0, fmt.Errorf("failed to create my-grants request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("my-grants request failed: %w", err)
+		return nil, 0, fmt.Errorf("my-grants request failed: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck // Response body close errors are not actionable after reading.
 	if resp.StatusCode != http.StatusOK {
@@ -216,28 +217,28 @@ func (c *AccessCheckClient) MyGrants(ctx context.Context, token, objectType stri
 		if len(body) > maxErrorBody {
 			body = append(body[:maxErrorBody], []byte(" [truncated]")...)
 		}
-		return nil, &accessCheckStatusError{status: resp.StatusCode, body: string(body)}
+		return nil, 0, &accessCheckStatusError{status: resp.StatusCode, body: string(body)}
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read my-grants response: %w", err)
+		return nil, 0, fmt.Errorf("failed to read my-grants response: %w", err)
 	}
 	var result struct {
 		Grants []string `json:"grants"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse my-grants response: %w", err)
+		return nil, 0, fmt.Errorf("failed to parse my-grants response: %w", err)
 	}
-	grants := make([]MyGrant, 0, len(result.Grants))
+	grants = make([]MyGrant, 0, len(result.Grants))
 	for _, tuple := range result.Grants {
 		grant, ok := parseMyGrant(tuple, objectType)
 		if !ok {
-			slog.WarnContext(ctx, "skipping malformed or wrong-type my-grants entry", "object_type", objectType)
+			skipped++
 			continue
 		}
 		grants = append(grants, grant)
 	}
-	return grants, nil
+	return grants, skipped, nil
 }
 
 // parseMyGrant accepts object_type:uid#role@user:principal, not usersets or

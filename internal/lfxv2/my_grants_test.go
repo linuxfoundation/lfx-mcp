@@ -16,14 +16,15 @@ import (
 
 func TestMyGrants(t *testing.T) {
 	for _, tc := range []struct {
-		name, body string
-		want       []MyGrant
-		wantError  bool
+		name, body  string
+		want        []MyGrant
+		wantError   bool
+		wantSkipped int
 	}{
-		{"valid and malformed", `{"grants":["project:b#writer@user:alice","project:a#auditor@user:auth0|alice","project:c#owner@user:alice@example.org","committee:d#member@user:alice","bad","project:a#writer@team:staff#member","project:a#viewer@user:*"]}`, []MyGrant{{"project", "b", "writer"}, {"project", "a", "auditor"}, {"project", "c", "owner"}}, false},
-		{"empty", `{"grants":[]}`, []MyGrant{}, false},
-		{"null grants", `{"grants":null}`, []MyGrant{}, false},
-		{"invalid json", `{`, nil, true},
+		{"valid and malformed", `{"grants":["project:b#writer@user:alice","project:a#auditor@user:auth0|alice","project:c#owner@user:alice@example.org","committee:d#member@user:alice","bad","project:a#writer@team:staff#member","project:a#viewer@user:*"]}`, []MyGrant{{"project", "b", "writer"}, {"project", "a", "auditor"}, {"project", "c", "owner"}}, false, 4},
+		{"empty", `{"grants":[]}`, []MyGrant{}, false, 0},
+		{"null grants", `{"grants":null}`, []MyGrant{}, false, 0},
+		{"invalid json", `{`, nil, true, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -36,9 +37,12 @@ func TestMyGrants(t *testing.T) {
 				_, _ = w.Write([]byte(tc.body))
 			}))
 			defer server.Close()
-			got, err := NewAccessCheckClient(server.URL+"/", server.Client()).MyGrants(context.Background(), "test-token", "project")
+			got, skipped, err := NewAccessCheckClient(server.URL+"/", server.Client()).MyGrants(context.Background(), "test-token", "project")
 			if (err != nil) != tc.wantError || !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("got %#v, %v; want %#v, error=%v", got, err, tc.want, tc.wantError)
+			}
+			if skipped != tc.wantSkipped {
+				t.Errorf("skipped=%d, want %d", skipped, tc.wantSkipped)
 			}
 		})
 	}
@@ -53,7 +57,7 @@ func TestMyGrants_URLTypeEscaping(t *testing.T) {
 		_, _ = w.Write([]byte(`{"grants":[]}`))
 	}))
 	defer server.Close()
-	if _, err := NewAccessCheckClient(server.URL, server.Client()).MyGrants(context.Background(), "token", typ); err != nil {
+	if _, _, err := NewAccessCheckClient(server.URL, server.Client()).MyGrants(context.Background(), "token", typ); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -66,7 +70,7 @@ func TestMyGrants_UpstreamStatus(t *testing.T) {
 				_, _ = w.Write([]byte("upstream detail"))
 			}))
 			defer server.Close()
-			_, err := NewAccessCheckClient(server.URL, server.Client()).MyGrants(context.Background(), "token", "project")
+			_, _, err := NewAccessCheckClient(server.URL, server.Client()).MyGrants(context.Background(), "token", "project")
 			if err == nil || !strings.Contains(err.Error(), "upstream detail") {
 				t.Fatalf("missing diagnostic: %v", err)
 			}
@@ -92,7 +96,7 @@ func TestMyGrants_BoundsErrorDiagnostics(t *testing.T) {
 		_, _ = w.Write([]byte(strings.Repeat("x", 8192)))
 	}))
 	defer server.Close()
-	_, err := NewAccessCheckClient(server.URL, server.Client()).MyGrants(context.Background(), "token", "project")
+	_, _, err := NewAccessCheckClient(server.URL, server.Client()).MyGrants(context.Background(), "token", "project")
 	if err == nil || !strings.HasSuffix(err.Error(), " [truncated]") || strings.Count(err.Error(), "x") != 4096 {
 		t.Fatalf("error diagnostic not bounded: %v", err)
 	}

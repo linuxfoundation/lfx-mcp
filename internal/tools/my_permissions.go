@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strings"
 
-	lfxauth "github.com/linuxfoundation/lfx-mcp/internal/auth"
 	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -22,19 +21,19 @@ import (
 // Keep the supported types and their ordering in one place. Organisation
 // roles are read as the b2b_org type; the access-check service must accept
 // that type on /my-grants for the organisation rows to be listed.
-const myPermissionTypes = "project,committee,project_membership,b2b_org"
+const myPermissionTypes = projectResourceType + "," + committeeResourceType + ",project_membership," + b2bOrgResourceType
 
 const myPermissionsCoverage = "Only direct grants on projects, %s, project memberships and organisations are listed. Roles inherited from a parent project or from a parent or connected organisation, team-based roles, public access and access implied by higher roles are not listed; a missing entry does not mean you lack access. Names are best-effort and may be omitted when unavailable, not visible to you, or beyond the lookup limit."
 
 // permissionTypeLabel names an object type in caller-facing text.
 func permissionTypeLabel(typ string, groups bool) string {
 	switch typ {
-	case "committee":
+	case committeeResourceType:
 		if groups {
 			return "group"
 		}
 		return "committee"
-	case "b2b_org":
+	case b2bOrgResourceType:
 		return "organisation"
 	default:
 		return strings.ReplaceAll(typ, "_", " ")
@@ -78,11 +77,7 @@ func handleListMyPermissions(ctx context.Context, req *mcp.CallToolRequest, grou
 	if req.Extra != nil {
 		tokenInfo = req.Extra.TokenInfo
 	}
-	isAPIKey := false
-	if tokenInfo != nil {
-		isAPIKey, _ = tokenInfo.Extra[lfxauth.APIKeyAuthExtraKey].(bool)
-	}
-	if IsMachineAccount(tokenInfo) || isAPIKey {
+	if IsMachineAccount(tokenInfo) || IsAPIKeyCaller(tokenInfo) {
 		return nil, myPermissionsResult{}, toolError("List My Permissions requires a signed-in person; machine accounts and API keys are not supported.")
 	}
 	if projectConfig == nil || projectConfig.Clients == nil || projectConfig.Clients.AccessCheck == nil {
@@ -110,7 +105,10 @@ func handleListMyPermissions(ctx context.Context, req *mcp.CallToolRequest, grou
 	counts := make(map[string]int, len(types))
 	for _, typ := range types {
 		counts[typ] = 0
-		grants, err := clients.AccessCheck.MyGrants(ctx, token, typ)
+		grants, skipped, err := clients.AccessCheck.MyGrants(ctx, token, typ)
+		if skipped > 0 {
+			logger.WarnContext(ctx, "skipped malformed or wrong-type my-grants entries", "object_type", typ, "skipped", skipped)
+		}
 		if err != nil {
 			logger.ErrorContext(ctx, "listing direct roles failed", "object_type", typ, "error", err)
 			out.Warnings = append(out.Warnings, "Could not list your "+permissionTypeLabel(typ, groups)+" roles: "+apiErrorDetail(err))
@@ -169,7 +167,7 @@ func handleListMyPermissions(ctx context.Context, req *mcp.CallToolRequest, grou
 // Organisation documents carry uid and name under the same relation a direct
 // role implies, so they resolve like projects and committees.
 func resolvePermissionNames(ctx context.Context, clients *lfxv2.Clients, logger *slog.Logger, typ string, rows []myPermission) {
-	if len(rows) == 0 || (typ != "project" && typ != "committee" && typ != "b2b_org") {
+	if len(rows) == 0 || (typ != projectResourceType && typ != committeeResourceType && typ != b2bOrgResourceType) {
 		return
 	}
 	const limit = 100

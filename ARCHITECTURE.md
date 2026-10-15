@@ -165,8 +165,10 @@ way after their own prefix.
 
 `list_my_permissions` reads the caller's direct grants through
 `AccessCheckClient.MyGrants` (`GET /my-grants`) with the same exchanged token,
-without performing an authorization check of its own. It refuses machine and
-API-key callers, and does not expand inherited, team-based or public access.
+one object type at a time (projects, committees, project memberships and
+`b2b_org` organisations), without performing an authorization check of its
+own. It refuses machine and API-key callers, and does not expand inherited,
+team-based or public access.
 Its typed HTTP status errors use the mapping above, including in per-type
 partial-result warnings; a 403 from this endpoint always uses the standard
 access message, never the response body. Non-success response bodies are capped

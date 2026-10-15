@@ -20,10 +20,26 @@ import (
 )
 
 // Keep the supported types and their ordering in one place. Organisation
-// roles are deliberately deferred pending the source decision for a later change.
-const myPermissionTypes = "project,committee,project_membership"
+// roles are read as the b2b_org type; the access-check service must accept
+// that type on /my-grants for the organisation rows to be listed.
+const myPermissionTypes = "project,committee,project_membership,b2b_org"
 
-const myPermissionsCoverage = "Only direct grants on projects, %s and project memberships are listed. Organisation grants, inherited roles, team-based roles, public access and access implied by higher roles are not listed; a missing entry does not mean you lack access. Names are best-effort and may be omitted when unavailable, not visible to you, or beyond the lookup limit."
+const myPermissionsCoverage = "Only direct grants on projects, %s, project memberships and organisations are listed. Roles inherited from a parent project or from a parent or connected organisation, team-based roles, public access and access implied by higher roles are not listed; a missing entry does not mean you lack access. Names are best-effort and may be omitted when unavailable, not visible to you, or beyond the lookup limit."
+
+// permissionTypeLabel names an object type in caller-facing text.
+func permissionTypeLabel(typ string, groups bool) string {
+	switch typ {
+	case "committee":
+		if groups {
+			return "group"
+		}
+		return "committee"
+	case "b2b_org":
+		return "organisation"
+	default:
+		return strings.ReplaceAll(typ, "_", " ")
+	}
+}
 
 // ListMyPermissionsArgs has no parameters: the caller's identity defines the query.
 type ListMyPermissionsArgs struct{}
@@ -49,7 +65,7 @@ func RegisterListMyPermissions(server *mcp.Server, committeesAsGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_my_permissions",
-		Description: fmt.Sprintf("Lists the roles granted directly to you on projects, %s and project memberships (key contact). Roles inherited from a parent project or organisation, held through a team, or implied by a higher role are not listed, so a missing entry does not mean you lack access.", committeeLabel),
+		Description: fmt.Sprintf("Lists the roles granted directly to you on projects, %s, project memberships (key contact) and organisations. Roles inherited from a parent project or a parent or connected organisation, held through a team, or implied by a higher role are not listed, so a missing entry does not mean you lack access.", committeeLabel),
 		Annotations: &mcp.ToolAnnotations{Title: "List My Permissions", ReadOnlyHint: true},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ ListMyPermissionsArgs) (*mcp.CallToolResult, myPermissionsResult, error) {
 		return handleListMyPermissions(ctx, req, committeesAsGroups)
@@ -97,11 +113,7 @@ func handleListMyPermissions(ctx context.Context, req *mcp.CallToolRequest, grou
 		grants, err := clients.AccessCheck.MyGrants(ctx, token, typ)
 		if err != nil {
 			logger.ErrorContext(ctx, "listing direct roles failed", "object_type", typ, "error", err)
-			label := strings.ReplaceAll(typ, "_", " ")
-			if typ == "committee" && groups {
-				label = "group"
-			}
-			out.Warnings = append(out.Warnings, "Could not list your "+label+" roles: "+apiErrorDetail(err))
+			out.Warnings = append(out.Warnings, "Could not list your "+permissionTypeLabel(typ, groups)+" roles: "+apiErrorDetail(err))
 			failures = append(failures, err)
 			continue
 		}
@@ -154,8 +166,10 @@ func handleListMyPermissions(ctx context.Context, req *mcp.CallToolRequest, grou
 // UIDs. QueryResources applies the caller's visibility; missing names reveal
 // nothing about why a record was absent. Memberships have no display-name field
 // in their indexer contract, so do not invent one from a company or tier name.
+// Organisation documents carry uid and name under the same relation a direct
+// role implies, so they resolve like projects and committees.
 func resolvePermissionNames(ctx context.Context, clients *lfxv2.Clients, logger *slog.Logger, typ string, rows []myPermission) {
-	if len(rows) == 0 || (typ != "project" && typ != "committee") {
+	if len(rows) == 0 || (typ != "project" && typ != "committee" && typ != "b2b_org") {
 		return
 	}
 	const limit = 100

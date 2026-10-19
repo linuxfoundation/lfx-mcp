@@ -333,7 +333,8 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 	)
 
 	// The generated meeting-service constructor requires every endpoint. We only
-	// call GetItxPastMeeting today; the rest are passed to satisfy the signature.
+	// call GetItxPastMeeting and GetItxPastMeetingChat today; the rest are passed
+	// to satisfy the signature.
 	clients.Meeting = meetingservice.NewClient(
 		meetingHTTPClient.Readyz(),
 		meetingHTTPClient.Livez(),

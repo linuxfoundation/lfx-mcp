@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -125,6 +126,11 @@ var nonPeopleTools = []string{
 	"user_info",
 	// count_lfx_resources has its own gate (peopleCountGate).
 	"count_lfx_resources",
+	// Chat content under the recording's own viewer relation; the service
+	// returns exactly this to the same caller. Sender display names are part
+	// of the chat record as the provider shows it to every recording viewer;
+	// no people records, no e-mail.
+	"get_past_meeting_chat",
 	// Write tools echo what the writer sent; only a writer reaches them.
 	"create_committee", "update_committee", "delete_committee", "update_committee_settings",
 	"create_committee_member", "update_committee_member", "delete_committee_member",
@@ -282,6 +288,27 @@ func TestNewServer_Tools1AreReadScoped(t *testing.T) {
 		}
 		if forNoScope[name] {
 			t.Errorf("%s must not be listed without read scope", name)
+		}
+	}
+}
+
+// TestNewServer_PastMeetingChatIsReadScopedInBothModes pins the wiring of
+// get_past_meeting_chat: a default tool, registered under canRead in both
+// terminology modes with the same name (it names neither committees nor
+// groups), and absent without read scope.
+func TestNewServer_PastMeetingChatIsReadScopedInBothModes(t *testing.T) {
+	const name = "get_past_meeting_chat"
+	if !slices.Contains(defaultTools, name) {
+		t.Errorf("%s must be a default tool", name)
+	}
+	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
+	noScope := &auth.TokenInfo{Scopes: []string{}}
+	for _, groups := range []bool{false, true} {
+		if !listedToolsForConfig(t, Config{Tools: []string{name}, CommitteesAsGroups: groups}, reader)[name] {
+			t.Errorf("%s must be listed for a read-scoped caller (groups=%v)", name, groups)
+		}
+		if listedToolsForConfig(t, Config{Tools: []string{name}, CommitteesAsGroups: groups}, noScope)[name] {
+			t.Errorf("%s must not be listed without read scope (groups=%v)", name, groups)
 		}
 	}
 }

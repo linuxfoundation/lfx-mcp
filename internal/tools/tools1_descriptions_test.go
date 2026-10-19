@@ -35,6 +35,7 @@ func TestTools1Descriptions_FunctionVisibilityAndBudget(t *testing.T) {
 		{"get_membership_key_contacts", RegisterGetMembershipKeyContacts},
 		{"search_committee_members", func(s *mcp.Server) { RegisterSearchCommitteeMembers(s, false) }},
 		{"search_group_members", func(s *mcp.Server) { RegisterSearchCommitteeMembers(s, true) }},
+		{"get_past_meeting_chat", RegisterGetPastMeetingChat},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tool := listRegisteredTool(t, tc.name, tc.register)

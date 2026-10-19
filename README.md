@@ -346,6 +346,7 @@ rule yet and are returned as the services return them, pending product decisions
 | `get_past_meeting_participant`     | Get a past meeting participant by UID                                   |
 | `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, project, name         |
 | `get_past_meeting_summary`         | Get a past meeting summary by UID                                       |
+| `get_past_meeting_chat`            | Read the chat saved with a past meeting's recording, as timestamped lines (messages to everyone only; callers who may view the recording) |
 
 ### Discord
 

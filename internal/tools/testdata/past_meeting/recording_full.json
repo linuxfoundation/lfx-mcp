@@ -1,0 +1,60 @@
+{
+  "id": "93699735000-1700000000",
+  "meeting_and_occurrence_id": "93699735000-1700000000",
+  "project_uid": "11111111-1111-1111-1111-111111111111",
+  "project_slug": "example-project",
+  "host_email": "host@example.test",
+  "host_id": "zoom-host-1",
+  "meeting_id": "93699735000",
+  "occurrence_id": "1700000000",
+  "platform": "Zoom",
+  "platform_meeting_id": "",
+  "recording_access": "meeting_hosts",
+  "title": "Weekly sync",
+  "transcript_access": "public",
+  "transcript_enabled": true,
+  "visibility": "private",
+  "recording_count": 4,
+  "recording_files": [
+    {
+      "id": "file-aaa-111",
+      "meeting_id": "93699735000",
+      "file_type": "MP4",
+      "file_extension": "MP4",
+      "file_size": 104857600,
+      "recording_type": "shared_screen_with_speaker_view",
+      "status": "completed",
+      "recording_start": "2026-10-01T15:00:00Z",
+      "recording_end": "2026-10-01T16:02:11Z",
+      "download_url": "https://provider.example/rec/download/aaa",
+      "play_url": "https://provider.example/rec/play/aaa"
+    },
+    {
+      "id": "file-bbb-222",
+      "meeting_id": "93699735000",
+      "file_type": "CHAT",
+      "file_extension": "TXT",
+      "file_size": 2048,
+      "recording_type": "chat_file",
+      "status": "completed",
+      "recording_start": "2026-10-01T15:00:00Z",
+      "recording_end": "2026-10-01T16:02:11Z",
+      "download_url": "https://provider.example/rec/download/bbb"
+    }
+  ],
+  "sessions": [
+    {
+      "uuid": "session-uuid-1==",
+      "start_time": "2026-10-01T15:00:00Z",
+      "total_size": 104859648,
+      "share_url": "https://provider.example/rec/share/abc?pwd=secret"
+    }
+  ],
+  "start_time": "2026-10-01T15:00:00Z",
+  "total_size": 104900000,
+  "committees": [{"uid": "66666666-6666-4666-8666-666666666666", "name": "TSC"}],
+  "created_at": "2026-10-01T17:00:00Z",
+  "updated_at": "2026-10-02T09:00:00Z",
+  "created_by": {"email": "creator@example.test", "name": "Creator", "username": "creator"},
+  "updated_by": {"email": "editor@example.test", "name": "Editor", "username": "editor"}
+}

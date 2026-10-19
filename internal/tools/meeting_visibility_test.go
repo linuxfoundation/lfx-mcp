@@ -516,35 +516,6 @@ func TestSearchPastMeetings_PeopleFieldsTrimmedWithoutFullView(t *testing.T) {
 	}
 }
 
-func TestGetPastMeeting_ArtifactPeopleFieldsTrimmedWithoutFullView(t *testing.T) {
-	artifact := func(typ, id string) stubAPIResponse {
-		return stubAPIResponse{Status: http.StatusOK, Body: singleResourcePage(typ, id, `{"uid": "`+id+`", "host_email": "host@example.test", "host_id": "h1", "created_by": {"email": "creator@example.test"}, "updated_by": {"email": "editor@example.test"}, "share_url": "https://zoom.example.test/rec"}`)}
-	}
-	res, out := getPastMeetingWith(t, artifact("v1_past_meeting_recording", "rec-1"), artifact("v1_past_meeting_transcript", "tr-1"))
-	assertNoEmail(t, allResultText(t, res))
-	for name, r := range map[string]map[string]any{"recording": resourceData(out.Recording), "transcript": resourceData(out.Transcript)} {
-		for _, key := range []string{"host_email", "host_id", "created_by", "updated_by"} {
-			if _, has := r[key]; has {
-				t.Errorf("%s %s must be removed", name, key)
-			}
-		}
-		if r["share_url"] == nil {
-			t.Errorf("%s links stay", name)
-		}
-	}
-}
-
-func TestGetPastMeeting_ArtifactPeopleFieldsKeptWithFullView(t *testing.T) {
-	api := setupMeetingLookupTest(t)
-	api.Respond(pastMeetingPath, pastMeetingBody)
-	api.Respond(resourcesPath, singleResourcePage("v1_past_meeting_recording", "rec-1", `{"uid": "rec-1", "host_email": "host@example.test"}`))
-	api.Respond(resourcesPath, emptyResourcePage)
-	_, out, err := handleGetPastMeeting(fullViewCtx(), stubCallToolRequest(), GetPastMeetingArgs{UID: "past-1"})
-	if err != nil || resourceData(out.Recording)["host_email"] != "host@example.test" {
-		t.Fatalf("full view keeps host_email: %v %v", err, out.Recording)
-	}
-}
-
 const summaryDoc = `{
   "type": "v1_past_meeting_summary",
   "id": "sum-1",

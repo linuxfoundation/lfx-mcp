@@ -262,7 +262,7 @@ func RegisterSearchPastMeetings(server *mcp.Server, asGroups bool) {
 func RegisterGetPastMeeting(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_past_meeting",
-		Description: "Get an LFX past meeting by its UID, including nested recording and transcript sub-objects (with links) when available. The recording or transcript is omitted if absent or inaccessible to the caller.",
+		Description: "Get an LFX past meeting by its UID, including nested recording and transcript details (no links) when available. The recording or transcript is omitted if absent or inaccessible to the caller.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Get Past Meeting",
 			ReadOnlyHint: true,
@@ -1248,14 +1248,14 @@ func handleSearchPastMeetings(ctx context.Context, req *mcp.CallToolRequest, arg
 }
 
 // pastMeetingGetResult is the output type for the get_past_meeting tool. It nests
-// the base past meeting alongside its recording and transcript, mirroring the
-// shape of get_project's { base, settings }. The recording and transcript are
-// omitted when absent or inaccessible; the text result then carries a note or
-// a warning saying so.
+// the base past meeting alongside the file details of its recording and
+// transcript, mirroring the shape of get_project's { base, settings }. The
+// recording and transcript are omitted when absent or inaccessible; the text
+// result then carries a note or a warning saying so.
 type pastMeetingGetResult struct {
 	Meeting    *meetingservice.ITXPastZoomMeeting `json:"meeting"`
-	Recording  *querysvc.Resource                 `json:"recording,omitempty"`
-	Transcript *querysvc.Resource                 `json:"transcript,omitempty"`
+	Recording  *pastMeetingRecordingDetails       `json:"recording,omitempty"`
+	Transcript *pastMeetingTranscriptDetails      `json:"transcript,omitempty"`
 }
 
 // fetchPastMeetingChildResource fetches a single child resource (recording or
@@ -1299,8 +1299,9 @@ func pastMeetingChildNotVisibleNote(what string) string {
 
 // handleGetPastMeeting implements the get_past_meeting tool logic. It fetches the
 // base past meeting via the meeting-service GetItxPastMeeting Goa endpoint, then
-// nests the recording and transcript sub-objects (fetched from the query service,
-// parent-ref scoped). Missing or inaccessible recording/transcript data yields a
+// nests the file details of its recording and transcript (projected from the
+// query-service documents, parent-ref scoped; see past_meeting_artifacts.go,
+// which keeps links and people fields out). Missing or inaccessible recording/transcript data yields a
 // partial result plus a note or warning rather than a hard failure, matching
 // get_project.
 func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args GetPastMeetingArgs) (*mcp.CallToolResult, pastMeetingGetResult, error) {
@@ -1360,7 +1361,7 @@ func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	case recording == nil:
 		warnings = append(warnings, pastMeetingChildNotVisibleNote("recording"))
 	default:
-		out.Recording = recording
+		out.Recording = projectPastMeetingRecording(recording.Data)
 	}
 
 	// Transcript (soft failure): same handling as recording.
@@ -1372,17 +1373,7 @@ func handleGetPastMeeting(ctx context.Context, req *mcp.CallToolRequest, args Ge
 	case transcript == nil:
 		warnings = append(warnings, pastMeetingChildNotVisibleNote("transcript"))
 	default:
-		out.Transcript = transcript
-	}
-
-	// No screen renders the host or editors of a recording or transcript.
-	if !HasFullView(ctx) {
-		if out.Recording != nil {
-			trimPastMeetingArtifactPeopleFields(out.Recording.Data)
-		}
-		if out.Transcript != nil {
-			trimPastMeetingArtifactPeopleFields(out.Transcript.Data)
-		}
+		out.Transcript = projectPastMeetingTranscript(transcript.Data)
 	}
 
 	prettyJSON, err := json.MarshalIndent(out, "", "  ")

@@ -511,14 +511,6 @@ func trimPastMeetingPeopleFields(data any) {
 	reduceUserField(m, "created_by")
 }
 
-// trimPastMeetingArtifactPeopleFields reduces a recording or transcript
-// record in place: no screen renders its host or editors.
-func trimPastMeetingArtifactPeopleFields(data any) {
-	if m, ok := data.(map[string]any); ok {
-		dropFields(m, "host_email", "host_id", "created_by", "updated_by")
-	}
-}
-
 // trimSummaryPeopleFields reduces a v1_past_meeting_summary record in place:
 // the summary modal renders the title and content only.
 func trimSummaryPeopleFields(data any) {

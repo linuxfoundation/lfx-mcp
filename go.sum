@@ -56,8 +56,8 @@ github.com/linuxfoundation/lfx-v2-committee-service v0.4.51 h1:gNCRAO17Lux73zxG+
 github.com/linuxfoundation/lfx-v2-committee-service v0.4.51/go.mod h1:OK3+bI5/RhzCyZbt5+Cg8H1ItMfv0PBsiT5OeY8VzLs=
 github.com/linuxfoundation/lfx-v2-mailing-list-service v0.5.12 h1:DunoqT7ZXbdbsHISNiYm/1WnOajPcVYoF53dPaWW9aE=
 github.com/linuxfoundation/lfx-v2-mailing-list-service v0.5.12/go.mod h1:5kqaQ1MDz9UkbuOOgOv1uacecZqSypY+gdoEhI6KGS0=
-github.com/linuxfoundation/lfx-v2-meeting-service v0.13.7-0.20261019135759-f306e91fdb2f h1:FiNNuLpN1QnI/rq6JyH/L+2EMmHySqf1yqUH5Xb6aqs=
-github.com/linuxfoundation/lfx-v2-meeting-service v0.13.7-0.20261019135759-f306e91fdb2f/go.mod h1:T3OxelU3u+s0dboIcVC3z0zOwaLITEPgu0lmAkJkOYQ=
+github.com/linuxfoundation/lfx-v2-meeting-service v0.13.7 h1:7Y3QqmYVkJEio8BxvdIgAllra9xCBJ7vW+oUkzqCO9k=
+github.com/linuxfoundation/lfx-v2-meeting-service v0.13.7/go.mod h1:T3OxelU3u+s0dboIcVC3z0zOwaLITEPgu0lmAkJkOYQ=
 github.com/linuxfoundation/lfx-v2-member-service v0.10.24 h1:Ae7d0qlh9x8di4HxC690YvufeMjY3AuhqRqvEay69OE=
 github.com/linuxfoundation/lfx-v2-member-service v0.10.24/go.mod h1:TromFwnIozWCNwT781GjFU4ybd0L9s/AxbnC6nLmQ2Q=
 github.com/linuxfoundation/lfx-v2-project-service v0.9.8 h1:2iKEl8uIhmlEWRKNmya3U6sO41wI4WcYUHN7M47T7a8=

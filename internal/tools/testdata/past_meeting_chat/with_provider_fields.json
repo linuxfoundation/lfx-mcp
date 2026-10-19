@@ -1,0 +1,27 @@
+{
+  "meeting_and_occurrence_id": "96365872728-1630560600000",
+  "sessions": [
+    {
+      "recording_start": "2026-10-01T15:00:00Z",
+      "recording_end": "2026-10-01T16:02:11Z",
+      "message_count": 1,
+      "truncated": false,
+      "id": "file-1",
+      "file_size": 1234,
+      "download_url": "https://provider.example/rec/download/abc",
+      "play_url": "https://provider.example/rec/play/abc",
+      "share_url": "http://provider.example/rec/share/abc",
+      "uuid": "session-uuid",
+      "password": "rec-secret",
+      "passcode": "rec-passcode",
+      "messages": [
+        {
+          "offset": "00:00:01",
+          "sender": "Participant One",
+          "recipient": "Everyone",
+          "text": "Hello"
+        }
+      ]
+    }
+  ]
+}

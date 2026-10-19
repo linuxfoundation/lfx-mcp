@@ -1,0 +1,43 @@
+{
+  "meeting_and_occurrence_id": "96365872728-1630560600000",
+  "sessions": [
+    {
+      "recording_start": "2026-10-01T15:00:00.250Z",
+      "recording_end": "2026-10-01T16:02:11Z",
+      "message_count": 42,
+      "truncated": true,
+      "messages": [
+        {
+          "offset": "00:12:34",
+          "sender": "Participant One",
+          "recipient": "Everyone",
+          "text": "Link to the agenda is in the invite"
+        },
+        {
+          "offset": "00:13:05.5",
+          "sender": "Participant Two",
+          "recipient": "Everyone",
+          "text": "Two points:\n- first\n- second\twith a tab"
+        },
+        {
+          "offset": "01:59:59",
+          "sender": "Participant One",
+          "recipient": "Everyone",
+          "text": "Thanks all"
+        }
+      ]
+    },
+    {
+      "message_count": 1,
+      "truncated": false,
+      "messages": [
+        {
+          "offset": "00:00:07",
+          "sender": "Participant Three",
+          "recipient": "everyone",
+          "text": "Recording restarted"
+        }
+      ]
+    }
+  ]
+}

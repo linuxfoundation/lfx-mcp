@@ -744,7 +744,11 @@ with `lfxv2.UpstreamStatus`:
 - **404**: the shared `accessDeniedMessage`, from any service: a 404 cannot
   tell a missing resource from one the caller may not see. A declared 404
   whose body the client cannot decode or validate keeps Goa's decoding or
-  validation error text.
+  validation error text. `get_past_meeting_chat` is the one exception: the
+  gateway's `recording_viewer` check runs before the meeting service, so the
+  saved-chat route's 404 reaches only a caller already admitted to the
+  recording and means only that no chat was saved; the tool returns the
+  "No chat was saved for this past meeting." notice as a successful result.
 - Anything else: the upstream error text (`upstreamErrorText`).
 
 The service API tools behind `internal/serviceapi` (Discord, email, member

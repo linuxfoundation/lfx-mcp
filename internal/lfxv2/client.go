@@ -333,7 +333,8 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 	)
 
 	// The generated meeting-service constructor requires every endpoint. We only
-	// call GetItxPastMeeting today; the rest are passed to satisfy the signature.
+	// call GetItxPastMeeting and GetItxPastMeetingChat today; the rest are passed
+	// to satisfy the signature.
 	clients.Meeting = meetingservice.NewClient(
 		meetingHTTPClient.Readyz(),
 		meetingHTTPClient.Livez(),
@@ -344,6 +345,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		meetingHTTPClient.GetItxMeetingCount(),
 		meetingHTTPClient.CreateItxRegistrant(),
 		meetingHTTPClient.SelfRegisterItxMeeting(),
+		meetingHTTPClient.SelfUnregisterItxMeeting(),
 		meetingHTTPClient.GetItxRegistrant(),
 		meetingHTTPClient.UpdateItxRegistrant(),
 		meetingHTTPClient.DeleteItxRegistrant(),
@@ -361,6 +363,7 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		meetingHTTPClient.UpdateItxPastMeeting(),
 		meetingHTTPClient.GetItxPastMeetingSummary(),
 		meetingHTTPClient.UpdateItxPastMeetingSummary(),
+		meetingHTTPClient.GetItxPastMeetingChat(),
 		meetingHTTPClient.CreateItxPastMeetingParticipant(),
 		meetingHTTPClient.UpdateItxPastMeetingParticipant(),
 		meetingHTTPClient.DeleteItxPastMeetingParticipant(),

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 module github.com/linuxfoundation/lfx-mcp
 
-go 1.26.8
+go 1.26.9
 
 require (
 	github.com/knadh/koanf/providers/basicflag v1.1.1
@@ -11,7 +11,7 @@ require (
 	github.com/lestrrat-go/jwx/v2 v2.1.7
 	github.com/linuxfoundation/lfx-v2-committee-service v0.4.51
 	github.com/linuxfoundation/lfx-v2-mailing-list-service v0.5.12
-	github.com/linuxfoundation/lfx-v2-meeting-service v0.13.0
+	github.com/linuxfoundation/lfx-v2-meeting-service v0.13.7
 	github.com/linuxfoundation/lfx-v2-member-service v0.10.24
 	github.com/linuxfoundation/lfx-v2-project-service v0.9.8
 	github.com/linuxfoundation/lfx-v2-query-service v0.4.31
@@ -66,7 +66,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.46.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect

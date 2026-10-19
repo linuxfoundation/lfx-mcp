@@ -375,7 +375,10 @@ tool's output byte for byte with goldens in
 there) adds the counts, `count_only`, date-range, project-scope and
 filtered calls, with their upstream requests. Regenerate a golden only from
 a checkout that predates the people rules, never from the branch under
-test.
+test. The one exception is the `get_past_meeting` pair, regenerated from
+the change that replaced its raw recording and transcript documents with a
+projection carrying no link and no people field for any caller (its
+testdata README records the decision).
 
 ### Tool Implementation Steps
 

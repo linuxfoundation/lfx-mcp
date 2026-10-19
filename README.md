@@ -341,7 +341,7 @@ rule yet and are returned as the services return them, pending product decisions
 | Tool                               | Description                                                             |
 |------------------------------------|-------------------------------------------------------------------------|
 | `search_past_meetings`             | Search past meetings; filter by project, committee, date range; only_mine for the past meetings the caller was invited to or attended, as in LFX Self Serve's My Meetings |
-| `get_past_meeting`                 | Get a past meeting by UID                                               |
+| `get_past_meeting`                 | Get a past meeting by UID, with the file details of its recording and transcript (types, sizes, times; no links) |
 | `search_past_meeting_participants` | Search past meeting participants; filter by meeting, committee, project, date range (non-staff callers: per past meeting, or a date range), attended_only or organisation name; count_only returns record counts; people are de-duplicated by identity like LFX Self Serve (dedupe=false returns raw records) |
 | `get_past_meeting_participant`     | Get a past meeting participant by UID                                   |
 | `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, project, name         |

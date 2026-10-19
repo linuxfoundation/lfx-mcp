@@ -52,8 +52,11 @@ type pastMeetingChatResult struct {
 }
 
 // pastMeetingChatSession is one recording session's chat window. The time span
-// is omitted when the service carries none. message_count counts the session's
-// messages to everyone before limit and offset apply; messages is the window.
+// is omitted when the service carries none. message_count counts the messages
+// to everyone the service parsed (the whole file unless it was cut at the size
+// limit), before limit and offset apply; messages is the window. truncated is
+// set by the service for either cause: the window ended before the last
+// parsed message, or the file was cut at the size limit.
 type pastMeetingChatSession struct {
 	RecordingStart string                   `json:"recording_start,omitempty"`
 	RecordingEnd   string                   `json:"recording_end,omitempty"`
@@ -240,7 +243,10 @@ func formatPastMeetingChat(out pastMeetingChatResult) string {
 
 // pastMeetingChatSessionHeader renders one session's header line: its number,
 // its time span when the service carries one, its count of messages to
-// everyone, and whether more are available than the window shows.
+// everyone, and whether the session is truncated. The service sets truncated
+// both when the window ended before the last parsed message and when the chat
+// file was cut at its size limit, so the header names both causes and never
+// promises that paging will retrieve more.
 func pastMeetingChatSessionHeader(n int, s pastMeetingChatSession) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Session %d: ", n)
@@ -258,7 +264,7 @@ func pastMeetingChatSessionHeader(n int, s pastMeetingChatSession) string {
 	}
 	fmt.Fprintf(&sb, "%d %s to everyone", s.MessageCount, noun)
 	if s.Truncated {
-		sb.WriteString(", more available (truncated)")
+		sb.WriteString(", truncated (window ended before the last message, or the file was cut at the size limit)")
 	}
 	return sb.String()
 }

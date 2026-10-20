@@ -122,8 +122,8 @@ var nonPeopleTools = []string{
 	"audit_committee_coverage", "search_committees", "search_groups", "search_projects",
 	"search_b2b_orgs", "get_mailing_list", "get_mailing_list_service", "search_mailing_lists",
 	"list_email_templates", "list_discord_roles", "find_discord_role",
-	// The caller's own profile.
-	"user_info",
+	// The caller's own profile and own direct grants.
+	"user_info", "list_my_permissions",
 	// count_lfx_resources has its own gate (peopleCountGate).
 	"count_lfx_resources",
 	// Write tools echo what the writer sent; only a writer reaches them.
@@ -339,6 +339,44 @@ func TestNewServer_Tools1AreReadScoped(t *testing.T) {
 		}
 		if forNoScope[name] {
 			t.Errorf("%s must not be listed without read scope", name)
+		}
+	}
+}
+
+func TestNewServer_MyPermissionsIsReadScopedAndDefault(t *testing.T) {
+	const name = "list_my_permissions"
+	for _, tc := range []struct {
+		scopes []string
+		want   bool
+	}{{[]string{tools.ScopeRead}, true}, {[]string{tools.ScopeManage}, true}, {nil, false}} {
+		got := listedToolsFor(t, defaultTools, &auth.TokenInfo{Scopes: tc.scopes})
+		if got[name] != tc.want {
+			t.Errorf("non-staff scopes %v: listed=%v, want %v", tc.scopes, got[name], tc.want)
+		}
+	}
+	if listedToolsFor(t, []string{"user_info"}, &auth.TokenInfo{Scopes: []string{tools.ScopeRead}})[name] {
+		t.Error("list_my_permissions must respect the tool allowlist")
+	}
+	if tools.ManageScopeTools[name] {
+		t.Error("list_my_permissions must not require manage scope")
+	}
+	// The naming mode is passed through to the tool: its description names
+	// the committee family the way the flag says.
+	for _, tc := range []struct {
+		groups bool
+		word   string
+	}{{false, "projects, committees, "}, {true, "projects, groups, "}} {
+		var found bool
+		for _, tool := range listAllToolsForStaff(t, Config{Tools: []string{name}, CommitteesAsGroups: tc.groups}) {
+			if tool.Name == name {
+				found = true
+				if !strings.Contains(tool.Description, tc.word) {
+					t.Errorf("groups=%v: description does not follow the naming mode: %q", tc.groups, tool.Description)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("groups=%v: %s not listed", tc.groups, name)
 		}
 	}
 }

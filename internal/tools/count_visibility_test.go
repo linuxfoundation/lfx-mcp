@@ -41,13 +41,16 @@ func runCountGateCases(t *testing.T, api *stubLFXAPI, cases []countArgsCase) {
 				t.Fatalf("expected a refusal before any count, got isError=%v counts=%d: %s", res.IsError, counted, text)
 			}
 			// A people type's refusal names the form LFX Self Serve shows;
-			// a meeting type's names the meeting's own fields; a mailing
-			// list member's names the lists the caller manages or audits,
-			// a rule stricter than Self Serve's screen.
+			// a meeting type's names the meeting's own fields, an
+			// attachment type's the attachment's; a mailing list member's
+			// names the lists the caller manages or audits, a rule
+			// stricter than Self Serve's screen.
 			form := "LFX Self Serve"
 			switch tc.args.Type {
 			case meetingResourceType, pastMeetingResourceType:
 				form = "the meeting's own fields"
+			case meetingAttachmentResourceType, pastMeetingAttachmentResourceType:
+				form = "the attachment's own fields"
 			case mailingListMemberResourceType:
 				form = "a mailing list you manage or audit"
 			}
@@ -272,4 +275,85 @@ func pastMeetingDocWith(occurrenceID, visibility string, restricted bool, commit
 	    "updated_by_list": [{"email": "editor@example.test", "name": "Editor"}]
 	  }
 	}`
+}
+
+// TestCountLFXResources_AttachmentFiltersAreAllowlisted walks every
+// CountLFXResourcesArgs field, for each attachment type, as a caller without
+// full view: parent, tags and tags_all pass unrestricted (none names a
+// person), name passes (it matches the attachment's name, file name, link
+// and description only), filters_or / filters_all pass only on the
+// attachment's own fields and date_field only from its date fields, and the
+// refusal names every accepted one.
+func TestCountLFXResources_AttachmentFiltersAreAllowlisted(t *testing.T) {
+	api := setupCountTest(t)
+	var cases []countArgsCase
+	for _, typ := range []string{meetingAttachmentResourceType, pastMeetingAttachmentResourceType} {
+		cases = append(cases, []countArgsCase{
+			{typ + " bare type", CountLFXResourcesArgs{Type: typ}, true},
+			{typ + " meeting parent", CountLFXResourcesArgs{Type: typ, Parent: "meeting:M1"}, true},
+			{typ + " past meeting parent", CountLFXResourcesArgs{Type: typ, Parent: "past_meeting:M1-1"}, true},
+			{typ + " project parent", CountLFXResourcesArgs{Type: typ, Parent: "project:P1"}, true},
+			{typ + " name", CountLFXResourcesArgs{Type: typ, Parent: "project:P1", Name: "agenda"}, true},
+			{typ + " tags", CountLFXResourcesArgs{Type: typ, Tags: []string{"type:file", "project_uid:P1", "meeting_id:M1", "meeting_and_occurrence_id:M1-1", "committee_uid:C1", "project_slug:example"}}, true},
+			{typ + " tags_all", CountLFXResourcesArgs{Type: typ, TagsAll: []string{"type:link", "project_uid:P1"}}, true},
+			{typ + " own fields", CountLFXResourcesArgs{Type: typ, FiltersAll: []string{"type:file", "file_upload_status:completed"}, FiltersOr: []string{"category:agenda", "source:upload"}}, true},
+			{typ + " date range on created_at", CountLFXResourcesArgs{Type: typ, DateField: "created_at", DateFrom: "2026-01-01"}, true},
+			{typ + " date range on file_uploaded_at", CountLFXResourcesArgs{Type: typ, DateField: "file_uploaded_at", DateTo: "2026-12-31"}, true},
+			{typ + " everything allowed at once", CountLFXResourcesArgs{Type: typ, Parent: "project:P1", Name: "agenda", Tags: []string{"type:file"}, TagsAll: []string{"project_uid:P1"}, DateField: "modified_at", DateFrom: "2026-01-01", DateTo: "2026-12-31", FiltersOr: []string{"category:agenda"}, FiltersAll: []string{"file_uploaded:true"}}, true},
+			{typ + " created_by email", CountLFXResourcesArgs{Type: typ, FiltersAll: []string{"created_by.email:x@example.test"}}, false},
+			{typ + " updated_by username", CountLFXResourcesArgs{Type: typ, FiltersOr: []string{"updated_by.username:x"}}, false},
+			{typ + " file_uploaded_by", CountLFXResourcesArgs{Type: typ, FiltersAll: []string{"file_uploaded_by.email:x@example.test"}}, false},
+			{typ + " file_url", CountLFXResourcesArgs{Type: typ, FiltersAll: []string{"file_url:meetings/M1/x"}}, false},
+			{typ + " unknown field", CountLFXResourcesArgs{Type: typ, FiltersOr: []string{"description:x"}}, false},
+			{typ + " leading space", CountLFXResourcesArgs{Type: typ, FiltersAll: []string{" created_by.email:x@example.test"}}, false},
+			{typ + " padded allowed field", CountLFXResourcesArgs{Type: typ, FiltersAll: []string{" type :file"}}, true},
+			{typ + " date_field on a people path", CountLFXResourcesArgs{Type: typ, DateField: "created_by.timestamp", DateFrom: "2026-01-01"}, false},
+			{typ + " date_field on a meeting field", CountLFXResourcesArgs{Type: typ, DateField: "start_time", DateFrom: "2026-01-01"}, false},
+			{typ + " date_field alone", CountLFXResourcesArgs{Type: typ, DateField: "updated_at"}, false},
+		}...)
+		for _, field := range attachmentCountFilterFields {
+			cases = append(cases, countArgsCase{typ + " accepts " + field, CountLFXResourcesArgs{Type: typ, FiltersAll: []string{field + ":x"}, FiltersOr: []string{field + ":y"}}, true})
+		}
+		for _, field := range attachmentCountDateFields {
+			cases = append(cases, countArgsCase{typ + " ranges on " + field, CountLFXResourcesArgs{Type: typ, DateField: field, DateFrom: "2026-01-01"}, true})
+		}
+		// The meeting allowlist is not the attachment's: a meeting field
+		// that is not an attachment field is refused on an attachment.
+		for _, field := range []string{"title", "visibility", "platform", "start_time"} {
+			cases = append(cases, countArgsCase{typ + " refuses meeting field " + field, CountLFXResourcesArgs{Type: typ, FiltersAll: []string{field + ":x"}}, false})
+		}
+	}
+	runCountGateCases(t, api, cases)
+	for _, typ := range []string{meetingAttachmentResourceType, pastMeetingAttachmentResourceType} {
+		res, _, _ := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: typ, FiltersAll: []string{"created_by.email:x@example.test"}})
+		text := allResultText(t, res)
+		if !strings.HasPrefix(text, "Error: counting "+typ+" accepts filters_or / filters_all only on the attachment's own fields") {
+			t.Errorf("an attachment count refusal names the attachment's own fields: %s", text)
+		}
+		for _, field := range append(append([]string{}, attachmentCountFilterFields...), attachmentCountDateFields...) {
+			if !strings.Contains(text, field) {
+				t.Errorf("the refusal must name the allowed field %q: %s", field, text)
+			}
+		}
+		for _, hidden := range []string{"created_by", "updated_by", "file_uploaded_by", "file_url"} {
+			if strings.Contains(text, hidden) {
+				t.Errorf("the refusal must not enumerate %q: %s", hidden, text)
+			}
+		}
+	}
+	if n := len(api.RequestsTo(accessCheckPath)); n != 0 {
+		t.Errorf("attachment counts need no relation check, got %d", n)
+	}
+}
+
+// TestCountLFXResources_MeetingAllowlistIsUnchanged pins that adding the
+// attachment types moved nothing in the meeting rule: the v1_meeting
+// refusal text is the one it had before them.
+func TestCountLFXResources_MeetingAllowlistIsUnchanged(t *testing.T) {
+	setupCountTest(t)
+	res, _, _ := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: meetingResourceType, FiltersAll: []string{"owner.email:x@example.test"}})
+	want := "Error: counting v1_meeting accepts filters_or / filters_all only on the meeting's own fields (" + strings.Join(meetingCountFilterFields, ", ") + ") and a date_field only of " + strings.Join(meetingCountDateFields, ", ") + ".\n"
+	if got := allResultText(t, res); got != want {
+		t.Errorf("meeting refusal moved:\nwant %s\ngot  %s", want, got)
+	}
 }

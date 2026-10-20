@@ -32,9 +32,11 @@ const stubTokenPath = "/oauth/token"
 
 // stubAPIRequest is one request the fake LFX API observed.
 type stubAPIRequest struct {
-	Method        string
-	Path          string
-	Query         url.Values
+	Method string
+	Path   string
+	Query  url.Values
+	// RawQuery is the query string as sent, for tests that pin request bytes.
+	RawQuery      string
 	Authorization string
 	Header        http.Header
 	Body          []byte
@@ -151,6 +153,7 @@ func (s *stubLFXAPI) serve(w http.ResponseWriter, r *http.Request) {
 		Method:        r.Method,
 		Path:          r.URL.Path,
 		Query:         r.URL.Query(),
+		RawQuery:      r.URL.RawQuery,
 		Authorization: r.Header.Get("Authorization"),
 		Header:        r.Header.Clone(),
 		Body:          rawBody,

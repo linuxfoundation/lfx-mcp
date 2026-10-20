@@ -228,6 +228,21 @@ var peopleTools = []peopleToolCase{
 		fixtures: []string{summaryDoc},
 	},
 	{
+		// New with the attachment tool: its golden is the handler's own
+		// full-view output at the commit that added it, there being no
+		// earlier handler to generate it from. file_url is dropped for
+		// every caller, so the fixture carries none.
+		name: "search_meeting_attachments",
+		setup: func(_ *testing.T, api *stubLFXAPI, _ bool) {
+			api.Respond(resourcesPath, page([]string{attachmentDoc(meetingAttachmentResourceType, "att-1")}, ""))
+		},
+		call: func(ctx context.Context) (*mcp.CallToolResult, any, error) {
+			return handleSearchMeetingAttachments(ctx, stubCallToolRequest(), SearchMeetingAttachmentsArgs{MeetingKind: meetingKindUpcoming, MeetingID: registryMeeting})
+		},
+		emails:   []string{"creator@example.test", "editor@example.test", "uploader@example.test"},
+		fixtures: []string{attachmentDoc(meetingAttachmentResourceType, "att-1")},
+	},
+	{
 		name: "search_mailing_list_members",
 		setup: func(_ *testing.T, api *stubLFXAPI, _ bool) {
 			api.Respond(resourcesPath, page([]string{fullViewMailingListMemberDoc}, ""))
@@ -479,6 +494,7 @@ func registerPeopleTools(s *mcp.Server, groups bool) {
 	RegisterGetPastMeeting(s)
 	RegisterSearchPastMeetingSummaries(s)
 	RegisterGetPastMeetingSummary(s)
+	RegisterSearchMeetingAttachments(s)
 	RegisterSearchMailingListMembers(s)
 	RegisterGetMailingListMember(s)
 }

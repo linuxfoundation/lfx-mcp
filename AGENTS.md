@@ -241,9 +241,9 @@ Adding a new write tool means registering it under `canRead` in `newServer()` (l
 ### People data for non-staff callers
 
 Tools that return people records (group members, meeting registrants, past
-meeting participants, and the people fields of meeting, past meeting and
-summary records; recording and transcript details carry no people fields)
-return, to a caller without
+meeting participants, and the people fields of meeting, past meeting,
+summary and attachment records; recording and transcript details carry no
+people fields) return, to a caller without
 **full view**, only what LFX Self Serve renders on screen to that same
 person. The rules live in `internal/tools/people_visibility.go` (groups),
 `people_visibility_meetings.go` (meetings) and
@@ -354,7 +354,13 @@ that.
   `v1_meeting` and `v1_past_meeting` it accepts
   `filters_or` / `filters_all` only on an allowlist of the record's own
   fields (`meetingCountFilterFields`) and `date_field` only from
-  `meetingCountDateFields`, so no field naming a person has to be enumerated.
+  `meetingCountDateFields`, so no field naming a person has to be enumerated;
+  `v1_meeting_attachment` and `v1_past_meeting_attachment` follow the same
+  rule with `attachmentCountFilterFields` and `attachmentCountDateFields`.
+  `search_meeting_attachments` (`meeting_attachment.go`) removes the
+  attachment's creator, editor and uploader without full view, and `file_url`
+  (the upload's storage key) for every caller; `attachmentDroppedFields` is
+  the one place that rule lives, and every other field of the record stays.
 
 Adding a people tool: decide the view per parent object with one of the
 `*Views` predicates (or add one next to them) before the query, narrow the

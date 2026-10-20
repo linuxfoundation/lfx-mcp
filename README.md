@@ -266,7 +266,7 @@ Notes:
 ## Available Tools
 
 People data (group members, meeting registrants, past meeting participants and the people fields of
-meeting records) is returned to non-staff callers as LFX Self Serve shows it to them on screen; LF
+meeting and meeting attachment records) is returned to non-staff callers as LFX Self Serve shows it to them on screen; LF
 staff, machine and API-key callers get the records as the services return them. Mailing-list
 members are returned to non-staff callers only for the lists they manage or audit, plus their own
 subscriptions on any list: this follows the platform's intended rule, which is stricter than what
@@ -285,7 +285,7 @@ rule yet and are returned as the services return them, pending product decisions
 
 | Tool                  | Description |
 |-----------------------|-------------|
-| `count_lfx_resources` | Count indexed LFX v2 records (meetings, participants, committees, members, projects) visible to the caller; complete=false means a lower bound |
+| `count_lfx_resources` | Count indexed LFX v2 records (meetings, participants, attachments, committees, members, projects) visible to the caller; complete=false means a lower bound |
 
 ### Committees
 
@@ -346,6 +346,7 @@ rule yet and are returned as the services return them, pending product decisions
 | `get_past_meeting_participant`     | Get a past meeting participant by UID                                   |
 | `search_past_meeting_summaries`    | Search past meeting summaries; filter by meeting, project, name         |
 | `get_past_meeting_summary`         | Get a past meeting summary by UID                                       |
+| `search_meeting_attachments`       | Search files and links attached to upcoming or past meetings (meeting_kind); scoped to a meeting or a project; download links are not returned |
 
 ### Discord
 

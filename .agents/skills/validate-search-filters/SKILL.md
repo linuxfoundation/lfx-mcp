@@ -158,6 +158,10 @@ earlier pass of this skill):
 | `search_past_meeting_participants` | `v1_past_meeting_participant` | `project_uid`        | Parent (fallback)  | `project:<uid>`                            |
 | `search_past_meeting_summaries`    | `v1_past_meeting_summary`     | `past_meeting_id`    | Parent (preferred) | `past_meeting:<meeting_and_occurrence_id>` |
 | `search_past_meeting_summaries`    | `v1_past_meeting_summary`     | `project_uid`        | Parent (fallback)  | `project:<uid>`                            |
+| `search_meeting_attachments`       | `v1_meeting_attachment`       | `meeting_id`         | Parent (preferred) | `meeting:<id>` (meeting_kind=upcoming)     |
+| `search_meeting_attachments`       | `v1_past_meeting_attachment`  | `past_meeting_id`    | Parent (preferred) | `past_meeting:<meeting_and_occurrence_id>` (meeting_kind=past) |
+| `search_meeting_attachments`       | both attachment types         | `project_uid`        | Parent (fallback)  | `project:<uid>`                            |
+| `search_meeting_attachments`       | both attachment types         | `type`               | TagsAll            | `type:<file or link>`                      |
 | `search_members`                   | `project_membership`          | `project_uid`        | FiltersAll         | `project_uid:<uid>`                        |
 | `search_members`                   | `project_membership`          | `b2b_org_uid`        | FiltersAll         | `b2b_org_uid:<uid>`                        |
 | `search_members`                   | `project_membership`          | `tier_uid`           | FiltersAll         | `tier_uid:<uid>`                           |

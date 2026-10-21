@@ -436,13 +436,16 @@ func dataStrings(resources []*querysvc.Resource, key string) []string {
 //   - v1_past_meeting_participant: attendance counts are shown to callers
 //     with full access to the past meeting. Allowed only as
 //     parent=past_meeting:<id>, optionally with the is_attended:true tag,
-//     when the caller is its organizer or has full access; that view sees
-//     the attendance list, so a group key or a metric over it passes.
+//     when the caller is its organizer or has full access. Full access is
+//     shown the figure, the hosts and its own records, not the roster, so a
+//     group key or a metric over the attendance passes for the organizer
+//     only, the view shown the whole list.
 //   - On every other type, group_by, group_by_size and metric pass as the
-//     filters do: the groupsio_member and attachment gates admit the count
-//     only to a caller shown the whole list, and the meeting and non-people
-//     types carry no people data in their tags. group_by_size follows
-//     group_by; the service's own 400 answers a size without a group.
+//     filters do: the groupsio_member gate admits the count only to a list's
+//     managers and auditors, who are shown the whole member list, and the
+//     meeting, attachment and non-people types carry no people data in their
+//     tags. group_by_size follows group_by; the service's own 400 answers a
+//     size without a group.
 //   - v1_meeting and v1_past_meeting: the records are not people records,
 //     but filters_or / filters_all on a field that names a person (editors,
 //     owner, organizer accounts, user id, registrant counts) would single
@@ -494,7 +497,7 @@ func peopleCountGate(ctx context.Context, clients *lfxv2.Clients, tokenInfo *aut
 		}
 		return "", nil
 	case pastMeetingParticipantResourceType:
-		allowed := "parent=past_meeting:<meeting_and_occurrence_id>, optionally with the is_attended:true tag, for a past meeting you organize or have full access to"
+		allowed := "parent=past_meeting:<meeting_and_occurrence_id>, optionally with the is_attended:true tag, for a past meeting you organize or have full access to; group_by and metric for a past meeting you organize"
 		id, ok := strings.CutPrefix(args.Parent, "past_meeting:")
 		if !ok || id == "" || hasPersonFilter || hasDateRange ||
 			!tagsAreExactly(args.Tags, "is_attended:true") || !tagsAreExactly(args.TagsAll, "is_attended:true") {
@@ -505,6 +508,12 @@ func peopleCountGate(ctx context.Context, clients *lfxv2.Clients, tokenInfo *aut
 			return "", err
 		}
 		if views[id] == participantOwnOnly {
+			return countRefusal(args.Type, allowed), nil
+		}
+		// Full access is shown the attendance figure, the hosts and the
+		// caller's own records, not the roster: a count per tag value or a
+		// distinct count over it is the organizer's breakdown.
+		if (args.GroupBy != "" || args.Metric != "") && views[id] != participantOrganizer {
 			return countRefusal(args.Type, allowed), nil
 		}
 		return "", nil

@@ -360,16 +360,20 @@ that.
   gate: a grouped count is one count per tag value, so on a people type a
   group key is accepted only where the gate accepts that tag prefix as a
   filter (`committee_member`: the four structural prefixes; a distinct
-  count on it is refused), `v1_meeting_registrant` accepts neither, and
-  the types whose count is admitted only to a caller shown the whole list
-  (`v1_past_meeting_participant`, `groupsio_member`), the meeting and
-  attachment types and the non-people types pass them through as they pass
-  the tags. The refusal is the type's `countRefusal` text; a caller with full
+  count on it is refused), `v1_meeting_registrant` accepts neither,
+  `v1_past_meeting_participant` accepts them from the organizer only (full
+  access is shown the attendance figure, the hosts and its own records, not
+  the roster), and `groupsio_member` (its count is admitted only to a list's
+  managers and auditors, who are shown the whole member list), the meeting
+  and attachment types and the non-people types pass them through as they
+  pass the tags. The refusal is the type's `countRefusal` text; a caller with full
   view keeps the unchanged pass-through, the service validating the key.
   `TestCountLFXResources_EveryArgumentIsClassifiedWithoutFullView`
   (`count_people_gate_walk_test.go`) walks every `CountLFXResourcesArgs`
-  field over every countable type: a new field fails it until it is
-  refused by the gate or listed in `countGatePassThroughs` with its reason.
+  field over every countable type, each probe added to that type's accepted
+  baseline call (`countGateBaselines`: the valid parent and the view it
+  needs), so a refusal is the field's own: a new field fails it until it is
+  refused by the gate or listed in the baseline's allow table with its reason.
   `search_meeting_attachments` (`meeting_attachment.go`) removes the
   attachment's creator, editor and uploader without full view, and `file_url`
   (the upload's storage key) for every caller; `attachmentDroppedFields` is

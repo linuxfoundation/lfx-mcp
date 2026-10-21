@@ -323,9 +323,10 @@ func TestCountLFXResources_AggregationServiceErrorsPassThrough(t *testing.T) {
 // gate's rule for group_by, group_by_size and metric for a caller without
 // full view: on committee_member a group key is accepted only on the tag
 // prefixes the gate accepts as filters and a metric is refused; on
-// v1_meeting_registrant both are refused; on v1_past_meeting_participant and
-// groupsio_member they pass with the view that already admits the count; on
-// the meeting types they pass as the tags do. Refusals happen before any
+// v1_meeting_registrant both are refused; on v1_past_meeting_participant they
+// pass for the organizer only (full access is shown the figure, not the
+// roster); on groupsio_member they pass with the manager or auditor view that
+// admits the count; on the meeting types they pass as the tags do. Refusals happen before any
 // upstream call, and an accepted call carries the argument unchanged.
 func TestCountLFXResources_AggregationFollowsThePeopleGate(t *testing.T) {
 	const pastID = "91461158520-1771596000000"
@@ -357,6 +358,24 @@ func TestCountLFXResources_AggregationFollowsThePeopleGate(t *testing.T) {
 			api.Respond(resourcesPath, page([]string{pastMeetingDoc(pastID)}, ""))
 		}, CountLFXResourcesArgs{Type: pastMeetingParticipantResourceType, Parent: "past_meeting:" + pastID, GroupBy: "organization_name"}, true,
 			map[string]string{"group_by": "organization_name"}},
+		{"v1_past_meeting_participant group_by with full access", func(api *stubLFXAPI) {
+			api.GrantRelations()
+			api.Respond(resourcesPath, page([]string{pastMeetingDocWith(pastID, "public", false)}, ""))
+		}, CountLFXResourcesArgs{Type: pastMeetingParticipantResourceType, Parent: "past_meeting:" + pastID, GroupBy: "organization_name"}, false, nil},
+		{"v1_past_meeting_participant metric with full access", func(api *stubLFXAPI) {
+			api.GrantRelations()
+			api.Respond(resourcesPath, page([]string{pastMeetingDocWith(pastID, "public", false)}, ""))
+		}, CountLFXResourcesArgs{Type: pastMeetingParticipantResourceType, Parent: "past_meeting:" + pastID, Tags: []string{"is_attended:true"}, Metric: "cardinality:email"}, false, nil},
+		{"v1_past_meeting_participant plain count with full access", func(api *stubLFXAPI) {
+			api.GrantRelations()
+			api.Respond(resourcesPath, page([]string{pastMeetingDocWith(pastID, "public", false)}, ""))
+		}, CountLFXResourcesArgs{Type: pastMeetingParticipantResourceType, Parent: "past_meeting:" + pastID, Tags: []string{"is_attended:true"}}, true,
+			map[string]string{"tags": "is_attended:true"}},
+		{"v1_past_meeting_participant metric as organizer", func(api *stubLFXAPI) {
+			api.GrantRelations("v1_past_meeting:" + pastID + "#organizer")
+			api.Respond(resourcesPath, page([]string{pastMeetingDoc(pastID)}, ""))
+		}, CountLFXResourcesArgs{Type: pastMeetingParticipantResourceType, Parent: "past_meeting:" + pastID, Metric: "cardinality:email"}, true,
+			map[string]string{"metric": "cardinality:email"}},
 		{"groupsio_member metric on a managed list", func(api *stubLFXAPI) { api.GrantRelations(listRelation(mlWriterUID, "writer")) },
 			CountLFXResourcesArgs{Type: mailingListMemberResourceType, Parent: "groupsio_mailing_list:" + mlWriterUID, Metric: "cardinality:email"}, true,
 			map[string]string{"metric": "cardinality:email"}},

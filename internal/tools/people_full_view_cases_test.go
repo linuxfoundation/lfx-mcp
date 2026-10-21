@@ -118,6 +118,13 @@ const fullViewMailingListMemberRecord = `{
   "updated_at": "2026-01-02T00:00:00Z"
 }`
 
+// fullViewCallCases are the calls TestPeopleTools_FullViewCallsMatchMain
+// pins. The count cases' output goldens (count_lfx_resources.* and the two
+// search_past_meeting_participants.*count_only cases: <case>.golden and
+// <case>.structured.json) are the handler's own output at the commit that
+// moved the count caveats into warnings, there being no earlier handler that
+// produced that shape, as for the search_meeting_attachments registry entry;
+// their .requests.golden are still origin/main's.
 var fullViewCallCases = []fullViewCallCase{
 	{
 		name: "search_mailing_list_members.one_list",

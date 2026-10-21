@@ -356,6 +356,24 @@ that.
   `meetingCountDateFields`, so no field naming a person has to be enumerated;
   `v1_meeting_attachment` and `v1_past_meeting_attachment` follow the same
   rule with `attachmentCountFilterFields` and `attachmentCountDateFields`.
+  The count's `group_by`, `group_by_size` and `metric` follow the same
+  gate: a grouped count is one count per tag value, so on a people type a
+  group key is accepted only where the gate accepts that tag prefix as a
+  filter (`committee_member`: the four structural prefixes; a distinct
+  count on it is refused), `v1_meeting_registrant` accepts neither,
+  `v1_past_meeting_participant` accepts them from the organizer only (full
+  access is shown the attendance figure, the hosts and its own records, not
+  the roster), and `groupsio_member` (its count is admitted only to a list's
+  managers and auditors, who are shown the whole member list), the meeting
+  and attachment types and the non-people types pass them through as they
+  pass the tags. The refusal is the type's `countRefusal` text; a caller with full
+  view keeps the unchanged pass-through, the service validating the key.
+  `TestCountLFXResources_EveryArgumentIsClassifiedWithoutFullView`
+  (`count_people_gate_walk_test.go`) walks every `CountLFXResourcesArgs`
+  field over every countable type, each probe added to that type's accepted
+  baseline call (`countGateBaselines`: the valid parent and the view it
+  needs), so a refusal is the field's own: a new field fails it until it is
+  refused by the gate or listed in the baseline's allow table with its reason.
   `search_meeting_attachments` (`meeting_attachment.go`) removes the
   attachment's creator, editor and uploader without full view, and `file_url`
   (the upload's storage key) for every caller; `attachmentDroppedFields` is
@@ -380,7 +398,13 @@ tool's output byte for byte with goldens in
 there) adds the counts, `count_only`, date-range, project-scope and
 filtered calls, with their upstream requests. Regenerate a golden only from
 a checkout that predates the people rules, never from the branch under
-test.
+test. The one exception is an output no earlier handler produced: a new
+tool's golden, or the output goldens of a case whose result shape changed
+on purpose for every caller (the count cases, whose caveats moved from
+`note` into `warnings`). Those are the handler's own output at the commit
+that introduced the shape, and the case or registry entry says so in a
+comment; their `.requests.golden` stay the independent baseline, and a
+request that differs from it is a defect, never a golden to update.
 
 ### Tool Implementation Steps
 

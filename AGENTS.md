@@ -356,6 +356,20 @@ that.
   `meetingCountDateFields`, so no field naming a person has to be enumerated;
   `v1_meeting_attachment` and `v1_past_meeting_attachment` follow the same
   rule with `attachmentCountFilterFields` and `attachmentCountDateFields`.
+  The count's `group_by`, `group_by_size` and `metric` follow the same
+  gate: a grouped count is one count per tag value, so on a people type a
+  group key is accepted only where the gate accepts that tag prefix as a
+  filter (`committee_member`: the four structural prefixes; a distinct
+  count on it is refused), `v1_meeting_registrant` accepts neither, and
+  the types whose count is admitted only to a caller shown the whole list
+  (`v1_past_meeting_participant`, `groupsio_member`), the meeting and
+  attachment types and the non-people types pass them through as they pass
+  the tags. The refusal is the type's `countRefusal` text; a caller with full
+  view keeps the unchanged pass-through, the service validating the key.
+  `TestCountLFXResources_EveryArgumentIsClassifiedWithoutFullView`
+  (`count_people_gate_walk_test.go`) walks every `CountLFXResourcesArgs`
+  field over every countable type: a new field fails it until it is
+  refused by the gate or listed in `countGatePassThroughs` with its reason.
   `search_meeting_attachments` (`meeting_attachment.go`) removes the
   attachment's creator, editor and uploader without full view, and `file_url`
   (the upload's storage key) for every caller; `attachmentDroppedFields` is

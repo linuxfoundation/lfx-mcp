@@ -420,6 +420,10 @@ func dataStrings(resources []*querysvc.Resource, key string) []string {
 //     a committee: or project: parent and committee_uid:, project_uid:,
 //     committee_category: or voting_status: tags; nothing that names a
 //     person (name, filters_or, filters_all, other tags) and no date range.
+//     A grouped count (group_by) is one count per tag value, so a group key
+//     is accepted only where that same tag prefix is accepted as a filter;
+//     a distinct count (metric) over the seats is not a figure the screen
+//     gives and is refused.
 //   - groupsio_member: a mailing list's members are shown only to its
 //     managers and auditors (people_visibility_mailing_lists.go). Allowed
 //     only with parent=groupsio_mailing_list:<uid> naming a list the caller
@@ -427,11 +431,18 @@ func dataStrings(resources []*querysvc.Resource, key string) []string {
 //     whose members the caller is shown in full.
 //   - v1_meeting_registrant: the count is shown to a meeting's organizers
 //     and registrants. Allowed only as parent=meeting:<id> with no other
-//     filter, when the caller has one of those two views.
+//     filter, when the caller has one of those two views; no group key and
+//     no metric, since the screen gives the one figure.
 //   - v1_past_meeting_participant: attendance counts are shown to callers
 //     with full access to the past meeting. Allowed only as
 //     parent=past_meeting:<id>, optionally with the is_attended:true tag,
-//     when the caller is its organizer or has full access.
+//     when the caller is its organizer or has full access; that view sees
+//     the attendance list, so a group key or a metric over it passes.
+//   - On every other type, group_by, group_by_size and metric pass as the
+//     filters do: the groupsio_member and attachment gates admit the count
+//     only to a caller shown the whole list, and the meeting and non-people
+//     types carry no people data in their tags. group_by_size follows
+//     group_by; the service's own 400 answers a size without a group.
 //   - v1_meeting and v1_past_meeting: the records are not people records,
 //     but filters_or / filters_all on a field that names a person (editors,
 //     owner, organizer accounts, user id, registrant counts) would single
@@ -446,10 +457,11 @@ func peopleCountGate(ctx context.Context, clients *lfxv2.Clients, tokenInfo *aut
 	hasDateRange := args.DateField != "" || args.DateFrom != "" || args.DateTo != ""
 	switch args.Type {
 	case committeeMemberResourceType:
-		allowed := "an optional committee:<uid> or project:<uid> parent and committee_uid:, project_uid:, committee_category: or voting_status: tags only"
+		allowed := "an optional committee:<uid> or project:<uid> parent and committee_uid:, project_uid:, committee_category: or voting_status: tags only, group_by only on those prefixes, and no metric"
 		parentOK := args.Parent == "" || strings.HasPrefix(args.Parent, "committee:") || strings.HasPrefix(args.Parent, "project:")
 		tagPrefixes := []string{"committee_uid:", "project_uid:", "committee_category:", "voting_status:"}
-		if hasPersonFilter || hasDateRange || !parentOK ||
+		groupByOK := args.GroupBy == "" || slices.Contains(tagPrefixes, args.GroupBy+":")
+		if hasPersonFilter || hasDateRange || !parentOK || !groupByOK || args.Metric != "" ||
 			!tagsHaveOnlyPrefixes(args.Tags, tagPrefixes...) || !tagsHaveOnlyPrefixes(args.TagsAll, tagPrefixes...) {
 			return countRefusal(args.Type, allowed), nil
 		}
@@ -470,7 +482,7 @@ func peopleCountGate(ctx context.Context, clients *lfxv2.Clients, tokenInfo *aut
 	case meetingRegistrantResourceType:
 		allowed := "parent=meeting:<id> alone, for a meeting you organize or are registered for"
 		id, ok := strings.CutPrefix(args.Parent, "meeting:")
-		if !ok || id == "" || hasPersonFilter || hasDateRange || len(args.Tags) > 0 || len(args.TagsAll) > 0 {
+		if !ok || id == "" || hasPersonFilter || hasDateRange || len(args.Tags) > 0 || len(args.TagsAll) > 0 || args.GroupBy != "" || args.Metric != "" {
 			return countRefusal(args.Type, allowed), nil
 		}
 		views, err := registrantViews(ctx, clients, tokenInfo, []string{id})

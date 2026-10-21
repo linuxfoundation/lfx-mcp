@@ -5,6 +5,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -317,3 +318,97 @@ func TestCountLFXResources_AggregationServiceErrorsPassThrough(t *testing.T) {
 		})
 	}
 }
+
+// TestCountLFXResources_AggregationFollowsThePeopleGate covers the people
+// gate's rule for group_by, group_by_size and metric for a caller without
+// full view: on committee_member a group key is accepted only on the tag
+// prefixes the gate accepts as filters and a metric is refused; on
+// v1_meeting_registrant both are refused; on v1_past_meeting_participant and
+// groupsio_member they pass with the view that already admits the count; on
+// the meeting types they pass as the tags do. Refusals happen before any
+// upstream call, and an accepted call carries the argument unchanged.
+func TestCountLFXResources_AggregationFollowsThePeopleGate(t *testing.T) {
+	const pastID = "91461158520-1771596000000"
+	for _, tc := range []struct {
+		name    string
+		setup   func(api *stubLFXAPI)
+		args    CountLFXResourcesArgs
+		allowed bool
+		query   map[string]string // on an accepted call, arguments that must reach the service as given
+	}{
+		{"committee_member group_by on an accepted prefix", nil,
+			CountLFXResourcesArgs{Type: committeeMemberResourceType, GroupBy: "committee_category"}, true,
+			map[string]string{"group_by": "committee_category"}},
+		{"committee_member group_by_size with an accepted prefix", nil,
+			CountLFXResourcesArgs{Type: committeeMemberResourceType, GroupBy: "voting_status", GroupBySize: intPointer(50), Parent: "project:P1"}, true,
+			map[string]string{"group_by": "voting_status", "group_by_size": "50"}},
+		{"committee_member group_by email", nil,
+			CountLFXResourcesArgs{Type: committeeMemberResourceType, GroupBy: "email"}, false, nil},
+		{"committee_member group_by organization_id", nil,
+			CountLFXResourcesArgs{Type: committeeMemberResourceType, Parent: "committee:C1", GroupBy: "organization_id"}, false, nil},
+		{"committee_member metric", nil,
+			CountLFXResourcesArgs{Type: committeeMemberResourceType, Metric: "cardinality:committee_uid"}, false, nil},
+		{"v1_meeting_registrant group_by as organizer", func(api *stubLFXAPI) { api.GrantRelations("v1_meeting:M1#organizer") },
+			CountLFXResourcesArgs{Type: meetingRegistrantResourceType, Parent: "meeting:M1", GroupBy: "committee_uid"}, false, nil},
+		{"v1_meeting_registrant metric as organizer", func(api *stubLFXAPI) { api.GrantRelations("v1_meeting:M1#organizer") },
+			CountLFXResourcesArgs{Type: meetingRegistrantResourceType, Parent: "meeting:M1", Metric: "cardinality:committee_uid"}, false, nil},
+		{"v1_past_meeting_participant group_by as organizer", func(api *stubLFXAPI) {
+			api.GrantRelations("v1_past_meeting:" + pastID + "#organizer")
+			api.Respond(resourcesPath, page([]string{pastMeetingDoc(pastID)}, ""))
+		}, CountLFXResourcesArgs{Type: pastMeetingParticipantResourceType, Parent: "past_meeting:" + pastID, GroupBy: "organization_name"}, true,
+			map[string]string{"group_by": "organization_name"}},
+		{"groupsio_member metric on a managed list", func(api *stubLFXAPI) { api.GrantRelations(listRelation(mlWriterUID, "writer")) },
+			CountLFXResourcesArgs{Type: mailingListMemberResourceType, Parent: "groupsio_mailing_list:" + mlWriterUID, Metric: "cardinality:email"}, true,
+			map[string]string{"metric": "cardinality:email"}},
+		{"v1_past_meeting group_by", nil,
+			CountLFXResourcesArgs{Type: pastMeetingResourceType, GroupBy: "project_uid"}, true,
+			map[string]string{"group_by": "project_uid"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := setupCountTest(t)
+			if tc.setup != nil {
+				tc.setup(api)
+			} else {
+				api.GrantRelations()
+			}
+			api.Respond(countPath, `{"count":2,"has_more":false,"groups":[],"groups_complete":true,"group_count_error_upper_bound":0,"metric_value":1,"metric_complete":true}`)
+			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			counts := api.RequestsTo(countPath)
+			text := allResultText(t, res)
+			if !tc.allowed {
+				if !res.IsError || len(counts) != 0 || !strings.HasPrefix(text, "Error: counting "+tc.args.Type+" is available in the form LFX Self Serve shows you") {
+					t.Fatalf("expected the gate's refusal before any count, got isError=%v counts=%d: %s", res.IsError, len(counts), text)
+				}
+				assertNoEmail(t, text)
+				return
+			}
+			if res.IsError || len(counts) != 1 {
+				t.Fatalf("expected the count to run once, got isError=%v counts=%d: %s", res.IsError, len(counts), text)
+			}
+			for key, want := range tc.query {
+				if got := counts[0].Query.Get(key); got != want {
+					t.Errorf("%s reached the service as %q, want %q", key, got, want)
+				}
+			}
+		})
+	}
+	t.Run("the committee_member refusal names the rule", func(t *testing.T) {
+		api := setupCountTest(t)
+		api.GrantRelations()
+		res, _, _ := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: committeeMemberResourceType, GroupBy: "email"})
+		text := allResultText(t, res)
+		for _, want := range []string{"group_by only on those prefixes", "no metric"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("refusal missing %q: %s", want, text)
+			}
+		}
+		if strings.Contains(text, "email") {
+			t.Errorf("the refusal must not name what was withheld: %s", text)
+		}
+	})
+}
+
+func intPointer(v int) *int { return &v }

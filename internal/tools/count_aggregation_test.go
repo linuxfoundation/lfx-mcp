@@ -5,7 +5,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -103,7 +102,7 @@ func TestCountLFXResources_AggregationPayloadMapping(t *testing.T) {
 			api := setupCountTest(t)
 			api.Respond(countPath, `{"count":0,"has_more":false}`)
 			tc.args.Type = "committee_member"
-			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), tc.args)
+			res, _, err := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), tc.args)
 			if err != nil || res.IsError {
 				t.Fatalf("unexpected error: %v; result=%v", err, res)
 			}
@@ -135,7 +134,7 @@ func TestCountLFXResources_ArbitraryTagPrefixesPassThrough(t *testing.T) {
 		t.Run(tc.param, func(t *testing.T) {
 			api := setupCountTest(t)
 			api.Respond(countPath, tc.response)
-			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), tc.args)
+			res, _, err := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), tc.args)
 			if err != nil || res == nil || res.IsError {
 				t.Fatalf("unexpected error: %v; result=%v", err, res)
 			}
@@ -177,7 +176,7 @@ func TestCountLFXResources_GroupedResults(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			api := setupCountTest(t)
 			api.Respond(countPath, tc.response)
-			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "committee_member", GroupBy: "organization_id"})
+			res, _, err := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "committee_member", GroupBy: "organization_id"})
 			if err != nil || res.IsError {
 				t.Fatalf("unexpected error: %v; result=%v", err, res)
 			}
@@ -236,7 +235,7 @@ func TestCountLFXResources_MetricResults(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			api := setupCountTest(t)
 			api.Respond(countPath, tc.response)
-			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "committee_member", Metric: tc.metric})
+			res, _, err := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "committee_member", Metric: tc.metric})
 			if err != nil || res.IsError {
 				t.Fatalf("unexpected error: %v; result=%v", err, res)
 			}
@@ -293,7 +292,7 @@ func TestCountLFXResources_AggregationServiceErrorsPassThrough(t *testing.T) {
 			}
 			api.RespondStatus(countPath, http.StatusBadRequest, string(body))
 			tc.args.Type = "committee_member"
-			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), tc.args)
+			res, _, err := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), tc.args)
 			if err != nil || !res.IsError {
 				t.Fatalf("expected error result: %v; result=%v", err, res)
 			}

@@ -380,7 +380,13 @@ tool's output byte for byte with goldens in
 there) adds the counts, `count_only`, date-range, project-scope and
 filtered calls, with their upstream requests. Regenerate a golden only from
 a checkout that predates the people rules, never from the branch under
-test.
+test. The one exception is an output no earlier handler produced: a new
+tool's golden, or the output goldens of a case whose result shape changed
+on purpose for every caller (the count cases, whose caveats moved from
+`note` into `warnings`). Those are the handler's own output at the commit
+that introduced the shape, and the case or registry entry says so in a
+comment; their `.requests.golden` stay the independent baseline, and a
+request that differs from it is a defect, never a golden to update.
 
 ### Tool Implementation Steps
 

@@ -109,6 +109,13 @@ const participantCountNotShownMessage = "Error: participant counts for this past
 // meetings for a caller without full view.
 const participantCountScopeWarning = "Counts cover only the past meetings whose attendance LFX Self Serve shows you."
 
+// participantCountZeroScopeWarning replaces the generic zero-count sentence
+// on a date-range count for a caller without full view: that sentence would
+// say no participant record is visible, while the caller's own records in
+// the past meetings whose counts are not shown stay visible. It says only
+// what the counted scope is, never how many past meetings it left out.
+const participantCountZeroScopeWarning = "No participant records are counted in the past meetings whose attendance LFX Self Serve shows you; this is not proof of absence."
+
 // participantSearchResult is the output shape of search_past_meeting_participants.
 type participantSearchResult struct {
 	Resources []*querysvc.Resource `json:"resources"`
@@ -443,6 +450,15 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 		out := buildCountResult(ctx, logger, &querysvc.QueryResourcesCountResult{Count: total, HasMore: serviceHasMore}, pastMeetingParticipantResourceType, false, false, truncated)
 		out.Warnings = append(out.Warnings, participantCountRecordsWarning)
 		if !fullView && hasDateRange {
+			// The generic zero sentence (visible == 0, no token) would claim no
+			// participant record is visible to the caller; here it only means
+			// none was counted in the past meetings whose counts are shown.
+			zero := searchWarnings(pastMeetingParticipantResourceType+" records", 0, 0, false, false)
+			for i := range out.Warnings {
+				if out.Warnings[i] == zero[0] {
+					out.Warnings[i] = participantCountZeroScopeWarning
+				}
+			}
 			out.Warnings = append(out.Warnings, participantCountScopeWarning)
 		}
 		if truncated {

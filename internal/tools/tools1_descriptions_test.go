@@ -29,6 +29,7 @@ func TestTools1Descriptions_FunctionVisibilityAndBudget(t *testing.T) {
 		{"search_groups", func(s *mcp.Server) { RegisterSearchCommittees(s, true) }},
 		{"search_past_meeting_participants", func(s *mcp.Server) { RegisterSearchPastMeetingParticipants(s, false) }},
 		{"search_past_meeting_participants", func(s *mcp.Server) { RegisterSearchPastMeetingParticipants(s, true) }},
+		{"search_meeting_attachments", RegisterSearchMeetingAttachments},
 		{"get_org_committee_seats", RegisterGetOrgCommitteeSeats},
 		{"audit_committee_coverage", RegisterAuditCommitteeCoverage},
 		{"search_projects", RegisterSearchProjects},
@@ -57,7 +58,7 @@ func TestTools1Descriptions_FunctionVisibilityAndBudget(t *testing.T) {
 				}
 			}
 			if tc.name == "count_lfx_resources" {
-				for _, want := range []string{"committee_member: committee:<uid>", "v1_past_meeting_participant: past_meeting:<meeting_and_occurrence_id>", "a ref or field the type lacks counts 0"} {
+				for _, want := range []string{"committee:<uid> for committee_member", "past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant and v1_past_meeting_attachment", "a ref or field the type lacks counts 0"} {
 					if !strings.Contains(tool.Description, want) {
 						t.Errorf("count description missing %q", want)
 					}

@@ -1,0 +1,1 @@
+GET /query/resources/count filters_all=email:member@example.test&parent=project:P1&type=committee_member&v=1

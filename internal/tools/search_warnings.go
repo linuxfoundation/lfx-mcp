@@ -6,6 +6,7 @@ package tools
 
 import (
 	"fmt"
+	"strings"
 
 	querysvc "github.com/linuxfoundation/lfx-v2-query-service/gen/query_svc"
 )
@@ -78,12 +79,26 @@ func notVisibleText(what string) string {
 }
 
 // lookupNotVisibleMessage is the error text of a query-backed lookup by UID
-// that returned no record. label names the record ("meeting", "past meeting
-// summary"). A lookup that calls an LFX v2 service other than the query
-// service reports that service's 404 through friendlyAPIError, which gives it
-// accessDeniedMessage.
+// that returned no record, or whose record the people rule
+// (people_visibility.go) does not show the caller. label names the record
+// ("meeting", "past meeting summary"). A lookup that calls an LFX v2 service
+// other than the query service reports that service's 404 through
+// friendlyAPIError, which gives it accessDeniedMessage, and uses
+// serviceLookupNotVisibleMessage for a record the rule does not show.
 func lookupNotVisibleMessage(label, uid string) string {
 	return fmt.Sprintf("Error: %s. Check the UID, or ask someone with access to confirm it.", notVisibleText(label+" with UID "+uid))
+}
+
+// serviceLookupNotVisibleMessage is the error text of a lookup that calls an
+// LFX v2 service other than the query service and whose record the people
+// rule (people_visibility.go) does not show the caller. It is byte-identical
+// to what friendlyAPIError gives that service's 404 for the same op, so a
+// record that is not shown cannot be told from one that does not exist.
+func serviceLookupNotVisibleMessage(op string) string {
+	if len(op) > 0 {
+		op = strings.ToUpper(op[:1]) + op[1:]
+	}
+	return op + ": " + accessDeniedMessage
 }
 
 // hasPageToken reports whether a pagination token is present and non-empty.

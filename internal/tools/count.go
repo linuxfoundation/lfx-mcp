@@ -25,6 +25,8 @@ var countableResourceTypes = []string{
 	meetingRegistrantResourceType,
 	pastMeetingResourceType,
 	pastMeetingParticipantResourceType,
+	meetingAttachmentResourceType,
+	pastMeetingAttachmentResourceType,
 	projectResourceType,
 	memberResourceType,
 	b2bOrgResourceType,
@@ -42,7 +44,7 @@ const countLowerBoundNote = " The count stopped at the query service's access-bu
 
 // CountLFXResourcesArgs defines the input parameters for the count_lfx_resources tool.
 type CountLFXResourcesArgs struct {
-	Type       string   `json:"type" jsonschema:"(required) Resource type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member (the v2 index holds only onboarded projects)"`
+	Type       string   `json:"type" jsonschema:"(required) Type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, v1_meeting_attachment, v1_past_meeting_attachment, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member"`
 	Parent     string   `json:"parent,omitempty" jsonschema:"The type's own parent ref, e.g. committee:<uid> for committee_member, project:<uid> for committee"`
 	Name       string   `json:"name,omitempty" jsonschema:"Name or alias to match (typeahead)"`
 	Tags       []string `json:"tags,omitempty" jsonschema:"Tags matched with OR, e.g. is_attended:true, project_slug:cncf"`
@@ -68,12 +70,12 @@ func RegisterCountLFXResources(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "count_lfx_resources",
 		Description: "Count LFX resources of one type via the query service, over the records visible to the caller. " +
-			"Filters: parent, the type's own ref (committee_member: committee:<uid>; committee: project:<uid>; v1_past_meeting_participant: past_meeting:<meeting_and_occurrence_id>), " +
+			"Filters: parent, the type's own ref (committee:<uid> for committee_member; project:<uid> for committee; meeting:<id> for v1_meeting_attachment; past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant and v1_past_meeting_attachment), " +
 			"name (typeahead), tags OR / tags_all AND (is_attended:true, project_uid:<uid>), a date range (date_field=start_time), " +
-			"and stored-value filters_all / filters_or on the type's data fields; a ref or field the type lacks counts 0. " +
-			"Returns {count, complete, visibility, note}. complete=true means every record indexed in LFX v2 that the caller may see was counted; " +
+			"and filters_all / filters_or on the type's data fields; a ref or field the type lacks counts 0. " +
+			"Returns {count, complete, visibility, note}. complete=true means every record the caller may see was counted; " +
 			"complete=false means the count stopped early and is a lower bound (narrow the query). Records not yet onboarded into LFX v2 are never counted. " +
-			"Use this instead of paging a search to count meetings, participants, committees and members. " +
+			"Use this instead of paging a search to count. " +
 			"For how many projects a foundation or parent has, use the semantic layer's project metrics (the authoritative project directory), not this tool.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Count LFX Resources",
@@ -177,6 +179,21 @@ func handleCountLFXResources(ctx context.Context, req *mcp.CallToolRequest, args
 	}
 
 	clients := projectConfig.Clients
+
+	// Without full view, counts of people types are limited to the forms
+	// LFX Self Serve shows the caller (people_visibility.go): a filter that
+	// can single out a person is refused, and a per-meeting count needs the
+	// view that shows that meeting's count on screen.
+	if !HasFullView(ctx) {
+		refusal, err := peopleCountGate(ctx, clients, tokenInfo, args)
+		if err != nil {
+			logger.ErrorContext(ctx, "people count visibility check failed", "error", err, "type", args.Type)
+			return errorResult(peopleCountUnavailableMessage(args.Type)), nil, nil
+		}
+		if refusal != "" {
+			return errorResult(refusal), nil, nil
+		}
+	}
 
 	payload := buildCountPayload(args)
 

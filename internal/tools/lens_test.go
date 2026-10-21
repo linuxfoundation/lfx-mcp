@@ -644,6 +644,18 @@ func listRegisteredTool(t *testing.T, name string, register func(*mcp.Server)) *
 // findRegisteredTool returns the named tool, or nil when it is not registered.
 func findRegisteredTool(t *testing.T, name string, register func(*mcp.Server)) *mcp.Tool {
 	t.Helper()
+	for _, tool := range registeredTools(t, register) {
+		if tool.Name == name {
+			return tool
+		}
+	}
+	return nil
+}
+
+// registeredTools lists, through an in-memory client, every tool register
+// adds to a fresh server.
+func registeredTools(t *testing.T, register func(*mcp.Server)) []*mcp.Tool {
+	t.Helper()
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "test-server",
@@ -670,12 +682,7 @@ func findRegisteredTool(t *testing.T, name string, register func(*mcp.Server)) *
 	if err != nil {
 		t.Fatalf("ListTools failed: %v", err)
 	}
-	for _, tool := range res.Tools {
-		if tool.Name == name {
-			return tool
-		}
-	}
-	return nil
+	return res.Tools
 }
 
 func schemaRequired(t *testing.T, tool *mcp.Tool) []string {

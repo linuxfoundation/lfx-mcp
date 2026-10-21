@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -111,6 +112,66 @@ var staffOnlyTools = []string{
 	"read_lfx_standard_metrics_guidance",
 }
 
+// nonPeopleTools are the tools newServer may register whose results carry no
+// people data under the people rule (AGENTS.md "People data for non-staff
+// callers"), or whose people data is out of that rule's scope for a stated
+// reason. A new tool must be added here or to tools.PeopleToolNames;
+// TestNewServer_EveryToolDecidesOnPeopleData fails until it is.
+var nonPeopleTools = []string{
+	// No people records.
+	"audit_committee_coverage", "search_committees", "search_groups", "search_projects",
+	"search_b2b_orgs", "get_mailing_list", "get_mailing_list_service", "search_mailing_lists",
+	"list_email_templates", "list_discord_roles", "find_discord_role",
+	// The caller's own profile.
+	"user_info",
+	// count_lfx_resources has its own gate (peopleCountGate).
+	"count_lfx_resources",
+	// Write tools echo what the writer sent; only a writer reaches them.
+	"create_committee", "update_committee", "delete_committee", "update_committee_settings",
+	"create_committee_member", "update_committee_member", "delete_committee_member",
+	"create_group", "update_group", "delete_group", "update_group_settings",
+	"create_group_member", "update_group_member", "delete_group_member",
+	"create_membership_key_contact", "update_membership_key_contact", "delete_membership_key_contact",
+	"send_email", "assign_discord_role",
+	// Discord lookups: gated per project to its writers by AuthorizeProject
+	// (RelationWriter); outside this rule's scope.
+	"find_discord_user", "check_discord_user_role",
+	// Staff-only Lens tools: registered for isStaff callers only.
+	"query_lfx_lens", "explore_lfx_semantic_layer", "query_lfx_semantic_layer",
+	"query_lfx_standard_metrics", "read_lfx_semantic_layer_guidance", "read_lfx_standard_metrics_guidance",
+	// Out of the rule's scope until the product decides what LFX Self Serve
+	// shows for them (README "People data"): member records, membership key
+	// contacts, org committee seats, and project settings (writers,
+	// auditors, meeting_coordinators).
+	"search_members", "get_member_membership",
+	"get_membership_key_contacts", "get_membership_key_contact", "get_org_committee_seats", "get_project",
+}
+
+// TestNewServer_EveryToolDecidesOnPeopleData pins that every tool newServer
+// registers, in either terminology mode and with every tool enabled, is
+// either in tools.PeopleToolNames (and so walked by the people-tool tests)
+// or declared in nonPeopleTools with its reason.
+func TestNewServer_EveryToolDecidesOnPeopleData(t *testing.T) {
+	decided := map[string]bool{}
+	for _, name := range tools.PeopleToolNames {
+		decided[name] = true
+	}
+	for _, name := range nonPeopleTools {
+		if decided[name] {
+			t.Errorf("%s is in both tools.PeopleToolNames and nonPeopleTools", name)
+		}
+		decided[name] = true
+	}
+	for _, groups := range []bool{false, true} {
+		cfg := Config{Tools: append(append([]string{}, defaultTools...), staffOnlyTools...), CommitteesAsGroups: groups}
+		for name := range listedToolsForConfig(t, cfg, nil) {
+			if !decided[name] {
+				t.Errorf("%s (groups=%v) is registered but neither in tools.PeopleToolNames nor in nonPeopleTools; decide which", name, groups)
+			}
+		}
+	}
+}
+
 // listedTools is the tools/list a caller holding token sees from a server
 // with every name in staffOnlyTools enabled.
 func listedTools(t *testing.T, token *auth.TokenInfo) map[string]bool {
@@ -125,6 +186,17 @@ func listedToolsFor(t *testing.T, enabled []string, token *auth.TokenInfo) map[s
 }
 
 func listedToolsForConfig(t *testing.T, cfg Config, token *auth.TokenInfo) map[string]bool {
+	t.Helper()
+	listed := map[string]bool{}
+	for name := range listedToolJSONForConfig(t, cfg, token) {
+		listed[name] = true
+	}
+	return listed
+}
+
+// listedToolJSONForConfig is the tools/list a caller holding token sees from
+// a server with cfg, each tool as the JSON the client received, by name.
+func listedToolJSONForConfig(t *testing.T, cfg Config, token *auth.TokenInfo) map[string]string {
 	t.Helper()
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -149,11 +221,56 @@ func listedToolsForConfig(t *testing.T, cfg Config, token *auth.TokenInfo) map[s
 	if err != nil {
 		t.Fatalf("ListTools failed: %v", err)
 	}
-	listed := make(map[string]bool, len(res.Tools))
+	listed := make(map[string]string, len(res.Tools))
 	for _, tool := range res.Tools {
-		listed[tool.Name] = true
+		raw, err := json.Marshal(tool)
+		if err != nil {
+			t.Fatalf("marshal tool %s: %v", tool.Name, err)
+		}
+		listed[tool.Name] = string(raw)
 	}
 	return listed
+}
+
+// TestNewServer_SearchMeetingAttachmentsIsListedForReaders pins that the
+// attachment tool is listed, under one name, for a read-scoped caller in
+// both terminology modes, is absent without read scope, and that enabling
+// it changes nothing else in tools/list: every other tool's listing is byte
+// for byte the one served without it.
+func TestNewServer_SearchMeetingAttachmentsIsListedForReaders(t *testing.T) {
+	const name = "search_meeting_attachments"
+	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
+	noScope := &auth.TokenInfo{Scopes: []string{}}
+	var without []string
+	for _, tool := range defaultTools {
+		if tool != name {
+			without = append(without, tool)
+		}
+	}
+	if len(without) == len(defaultTools) {
+		t.Fatalf("%s is not in defaultTools", name)
+	}
+	for _, groups := range []bool{false, true} {
+		with := listedToolJSONForConfig(t, Config{Tools: defaultTools, CommitteesAsGroups: groups}, reader)
+		if _, ok := with[name]; !ok {
+			t.Errorf("groups=%v: %s must be listed for a read-scoped caller", groups, name)
+		}
+		if _, ok := listedToolJSONForConfig(t, Config{Tools: defaultTools, CommitteesAsGroups: groups}, noScope)[name]; ok {
+			t.Errorf("groups=%v: %s must not be listed without read scope", groups, name)
+		}
+		rest := listedToolJSONForConfig(t, Config{Tools: without, CommitteesAsGroups: groups}, reader)
+		delete(with, name)
+		if !reflect.DeepEqual(with, rest) {
+			t.Errorf("groups=%v: enabling %s changed another tool's listing", groups, name)
+		}
+	}
+	// The same listing under both modes: nothing in the tool names a
+	// committee or a group.
+	committeeMode := listedToolJSONForConfig(t, Config{Tools: []string{name}}, reader)[name]
+	groupMode := listedToolJSONForConfig(t, Config{Tools: []string{name}, CommitteesAsGroups: true}, reader)[name]
+	if committeeMode == "" || committeeMode != groupMode {
+		t.Errorf("%s must list identically in both modes:\n%s\n%s", name, committeeMode, groupMode)
+	}
 }
 
 // TestNewServer_LensToolsAreStaffOnly pins the gate: a read-scoped caller who

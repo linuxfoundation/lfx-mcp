@@ -1,0 +1,51 @@
+{
+  "resources": [
+    {
+      "Type": "v1_past_meeting_participant",
+      "ID": "p1",
+      "Data": {
+        "avatar_url": "",
+        "committee_uid": "9f0c2e6a-6b1e-4c3e-9d1a-0c1b2a3d4e5f",
+        "created_at": "2026-06-10T16:00:00Z",
+        "email": "ann@example.test",
+        "first_name": "Ann",
+        "host": false,
+        "is_ai_reconciled": false,
+        "is_attended": true,
+        "is_auto_matched": false,
+        "is_invited": true,
+        "is_unknown": false,
+        "is_verified": false,
+        "job_title": "Engineer",
+        "last_name": "A",
+        "mapped_invitee_name": "",
+        "meeting_and_occurrence_id": "91461158520-1771596000000",
+        "meeting_id": "91461158520",
+        "org_is_member": true,
+        "org_is_project_member": false,
+        "org_name": "Red Hat",
+        "project_slug": "cncf",
+        "project_uid": "a0941000002wBz4AAE",
+        "sessions": [
+          {
+            "join_time": "2026-06-10T15:02:11Z",
+            "leave_reason": "left",
+            "leave_time": "2026-06-10T15:58:40Z",
+            "uid": "s1"
+          }
+        ],
+        "uid": "p1",
+        "updated_at": "2026-06-10T16:00:00Z",
+        "username": "",
+        "zoom_user_name": "Ann A"
+      }
+    }
+  ],
+  "page_token": "next",
+  "people": 1,
+  "records": 2,
+  "note": "people and records describe this page only; a person whose records straddle pages can appear on more than one page.",
+  "warnings": [
+    "This page lists only past-meeting participants visible to you, so it can hold fewer than page_size; more pages remain: continue with page_token, increase page_size, or narrow your filters."
+  ]
+}

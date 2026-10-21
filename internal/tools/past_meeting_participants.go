@@ -7,6 +7,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -34,19 +35,34 @@ var errDrainPageCap = fmt.Errorf("paging exceeded the %d-page cap; narrow the qu
 
 // participantMaxRequests caps the query-service calls one tool invocation may
 // make on the date-range path (meeting pages + participant pages together).
-// Without it, max_meetings x per-meeting page cap allows 40k calls.
-const participantMaxRequests = 2000
+// Without it, max_meetings x per-meeting page cap allows 40k calls. A
+// variable so tests can lower it to reach the cap.
+var participantMaxRequests = 2000
 
-// errRequestBudget is returned when a date-range call exhausts participantMaxRequests.
-var errRequestBudget = fmt.Errorf("the date range needed more than %d query-service requests; narrow the range, add attended_only or org_name, or use count_only", participantMaxRequests)
+// requestBudgetError is the error for a date-range call that exhausts
+// participantMaxRequests; its text is built when it happens so the figure is
+// current.
+type requestBudgetError struct{}
 
-// requestBudget counts upstream calls across the steps of one tool call.
+func (requestBudgetError) Error() string {
+	return fmt.Sprintf("the date range needed more than %d query-service requests; narrow the range, add attended_only or org_name, or use count_only", participantMaxRequests)
+}
+
+// errRequestBudget returns the error for a date-range call that exhausts
+// participantMaxRequests.
+func errRequestBudget() error { return requestBudgetError{} }
+
+// requestBudget counts upstream calls across the steps of one tool call. A
+// nil budget is unlimited, for the lookups that run outside the date range.
 type requestBudget struct{ remaining int }
 
 // take consumes one request; it returns errRequestBudget when none are left.
 func (b *requestBudget) take() error {
+	if b == nil {
+		return nil
+	}
 	if b.remaining <= 0 {
-		return errRequestBudget
+		return errRequestBudget()
 	}
 	b.remaining--
 	return nil
@@ -72,6 +88,26 @@ const participantPerPageNote = "people and records describe this page only; a pe
 
 // participantCountRecordsNote distinguishes counted records from people.
 const participantCountRecordsNote = " This counts participant records, not distinct people; use count_only=false for de-duplicated people."
+
+// participantScopeRefusal is the tool error for a caller without full view
+// who names no single past meeting and no date range: LFX Self Serve has no
+// cross-meeting participant list for anyone but a meeting's organizers, and a
+// page over a whole project or group would only be read to be emptied.
+const participantScopeRefusal = "Error: participants are available per past meeting as LFX Self Serve shows them to you: set past_meeting_id, or a project or group scope with a date range."
+
+// participantFilterRefusal is the tool error for a name or org_name filter
+// from a caller without full view outside the one form LFX Self Serve offers
+// a non-organizer nothing like: a past meeting, or a date range of past
+// meetings, that the caller organizes.
+const participantFilterRefusal = "Error: name and org_name are available for past meetings you organize: set past_meeting_id to a past meeting you organize, or a date range whose past meetings you all organize."
+
+// participantCountNotShownMessage is the tool error for count_only on one
+// past meeting whose attendance LFX Self Serve does not show the caller.
+const participantCountNotShownMessage = "Error: participant counts for this past meeting are shown in LFX Self Serve to its organizers and to people with full access to it."
+
+// participantCountScopeNote is appended to a count over several past
+// meetings for a caller without full view.
+const participantCountScopeNote = " Counts cover only the past meetings whose attendance LFX Self Serve shows you."
 
 // participantSearchResult is the output shape of search_past_meeting_participants.
 type participantSearchResult struct {
@@ -183,9 +219,13 @@ func pastMeetingOccurrenceID(r *querysvc.Resource) string {
 }
 
 // drainParticipants fetches pages of participants for one parent until the
-// pages run out or recordBudget records have been collected. capped reports
-// that records were left behind (more than the budget, or a token remained).
-func drainParticipants(ctx context.Context, clients *lfxv2.Clients, parent string, args SearchPastMeetingParticipantsArgs, sort string, recordBudget int, budget *requestBudget) (out []*querysvc.Resource, capped bool, err error) {
+// pages run out or recordBudget records have been collected. narrow, when
+// not empty, is a filters_or clause that limits the query to the records the
+// caller may be shown (see participantNarrowing); keep, when not nil, then
+// selects the records that count (the others are dropped as each page
+// arrives, so neither the budget nor capped sees them). capped reports that
+// records were left behind (more than the budget, or a token remained).
+func drainParticipants(ctx context.Context, clients *lfxv2.Clients, parent string, args SearchPastMeetingParticipantsArgs, sort string, recordBudget int, budget *requestBudget, narrow []string, keep func([]*querysvc.Resource) []*querysvc.Resource) (out []*querysvc.Resource, capped bool, err error) {
 	resourceType := pastMeetingParticipantResourceType
 	tags, filtersAll := participantFilters(args)
 	var pageToken *string
@@ -202,6 +242,7 @@ func drainParticipants(ctx context.Context, clients *lfxv2.Clients, parent strin
 			Parent:     strPtr(parent),
 			Tags:       tags,
 			FiltersAll: filtersAll,
+			FiltersOr:  narrow,
 			PageSize:   participantDrainPageSize,
 			Sort:       sort,
 			PageToken:  pageToken,
@@ -213,7 +254,11 @@ func drainParticipants(ctx context.Context, clients *lfxv2.Clients, parent strin
 		if err != nil {
 			return nil, false, err
 		}
-		out = append(out, result.Resources...)
+		page := result.Resources
+		if keep != nil {
+			page = keep(page)
+		}
+		out = append(out, page...)
 		if len(out) >= recordBudget {
 			return out[:recordBudget], len(out) > recordBudget || (result.PageToken != nil && *result.PageToken != ""), nil
 		}
@@ -294,6 +339,16 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 
 	parent, _ := participantScope(args)
 
+	// Without full view, the result follows what LFX Self Serve shows the
+	// caller of each past meeting (people_visibility_meetings.go). A filter
+	// that can probe for a person needs a scope whose meetings the caller
+	// all organizes, which only a single past meeting or a date range names.
+	fullView := HasFullView(ctx)
+	if !fullView && args.PastMeetingID == "" && !hasDateRange {
+		return errorResult(participantScopeRefusal), nil, nil
+	}
+	hasPersonFilter := args.Name != "" || args.OrgName != ""
+
 	logger.InfoContext(ctx, "searching past meeting participants",
 		"past_meeting_id", args.PastMeetingID,
 		"committee_uid", args.CommitteeUID,
@@ -309,27 +364,62 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 	)
 
 	// Step 1 (date range only): resolve the past meetings in range.
-	var parents []string
+	var ids []string
 	truncated := false
 	budget := &requestBudget{remaining: participantMaxRequests}
 	if hasDateRange {
-		ids, trunc, err := resolvePastMeetingIDs(ctx, clients, parent, args, maxMeetings, budget)
+		resolved, trunc, err := resolvePastMeetingIDs(ctx, clients, parent, args, maxMeetings, budget)
 		if err != nil {
 			logger.ErrorContext(ctx, "past meeting resolution failed", "error", err)
 			return errorResult(friendlyAPIError("failed to resolve past meetings for the date range", err)), nil, nil
 		}
-		truncated = trunc
-		for _, id := range ids {
-			parents = append(parents, "past_meeting:"+id)
+		ids, truncated = resolved, trunc
+	}
+	parents := make([]string, 0, len(ids))
+	for _, id := range ids {
+		parents = append(parents, "past_meeting:"+id)
+	}
+
+	// Without full view, decide the view of every past meeting in scope
+	// before any participant data is read or counted; the scope is always
+	// one past meeting or the resolved range here. Every page of the
+	// past-meeting lookup is charged to the request budget.
+	var views map[string]participantView
+	if !fullView {
+		scope := ids
+		if args.PastMeetingID != "" {
+			scope = []string{args.PastMeetingID}
+		}
+		views, err = participantViews(ctx, clients, scope, budget)
+		if errors.As(err, &requestBudgetError{}) {
+			return errorResult(friendlyAPIError("failed to check past meeting visibility", err)), nil, nil
+		}
+		if err != nil {
+			logger.ErrorContext(ctx, "participant visibility check failed", "error", err)
+			return errorResult(peopleVisibilityUnavailableMessage), nil, nil
+		}
+		if hasPersonFilter {
+			for _, id := range scope {
+				if views[id] != participantOrganizer {
+					return errorResult(participantFilterRefusal), nil, nil
+				}
+			}
 		}
 	}
 
-	// count_only: sum the count route over the scope(s).
+	// count_only: sum the count route over the scope(s). Without full view,
+	// only past meetings whose attendance Self Serve shows the caller count.
 	if args.CountOnly {
 		var total uint64
 		complete := !truncated
 		if hasDateRange {
-			for _, p := range parents {
+			for i, p := range parents {
+				if !fullView && views[ids[i]] == participantOwnOnly {
+					continue
+				}
+				if err := budget.take(); err != nil {
+					return errorResult(friendlyAPIError("failed to count past meeting participants", err)), nil, nil
+				}
 				res, err := countParticipants(ctx, clients, p, args)
 				if err != nil {
 					logger.ErrorContext(ctx, "QueryResourcesCount failed", "error", err)
@@ -341,6 +431,9 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 				}
 			}
 		} else {
+			if !fullView && views[args.PastMeetingID] == participantOwnOnly {
+				return errorResult(participantCountNotShownMessage), nil, nil
+			}
 			res, err := countParticipants(ctx, clients, parent, args)
 			if err != nil {
 				logger.ErrorContext(ctx, "QueryResourcesCount failed", "error", err)
@@ -351,6 +444,9 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 		}
 		out := buildCountResult(total, !complete)
 		out.Note += participantCountRecordsNote
+		if !fullView && hasDateRange {
+			out.Note += participantCountScopeNote
+		}
 		if truncated {
 			out.Note += " " + fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings)
 		}
@@ -362,8 +458,24 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 	if hasDateRange {
 		var all []*querysvc.Resource
 		drained := 0
+		// Without full view each meeting is read narrowed to the records the
+		// caller may be shown, and only those are collected, so the record
+		// cap and its note count them alone. A meeting that can show the
+		// caller nothing is not read at all.
+		var keep func([]*querysvc.Resource) []*querysvc.Resource
+		if !fullView {
+			keep = func(rs []*querysvc.Resource) []*querysvc.Resource { return selectParticipants(rs, views, tokenInfo) }
+		}
 		for i, p := range parents {
-			rs, capped, err := drainParticipants(ctx, clients, p, args, sort, participantMaxRecords-len(all), budget)
+			var narrow []string
+			if !fullView {
+				var readable bool
+				if narrow, readable = participantNarrowing(views[ids[i]], tokenInfo); !readable {
+					drained = i + 1
+					continue
+				}
+			}
+			rs, capped, err := drainParticipants(ctx, clients, p, args, sort, participantMaxRecords-len(all), budget, narrow, keep)
 			if err != nil {
 				logger.ErrorContext(ctx, "QueryResources failed", "error", err)
 				return errorResult(friendlyAPIError("failed to search past meeting participants", err)), nil, nil
@@ -405,29 +517,60 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 		if args.PageToken != "" {
 			payload.PageToken = strPtr(args.PageToken)
 		}
-		result, err := clients.QuerySvc.QueryResources(ctx, payload)
-		if err != nil {
-			logger.ErrorContext(ctx, "QueryResources failed", "error", err)
-			return errorResult(friendlyAPIError("failed to search past meeting participants", err)), nil, nil
+		// Without full view the single meeting is read narrowed to the
+		// records the caller may be shown, so no page is read only to be
+		// emptied and the page token never spans records the caller is not
+		// shown. A meeting that can show the caller nothing is not read.
+		readable := true
+		if !fullView {
+			payload.FiltersOr, readable = participantNarrowing(views[args.PastMeetingID], tokenInfo)
 		}
-		out.Resources = result.Resources
-		out.PageToken = result.PageToken
+		if readable {
+			result, err := clients.QuerySvc.QueryResources(ctx, payload)
+			if err != nil {
+				logger.ErrorContext(ctx, "QueryResources failed", "error", err)
+				return errorResult(friendlyAPIError("failed to search past meeting participants", err)), nil, nil
+			}
+			out.Resources = result.Resources
+			out.PageToken = result.PageToken
+		}
 	}
 
+	// Without full view the rule takes two passes around de-duplication:
+	// records the caller is not shown are dropped first, with their fields
+	// intact, so identity matching (which needs the full records) only ever
+	// merges records the caller is shown, within one meeting; fields are
+	// reduced after. Totals describe what is returned, never what was
+	// withheld.
+	if !fullView {
+		out.Resources = selectParticipants(out.Resources, views, tokenInfo)
+		if out.Meetings != nil {
+			shown := distinctMeetings(out.Resources)
+			out.Meetings = &shown
+		}
+	}
 	records := len(out.Resources)
 	// A date range drains every page itself, so it never has a token and is
-	// never a continuation; the page-level warnings count raw records, before
-	// de-duplication. When max_meetings left meetings in the range
-	// unexpanded, the result does not cover the whole filter set, so no
-	// warning is added: the truncation note already says what to do next.
+	// never a continuation; the page-level warnings count records before
+	// de-duplication (with full view, every raw record; without it, the
+	// records the caller is shown). When max_meetings left meetings in the
+	// range unexpanded, the result does not cover the whole filter set, so
+	// no warning is added: the truncation note already says what to do next.
 	if !truncated {
 		out.Warnings = searchWarnings("past-meeting participants", records, pageSize, hasPageToken(out.PageToken), args.PageToken != "")
 	}
 	if dedupe {
-		out.Resources = dedupeParticipants(out.Resources)
+		if fullView {
+			out.Resources = dedupeParticipants(out.Resources)
+		} else {
+			out.Resources = dedupeParticipantsPerMeeting(out.Resources, views, tokenInfo)
+		}
 		people := len(out.Resources)
 		out.People = &people
 		out.Records = &records
+	}
+	if !fullView {
+		out.Resources = filterParticipants(out.Resources, views, tokenInfo)
 	}
 	if out.Resources == nil {
 		out.Resources = []*querysvc.Resource{}

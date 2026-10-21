@@ -1,0 +1,44 @@
+{
+  "meeting": {
+    "ID": "past-1",
+    "MeetingID": null,
+    "OccurrenceID": null,
+    "ProjectUID": null,
+    "Title": "Weekly sync",
+    "Description": null,
+    "StartTime": null,
+    "Duration": null,
+    "Timezone": null,
+    "Visibility": null,
+    "Restricted": null,
+    "MeetingType": null,
+    "Committees": null,
+    "RecordingEnabled": null,
+    "ArtifactVisibility": null,
+    "TranscriptEnabled": null,
+    "IsManuallyCreated": null,
+    "MeetingPassword": null
+  },
+  "recording": {
+    "Type": "v1_past_meeting_recording",
+    "ID": "rec-1",
+    "Data": {
+      "created_by": {
+        "email": "creator@example.test"
+      },
+      "host_email": "host@example.test",
+      "uid": "rec-1"
+    }
+  },
+  "transcript": {
+    "Type": "v1_past_meeting_transcript",
+    "ID": "tr-1",
+    "Data": {
+      "host_email": "host@example.test",
+      "uid": "tr-1",
+      "updated_by": {
+        "email": "editor@example.test"
+      }
+    }
+  }
+}

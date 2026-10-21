@@ -28,7 +28,7 @@ func TestCountLFXResources_PayloadMapping(t *testing.T) {
 	api := setupCountTest(t)
 	api.Respond(countPath, `{"count": 42, "has_more": false}`)
 
-	res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{
+	res, _, err := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{
 		Type:       "v1_past_meeting",
 		Parent:     "project:a09410000182dD2AAI",
 		Name:       "TOC",
@@ -117,7 +117,7 @@ func TestCountLFXResources_HasMoreIsLowerBound(t *testing.T) {
 	api := setupCountTest(t)
 	api.Respond(countPath, `{"count": 100, "has_more": true}`)
 
-	res, _, _ := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "v1_past_meeting_participant"})
+	res, _, _ := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "v1_past_meeting_participant"})
 	if res.IsError {
 		t.Fatalf("unexpected error result: %s", allResultText(t, res))
 	}
@@ -156,7 +156,7 @@ func TestCountLFXResources_EveryListedTypeIsAccepted(t *testing.T) {
 	api := setupCountTest(t)
 	for _, typ := range countableResourceTypes {
 		api.Respond(countPath, `{"count": 1, "has_more": false}`)
-		res, _, _ := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: typ})
+		res, _, _ := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{Type: typ})
 		if res.IsError {
 			t.Errorf("type %s rejected: %s", typ, allResultText(t, res))
 		}
@@ -217,12 +217,13 @@ func TestCountLFXResources_MissingTokenFails(t *testing.T) {
 
 func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 	tool := listRegisteredTool(t, "count_lfx_resources", RegisterCountLFXResources)
-	// Keep a tight local pin while allowing the explicit participant parent type.
+	// Keep a tight local pin: the attachment types joined at no net cost,
+	// so the budget is main's before them.
 	const descriptionBudget = 1005
 	if n := len(tool.Description); n > descriptionBudget {
 		t.Errorf("description is %d bytes, budget is %d", n, descriptionBudget)
 	}
-	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "committee_member: committee:<uid>", "committee: project:<uid>", "v1_past_meeting_participant: past_meeting:<meeting_and_occurrence_id>", "a date range (date_field=start_time)", "filters_all", "filters_or", "a ref or field the type lacks counts 0"} {
+	for _, want := range []string{"visible to the caller", "complete=false", "lower bound", "committee:<uid> for committee_member", "project:<uid> for committee", "meeting:<id> for v1_meeting_attachment", "past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant and v1_past_meeting_attachment", "a date range (date_field=start_time)", "filters_all", "filters_or", "a ref or field the type lacks counts 0"} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("description missing %q", want)
 		}
@@ -240,13 +241,13 @@ func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 func TestCountLFXResources_IndexScopeDescriptionAndSchema(t *testing.T) {
 	tool := listRegisteredTool(t, "count_lfx_resources", RegisterCountLFXResources)
 	t.Logf("count_lfx_resources description: %d UTF-8 bytes", len(tool.Description))
-	const want = "Returns {count, complete, visibility, note}. complete=true means every record indexed in LFX v2 that the caller may see was counted; complete=false means the count stopped early and is a lower bound (narrow the query). Records not yet onboarded into LFX v2 are never counted. Use this instead of paging a search to count meetings, participants, committees and members. For how many projects a foundation or parent has, use the semantic layer's project metrics (the authoritative project directory), not this tool."
+	const want = "Returns {count, complete, visibility, note}. complete=true means every record the caller may see was counted; complete=false means the count stopped early and is a lower bound (narrow the query). Records not yet onboarded into LFX v2 are never counted. Use this instead of paging a search to count. For how many projects a foundation or parent has, use the semantic layer's project metrics (the authoritative project directory), not this tool."
 	if !strings.Contains(tool.Description, want) {
 		t.Error("count description must distinguish index completeness from directory coverage and route project counts to the semantic layer")
 	}
-	const wantType = "(required) Resource type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member (the v2 index holds only onboarded projects)"
+	const wantType = "(required) Type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, v1_meeting_attachment, v1_past_meeting_attachment, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member"
 	if got := countTypeTag(t); got != wantType {
-		t.Errorf("type schema must retain the type list and project index coverage caveat: got %q", got)
+		t.Errorf("type schema must retain the type list: got %q", got)
 	}
 }
 

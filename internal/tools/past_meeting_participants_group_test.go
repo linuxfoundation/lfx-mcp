@@ -5,7 +5,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"reflect"
 	"strings"
@@ -24,6 +23,7 @@ func TestParticipantsGroupMode_SchemaAndDescription(t *testing.T) {
 	wantDescription := strings.NewReplacer(
 		"committee UID", "group UID (also known as committee UID)",
 		"project or committee", "project or group",
+		"whose committee you belong to", "whose group you belong to",
 	).Replace(committee.Description)
 	if group.Description != wantDescription {
 		t.Errorf("group description must change only the sibling-style terminology: %q", group.Description)
@@ -145,9 +145,9 @@ func TestParticipantsGroupMode_DelegatesToSameHandler(t *testing.T) {
 				api.Respond(countPath, `{"count":2,"has_more":false}`)
 				var result *mcp.CallToolResult
 				if asGroups {
-					result, _, err = handleSearchPastMeetingParticipantsGroupMode(context.Background(), stubCallToolRequest(), tc.args)
+					result, _, err = handleSearchPastMeetingParticipantsGroupMode(fullViewCtx(), stubCallToolRequest(), tc.args)
 				} else {
-					result, _, err = handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), canonical)
+					result, _, err = handleSearchPastMeetingParticipants(fullViewCtx(), stubCallToolRequest(), canonical)
 				}
 				if err != nil {
 					t.Fatal(err)

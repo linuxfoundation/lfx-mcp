@@ -1,0 +1,3 @@
+GET /query/resources date_field=start_time&date_from=2026-06-01&page_size=100&parent=committee:66666666-6666-4666-8666-666666666666&sort=name_asc&type=v1_past_meeting&v=1
+GET /query/resources/count filters_all=org_name:Red Hat&parent=past_meeting:m-1&type=v1_past_meeting_participant&v=1
+GET /query/resources/count filters_all=org_name:Red Hat&parent=past_meeting:m-2&type=v1_past_meeting_participant&v=1

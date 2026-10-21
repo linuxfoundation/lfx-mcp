@@ -1,0 +1,9 @@
+{
+  "count": 4,
+  "complete": false,
+  "visibility": "caller",
+  "note": "Counts only the records indexed in LFX v2 and visible to you; records you cannot see, or not yet onboarded into LFX v2, are not counted.",
+  "warnings": [
+    "The count is not guaranteed exhaustive: the service stopped counting early, so it is a lower bound; narrow the query (parent, date range, tags) or count per project."
+  ]
+}

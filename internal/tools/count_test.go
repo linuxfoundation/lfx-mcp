@@ -28,7 +28,7 @@ func TestCountLFXResources_PayloadMapping(t *testing.T) {
 	api := setupCountTest(t)
 	api.Respond(countPath, `{"count": 42, "has_more": false}`)
 
-	res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{
+	res, _, err := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{
 		Type:       "v1_past_meeting",
 		Parent:     "project:a09410000182dD2AAI",
 		Name:       "TOC",
@@ -117,7 +117,7 @@ func TestCountLFXResources_HasMoreIsLowerBound(t *testing.T) {
 	api := setupCountTest(t)
 	api.Respond(countPath, `{"count": 100, "has_more": true}`)
 
-	res, _, _ := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "v1_past_meeting_participant"})
+	res, _, _ := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{Type: "v1_past_meeting_participant"})
 	if res.IsError {
 		t.Fatalf("unexpected error result: %s", allResultText(t, res))
 	}
@@ -156,7 +156,7 @@ func TestCountLFXResources_EveryListedTypeIsAccepted(t *testing.T) {
 	api := setupCountTest(t)
 	for _, typ := range countableResourceTypes {
 		api.Respond(countPath, `{"count": 1, "has_more": false}`)
-		res, _, _ := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: typ})
+		res, _, _ := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{Type: typ})
 		if res.IsError {
 			t.Errorf("type %s rejected: %s", typ, allResultText(t, res))
 		}
@@ -230,9 +230,13 @@ func TestCountLFXResources_DescriptionBudgetAndContent(t *testing.T) {
 	if strings.Contains(tool.Description, "type lacks counts 0") {
 		t.Error("description must not promise zero for unsupported filters")
 	}
-	const participantParent = "past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant"
-	if parent := schemaPropertyDescription(t, tool, "parent"); !strings.Contains(parent, participantParent) {
-		t.Errorf("parent description must retain the participant's past-meeting ref: %q", parent)
+	// The per-type parent refs live in the parent parameter's text, not in
+	// the description; the attachment types' refs joined there.
+	parent := schemaPropertyDescription(t, tool, "parent")
+	for _, want := range []string{"committee:<uid> for committee_member", "project:<uid> for committee", "meeting:<id> for v1_meeting_attachment", "past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant and v1_past_meeting_attachment"} {
+		if !strings.Contains(parent, want) {
+			t.Errorf("parent description missing %q: %q", want, parent)
+		}
 	}
 	for _, banned := range []string{"Insights", "because", "Jim"} {
 		if strings.Contains(tool.Description, banned) {
@@ -251,9 +255,9 @@ func TestCountLFXResources_IndexScopeDescriptionAndSchema(t *testing.T) {
 	if !strings.Contains(tool.Description, want) {
 		t.Error("count description must distinguish index completeness from directory coverage and route project counts to the semantic layer")
 	}
-	const wantType = "(required) Resource type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member (the v2 index holds only onboarded projects)"
+	const wantType = "(required) Type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, v1_meeting_attachment, v1_past_meeting_attachment, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member"
 	if got := countTypeTag(t); got != wantType {
-		t.Errorf("type schema must retain the type list and project index coverage caveat: got %q", got)
+		t.Errorf("type schema must retain the type list: got %q", got)
 	}
 }
 

@@ -1022,6 +1022,8 @@ func handleUpdateCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 	member := current.Member
 
 	// Build payload from current state, overriding with any provided args.
+	// An empty e-mail is not sent on the wire: see committeeRequestEncoder
+	// in the lfxv2 package.
 	payload := &committeeservice.UpdateCommitteeMemberPayload{
 		Version:         "1",
 		IfMatch:         current.Etag,

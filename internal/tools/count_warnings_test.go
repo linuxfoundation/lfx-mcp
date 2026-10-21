@@ -172,7 +172,8 @@ func TestCountLFXResources_ZeroCountsAreNotProofOfAbsence(t *testing.T) {
 		t.Run(resourceType, func(t *testing.T) {
 			api := setupCountTest(t)
 			api.Respond(countPath, `{"count":0,"has_more":false}`)
-			res, _, err := handleCountLFXResources(context.Background(), stubCallToolRequest(), CountLFXResourcesArgs{Type: resourceType})
+			// Full view: the people types are gated without it.
+			res, _, err := handleCountLFXResources(fullViewCtx(), stubCallToolRequest(), CountLFXResourcesArgs{Type: resourceType})
 			if err != nil || res == nil || res.IsError {
 				t.Fatalf("unexpected error: %v; result=%v", err, res)
 			}

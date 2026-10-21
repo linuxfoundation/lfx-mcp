@@ -5,7 +5,6 @@
 package tools
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -30,7 +29,7 @@ func TestParticipants_RecordCapNoteDoesNotInventExtraMatches(t *testing.T) {
 	}
 	api.Respond(resourcesPath, page(nil, "")) // The unvisited meeting might be empty.
 
-	res, _, err := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{
+	res, _, err := handleSearchPastMeetingParticipants(fullViewCtx(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{
 		ProjectUID: "p", DateFrom: "2026-01-01",
 	})
 	if err != nil || res.IsError {

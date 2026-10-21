@@ -26,6 +26,8 @@ var countableResourceTypes = []string{
 	meetingRegistrantResourceType,
 	pastMeetingResourceType,
 	pastMeetingParticipantResourceType,
+	meetingAttachmentResourceType,
+	pastMeetingAttachmentResourceType,
 	projectResourceType,
 	memberResourceType,
 	b2bOrgResourceType,
@@ -50,8 +52,8 @@ const countMetricIncompleteWarning = "The distinct count stopped early and is a 
 
 // CountLFXResourcesArgs defines the input parameters for the count_lfx_resources tool.
 type CountLFXResourcesArgs struct {
-	Type        string   `json:"type" jsonschema:"(required) Resource type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member (the v2 index holds only onboarded projects)"`
-	Parent      string   `json:"parent,omitempty" jsonschema:"Parent ref: committee:<uid> for committee_member, project:<uid> for committee, past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant"`
+	Type        string   `json:"type" jsonschema:"(required) Type to count: committee, committee_member, v1_meeting, v1_meeting_registrant, v1_past_meeting, v1_past_meeting_participant, v1_meeting_attachment, v1_past_meeting_attachment, project, project_membership, b2b_org, groupsio_mailing_list, groupsio_member"`
+	Parent      string   `json:"parent,omitempty" jsonschema:"Parent ref: committee:<uid> for committee_member, project:<uid> for committee, meeting:<id> for v1_meeting_attachment, past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant and v1_past_meeting_attachment"`
 	Name        string   `json:"name,omitempty" jsonschema:"Name or alias to match (typeahead)"`
 	Tags        []string `json:"tags,omitempty" jsonschema:"Tags matched with OR, e.g. is_attended:true, project_slug:cncf"`
 	TagsAll     []string `json:"tags_all,omitempty" jsonschema:"Tags that must all match"`
@@ -264,6 +266,21 @@ func handleCountLFXResources(ctx context.Context, req *mcp.CallToolRequest, args
 	}
 
 	clients := projectConfig.Clients
+
+	// Without full view, counts of people types are limited to the forms
+	// LFX Self Serve shows the caller (people_visibility.go): a filter that
+	// can single out a person is refused, and a per-meeting count needs the
+	// view that shows that meeting's count on screen.
+	if !HasFullView(ctx) {
+		refusal, err := peopleCountGate(ctx, clients, tokenInfo, args)
+		if err != nil {
+			logger.ErrorContext(ctx, "people count visibility check failed", "error", err, "type", args.Type)
+			return errorResult(peopleCountUnavailableMessage(args.Type)), nil, nil
+		}
+		if refusal != "" {
+			return errorResult(refusal), nil, nil
+		}
+	}
 
 	payload := buildCountPayload(args)
 

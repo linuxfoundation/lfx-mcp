@@ -65,7 +65,7 @@ func RegisterMeetupAnalytics(server *mcp.Server) {
 
 // SearchMeetupsArgs is the request body of search_lfx_meetups.
 type SearchMeetupsArgs struct {
-	Community string `json:"community,omitempty" jsonschema:"ocgroups.dev community slug, exact (e.g. <slug>). Not an LFX project slug."`
+	Community string `json:"community,omitempty" jsonschema:"ocgroups.dev community slug, lower-case, exact (e.g. cncf, lf-energy). Not an LFX project slug."`
 	Group     string `json:"group,omitempty" jsonschema:"Group slug, exact (e.g. cncf-austin)."`
 	Country   string `json:"country,omitempty" jsonschema:"ISO 3166-1 alpha-2 code of the venue country (e.g. US)."`
 	StartDate string `json:"start_date,omitempty" jsonschema:"yyyy-mm-dd, inclusive, on the event start date. Omitted = today, so the default is upcoming events."`
@@ -78,7 +78,7 @@ type SearchMeetupsArgs struct {
 
 // MeetupAnalyticsArgs is the request body of query_lfx_meetup_analytics.
 type MeetupAnalyticsArgs struct {
-	Community string `json:"community,omitempty" jsonschema:"ocgroups.dev community slug, exact (e.g. <slug>). Not an LFX project slug."`
+	Community string `json:"community,omitempty" jsonschema:"ocgroups.dev community slug, lower-case, exact (e.g. cncf, lf-energy). Not an LFX project slug."`
 	Group     string `json:"group,omitempty" jsonschema:"Group slug, exact (e.g. cncf-austin)."`
 	Country   string `json:"country,omitempty" jsonschema:"ISO 3166-1 alpha-2 code of the venue country (e.g. US)."`
 	StartDate string `json:"start_date,omitempty" jsonschema:"yyyy-mm-dd, inclusive, on the event's local start date. Omitted = the trailing 365 days before end_date."`

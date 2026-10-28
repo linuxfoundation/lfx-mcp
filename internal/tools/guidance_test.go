@@ -193,6 +193,7 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"scope them with project__foundation_slug",
 		"leaf project's own slug returns NOTHING",
 		// community meetups route to the two ocgroups.dev tools, not here
+		"- Community meetups from Open Community Groups (ocgroups.dev): search_lfx_meetups lists the events, query_lfx_meetup_analytics counts meetups, registrants and checked_in per grouping (recipe 15)",
 		"15. COMMUNITY MEETUPS",
 		"live on two tools, not on this layer\nor the standard metrics: search_lfx_meetups lists events",
 		"query_lfx_meetup_analytics returns meetups,\nregistrants and checked_in per grouping",

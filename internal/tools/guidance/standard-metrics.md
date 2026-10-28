@@ -13,7 +13,8 @@ company's subsidiaries AT ANY DEPTH (see "Organizations" and "Projects" below).
 Community meetups from Open Community Groups (ocgroups.dev) are not a
 family: search_lfx_meetups lists the events and query_lfx_meetup_analytics
 returns meetups, registrants and checked_in per grouping; the
-event_registrations family is conference registrations.
+event_registrations family is conference registrations and includes the
+earlier chapter platform's meetups.
 
 ## Resolve names first — ALWAYS
 

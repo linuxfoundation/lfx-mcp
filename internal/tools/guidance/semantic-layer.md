@@ -353,6 +353,8 @@ registrants and checked_in are distinct people; checked_in is zero where
 organisers did not run check-in, which is not low attendance. Most meetups
 carry no venue country yet, so by=country and by=region put most meetups
 under Unknown and applied.note says how many; say so when you report them.
+A country filter matches only meetups with a venue country, so a
+country-filtered list or total reads low; qualify it the same way.
 Meetups are not LFX project meetings (search_meetings) and not the
 event_registrations family, which counts conference registrations and
 includes the earlier chapter platform's meetups that were unioned into

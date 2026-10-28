@@ -200,6 +200,7 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"community SLUG, exact",
 		"checked_in is zero where\norganisers did not run check-in, which is not low attendance",
 		"Most meetups\ncarry no venue country yet",
+		"A country filter matches only meetups with a venue country, so a\ncountry-filtered list or total reads low; qualify it the same way.",
 		"includes the earlier chapter platform's meetups that were unioned into\nevents",
 		"registration_id__event_start_date",
 		"and metric_time, the sign-up\ndate",
@@ -478,6 +479,7 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		// chapter meetups sit, the intro routes the question to the two tools
 		"includes the earlier chapter platform's meetups, which were unioned into events: community meetups from Open Community Groups are query_lfx_meetup_analytics, not a family",
 		"Community meetups from Open Community Groups (ocgroups.dev) are not a\nfamily: search_lfx_meetups lists the events and query_lfx_meetup_analytics",
+		"event_registrations family is conference registrations and includes the\nearlier chapter platform's meetups.",
 		"memberships without a\n  resolvable billing country; it is one row, never dropped and never folded\n  into a named country",
 		// round 10: series order and flagged rows
 		"A series arrives in period order, oldest first",

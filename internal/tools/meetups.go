@@ -35,9 +35,9 @@ const (
 // Neither tool has a required parameter, and clients summarise optional
 // parameter descriptions away, so what a caller cannot guess (the by values,
 // the defaults, the routing) lives in the tool descriptions.
-const searchMeetupsDescription = `Community-run meetup events from Open Community Groups (ocgroups.dev), one row per event: name, community, group, start time, venue city and country, and its ocgroups.dev link. Upcoming unless start_date is set; filter by community (ocgroups.dev community name, exact - not an LFX project slug), group (slug), country (ISO 3166-1 alpha-2 of the venue) or q (title words). order_by starts_at (default) or -starts_at; limit default 10, max 100; offset default 0. An unknown community or group is rejected with the closest candidates. Not LFX project meetings (search_meetings). For counts and attendance use query_lfx_meetup_analytics.`
+const searchMeetupsDescription = `Community-run meetup events from Open Community Groups (ocgroups.dev), one row per event: name, community, group, start time, venue city and country, and its ocgroups.dev link. Upcoming unless start_date is set; filter by community (ocgroups.dev community slug, exact - not an LFX project slug), group (slug), country (ISO 3166-1 alpha-2 of the venue) or q (title words). order_by starts_at (default) or -starts_at; limit default 10, max 100; offset default 0. An unknown community or group is rejected with the closest candidates. Not LFX project meetings (search_meetings). For counts and attendance use query_lfx_meetup_analytics.`
 
-const meetupAnalyticsDescription = `Meetup analytics for Open Community Groups (ocgroups.dev): meetups (published events of active groups, not cancelled, deleted or test events), registrants (confirmed RSVPs) and checked_in, distinct people each, per grouping. by: total (default), community, group, city, country or region (LF region of the venue country); period adds month, quarter or year. Filter by community (ocgroups.dev community name, exact - not an LFX project slug), group (slug), country (ISO 3166-1 alpha-2 of the venue) and start_date/end_date on the event's local start date; the window defaults to the trailing 365 days. by=community lists every community and by=group every active group, with 0 for no meetups, so order_by=meetups is least active. An unknown community or group is rejected with candidates. For individual events use search_lfx_meetups.`
+const meetupAnalyticsDescription = `Meetup analytics for Open Community Groups (ocgroups.dev): meetups (published events of active groups, not cancelled, deleted or test events), registrants (confirmed RSVPs) and checked_in, distinct people each, per grouping. by: total (default), community, group, city, country or region (LF region of the venue country); period adds month, quarter or year. Filter by community (ocgroups.dev community slug, exact - not an LFX project slug), group (slug), country (ISO 3166-1 alpha-2 of the venue) and start_date/end_date on the event's local start date; the window defaults to the trailing 365 days. by=community lists every community and by=group every active group, with 0 for no meetups, so order_by=meetups is least active. An unknown community or group is rejected with candidates. For individual events use search_lfx_meetups.`
 
 // RegisterSearchMeetups registers the search_lfx_meetups tool.
 func RegisterSearchMeetups(server *mcp.Server) {
@@ -65,7 +65,7 @@ func RegisterMeetupAnalytics(server *mcp.Server) {
 
 // SearchMeetupsArgs is the request body of search_lfx_meetups.
 type SearchMeetupsArgs struct {
-	Community string `json:"community,omitempty" jsonschema:"ocgroups.dev community name, exact (e.g. CNCF). Not an LFX project slug."`
+	Community string `json:"community,omitempty" jsonschema:"ocgroups.dev community slug, exact (e.g. <slug>). Not an LFX project slug."`
 	Group     string `json:"group,omitempty" jsonschema:"Group slug, exact (e.g. cncf-austin)."`
 	Country   string `json:"country,omitempty" jsonschema:"ISO 3166-1 alpha-2 code of the venue country (e.g. US)."`
 	StartDate string `json:"start_date,omitempty" jsonschema:"yyyy-mm-dd, inclusive, on the event start date. Omitted = today, so the default is upcoming events."`
@@ -78,7 +78,7 @@ type SearchMeetupsArgs struct {
 
 // MeetupAnalyticsArgs is the request body of query_lfx_meetup_analytics.
 type MeetupAnalyticsArgs struct {
-	Community string `json:"community,omitempty" jsonschema:"ocgroups.dev community name, exact (e.g. CNCF). Not an LFX project slug."`
+	Community string `json:"community,omitempty" jsonschema:"ocgroups.dev community slug, exact (e.g. <slug>). Not an LFX project slug."`
 	Group     string `json:"group,omitempty" jsonschema:"Group slug, exact (e.g. cncf-austin)."`
 	Country   string `json:"country,omitempty" jsonschema:"ISO 3166-1 alpha-2 code of the venue country (e.g. US)."`
 	StartDate string `json:"start_date,omitempty" jsonschema:"yyyy-mm-dd, inclusive, on the event's local start date. Omitted = the trailing 365 days before end_date."`

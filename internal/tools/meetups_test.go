@@ -47,7 +47,7 @@ func TestMeetupTools_DescriptionsCarryTheContract(t *testing.T) {
 			register: RegisterSearchMeetups,
 			wants: []string{
 				"ocgroups.dev", "one row per event", "Upcoming unless start_date is set",
-				"not an LFX project slug", "ISO 3166-1 alpha-2",
+				"ocgroups.dev community slug, exact", "not an LFX project slug", "ISO 3166-1 alpha-2",
 				"order_by starts_at (default) or -starts_at", "limit default 10, max 100",
 				"rejected with the closest candidates", "search_meetings", "query_lfx_meetup_analytics",
 			},
@@ -60,7 +60,7 @@ func TestMeetupTools_DescriptionsCarryTheContract(t *testing.T) {
 				"registrants (confirmed RSVPs) and checked_in",
 				"by: total (default), community, group, city, country or region",
 				"LF region of the venue country", "period adds month, quarter or year",
-				"not an LFX project slug", "local start date", "trailing 365 days",
+				"ocgroups.dev community slug, exact", "not an LFX project slug", "local start date", "trailing 365 days",
 				"by=group every active group, with 0 for no meetups",
 				"rejected with candidates", "search_lfx_meetups",
 			},

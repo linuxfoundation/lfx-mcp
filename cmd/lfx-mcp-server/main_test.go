@@ -269,20 +269,26 @@ func TestNewServer_LensToolsAreStaffOnly_MachineAccounts(t *testing.T) {
 	}
 }
 
-// TestNewServer_MeetupToolsAreNotInDefaults pins the deployment-safety
-// invariant on the meetup tools: their lens routes are not live, so a staff
-// caller on a server built from defaultTools must not see them. They come on
-// by name once the routes exist. Without this, adding a name to defaultTools
-// by mistake would expose a tool that returns 404s.
-func TestNewServer_MeetupToolsAreNotInDefaults(t *testing.T) {
+// TestNewServer_MeetupToolsAreInDefaultsForStaff pins the meetup tools'
+// place among the defaults: a staff caller on a server built from
+// defaultTools lists both, and a non-staff read-scoped caller on the same
+// server lists neither, exactly like the other lens-backed tools. Without
+// this, dropping a name from defaultTools, or loosening its gate, would go
+// unnoticed.
+func TestNewServer_MeetupToolsAreInDefaultsForStaff(t *testing.T) {
+	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
 	staff := &auth.TokenInfo{
 		Scopes: []string{tools.ScopeRead},
 		Extra:  map[string]any{tools.ClaimLFStaff: true},
 	}
 	forStaffDefaults := listedToolsFor(t, defaultTools, staff)
+	forReaderDefaults := listedToolsFor(t, defaultTools, reader)
 	for _, name := range []string{"search_lfx_meetups", "query_lfx_meetup_analytics"} {
-		if forStaffDefaults[name] {
-			t.Errorf("%s is listed on a defaultTools server; it must stay opt-in until its lens route is live", name)
+		if !forStaffDefaults[name] {
+			t.Errorf("%s is not listed for a staff reader on a defaultTools server; it must be a default tool", name)
+		}
+		if forReaderDefaults[name] {
+			t.Errorf("%s is listed for a non-staff reader on a defaultTools server; it must be staff-only", name)
 		}
 	}
 }

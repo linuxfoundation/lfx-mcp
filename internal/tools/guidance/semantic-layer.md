@@ -38,7 +38,7 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
 ## Protocol
 
 0. If a standard metric matches, prefer it (scope and window via its own
-   parameters, recipe 15; never go ad hoc just to sort, filter or scope).
+   parameters, recipe 16; never go ad hoc just to sort, filter or scope).
 1. ALWAYS resolve names first: search_projects for project slugs ('k8s', 'korg',
    'ptproject' — stored slugs are not everyday names), search_b2b_orgs for org
    legal names (recipe 5). A name either tool returned in this session may be
@@ -338,7 +338,26 @@ enrollments carry no account and land in the NULL bucket, and a share of
 registrations has no account either, so every org-scoped figure here is a
 floor — present "attributed registrations/enrollments" and say so.
 
-15. STANDARD METRIC CALLS take uniform parameters on every family — metric,
+15. COMMUNITY MEETUPS ("how many meetups did the CNCF community run last
+year", "upcoming meetups in Germany", "least active groups") are Open
+Community Groups (ocgroups.dev) data and live on two tools, not on this layer
+or the standard metrics: search_lfx_meetups lists events (one row per event,
+upcoming by default) and query_lfx_meetup_analytics returns meetups,
+registrants and checked_in per grouping (by=total, community, group, city,
+country or region; period=month, quarter or year adds a time column; the
+window defaults to the trailing year). community is the ocgroups.dev
+community SLUG, exact: read it back from a result or from by=community, which
+lists every active community; an unknown slug is rejected with candidates.
+registrants and checked_in are distinct people; checked_in is zero where
+organisers did not run check-in, which is not low attendance. Most meetups
+carry no venue country yet, so by=country and by=region put most meetups
+under Unknown and applied.note says how many; say so when you report them.
+Meetups are not LFX project meetings (search_meetings) and not the
+event_registrations family, which counts conference registrations and
+includes the earlier chapter platform's meetups that were unioned into
+events.
+
+16. STANDARD METRIC CALLS take uniform parameters on every family — metric,
 by, project + subprojects (excluded|separate|combined, default combined), org
 + subsidiaries (excluded|separate|combined, default excluded), start_date,
 end_date, period (day|week|month|quarter|year), order_by, limit; there is no
@@ -381,7 +400,7 @@ There is no free filter on a standard metric: a slice the switches, the dates an
 the period cannot express is an explore + query question, and its answer is
 labelled ad hoc.
 
-16. SOCIAL LISTENING. The standard metrics social_mentions (by total,
+17. SOCIAL LISTENING. The standard metrics social_mentions (by total,
 project, network, sentiment) and social_reach (by total, project) cover the
 common readings — prefer them. Compose here only for a slice they lack:
 language, keyword, share of voice across foundations, trends at a grain the
@@ -407,7 +426,7 @@ The feed is young — group by metric_time__year before comparing years.
 Free-text feeds (titles, bodies, URLs, per-author lists) are not metrics;
 they are the one social question that still goes to query_lfx_lens.
 
-17. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
+18. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
 is the figure, one line on what it covers, and only the caveats that change
 how that figure is read, in the reader's words: no metric, dimension or
 column names, keys, SQL or tool names unless asked how it was made. Grain,
@@ -424,7 +443,7 @@ Kubernetes contributor trend by month:
   metrics=total_contributors group_by=metric_time__month
   where={{ Dimension('activity_project_id__project_slug') }} = 'k8s' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-03-01'
 
-Kubernetes mentions by network this year (recipe 16):
+Kubernetes mentions by network this year (recipe 17):
   metrics=social_listening_mentions,social_listening_positive_mentions,social_listening_negative_mentions
   group_by=mention_key__social_network order_by=-social_listening_mentions
   where={{ Dimension('mention_key__project_slug') }} = 'k8s' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-01-01'

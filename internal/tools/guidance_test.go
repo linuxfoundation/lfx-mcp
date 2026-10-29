@@ -329,6 +329,7 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"| excluded (default) | the Y account only |",
 		"| combined | Y plus every subsidiary under it, any depth | folded together: the org columns leave the result; the rows are whatever by groups",
 		"one\nrow per parent organization, resolved to the top of each chain",
+		"The headline\nis combined, the breakdown is separate.",
 		"Never derive one from the other: distinct counts do not sum",
 		// inventory: every family, kind and grouping list — derived below from
 		// standardMetricNames and standardMetricGroupings, the single source

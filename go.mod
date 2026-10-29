@@ -14,7 +14,7 @@ require (
 	github.com/linuxfoundation/lfx-v2-meeting-service v0.13.0
 	github.com/linuxfoundation/lfx-v2-member-service v0.10.24
 	github.com/linuxfoundation/lfx-v2-project-service v0.9.8
-	github.com/linuxfoundation/lfx-v2-query-service v0.4.31
+	github.com/linuxfoundation/lfx-v2-query-service v0.4.32
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/remychantenay/slog-otel v1.3.5

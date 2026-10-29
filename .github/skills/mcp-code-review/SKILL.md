@@ -24,7 +24,7 @@ surrounding code to judge each hunk in its real context.
 
 The repo defines its own standards; hold the diff to them, and name the
 documented source in any standards finding. They live in the repo's
-documentation (`CLAUDE.md` / the root `AGENTS.md`, `ARCHITECTURE.md`, and
+documentation (the root `AGENTS.md`, `ARCHITECTURE.md`, and
 what they point to): code layout, the error model, how tools are registered
 and described, test expectations, license headers. Read the parts relevant
 to the diff before judging, every run, because the standards belong to the

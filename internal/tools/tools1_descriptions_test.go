@@ -55,14 +55,24 @@ func TestTools1Descriptions_FunctionVisibilityAndBudget(t *testing.T) {
 				if got := schemaPropertyDescription(t, tool, "count_only"); !strings.Contains(got, "participant records (not people or attendances)") {
 					t.Errorf("count_only must distinguish records from people and attendances: %q", got)
 				}
+				// The count mode's result shape, warnings included (count caveats
+				// are warnings, not part of the note).
+				if want := "count_only returns the record count with complete, visibility and warnings."; !strings.Contains(tool.Description, want) {
+					t.Errorf("description must state the count_only result shape %q", want)
+				}
 			}
 			if tc.name == "count_lfx_resources" {
-				for _, want := range []string{"committee:<uid> for committee_member", "past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant and v1_past_meeting_attachment", "a ref or field the type lacks counts 0"} {
+				for _, want := range []string{"parent (the type's own ref)", "filters_all / filters_or on data fields.", "group_by=<tag prefix> returns groups [{key, count}] with groups_complete", "metric=cardinality:<tag prefix> returns metric_value with metric_complete"} {
 					if !strings.Contains(tool.Description, want) {
 						t.Errorf("count description missing %q", want)
 					}
 				}
-				const parent = "The type's own parent ref, e.g. committee:<uid> for committee_member, project:<uid> for committee"
+				if strings.Contains(tool.Description, "type lacks counts 0") {
+					t.Error("count description must not promise zero for unsupported filters")
+				}
+				// The per-type parent refs, the attachment types' included, live
+				// in the parent parameter's text.
+				const parent = "Parent ref: committee:<uid> for committee_member, project:<uid> for committee, meeting:<id> for v1_meeting_attachment, past_meeting:<meeting_and_occurrence_id> for v1_past_meeting_participant and v1_past_meeting_attachment"
 				if got := schemaPropertyDescription(t, tool, "parent"); got != parent {
 					t.Errorf("parent must name the type-specific ref: %q", got)
 				}

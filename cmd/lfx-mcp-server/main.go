@@ -193,6 +193,8 @@ var defaultTools = []string{
 	"explore_lfx_semantic_layer",
 	"query_lfx_semantic_layer",
 	"read_lfx_semantic_layer_guidance",
+	"search_lfx_meetups",
+	"query_lfx_meetup_analytics",
 	"search_b2b_orgs",
 	// TOOLS-1 (LFXV2-2891): caller-visibility counts and governance/meeting lookups.
 	"count_lfx_resources",
@@ -1043,6 +1045,16 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	// endpoint is live.
 	if enabledTools["query_lfx_standard_metrics"] && canRead && isStaff {
 		tools.RegisterStandardMetrics(server)
+	}
+	// The meetup tools are default tools, gated like the other lens-backed
+	// tools: read scope and staff-equivalent, absent from tools/list for
+	// everyone else. A deployment that enables tools by an explicit list
+	// still has to name them.
+	if enabledTools["search_lfx_meetups"] && canRead && isStaff {
+		tools.RegisterSearchMeetups(server)
+	}
+	if enabledTools["query_lfx_meetup_analytics"] && canRead && isStaff {
+		tools.RegisterMeetupAnalytics(server)
 	}
 	// Guidance tools carry the query doctrine as tool results (no byte budget)
 	// and are gated exactly like the tools they document — staff-only, one

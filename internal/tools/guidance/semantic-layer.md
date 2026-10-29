@@ -78,11 +78,9 @@ dimension by what the question names:
   bucket, not the LF-wide scope; state which population you used.
 - A SINGLE PROJECT (k8s, pytorch...): activity_project_id__project_slug — the
   per-project surface (__project_slug and __segment_slug), whose DEFINITION
-  is code contributions, bots excluded. Do NOT reconcile figures against other
-  dashboards or pages: they differ by repo registration, member cleaning and
-  curated lists; say what this figure covers, and PCC-style reporting is the
-  reconciliation surface. For leaf projects the spine slug returns identical
-  counts; for umbrella nodes project_slug is only the node's own bucket.
+  is code contributions, bots excluded. Say what this figure covers. For leaf
+  projects the spine slug returns identical counts; for umbrella nodes
+  project_slug is only the node's own bucket.
 - SUBTREES AND HIERARCHY WALKS (umbrella nodes, "foundation to its projects"):
   activity_project_id__project_spine_slug — identical totals to foundation_slug
   (verified) and the surface PCC-style foundation rollups reconcile against.
@@ -219,10 +217,7 @@ maintainers" is maintainer_contributions by=maintainer. Compose it here
 (code_contribution_activities by activity_project_id__member_display_name,
 spine-scoped, trailing 365 days) only for a slice the switches cannot
 express. Display names are not identity keys — for identity-stable answers
-use lens (member_id); say which. Offer the governed readings as follow-ups:
-organizations by volume (contributions by=org) or headcount
-(contributors by=org), projects by volume (contributions by=project) or
-headcount (contributors by=project).
+use lens (member_id); say which.
 
 11. MAINTAINERS. One project: maintainer_key__project_slug ('k8s' returns the
 real roster; cm_project_grandparents_slug = 'k8s' returns ZERO — the cm_*
@@ -364,19 +359,12 @@ in it, not the roster at that time. "Members at the end of 2022" and
 "members at each year end" are memberships with end_date, or with start_date
 + period=year; no lens call needed. An LF-wide total takes NO project; the
 foundation's own slug (tlf) is one bucket, not the LF-wide scope. Every date is a UTC calendar day;
-end_date defaults to today. The switches say what a name covers: excluded =
-that project or account alone, separate = it and everything under it one row
-each (the breakdown), combined = the hierarchy folded together (the project
-or account columns leave the result; any other by grouping keeps its rows,
-by=total is one figure). The
-DEFAULTS are the plain reading: a project name alone is its whole tree as ONE figure, an
-organization name alone is that account, and an activity family with no
-start_date is the trailing 365 days; every result carries an applied block
-saying which scope, dates and definition ran. A briefing usually wants the
-headline and the breakdown — two calls. DEPTH: on every standard metric,
-separate and combined cover a named node's tree and a company's subsidiaries
-at ANY depth. Results come back in the same words (account, parent_org, project,
-foundation, period), and order_by takes them.
+end_date defaults to today. The switches (excluded, separate, combined) and
+what each returns are in read_lfx_standard_metrics_guidance. The
+DEFAULTS are the plain reading: a project name alone is its whole tree as
+ONE figure, an organization name alone is that account, and an activity
+family with no start_date is the trailing 365 days; every result carries an
+applied block saying which scope, dates and definition ran.
 There is no free filter on a standard metric: a slice the switches, the dates and
 the period cannot express is an explore + query question, and its answer is
 labelled ad hoc.
@@ -411,7 +399,9 @@ they are the one social question that still goes to query_lfx_lens.
 is the figure, one line on what it covers, and only the caveats that change
 how that figure is read, in the reader's words: no metric, dimension or
 column names, keys, SQL or tool names unless asked how it was made. Grain,
-vocabulary and timezone notes stay in context.
+vocabulary and timezone notes stay in context. The full reading of how an
+answer is worded and sourced is in the LFX playbook skills
+(lfx-data-querying), where they are installed.
 
 ## Worked examples (verified live)
 

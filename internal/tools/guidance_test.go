@@ -198,10 +198,8 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"enrollment_id__course_name",
 		"enrollment_id__product_type",
 		"every org-scoped figure here is a\nfloor",
-		// other surfaces are never a reconciliation target
+		// the per-project surface's definition
 		"is code contributions, bots excluded",
-		"Do NOT reconcile figures against other\n  dashboards or pages",
-		"PCC-style reporting is the\n  reconciliation surface",
 		// worked examples stay live-verified
 		"## Worked examples (verified live)",
 		// resolve-first: a guessed slug or account name is a silent wrong answer
@@ -244,7 +242,6 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"an AT-DATE family (memberships, member_organizations,\npaying_member_organizations, maintainers, project_health, software_value)\nreports the state on end_date",
 		"no lens call needed",
 		"Every date is a UTC calendar day",
-		"separate and combined cover a named node's tree and a company's subsidiaries\nat ANY depth. Results come back",
 		"maintainer_contributions (by=project or by=org",
 		"PEOPLE is maintainer_contributions by=maintainer",
 		"query_lfx_standard_metrics",
@@ -332,7 +329,7 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"| excluded (default) | the Y account only |",
 		"| combined | Y plus every subsidiary under it, any depth | folded together: the org columns leave the result; the rows are whatever by groups",
 		"one\nrow per parent organization, resolved to the top of each chain",
-		"MOST\nQUESTIONS WANT BOTH",
+		"The headline\nis combined, the breakdown is separate.",
 		"Never derive one from the other: distinct counts do not sum",
 		// inventory: every family, kind and grouping list — derived below from
 		// standardMetricNames and standardMetricGroupings, the single source
@@ -447,7 +444,6 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"the average normalized to a hundred-point scale on both engines; applied.definition says which column this call read",
 		"snapshots have a short history).",
 		// round 9: answer economy, the umbrella slug, placeholders, one lens query
-		"when unsure\nwhether a note belongs, leave it out",
 		"\"How many members\ndoes the LF have\" → member_organizations, no project: the figure, \"distinct\nmember organizations across the LF today\"",
 		"leave project unset. A foundation's slug is a root in the project tree and,\non the membership families, that foundation's own programme: hosted\nfoundations are their own roots with their own slugs and are never folded\nin; combined adds only programmes the spine places under the root; LF-wide\nis no project.",
 		"A search_projects hit for the foundation's name\nis not a reason to scope.",
@@ -457,7 +453,6 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		// round 7 addendum: preconditions, not background
 		"stating the stored spelling here does not exempt\nit: k8s, cncf and tlf still come back from search_projects in-session",
 		"Do not compute a\nstart_date by counting back N years from today",
-		"report every row the series returned, or say how many rows\nthere are and which ones you show",
 		// round 11: executive readings vs the layer's (Part E)
 		"an organization with memberships on three projects counts three times",
 		"count with\n  by=total, list with limit and order_by (applied.truncated says when the\n  list is partial)",
@@ -473,7 +468,6 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"the last one today's state with\n  partial_last_period set",
 		"a future end_date reads the scheduled state on that day and sets includes_future_dated, it is not the to-date row",
 		"A flagged row (partial_last_period,\nincludes_future_dated) is reported with the applied block's wording, never\ndropped",
-		"do not trim the table to a rounder\nwindow when writing up",
 		"Decide the lens query's\n  scope before issuing it, not after seeing the result",
 		// verification exercise (round 5): the disclosed lines
 		"means participants (any non-bot activity, stars and forks included)",

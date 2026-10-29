@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -167,6 +168,97 @@ func (c *Clients) CheckRelations(ctx context.Context, requests []string) (map[st
 		}
 	}
 	return out, nil
+}
+
+// MyGrant is a direct role on an object, without the caller's principal.
+type MyGrant struct {
+	Type string
+	UID  string
+	Role string
+}
+
+// myGrantsStatusError preserves the HTTP status and body of a non-200
+// /my-grants answer for diagnostics. Only MyGrants returns it: CheckAccess
+// keeps its plain formatted errors, which carry no status for UpstreamStatus.
+// MyGrants does not expose service text for authorization refusals.
+type myGrantsStatusError struct {
+	status int
+	body   string
+}
+
+func (e *myGrantsStatusError) Error() string {
+	return fmt.Sprintf("my-grants returned status %d: %s", e.status, e.body)
+}
+
+func (e *myGrantsStatusError) Is(target error) bool {
+	return target == ErrAccessRefused && (e.status == http.StatusUnauthorized || e.status == http.StatusForbidden)
+}
+
+// MyGrants lists the authenticated person's direct grants for one object type.
+// token is the caller's exchanged LFX token (or static LFX token in stdio).
+// Malformed or wrong-type tuples are skipped and counted in skipped, so the
+// caller can log the count with its request-bound logger; their contents are
+// never logged.
+func (c *AccessCheckClient) MyGrants(ctx context.Context, token, objectType string) (grants []MyGrant, skipped int, err error) {
+	query := url.Values{"v": {"1"}, "object_type": {objectType}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.apiURL+"/my-grants?"+query.Encode(), nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create my-grants request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("my-grants request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // Response body close errors are not actionable after reading.
+	if resp.StatusCode != http.StatusOK {
+		// Error bodies can be gateway HTML, not just a service message. Bound
+		// diagnostics without truncating the successful direct-grant set.
+		const maxErrorBody = 4096
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody+1))
+		if len(body) > maxErrorBody {
+			body = append(body[:maxErrorBody], []byte(" [truncated]")...)
+		}
+		return nil, 0, &myGrantsStatusError{status: resp.StatusCode, body: string(body)}
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to read my-grants response: %w", err)
+	}
+	var result struct {
+		Grants []string `json:"grants"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, 0, fmt.Errorf("failed to parse my-grants response: %w", err)
+	}
+	grants = make([]MyGrant, 0, len(result.Grants))
+	for _, tuple := range result.Grants {
+		grant, ok := parseMyGrant(tuple, objectType)
+		if !ok {
+			skipped++
+			continue
+		}
+		grants = append(grants, grant)
+	}
+	return grants, skipped, nil
+}
+
+// parseMyGrant accepts object_type:uid#role@user:principal, not usersets or
+// wildcards. Split the first @user: delimiter: the principal may contain @ or auth0|.
+func parseMyGrant(tuple, objectType string) (MyGrant, bool) {
+	object, principal, ok := strings.Cut(tuple, "@user:")
+	if !ok || principal == "" || strings.ContainsAny(principal, "#*\t\r\n ") {
+		return MyGrant{}, false
+	}
+	resource, role, ok := strings.Cut(object, "#")
+	if !ok || role == "" || strings.ContainsAny(role, ":#@\t\r\n ") {
+		return MyGrant{}, false
+	}
+	typ, uid, ok := strings.Cut(resource, ":")
+	if !ok || typ != objectType || uid == "" || strings.ContainsAny(uid, ":#@\t\r\n ") {
+		return MyGrant{}, false
+	}
+	return MyGrant{Type: typ, UID: uid, Role: role}, true
 }
 
 // CheckProjectAccess verifies the user has the specified relation to a project.

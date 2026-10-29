@@ -386,9 +386,10 @@ These tools are available only to Linux Foundation staff; they do not appear in 
 
 ### Utility
 
-| Tool        | Description                                         |
-|-------------|------------------------------------------------------|
-| `user_info` | Get the authenticated user's OpenID Connect profile |
+| Tool                  | Description                                                                                                              |
+|-----------------------|--------------------------------------------------------------------------------------------------------------------------|
+| `user_info`           | Get the authenticated user's OpenID Connect profile                                                                      |
+| `list_my_permissions` | List your direct roles on projects, committees (groups), project memberships and organisations; not all effective access |
 
 ## License
 

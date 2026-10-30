@@ -783,6 +783,9 @@ The SDK handles most protocol-level errors automatically. Tool implementation sh
 6. **Documentation**: Update README.md for user-facing changes
 7. **Code Quality**: Run `make check` before commits
 8. **Package Comments**: Every new `*.go` file must include a `// Package <name> ...` doc comment immediately above the `package` declaration (required by Megalinter's revive `package-comments` rule)
+9. **Go toolchain version**: Follow the `lfx-megalinter` skill's Go version
+   policy. It sets `go.mod` to the latest patch of the previous stable Go
+   minor and caps it at the minor bundled by the pinned MegaLinter release.
 
 ## Release Process
 

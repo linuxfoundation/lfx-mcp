@@ -21,3 +21,8 @@ SPELL_CSPELL_ANALYZE_FILE_NAMES: false
 # Ignore YAML files with templating macros; these typically fail linting and/or
 # schema checking.
 FILTER_REGEX_EXCLUDE: '(templates/.*\.yml|templates/.*\.yaml)'
+# The agentic-*.yml workflows are a proof-of-concept review-agent
+# integration; their pull_request_target/PAT pattern is deliberate and
+# already documented inline, so skip zizmor on them rather than annotate
+# every finding here.
+ACTION_ZIZMOR_FILTER_REGEX_EXCLUDE: 'agentic-.*\.yml'

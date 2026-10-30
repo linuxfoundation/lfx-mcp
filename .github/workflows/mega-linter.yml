@@ -25,7 +25,7 @@ jobs:
     steps:
       # Git Checkout
       - name: Checkout Code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -49,6 +49,6 @@ jobs:
           GOTOOLCHAIN: auto
           # Allow GITHUB_TOKEN for working around rate limits (aquasecurity/trivy#7668).
           REPOSITORY_TRIVY_UNSECURED_ENV_VARIABLES: GITHUB_TOKEN
-          # zizmor's "artipacked" audit needs the GitHub API (to verify
-          # SHA-pinned action tags), which requires GITHUB_TOKEN.
+          # zizmor's online audits (e.g. resolving action refs/tags to the
+          # pinned SHAs) query the GitHub API, which requires GITHUB_TOKEN.
           ACTION_ZIZMOR_UNSECURED_ENV_VARIABLES: GITHUB_TOKEN

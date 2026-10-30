@@ -90,6 +90,12 @@ func (v *APIKeyVerifier) VerifyAPIKey(_ context.Context, bearerValue string) (*s
 // token-exchange layer checks this marker to select the client_credentials grant.
 const APIKeyAuthExtraKey = "api_key_auth"
 
+// MachineAccountExtraKey is the key used in TokenInfo.Extra to signal that the
+// bearer JWT belongs to a machine (client-credentials/M2M) account rather than
+// a human user, per IsMachineToken. Set once at verification time so callers
+// don't need to re-derive it from the subject claim.
+const MachineAccountExtraKey = "machine_account"
+
 // buildTokenInfo constructs a TokenInfo for a successfully authenticated API-key request.
 // Extra[APIKeyAuthExtraKey]=true signals to the lfxv2 token-exchange layer that it
 // should use the client_credentials grant rather than attempting to exchange the

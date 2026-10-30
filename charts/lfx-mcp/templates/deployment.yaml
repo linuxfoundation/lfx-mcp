@@ -50,8 +50,10 @@ spec:
               value: {{ .Values.service.port | quote }}
             - name: LFXMCP_MCP_API_PUBLIC_URL
               value: {{ include "lfx-mcp.mcpPublicURL" . | quote }}
+            {{- if .Values.app.mcpApiAuthServers }}
             - name: LFXMCP_MCP_API_AUTH_SERVERS
               value: {{ .Values.app.mcpApiAuthServers | quote }}
+            {{- end }}
             {{- if .Values.app.debug }}
             - name: LFXMCP_DEBUG
               value: "true"

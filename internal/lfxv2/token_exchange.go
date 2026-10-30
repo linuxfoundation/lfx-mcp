@@ -20,6 +20,8 @@ import (
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwt"
+
+	lfxauth "github.com/linuxfoundation/lfx-mcp/internal/auth"
 )
 
 // TokenExchangeConfig holds configuration for OAuth2 token exchange (RFC 8693).
@@ -157,7 +159,7 @@ func isM2MToken(token string) bool {
 	if err != nil {
 		return false
 	}
-	return strings.HasSuffix(parsed.Subject(), "@clients")
+	return lfxauth.IsMachineToken(parsed)
 }
 
 // addClientAuth adds client authentication fields (secret or JWT assertion) to data.

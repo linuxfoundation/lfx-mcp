@@ -1,0 +1,1 @@
+GET /query/resources/count tags=email:registrant@example.test&type=v1_meeting_registrant&v=1

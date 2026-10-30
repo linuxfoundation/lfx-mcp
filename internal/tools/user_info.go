@@ -23,6 +23,13 @@ type UserInfoArgs struct {
 type UserInfoConfig struct {
 	UserInfoEndpoint string // Full userinfo endpoint URL (e.g., https://example.auth0.com/userinfo).
 	HTTPClient       *http.Client
+	// StaticToken, when set, is used as the /userinfo bearer whenever the
+	// request carries no per-request OAuth token (i.e. stdio mode, which has
+	// no MCP-level OAuth). This is the same static LFX bearer token used for
+	// LFX v2 API calls in stdio (see lfxv2.ClientConfig.StaticLFXToken); the
+	// LF identity provider issues it with openid/profile/email scope, so it
+	// is also valid for /userinfo regardless of its LFX API audience.
+	StaticToken string
 }
 
 var userInfoConfig *UserInfoConfig
@@ -71,12 +78,17 @@ func handleUserInfo(ctx context.Context, req *mcp.CallToolRequest, _ UserInfoArg
 
 	logger.InfoContext(ctx, "fetching user info from OAuth provider")
 
-	// Extract raw token from TokenInfo.Extra (populated by JWT verifier).
+	// Extract raw token from TokenInfo.Extra (populated by JWT verifier in
+	// HTTP mode). Stdio mode has no per-request OAuth token, so fall back to
+	// the configured static LFX token, if any.
 	var rawToken string
-	if req.Extra.TokenInfo != nil && req.Extra.TokenInfo.Extra != nil {
+	if req.Extra != nil && req.Extra.TokenInfo != nil && req.Extra.TokenInfo.Extra != nil {
 		if token, ok := req.Extra.TokenInfo.Extra["raw_token"].(string); ok {
 			rawToken = token
 		}
+	}
+	if rawToken == "" {
+		rawToken = userInfoConfig.StaticToken
 	}
 
 	if rawToken == "" {

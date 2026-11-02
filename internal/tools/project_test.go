@@ -252,9 +252,9 @@ func TestSearchProjectsDescriptionMentionsEachNewParameter(t *testing.T) {
 // v0.10.0) through the real generated client: older clients validated the
 // response slug against a letter-first pattern and failed the call.
 func TestGetProject_DigitLeadingSlug(t *testing.T) {
-	const slug = "3mf-working-group"
+	const slug = "1st-test-project"
 	api := setupProjectTest(t)
-	api.Respond("/projects/"+testUID, `{"uid": "`+testUID+`", "slug": "`+slug+`", "name": "3MF Working Group", "stage": "Active"}`)
+	api.Respond("/projects/"+testUID, `{"uid": "`+testUID+`", "slug": "`+slug+`", "name": "Test Project", "stage": "Active"}`)
 	api.Respond("/projects/"+testUID+"/settings", `{"uid": "`+testUID+`"}`)
 
 	res, out, err := handleGetProject(context.Background(), stubCallToolRequest(), GetProjectArgs{UID: testUID})

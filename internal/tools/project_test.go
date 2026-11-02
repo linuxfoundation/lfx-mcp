@@ -246,3 +246,25 @@ func TestSearchProjectsDescriptionMentionsEachNewParameter(t *testing.T) {
 		t.Error("TOOLS-1 parameter description must not contain rationale")
 	}
 }
+
+// TestGetProject_DigitLeadingSlug pins that get_project decodes a project
+// whose slug starts with a digit (allowed since lfx-v2-project-service
+// v0.10.0) through the real generated client: older clients validated the
+// response slug against a letter-first pattern and failed the call.
+func TestGetProject_DigitLeadingSlug(t *testing.T) {
+	const slug = "3mf-working-group"
+	api := setupProjectTest(t)
+	api.Respond("/projects/"+testUID, `{"uid": "`+testUID+`", "slug": "`+slug+`", "name": "3MF Working Group", "stage": "Active"}`)
+	api.Respond("/projects/"+testUID+"/settings", `{"uid": "`+testUID+`"}`)
+
+	res, out, err := handleGetProject(context.Background(), stubCallToolRequest(), GetProjectArgs{UID: testUID})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Base == nil || out.Base.Slug == nil || *out.Base.Slug != slug {
+		t.Fatalf("base slug = %v, want %q", out.Base, slug)
+	}
+	if out.Settings == nil {
+		t.Errorf("settings missing; result: %s", allResultText(t, res))
+	}
+}

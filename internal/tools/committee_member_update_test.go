@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -296,5 +297,36 @@ func TestUpdateCommitteeMember_GetFailureMakesNoPut(t *testing.T) {
 	}
 	if api.Requests()[0].Method != http.MethodGet {
 		t.Fatalf("the one request must be the GET, got %s", api.Requests()[0].Method)
+	}
+}
+
+// A field this client's generated type does not know about must refuse the
+// update rather than merge the GET's known fields over it and PUT, silently
+// erasing the unknown one. See lfx-mcp#196.
+func TestUpdateCommitteeMember_UnknownFieldOnGetRefusesWrite(t *testing.T) {
+	api := setupCommitteeTest(t)
+	path := fmt.Sprintf("/committees/%s/members/%s", updateMemberCommitteeUID, updateMemberUID)
+	api.Handle(http.MethodGet, path, func(stubAPIRequest) stubAPIResponse {
+		body := strings.TrimSuffix(memberRecord(true), "}") + `,"brand_new_field":"future value"}`
+		return stubAPIResponse{Status: http.StatusOK, Body: body, Header: map[string]string{"ETag": updateMemberETag}}
+	})
+	api.Handle(http.MethodPut, path, func(stubAPIRequest) stubAPIResponse {
+		t.Fatal("PUT must not happen when the preceding GET is refused")
+		return stubAPIResponse{}
+	})
+
+	status := "Inactive"
+	res, _, err := handleUpdateCommitteeMember(context.Background(), stubCallToolRequest(), UpdateCommitteeMemberArgs{
+		CommitteeUID: updateMemberCommitteeUID, MemberUID: updateMemberUID, Status: &status,
+	})
+	if err != nil || !res.IsError {
+		t.Fatalf("want a tool error, got err=%v IsError=%v", err, res != nil && res.IsError)
+	}
+	text := resultText(t, res)
+	if !strings.Contains(text, "brand_new_field") {
+		t.Errorf("error should name the unknown field, got: %s", text)
+	}
+	if got := len(api.RequestsTo(path)); got != 1 {
+		t.Fatalf("want exactly the GET, got %d requests to %s", got, path)
 	}
 }

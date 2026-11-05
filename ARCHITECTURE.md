@@ -58,8 +58,9 @@ Tool registration is gated on two access levels derived from the caller's token:
 | Manage | token holds `manage:all`                   | Read + write/delete tools |
 
 An additional requirement gates the staff-only tools (`query_lfx_lens`, `explore_lfx_semantic_layer`,
-`query_lfx_semantic_layer`, `query_lfx_standard_metrics`, `read_lfx_semantic_layer_guidance` and
-`read_lfx_standard_metrics_guidance`) on top of the read scope requirement:
+`query_lfx_semantic_layer`, `query_lfx_standard_metrics`, `read_lfx_semantic_layer_guidance`,
+`read_lfx_standard_metrics_guidance`, `search_lfx_meetups` and `query_lfx_meetup_analytics`) on top of
+the read scope requirement:
 the caller must be staff-equivalent, either via the `lf_staff` claim (from the
 `http://lfx.dev/claims/lf_staff` custom claim) or via the machine-account marker set for M2M
 callers (see "MCP-brokered service APIs" below).

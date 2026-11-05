@@ -16,7 +16,7 @@
 # Why a task and not an @copilot mention: a mention resumes the PR's existing agent
 # task only while the PR head still matches the last session's workspace. Every
 # conductor round after the baseline follows a push, so a mention would mint a fresh
-# task on the DEFAULT agent model anyway — losing the gpt-5.5 pin. Firing the task
+# task on the DEFAULT agent model anyway — losing the vars.AGENTIC_MODEL pin. Firing the task
 # ourselves keeps the model pinned per round, and a plain informational comment tells
 # the engineer what is happening without invoking the bot in the thread.
 #
@@ -80,6 +80,12 @@ jobs:
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
       BASE_REF: ${{ github.event.pull_request.base.ref }}
+      # Copilot model for the Agent Tasks API calls below, pinned by the
+      # AGENTIC_MODEL repo variable. There is deliberately no fallback (not even
+      # auto): the reviewer is a cross-model second opinion on a validated model,
+      # so an unset variable fails the task step rather than running on whatever
+      # Copilot picks. gpt-5.5 was retired from Copilot on 2026-10-19.
+      AGENTIC_MODEL: ${{ vars.AGENTIC_MODEL }}
     steps:
       - uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450  # v2.19.1
         with:
@@ -321,11 +327,12 @@ jobs:
           gh api "repos/$REPO/issues/$PR/comments" -F "body=@$BODY_FILE" --jq '.html_url'
           echo "baseline agentic-check posted deterministically (agentic-apply reacts to it)"
 
-      - name: Announce the round and fire the reconcile task (gpt-5.5)
+      - name: Announce the round and fire the reconcile task (vars.AGENTIC_MODEL)
         if: steps.cfg.outputs.present == 'true' && steps.round.outputs.first != 'true'
         env:
           ROUND_ID: ${{ steps.stamp.outputs.id }}
         run: |
+          if [ -z "$AGENTIC_MODEL" ]; then echo "::error::repo variable AGENTIC_MODEL is not set; set it to the pinned Copilot model"; exit 1; fi
           # The branch may have moved between the poll and this step, and a task
           # fired now would judge a head whose reviews were never awaited (the
           # task survives this workflow's cancellation). Abort quietly: the
@@ -342,7 +349,7 @@ jobs:
             --jq '.html_url'
           TID=$(gh api "/agents/repos/$REPO/tasks" \
             -H "X-GitHub-Api-Version: 2026-03-10" --method POST \
-            -f model=gpt-5.5 -F create_pull_request=false \
+            -f model="$AGENTIC_MODEL" -F create_pull_request=false \
             -f base_ref="$BASE_REF" -f head_ref="$HEAD_REF" \
             -f prompt="Reconcile the AI-reviewer threads on pull request #$PR in $REPO against head $HEAD_SHA (base branch $BASE_REF, review round $ROUND_ID) and any developer replies, following the repository instructions exactly. Immediately before posting, re-read the pull request: if its head no longer equals $HEAD_SHA or its base branch no longer equals $BASE_REF, post nothing — a newer round owns the verdict. Post your agentic-check verdict comment using the add_issue_comment tool, carrying head: $HEAD_SHA and round: $ROUND_ID in the machine block exactly." \
             --jq '.id')

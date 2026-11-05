@@ -62,8 +62,8 @@ github.com/linuxfoundation/lfx-v2-member-service v0.10.24 h1:Ae7d0qlh9x8di4HxC69
 github.com/linuxfoundation/lfx-v2-member-service v0.10.24/go.mod h1:TromFwnIozWCNwT781GjFU4ybd0L9s/AxbnC6nLmQ2Q=
 github.com/linuxfoundation/lfx-v2-project-service v0.9.8 h1:2iKEl8uIhmlEWRKNmya3U6sO41wI4WcYUHN7M47T7a8=
 github.com/linuxfoundation/lfx-v2-project-service v0.9.8/go.mod h1:5pgcOQOT/vr6aGk8QxfltV1zrzoAsXZrQDPR53W5Kjo=
-github.com/linuxfoundation/lfx-v2-query-service v0.4.31 h1:JgDQtmtMDgHFECSa/K16BVyzKm7Q3cq0l9rLjuUaRds=
-github.com/linuxfoundation/lfx-v2-query-service v0.4.31/go.mod h1:hVAZ/VK+H6wVJpo/9AM+7faYBADVTJNmRWvkKkmNpIQ=
+github.com/linuxfoundation/lfx-v2-query-service v0.4.32 h1:Dbc/tk6j3bqeCEaiRrfAsZR93rpjKrSD6NpTrLw8hN4=
+github.com/linuxfoundation/lfx-v2-query-service v0.4.32/go.mod h1:hVAZ/VK+H6wVJpo/9AM+7faYBADVTJNmRWvkKkmNpIQ=
 github.com/mitchellh/copystructure v1.2.0 h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa15WveJJGw=
 github.com/mitchellh/copystructure v1.2.0/go.mod h1:qLl+cE2AmVv+CoeAwDPye/v+N2HKCj9FbZEVFJRxO9s=
 github.com/mitchellh/reflectwalk v1.0.2 h1:G2LzWKi524PWgd3mLHV8Y5k7s6XUvT0Gef6zxSIeXaQ=

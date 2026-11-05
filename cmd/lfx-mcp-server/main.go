@@ -145,6 +145,7 @@ var groupToCommitteeToolNames = func() map[string]string {
 // defaultTools is the list of tools enabled by default.
 var defaultTools = []string{
 	"user_info",
+	"list_my_permissions",
 	"search_projects",
 	"get_project",
 	"search_committees",
@@ -875,6 +876,9 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 
 	if enabledTools["user_info"] && canRead {
 		tools.RegisterUserInfo(server)
+	}
+	if enabledTools["list_my_permissions"] && canRead {
+		tools.RegisterListMyPermissions(server, cfg.CommitteesAsGroups)
 	}
 	if enabledTools["search_projects"] && canRead {
 		tools.RegisterSearchProjects(server)

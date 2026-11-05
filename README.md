@@ -285,7 +285,7 @@ rule yet and are returned as the services return them, pending product decisions
 
 | Tool                  | Description |
 |-----------------------|-------------|
-| `count_lfx_resources` | Count indexed LFX v2 records (meetings, participants, attachments, committees, members, projects) visible to the caller; complete=false means a lower bound |
+| `count_lfx_resources` | Count indexed LFX v2 records visible to the caller; group by a tag or count distinct tag values; completeness covers the requested counts |
 
 ### Committees
 

@@ -570,6 +570,62 @@ func TestSearchCommitteeMembers_RefusesPersonFiltersWithoutShownList(t *testing.
 			t.Fatalf("expected the refusal and no member query, got %v (%d queries)", err, len(api.RequestsTo(resourcesPath)))
 		}
 	})
+	// organization_id is the same filter as organization_name, by id: over a
+	// chairs-only roster it would probe whether an organization holds a seat,
+	// so it is accepted under the same condition, where the member list is
+	// shown, and refused everywhere organization_name is.
+	t.Run("chairs-only group: organization_id is refused before the search", func(t *testing.T) {
+		for _, asGroups := range []bool{false, true} {
+			api := setupCommitteeTest(t)
+			api.GrantRelations()
+			var err error
+			if asGroups {
+				_, _, err = handleSearchCommitteeMembersGroupMode(context.Background(), stubCallToolRequest(), SearchGroupMembersArgs{GroupUID: committeeViewerUID, OrganizationID: "org-1"})
+			} else {
+				_, _, err = handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{CommitteeUID: committeeViewerUID, OrganizationID: "org-1"})
+			}
+			if err == nil || !strings.Contains(err.Error(), "organization_id") || !strings.Contains(err.Error(), "member list") || len(api.RequestsTo(resourcesPath)) != 0 {
+				t.Fatalf("groups=%t: expected the refusal naming organization_id and no member query, got %v (%d queries)", asGroups, err, len(api.RequestsTo(resourcesPath)))
+			}
+		}
+	})
+	t.Run("no scope: organization_id is refused in both modes", func(t *testing.T) {
+		api := setupCommitteeTest(t)
+		_, _, err := handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{OrganizationID: "org-1"})
+		if err == nil || !strings.Contains(err.Error(), "organization_id") || !strings.Contains(err.Error(), "committee_uid") || len(api.Requests()) != 0 {
+			t.Fatalf("expected a refusal naming committee_uid before any upstream call, got %v", err)
+		}
+		_, _, err = handleSearchCommitteeMembersGroupMode(context.Background(), stubCallToolRequest(), SearchGroupMembersArgs{OrganizationID: "org-1"})
+		if err == nil || !strings.Contains(err.Error(), "group_uid") || strings.Contains(err.Error(), "committee") {
+			t.Fatalf("expected a group-mode refusal, got %v", err)
+		}
+	})
+	t.Run("roster-shown group: organization_id passes in both modes", func(t *testing.T) {
+		for _, asGroups := range []bool{false, true} {
+			api := setupCommitteeTest(t)
+			api.GrantRelations("committee:" + committeeAuditorUID + "#auditor")
+			api.Respond(resourcesPath, callerMembershipPage(committeeAuditorUID))
+			api.Respond("/committees/"+committeeAuditorUID+"/settings", committeeSettingsRecord(committeeAuditorUID, "basic_profile"))
+			api.Respond(resourcesPath, rosterPage(committeeAuditorUID))
+			var out resourceSearchResult
+			var err error
+			if asGroups {
+				_, out, err = handleSearchCommitteeMembersGroupMode(context.Background(), stubCallToolRequest(), SearchGroupMembersArgs{GroupUID: committeeAuditorUID, OrganizationID: "org-1"})
+			} else {
+				_, out, err = handleSearchCommitteeMembers(context.Background(), stubCallToolRequest(), SearchCommitteeMembersArgs{CommitteeUID: committeeAuditorUID, OrganizationID: "org-1"})
+			}
+			if err != nil {
+				t.Fatalf("groups=%t: a caller shown the member list may filter by organization_id: %v", asGroups, err)
+			}
+			if len(out.Resources) != 2 {
+				t.Errorf("groups=%t: expected the whole page, got %+v", asGroups, out.Resources)
+			}
+			search := api.RequestsTo(resourcesPath)[1]
+			if got := strings.Join(search.Query["tags_all"], ","); !strings.Contains(got, "organization_id:org-1") {
+				t.Errorf("groups=%t: the filter must reach the query as a tag: %q", asGroups, got)
+			}
+		}
+	})
 	t.Run("roster-shown group: organization_name passes, name does not", func(t *testing.T) {
 		// An auditor who is a member of a basic_profile group sees the
 		// Members tab, which shows organisations but not usernames; name

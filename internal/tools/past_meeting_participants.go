@@ -86,8 +86,8 @@ const participantRecordsCapNote = "The record cap (%d) was reached before every 
 // participantPerPageNote explains dedup scope on a paged call.
 const participantPerPageNote = "people and records describe this page only; a person whose records straddle pages can appear on more than one page."
 
-// participantCountRecordsNote distinguishes counted records from people.
-const participantCountRecordsNote = " This counts participant records, not distinct people; use count_only=false for de-duplicated people."
+// participantCountRecordsWarning distinguishes counted records from people.
+const participantCountRecordsWarning = "This counts participant records, not distinct people; use count_only=false for de-duplicated people."
 
 // participantScopeRefusal is the tool error for a caller without full view
 // who names no single past meeting and no date range: LFX Self Serve has no
@@ -105,9 +105,16 @@ const participantFilterRefusal = "Error: name and org_name are available for pas
 // past meeting whose attendance LFX Self Serve does not show the caller.
 const participantCountNotShownMessage = "Error: participant counts for this past meeting are shown in LFX Self Serve to its organizers and to people with full access to it."
 
-// participantCountScopeNote is appended to a count over several past
+// participantCountScopeWarning is returned with a count over several past
 // meetings for a caller without full view.
-const participantCountScopeNote = " Counts cover only the past meetings whose attendance LFX Self Serve shows you."
+const participantCountScopeWarning = "Counts cover only the past meetings whose attendance LFX Self Serve shows you."
+
+// participantCountZeroScopeWarning replaces the generic zero-count sentence
+// on a date-range count for a caller without full view: that sentence would
+// say no participant record is visible, while the caller's own records in
+// the past meetings whose counts are not shown stay visible. It says only
+// what the counted scope is, never how many past meetings it left out.
+const participantCountZeroScopeWarning = "No participant records are counted in the past meetings whose attendance LFX Self Serve shows you; this is not proof of absence."
 
 // participantSearchResult is the output shape of search_past_meeting_participants.
 type participantSearchResult struct {
@@ -411,7 +418,7 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 	// only past meetings whose attendance Self Serve shows the caller count.
 	if args.CountOnly {
 		var total uint64
-		complete := !truncated
+		serviceHasMore := false
 		if hasDateRange {
 			for i, p := range parents {
 				if !fullView && views[ids[i]] == participantOwnOnly {
@@ -426,9 +433,7 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 					return errorResult(friendlyAPIError("failed to count past meeting participants", err)), nil, nil
 				}
 				total += res.Count
-				if res.HasMore {
-					complete = false
-				}
+				serviceHasMore = serviceHasMore || res.HasMore
 			}
 		} else {
 			if !fullView && views[args.PastMeetingID] == participantOwnOnly {
@@ -440,17 +445,30 @@ func handleSearchPastMeetingParticipants(ctx context.Context, req *mcp.CallToolR
 				return errorResult(friendlyAPIError("failed to count past meeting participants", err)), nil, nil
 			}
 			total = res.Count
-			complete = !res.HasMore
+			serviceHasMore = res.HasMore
 		}
-		out := buildCountResult(total, !complete)
-		out.Note += participantCountRecordsNote
+		out := buildCountResult(ctx, logger, &querysvc.QueryResourcesCountResult{Count: total, HasMore: serviceHasMore}, pastMeetingParticipantResourceType, false, false, truncated)
+		out.Warnings = append(out.Warnings, participantCountRecordsWarning)
 		if !fullView && hasDateRange {
-			out.Note += participantCountScopeNote
+			// The generic zero sentence (visible == 0, no token) would claim no
+			// participant record is visible to the caller; here it only means
+			// none was counted in the past meetings whose counts are shown.
+			zero := searchWarnings(pastMeetingParticipantResourceType+" records", 0, 0, false, false)
+			for i := range out.Warnings {
+				if out.Warnings[i] == zero[0] {
+					out.Warnings[i] = participantCountZeroScopeWarning
+				}
+			}
+			out.Warnings = append(out.Warnings, participantCountScopeWarning)
 		}
 		if truncated {
-			out.Note += " " + fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings)
+			out.Warnings = append(out.Warnings, fmt.Sprintf(participantTruncatedNote, maxMeetings, participantHardMaxMeetings))
 		}
-		return jsonResult(ctx, logger, "search_past_meeting_participants count succeeded", out)
+		result, _, err := jsonResult(ctx, logger, "search_past_meeting_participants count succeeded", out)
+		if err != nil || result.IsError {
+			return result, nil, err
+		}
+		return result, out, nil
 	}
 
 	out := participantSearchResult{}

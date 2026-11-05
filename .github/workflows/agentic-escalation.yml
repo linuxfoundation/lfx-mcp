@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 #
 # On PR open AND on every new head: fire the needs-human escalation as an Agent
-# Tasks API task pinned to gpt-5.5. It runs the escalation and posts its
+# Tasks API task pinned to vars.AGENTIC_MODEL. It runs the escalation and posts its
 # needs-human verdict comment via the writable GitHub MCP (add_issue_comment).
 # Re-running per head is what keeps a human override honest: an unlabel vouches
 # only for the code that existed when the human looked, and a PR whose scope
@@ -72,6 +72,12 @@ jobs:
       PR: ${{ github.event.pull_request.number }}
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
       BASE_REF: ${{ github.event.pull_request.base.ref }}
+      # Copilot model for the Agent Tasks API calls below, pinned by the
+      # AGENTIC_MODEL repo variable. There is deliberately no fallback (not even
+      # auto): the reviewer is a cross-model second opinion on a validated model,
+      # so an unset variable fails the task step rather than running on whatever
+      # Copilot picks. gpt-5.5 was retired from Copilot on 2026-10-19.
+      AGENTIC_MODEL: ${{ vars.AGENTIC_MODEL }}
     steps:
       - uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450  # v2.19.1
         with:
@@ -182,15 +188,16 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Fire escalation task (gpt-5.5) — posts the needs-human verdict
+      - name: Fire escalation task (vars.AGENTIC_MODEL) — posts the needs-human verdict
         if: steps.cfg.outputs.present == 'true' && steps.label.outputs.skip != 'true'
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          if [ -z "$AGENTIC_MODEL" ]; then echo "::error::repo variable AGENTIC_MODEL is not set; set it to the pinned Copilot model"; exit 1; fi
           TID=$(gh api "/agents/repos/$REPO/tasks" \
             -H "X-GitHub-Api-Version: 2026-03-10" --method POST \
-            -f model=gpt-5.5 -F create_pull_request=false \
+            -f model="$AGENTIC_MODEL" -F create_pull_request=false \
             -f base_ref="$BASE_REF" -f head_ref="$HEAD_REF" \
             -f prompt="Run the needs-human escalation for pull request #$PR in $REPO against head $HEAD_SHA (base branch $BASE_REF), following the repository instructions exactly. Immediately before posting, re-read the pull request: if its head no longer equals $HEAD_SHA or its base branch no longer equals $BASE_REF, post nothing — a newer push or retarget owns the next verdict. Post your machine-readable needs-human verdict comment using the add_issue_comment tool, carrying head: $HEAD_SHA and base: $BASE_REF in the hidden markers exactly." \
             --jq '.id')
-          echo "escalation task: $TID (seeds the gpt-5.5 session; agentic-apply reacts to its comment)"
+          echo "escalation task: $TID (seeds the $AGENTIC_MODEL session; agentic-apply reacts to its comment)"

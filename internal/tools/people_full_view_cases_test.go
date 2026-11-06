@@ -6,6 +6,7 @@ package tools
 
 import (
 	"context"
+	"net/http"
 	"sort"
 	"strings"
 	"testing"
@@ -63,7 +64,151 @@ const fullViewRegistrantDoc = `{
   }
 }`
 
+// The mailing-list fixtures follow the groupsio_member indexer contract and
+// the get-groupsio-member response body of lfx-v2-mailing-list-service
+// v0.5.12; the list UID is the Groups.io group ID, as on the live index.
+const (
+	fullViewMailingListID         = "145670"
+	fullViewMailingListMemberID   = "14875835"
+	fullViewMailingListMemberPath = "/groupsio/mailing-lists/" + fullViewMailingListID + "/members/" + fullViewMailingListMemberID
+)
+
+const fullViewMailingListMemberDoc = `{
+  "type": "groupsio_member",
+  "id": "groupsio_member:gm-1",
+  "data": {
+    "uid": "gm-1",
+    "mailing_list_uid": "145670",
+    "member_id": 14875835,
+    "group_id": 145670,
+    "source": "v1-sync",
+    "username": "subscriber-1",
+    "first_name": "Sam",
+    "last_name": "Subscriber",
+    "email": "subscriber@example.test",
+    "organization": "Example Org",
+    "job_title": "Engineer",
+    "member_type": "direct",
+    "delivery_mode": "email_delivery_single",
+    "mod_status": "none",
+    "status": "normal",
+    "last_reviewed_at": null,
+    "last_reviewed_by": null,
+    "project_uid": "P1",
+    "project_slug": "example",
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-02T00:00:00Z"
+  }
+}`
+
+const fullViewMailingListMemberRecord = `{
+  "id": "14875835",
+  "email": "subscriber@example.test",
+  "name": "Sam Subscriber",
+  "member_type": "direct",
+  "delivery_mode": "email_delivery_single",
+  "mod_status": "none",
+  "status": "normal",
+  "organization": "Example Org",
+  "job_title": "Engineer",
+  "username": "subscriber-1",
+  "role": "None",
+  "voting_status": "Non-Voting",
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-02T00:00:00Z"
+}`
+
 var fullViewCallCases = []fullViewCallCase{
+	{
+		name: "search_mailing_list_members.one_list",
+		setup: func(t *testing.T) *stubLFXAPI {
+			api := setupMailingListTest(t)
+			api.Respond(resourcesPath, page([]string{fullViewMailingListMemberDoc}, "next"))
+			return api
+		},
+		call: func(ctx context.Context) (*mcp.CallToolResult, any, error) {
+			return handleSearchMailingListMembers(ctx, stubCallToolRequest(), SearchMailingListMembersArgs{
+				MailingListID: fullViewMailingListID, Name: "Sam", PageSize: 25,
+			})
+		},
+	},
+	{
+		name: "search_mailing_list_members.project",
+		setup: func(t *testing.T) *stubLFXAPI {
+			api := setupMailingListTest(t)
+			api.Respond(resourcesPath, page([]string{fullViewMailingListMemberDoc}, ""))
+			return api
+		},
+		call: func(ctx context.Context) (*mcp.CallToolResult, any, error) {
+			return handleSearchMailingListMembers(ctx, stubCallToolRequest(), SearchMailingListMembersArgs{ProjectUID: "P1"})
+		},
+	},
+	{
+		name: "search_mailing_list_members.unscoped_name",
+		setup: func(t *testing.T) *stubLFXAPI {
+			api := setupMailingListTest(t)
+			api.Respond(resourcesPath, page([]string{fullViewMailingListMemberDoc}, ""))
+			return api
+		},
+		call: func(ctx context.Context) (*mcp.CallToolResult, any, error) {
+			return handleSearchMailingListMembers(ctx, stubCallToolRequest(), SearchMailingListMembersArgs{Name: "subscriber@example.test"})
+		},
+	},
+	{
+		name: "get_mailing_list_member.lookup",
+		setup: func(t *testing.T) *stubLFXAPI {
+			api := setupMailingListTest(t)
+			api.Respond(fullViewMailingListMemberPath, fullViewMailingListMemberRecord)
+			return api
+		},
+		call: func(ctx context.Context) (*mcp.CallToolResult, any, error) {
+			return handleGetMailingListMember(ctx, stubCallToolRequest(), GetMailingListMemberArgs{
+				MailingListID: fullViewMailingListID, MemberID: fullViewMailingListMemberID,
+			})
+		},
+	},
+	{
+		// The text a caller without full view gets for a member it is not
+		// shown must equal this one, byte for byte.
+		name: "get_mailing_list_member.not_found",
+		setup: func(t *testing.T) *stubLFXAPI {
+			api := setupMailingListTest(t)
+			api.RespondStatus(fullViewMailingListMemberPath, http.StatusNotFound, `{"name":"NotFound","message":"member not found"}`)
+			return api
+		},
+		wantError: true,
+		call: func(ctx context.Context) (*mcp.CallToolResult, any, error) {
+			return handleGetMailingListMember(ctx, stubCallToolRequest(), GetMailingListMemberArgs{
+				MailingListID: fullViewMailingListID, MemberID: fullViewMailingListMemberID,
+			})
+		},
+	},
+	{
+		name: "count_lfx_resources.mailing_list_member_parent",
+		setup: func(t *testing.T) *stubLFXAPI {
+			api := setupCountTest(t)
+			api.Respond(countPath, `{"count": 24, "has_more": false}`)
+			return api
+		},
+		call: func(ctx context.Context) (*mcp.CallToolResult, any, error) {
+			return handleCountLFXResources(ctx, stubCallToolRequest(), CountLFXResourcesArgs{
+				Type: "groupsio_member", Parent: "groupsio_mailing_list:" + fullViewMailingListID, Tags: []string{"status:normal"},
+			})
+		},
+	},
+	{
+		name: "count_lfx_resources.mailing_list_member_without_parent",
+		setup: func(t *testing.T) *stubLFXAPI {
+			api := setupCountTest(t)
+			api.Respond(countPath, `{"count": 7, "has_more": false}`)
+			return api
+		},
+		call: func(ctx context.Context) (*mcp.CallToolResult, any, error) {
+			return handleCountLFXResources(ctx, stubCallToolRequest(), CountLFXResourcesArgs{
+				Type: "groupsio_member", TagsAll: []string{"project_uid:P1"}, FiltersOr: []string{"email:subscriber@example.test"},
+			})
+		},
+	},
 	{
 		name:      "search_past_meeting_participants.date_range_without_scope",
 		setup:     setupParticipantTest,
@@ -256,7 +401,8 @@ func fullViewRequestLog(api *stubLFXAPI) string {
 				parts = append(parts, k+"="+v)
 			}
 		}
-		lines = append(lines, r.Method+" "+r.Path+" "+strings.Join(parts, "&"))
+		// A request without a query ends at its path, with no trailing space.
+		lines = append(lines, strings.TrimSuffix(r.Method+" "+r.Path+" "+strings.Join(parts, "&"), " "))
 	}
 	return strings.Join(lines, "\n") + "\n"
 }

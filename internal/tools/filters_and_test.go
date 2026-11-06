@@ -111,7 +111,7 @@ func TestSearchMailingListMembers_FiltersCombineWithAND(t *testing.T) {
 	api := setupMailingListTest(t)
 	api.Respond(resourcesPath, page(nil, ""))
 
-	res, _, err := handleSearchMailingListMembers(context.Background(), stubCallToolRequest(), SearchMailingListMembersArgs{
+	res, _, err := handleSearchMailingListMembers(fullViewCtx(), stubCallToolRequest(), SearchMailingListMembersArgs{
 		MailingListID: "145670",
 		ProjectUID:    "P1",
 	})

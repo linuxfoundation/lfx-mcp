@@ -1,0 +1,16 @@
+{
+  "ID": "14875835",
+  "Email": "subscriber@example.test",
+  "Name": "Sam Subscriber",
+  "MemberType": "direct",
+  "DeliveryMode": "email_delivery_single",
+  "ModStatus": "none",
+  "Status": "normal",
+  "Organization": "Example Org",
+  "JobTitle": "Engineer",
+  "Username": "subscriber-1",
+  "Role": "None",
+  "VotingStatus": "Non-Voting",
+  "CreatedAt": "2026-01-01T00:00:00Z",
+  "UpdatedAt": "2026-01-02T00:00:00Z"
+}

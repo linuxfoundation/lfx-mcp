@@ -242,14 +242,24 @@ Adding a new write tool means registering it under `canRead` in `newServer()` (l
 
 Tools that return people records (group members, meeting registrants, past
 meeting participants, and the people fields of meeting, past meeting,
-recording, transcript and summary records) return, to a caller without
+recording, transcript, summary and attachment records) return, to a caller without
 **full view**, only what LFX Self Serve renders on screen to that same
-person. The rules live in `internal/tools/people_visibility.go` (groups) and
-`people_visibility_meetings.go` (meetings); the tool descriptions state each
-rule in user terms. Mailing-list members, member records, membership key
-contacts, org committee seats and project settings are not under the rule
-yet (product decisions pending); `nonPeopleTools` in
-`cmd/lfx-mcp-server/main_test.go` records that.
+person. The rules live in `internal/tools/people_visibility.go` (groups),
+`people_visibility_meetings.go` (meetings) and
+`people_visibility_mailing_lists.go` (mailing-list members); the tool
+descriptions state each rule in user terms. Mailing-list members follow the
+platform's intended rule rather than today's screen: a list's members are
+shown only to the list's managers and auditors (`writer` or `auditor` on
+`groupsio_mailing_list:<uid>`, both checked, since in the access model
+auditor does not include writer), and every caller is shown their own
+subscriptions on any list, matched by username or e-mail as for meeting
+registrants and participants (`isOwnRecord`). This is deliberately stricter than LFX
+Self Serve, which currently shows a public list's members, with e-mails, to
+any signed-in user; the MCP server applies the intended rule ahead of the
+platform fix. Member records, membership key contacts, org committee seats
+and project settings are not under the rule yet (product decisions
+pending); `nonPeopleTools` in `cmd/lfx-mcp-server/main_test.go` records
+that.
 
 - **Full view** is `tools.IsFullViewCaller(callerToken)`: `IsStaffCaller`
   (nil token, `lf_staff`, machine account) **or** `IsAPIKeyCaller` (a static
@@ -303,7 +313,31 @@ yet (product decisions pending); `nonPeopleTools` in
   `peopleFilterChunk` terms, is refused: it could not be narrowed. The
   post-query selection stays as a second check, and decides the view of any
   group the narrowing did not cover (a member record whose project tag is
-  stale).
+  stale). Mailing-list member searches take the same shape: the list named,
+  or every list of the project visible to the caller
+  (`projectMailingListUIDs`, paged and capped), is checked first. A list
+  named that the caller manages or audits is read whole; any other search
+  is narrowed with one `filters_or` clause (`mailingListMemberFilters`) on
+  `mailing_list_uid` of the lists the caller manages or audits plus the
+  caller's identity terms (`participantNarrowing`: `username`, the e-mail
+  as given and lowercased), which the query service ANDs with the list or
+  project tag and `name`. A list named that the caller does not manage or
+  audit therefore reads only their own records on it, and a search with
+  neither scope reads their own subscriptions across lists; `name` runs
+  within that set, so it cannot probe for anyone else. A caller shown no
+  list and carrying neither username nor e-mail gets an empty page and no
+  query is sent. A project with more lists than the lookup reads, or whose
+  clause would exceed `peopleFilterChunk` terms, is refused with a tool
+  error naming the allowed form. `get_mailing_list_member` decides the list
+  before the fetch: for a list the caller does not manage or audit it
+  fetches the record as the caller and returns it only when it is their
+  own; any other record gets the mailing list service's 404 text
+  (`serviceLookupNotVisibleMessage`), as a missing member does. The mailing-list
+  rule's own texts do not say "what LFX Self Serve shows", since the rule
+  is stricter than that screen: its count refusal is
+  `mailingListMemberCountRefusal` rather than `countRefusal`, and it fails
+  closed with `mailingListVisibilityUnavailableMessage` rather than
+  `peopleVisibilityUnavailableMessage`.
 - **Refuse filters that can probe for a person** (`name`, `org_name`,
   e-mail or username tags, `filters_or` / `filters_all` on people fields)
   wherever the rule would not show the caller that list, with a tool error
@@ -313,10 +347,19 @@ yet (product decisions pending); `nonPeopleTools` in
   whole project the same holds for every group of the project visible to
   the caller (`personFilterShown`).
   `count_lfx_resources` applies the same gate per people type
-  (`peopleCountGate`): for `v1_meeting` and `v1_past_meeting` it accepts
+  (`peopleCountGate`): `groupsio_member` is counted only with
+  `parent=groupsio_mailing_list:<uid>` for a list the caller manages or
+  audits (list records and their `subscriber_count` stay ungated); for
+  `v1_meeting` and `v1_past_meeting` it accepts
   `filters_or` / `filters_all` only on an allowlist of the record's own
   fields (`meetingCountFilterFields`) and `date_field` only from
-  `meetingCountDateFields`, so no field naming a person has to be enumerated.
+  `meetingCountDateFields`, so no field naming a person has to be enumerated;
+  `v1_meeting_attachment` and `v1_past_meeting_attachment` follow the same
+  rule with `attachmentCountFilterFields` and `attachmentCountDateFields`.
+  `search_meeting_attachments` (`meeting_attachment.go`) removes the
+  attachment's creator, editor and uploader without full view, and `file_url`
+  (the upload's storage key) for every caller; `attachmentDroppedFields` is
+  the one place that rule lives, and every other field of the record stays.
 
 Adding a people tool: decide the view per parent object with one of the
 `*Views` predicates (or add one next to them) before the query, narrow the

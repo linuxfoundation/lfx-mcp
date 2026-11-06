@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -143,10 +144,10 @@ var nonPeopleTools = []string{
 	// Meetup tools: events and aggregates, no person records.
 	"search_lfx_meetups", "query_lfx_meetup_analytics",
 	// Out of the rule's scope until the product decides what LFX Self Serve
-	// shows for them (README "People data"): mailing-list members, member
-	// records, membership key contacts, org committee seats, and project
-	// settings (writers, auditors, meeting_coordinators).
-	"search_mailing_list_members", "get_mailing_list_member", "search_members", "get_member_membership",
+	// shows for them (README "People data"): member records, membership key
+	// contacts, org committee seats, and project settings (writers,
+	// auditors, meeting_coordinators).
+	"search_members", "get_member_membership",
 	"get_membership_key_contacts", "get_membership_key_contact", "get_org_committee_seats", "get_project",
 }
 
@@ -190,6 +191,17 @@ func listedToolsFor(t *testing.T, enabled []string, token *auth.TokenInfo) map[s
 
 func listedToolsForConfig(t *testing.T, cfg Config, token *auth.TokenInfo) map[string]bool {
 	t.Helper()
+	listed := map[string]bool{}
+	for name := range listedToolJSONForConfig(t, cfg, token) {
+		listed[name] = true
+	}
+	return listed
+}
+
+// listedToolJSONForConfig is the tools/list a caller holding token sees from
+// a server with cfg, each tool as the JSON the client received, by name.
+func listedToolJSONForConfig(t *testing.T, cfg Config, token *auth.TokenInfo) map[string]string {
+	t.Helper()
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -213,11 +225,56 @@ func listedToolsForConfig(t *testing.T, cfg Config, token *auth.TokenInfo) map[s
 	if err != nil {
 		t.Fatalf("ListTools failed: %v", err)
 	}
-	listed := make(map[string]bool, len(res.Tools))
+	listed := make(map[string]string, len(res.Tools))
 	for _, tool := range res.Tools {
-		listed[tool.Name] = true
+		raw, err := json.Marshal(tool)
+		if err != nil {
+			t.Fatalf("marshal tool %s: %v", tool.Name, err)
+		}
+		listed[tool.Name] = string(raw)
 	}
 	return listed
+}
+
+// TestNewServer_SearchMeetingAttachmentsIsListedForReaders pins that the
+// attachment tool is listed, under one name, for a read-scoped caller in
+// both terminology modes, is absent without read scope, and that enabling
+// it changes nothing else in tools/list: every other tool's listing is byte
+// for byte the one served without it.
+func TestNewServer_SearchMeetingAttachmentsIsListedForReaders(t *testing.T) {
+	const name = "search_meeting_attachments"
+	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
+	noScope := &auth.TokenInfo{Scopes: []string{}}
+	var without []string
+	for _, tool := range defaultTools {
+		if tool != name {
+			without = append(without, tool)
+		}
+	}
+	if len(without) == len(defaultTools) {
+		t.Fatalf("%s is not in defaultTools", name)
+	}
+	for _, groups := range []bool{false, true} {
+		with := listedToolJSONForConfig(t, Config{Tools: defaultTools, CommitteesAsGroups: groups}, reader)
+		if _, ok := with[name]; !ok {
+			t.Errorf("groups=%v: %s must be listed for a read-scoped caller", groups, name)
+		}
+		if _, ok := listedToolJSONForConfig(t, Config{Tools: defaultTools, CommitteesAsGroups: groups}, noScope)[name]; ok {
+			t.Errorf("groups=%v: %s must not be listed without read scope", groups, name)
+		}
+		rest := listedToolJSONForConfig(t, Config{Tools: without, CommitteesAsGroups: groups}, reader)
+		delete(with, name)
+		if !reflect.DeepEqual(with, rest) {
+			t.Errorf("groups=%v: enabling %s changed another tool's listing", groups, name)
+		}
+	}
+	// The same listing under both modes: nothing in the tool names a
+	// committee or a group.
+	committeeMode := listedToolJSONForConfig(t, Config{Tools: []string{name}}, reader)[name]
+	groupMode := listedToolJSONForConfig(t, Config{Tools: []string{name}, CommitteesAsGroups: true}, reader)[name]
+	if committeeMode == "" || committeeMode != groupMode {
+		t.Errorf("%s must list identically in both modes:\n%s\n%s", name, committeeMode, groupMode)
+	}
 }
 
 // TestNewServer_LensToolsAreStaffOnly pins the gate: a read-scoped caller who

@@ -420,6 +420,11 @@ func dataStrings(resources []*querysvc.Resource, key string) []string {
 //     a committee: or project: parent and committee_uid:, project_uid:,
 //     committee_category: or voting_status: tags; nothing that names a
 //     person (name, filters_or, filters_all, other tags) and no date range.
+//   - groupsio_member: a mailing list's members are shown only to its
+//     managers and auditors (people_visibility_mailing_lists.go). Allowed
+//     only with parent=groupsio_mailing_list:<uid> naming a list the caller
+//     manages or audits; the parent bounds every other filter to that list,
+//     whose members the caller is shown in full.
 //   - v1_meeting_registrant: the count is shown to a meeting's organizers
 //     and registrants. Allowed only as parent=meeting:<id> with no other
 //     filter, when the caller has one of those two views.
@@ -432,6 +437,10 @@ func dataStrings(resources []*querysvc.Resource, key string) []string {
 //     owner, organizer accounts, user id, registrant counts) would single
 //     one out; only the meeting's own fields (meetingCountFilterFields) and
 //     date fields (meetingCountDateFields) are accepted.
+//   - v1_meeting_attachment and v1_past_meeting_attachment: the same rule
+//     with the attachment's own fields (attachmentCountFilterFields and
+//     attachmentCountDateFields): its creator, editor and uploader are user
+//     references no screen renders.
 func peopleCountGate(ctx context.Context, clients *lfxv2.Clients, tokenInfo *auth.TokenInfo, args CountLFXResourcesArgs) (refusal string, err error) {
 	hasPersonFilter := args.Name != "" || len(args.FiltersOr) > 0 || len(args.FiltersAll) > 0
 	hasDateRange := args.DateField != "" || args.DateFrom != "" || args.DateTo != ""
@@ -443,6 +452,19 @@ func peopleCountGate(ctx context.Context, clients *lfxv2.Clients, tokenInfo *aut
 		if hasPersonFilter || hasDateRange || !parentOK ||
 			!tagsHaveOnlyPrefixes(args.Tags, tagPrefixes...) || !tagsHaveOnlyPrefixes(args.TagsAll, tagPrefixes...) {
 			return countRefusal(args.Type, allowed), nil
+		}
+		return "", nil
+	case mailingListMemberResourceType:
+		uid, ok := strings.CutPrefix(args.Parent, mailingListResourceType+":")
+		if !ok || uid == "" {
+			return mailingListMemberCountRefusal, nil
+		}
+		shown, err := mailingListMemberListShown(ctx, clients, []string{uid})
+		if err != nil {
+			return "", err
+		}
+		if !shown[uid] {
+			return mailingListMemberCountRefusal, nil
 		}
 		return "", nil
 	case meetingRegistrantResourceType:
@@ -475,21 +497,30 @@ func peopleCountGate(ctx context.Context, clients *lfxv2.Clients, tokenInfo *aut
 		}
 		return "", nil
 	case meetingResourceType, pastMeetingResourceType:
-		refusal := fmt.Sprintf("Error: counting %s accepts filters_or / filters_all only on the meeting's own fields (%s) and a date_field only of %s.", args.Type, strings.Join(meetingCountFilterFields, ", "), strings.Join(meetingCountDateFields, ", "))
-		for _, filter := range append(append([]string{}, args.FiltersOr...), args.FiltersAll...) {
-			// The query service trims the field name before it applies the
-			// filter, so match the trimmed form.
-			field, _, _ := strings.Cut(filter, ":")
-			if !slices.Contains(meetingCountFilterFields, strings.TrimSpace(field)) {
-				return refusal, nil
-			}
-		}
-		if args.DateField != "" && !slices.Contains(meetingCountDateFields, strings.TrimSpace(args.DateField)) {
-			return refusal, nil
-		}
-		return "", nil
+		return ownFieldsCountGate(args, "the meeting's own fields", meetingCountFilterFields, meetingCountDateFields), nil
+	case meetingAttachmentResourceType, pastMeetingAttachmentResourceType:
+		return ownFieldsCountGate(args, "the attachment's own fields", attachmentCountFilterFields, attachmentCountDateFields), nil
 	}
 	return "", nil
+}
+
+// ownFieldsCountGate refuses a count whose filters_or / filters_all name a
+// field outside filterFields, or whose date_field is outside dateFields, with
+// a refusal that names the type, what the fields are and every accepted one.
+func ownFieldsCountGate(args CountLFXResourcesArgs, what string, filterFields, dateFields []string) string {
+	refusal := fmt.Sprintf("Error: counting %s accepts filters_or / filters_all only on %s (%s) and a date_field only of %s.", args.Type, what, strings.Join(filterFields, ", "), strings.Join(dateFields, ", "))
+	for _, filter := range append(append([]string{}, args.FiltersOr...), args.FiltersAll...) {
+		// The query service trims the field name before it applies the
+		// filter, so match the trimmed form.
+		field, _, _ := strings.Cut(filter, ":")
+		if !slices.Contains(filterFields, strings.TrimSpace(field)) {
+			return refusal
+		}
+	}
+	if args.DateField != "" && !slices.Contains(dateFields, strings.TrimSpace(args.DateField)) {
+		return refusal
+	}
+	return ""
 }
 
 // meetingCountFilterFields are the only data fields a caller without full
@@ -514,6 +545,24 @@ var meetingCountFilterFields = []string{
 // range v1_meeting and v1_past_meeting counts over.
 var meetingCountDateFields = []string{"start_time", "end_time", "created_at", "updated_at"}
 
+// attachmentCountFilterFields are the only data fields a caller without full
+// view may filter v1_meeting_attachment and v1_past_meeting_attachment counts
+// on: the record's identifiers, its kind and its file metadata (names as the
+// meeting service publishes them, docs/indexer-contract.md). An allowlist,
+// so that the three user references (created_by, updated_by,
+// file_uploaded_by), the storage key (file_url) and any nested path stay out
+// without being enumerated. name is allowed: it matches the attachment's
+// name, file name, link and description only.
+var attachmentCountFilterFields = []string{
+	"uid", "meeting_id", "meeting_and_occurrence_id", "project_uid", "project_slug",
+	"type", "category", "name", "source", "file_name", "file_content_type",
+	"file_upload_status", "file_uploaded",
+}
+
+// attachmentCountDateFields are the date fields a caller without full view
+// may range attachment counts over.
+var attachmentCountDateFields = []string{"created_at", "modified_at", "file_uploaded_at"}
+
 // PeopleToolNames are the tools whose results follow the people rule above,
 // under both terminology modes. The tests in internal/tools walk every name
 // (people_tools_registry_test.go) and cmd/lfx-mcp-server checks that every
@@ -529,6 +578,18 @@ var PeopleToolNames = []string{
 	"search_past_meeting_participants", "get_past_meeting_participant",
 	"search_past_meetings", "get_past_meeting",
 	"search_past_meeting_summaries", "get_past_meeting_summary",
+	"search_meeting_attachments",
+	"search_mailing_list_members", "get_mailing_list_member",
+}
+
+// peopleCountUnavailableMessage is the fail-closed tool error of a people
+// count whose gate could not decide: the mailing-list member rule has its
+// own wording (mailingListVisibilityUnavailableMessage).
+func peopleCountUnavailableMessage(resourceType string) string {
+	if resourceType == mailingListMemberResourceType {
+		return mailingListVisibilityUnavailableMessage
+	}
+	return peopleVisibilityUnavailableMessage
 }
 
 // countRefusal is the tool error refusing a count of a people type for a

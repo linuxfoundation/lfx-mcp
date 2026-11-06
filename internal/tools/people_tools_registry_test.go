@@ -207,17 +207,57 @@ var peopleTools = []peopleToolCase{
 		emails:   []string{"host@example.test", "creator@example.test", "editor@example.test"},
 		fixtures: []string{summaryDoc},
 	},
+	{
+		// New with the attachment tool: its golden is the handler's own
+		// full-view output at the commit that added it, there being no
+		// earlier handler to generate it from. file_url is dropped for
+		// every caller, so the fixture carries none.
+		name: "search_meeting_attachments",
+		setup: func(_ *testing.T, api *stubLFXAPI, _ bool) {
+			api.Respond(resourcesPath, page([]string{attachmentDoc(meetingAttachmentResourceType, "att-1")}, ""))
+		},
+		call: func(ctx context.Context) (*mcp.CallToolResult, any, error) {
+			return handleSearchMeetingAttachments(ctx, stubCallToolRequest(), SearchMeetingAttachmentsArgs{MeetingKind: meetingKindUpcoming, MeetingID: registryMeeting})
+		},
+		emails:   []string{"creator@example.test", "editor@example.test", "uploader@example.test"},
+		fixtures: []string{attachmentDoc(meetingAttachmentResourceType, "att-1")},
+	},
+	{
+		name: "search_mailing_list_members",
+		setup: func(_ *testing.T, api *stubLFXAPI, _ bool) {
+			api.Respond(resourcesPath, page([]string{fullViewMailingListMemberDoc}, ""))
+		},
+		call: func(ctx context.Context) (*mcp.CallToolResult, any, error) {
+			return handleSearchMailingListMembers(ctx, stubCallToolRequest(), SearchMailingListMembersArgs{MailingListID: fullViewMailingListID})
+		},
+		emails:   []string{"subscriber@example.test"},
+		fixtures: []string{fullViewMailingListMemberDoc},
+	},
+	{
+		name: "get_mailing_list_member",
+		setup: func(_ *testing.T, api *stubLFXAPI, _ bool) {
+			api.Respond(fullViewMailingListMemberPath, fullViewMailingListMemberRecord)
+		},
+		call: func(ctx context.Context) (*mcp.CallToolResult, any, error) {
+			return handleGetMailingListMember(ctx, stubCallToolRequest(), GetMailingListMemberArgs{MailingListID: fullViewMailingListID, MemberID: fullViewMailingListMemberID})
+		},
+		emails:   []string{"subscriber@example.test"},
+		fixtures: []string{fullViewMailingListMemberRecord},
+	},
 }
 
 // setupPeopleToolsTest points every tool family at one stub.
 func setupPeopleToolsTest(t *testing.T) *stubLFXAPI {
 	t.Helper()
 	api := newStubLFXAPI(t)
-	prevMeeting, prevCommittee, prevProject := meetingConfig, committeeConfig, projectConfig
+	prevMeeting, prevCommittee, prevProject, prevMailingList := meetingConfig, committeeConfig, projectConfig, mailingListConfig
 	SetMeetingConfig(&MeetingConfig{Clients: api.Clients})
 	SetCommitteeConfig(&CommitteeConfig{Clients: api.Clients})
 	SetProjectConfig(&ProjectConfig{Clients: api.Clients})
-	t.Cleanup(func() { meetingConfig, committeeConfig, projectConfig = prevMeeting, prevCommittee, prevProject })
+	SetMailingListConfig(&MailingListConfig{Clients: api.Clients})
+	t.Cleanup(func() {
+		meetingConfig, committeeConfig, projectConfig, mailingListConfig = prevMeeting, prevCommittee, prevProject, prevMailingList
+	})
 	return api
 }
 
@@ -433,6 +473,9 @@ func registerPeopleTools(s *mcp.Server, groups bool) {
 	RegisterGetPastMeeting(s)
 	RegisterSearchPastMeetingSummaries(s)
 	RegisterGetPastMeetingSummary(s)
+	RegisterSearchMeetingAttachments(s)
+	RegisterSearchMailingListMembers(s)
+	RegisterGetMailingListMember(s)
 }
 
 // predicateRequests counts the access-check calls. Together with the queue

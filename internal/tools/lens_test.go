@@ -608,6 +608,8 @@ func TestAllLensToolDescriptionsFitBudget(t *testing.T) {
 		{"explore_lfx_semantic_layer", RegisterExploreSemanticLayer},
 		{"query_lfx_semantic_layer", RegisterQuerySemanticLayer},
 		{"query_lfx_lens", RegisterQueryLFXLens},
+		{"search_lfx_meetups", RegisterSearchMeetups},
+		{"query_lfx_meetup_analytics", RegisterMeetupAnalytics},
 	} {
 		tool := listRegisteredTool(t, tc.name, tc.register)
 		if got := len(tool.Description); got > schemaDescriptionBudget {

@@ -192,6 +192,16 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"enrollment records only",
 		"scope them with project__foundation_slug",
 		"leaf project's own slug returns NOTHING",
+		// community meetups route to the two ocgroups.dev tools, not here
+		"- Community meetups from Open Community Groups (ocgroups.dev): search_lfx_meetups lists the events, query_lfx_meetup_analytics counts meetups, registrants and checked_in per grouping (recipe 15)",
+		"15. COMMUNITY MEETUPS",
+		"live on two tools, not on this layer\nor the standard metrics: search_lfx_meetups lists events",
+		"query_lfx_meetup_analytics returns meetups,\nregistrants and checked_in per grouping",
+		"community SLUG, exact",
+		"checked_in is zero where\norganisers did not run check-in, which is not low attendance",
+		"Most meetups\ncarry no venue country yet",
+		"A country filter matches only meetups with a venue country, so a\ncountry-filtered list or total reads low; qualify it the same way.",
+		"includes the earlier chapter platform's meetups that were unioned into\nevents",
 		"registration_id__event_start_date",
 		"and metric_time, the sign-up\ndate",
 		"event_id__event_name",
@@ -242,11 +252,11 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		// standard metric calls
 		"STANDARD METRIC CALLS take uniform parameters",
 		"this means INDIVIDUALS by contribution volume — run it, do not ask",
-		"16. SOCIAL LISTENING. The standard metrics social_mentions (by total,\nproject, network, sentiment) and social_reach (by total, project) cover the\ncommon readings — prefer them",
+		"17. SOCIAL LISTENING. The standard metrics social_mentions (by total,\nproject, network, sentiment) and social_reach (by total, project) cover the\ncommon readings — prefer them",
 		"Compose here only for a slice they lack",
 		"stored as 'Twitter', not 'X'",
 		"no filter means ALL of LF",
-		"17. WHAT GOES IN THE ANSWER",
+		"18. WHAT GOES IN THE ANSWER",
 		"There is no free filter on a standard metric",
 		"default combined",
 		"default excluded",
@@ -491,6 +501,11 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"an organization that dropped one project but kept another still counts here and is not a lost member",
 		"lf_region is provisional and lists China, India and\n  Japan beside Asia Pacific",
 		"check-in data exists only for some registration sources, so an event whose source carries none shows zero attendees, not low attendance",
+		// community meetups are not a family: the row says where the unioned
+		// chapter meetups sit, the intro routes the question to the two tools
+		"includes the earlier chapter platform's meetups, which were unioned into events: community meetups from Open Community Groups are query_lfx_meetup_analytics, not a family",
+		"Community meetups from Open Community Groups (ocgroups.dev) are not a\nfamily: search_lfx_meetups lists the events and query_lfx_meetup_analytics",
+		"event_registrations family is conference registrations and includes the\nearlier chapter platform's meetups.",
 		"memberships without a\n  resolvable billing country; it is one row, never dropped and never folded\n  into a named country",
 		// round 10: series order and flagged rows
 		"A series arrives in period order, oldest first",

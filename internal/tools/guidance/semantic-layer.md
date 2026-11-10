@@ -22,6 +22,7 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
   maintainers) are standard metrics, not lens questions.
 - Committee/board/ambassador rosters: committee tools. Ranking organisations by seats: count each candidate organisation with count_lfx_resources (type=committee_member, tags_all organization_id:<SFID>, plus committee_category:Board for board seats) — seats visible to you in LFX v2. An open LF-wide ranking over every organisation is query_lfx_lens as the last resort, labelled generated SQL over the warehouse copy of the v1 committee records, active seats only (end date empty or in the future), LF staff and unaffiliated seats set aside and said; that copy differs from the LFX v2 committee service, so say which one was read and never combine or reconcile the two. Meeting lists and one meeting's details: meeting tools. Counts of meetings and participants with the caller's visibility: count_lfx_resources and search_past_meeting_participants (recipe 12). Meeting TOTALS over a period (occurrences, scheduled minutes, unique attendees, attendances) are in this layer (recipe 12). "Who represents ORG at FOUNDATION" has two true answers: the membership's contact of record (get_membership_key_contacts — key-contact roles such as Representative/Voting Contact, Authorized Signatory or Billing Contact; status Active or Inactive) and who holds the seat (get_org_committee_seats or search_committee_members — roster rows with voting_status Voting Rep, Alternate Voting Rep, Observer, Emeritus or None). They are different records and can name different people: return both, labelled, never one for the other; the seats that represent the organization are Board seats and Voting Rep or Alternate Voting Rep seats on any committee, member-class rosters filed under category Other included, never Board alone; a contact carries an updated date; a seat row carries a role or voting term date only where one is recorded (search_committee_members, get_committee_member; 0001-01-01 means none; get_org_committee_seats rows carry no date), and its created/updated stamps date the LFX v2 record, not the seat — cite a term date as recorded, never a stamp, never "current" or "member since". Without the organisation grant, get_org_committee_seats refuses and returns no contacts either: a refusal is the gate, never 'no seats'; read the contacts through search_members → get_membership_key_contacts and the seats through search_committee_members or count_lfx_resources, both "visible to you", and say an empty side is what you can see, not an absence.
 - How many projects a foundation or parent has: this layer's project metrics count the authoritative project directory; search_projects and count_lfx_resources count only projects onboarded into LFX v2 and can be lower — use the tools to resolve names and slugs, the layer for the number.
+- Community meetups from Open Community Groups (ocgroups.dev): search_lfx_meetups lists the events, query_lfx_meetup_analytics counts meetups, registrants and checked_in per grouping (recipe 15); not this layer, not a standard metric, not the meeting tools.
 - Where this layer and the standard metrics read differently (both are
   right; say which one you used): dates are UTC calendar days on the
   standard metrics and the session clock on ad hoc windows here, so a window
@@ -38,7 +39,7 @@ Dimension qualified_names are entity__field, prefix per metric — copy from exp
 ## Protocol
 
 0. If a standard metric matches, prefer it (scope and window via its own
-   parameters, recipe 15; never go ad hoc just to sort, filter or scope).
+   parameters, recipe 16; never go ad hoc just to sort, filter or scope).
 1. ALWAYS resolve names first: search_projects for project slugs ('k8s', 'korg',
    'ptproject' — stored slugs are not everyday names), search_b2b_orgs for org
    legal names (recipe 5). A name either tool returned in this session may be
@@ -360,7 +361,28 @@ the Accepted filter is required (declined proposals otherwise appear as
 zero rows); Bevy events carry no session titles. event_id__project_name is
 the foundation that ran the event, not what a talk was about.
 
-15. STANDARD METRIC CALLS take uniform parameters on every family — metric,
+15. COMMUNITY MEETUPS ("how many meetups did the cncf community run last
+year", "upcoming meetups in Germany", "least active groups") are Open
+Community Groups (ocgroups.dev) data and live on two tools, not on this layer
+or the standard metrics: search_lfx_meetups lists events (one row per event,
+upcoming by default) and query_lfx_meetup_analytics returns meetups,
+registrants and checked_in per grouping (by=total, community, group, city,
+country or region; period=month, quarter or year adds a time column; the
+window defaults to the trailing year). community is the ocgroups.dev
+community SLUG, exact: read it back from a result or from by=community, which
+lists every active community; an unknown slug is rejected with candidates.
+registrants and checked_in are distinct people; checked_in is zero where
+organisers did not run check-in, which is not low attendance. Most meetups
+carry no venue country yet, so by=country and by=region put most meetups
+under Unknown and applied.note says how many; say so when you report them.
+A country filter matches only meetups with a venue country, so a
+country-filtered list or total reads low; qualify it the same way.
+Meetups are not LFX project meetings (search_meetings) and not the
+event_registrations family, which counts conference registrations and
+includes the earlier chapter platform's meetups that were unioned into
+events.
+
+16. STANDARD METRIC CALLS take uniform parameters on every family — metric,
 by, project + subprojects (excluded|separate|combined, default combined), org
 + subsidiaries (excluded|separate|combined, default excluded), start_date,
 end_date, period (day|week|month|quarter|year), order_by, limit; there is no
@@ -403,7 +425,7 @@ There is no free filter on a standard metric: a slice the switches, the dates an
 the period cannot express is an explore + query question, and its answer is
 labelled ad hoc.
 
-16. SOCIAL LISTENING. The standard metrics social_mentions (by total,
+17. SOCIAL LISTENING. The standard metrics social_mentions (by total,
 project, network, sentiment) and social_reach (by total, project) cover the
 common readings — prefer them. Compose here only for a slice they lack:
 language, keyword, share of voice across foundations, trends at a grain the
@@ -429,7 +451,7 @@ The feed is young — group by metric_time__year before comparing years.
 Free-text feeds (titles, bodies, URLs, per-author lists) are not metrics;
 they are the one social question that still goes to query_lfx_lens.
 
-17. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
+18. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
 is the figure, one line on what it covers, and only the caveats that change
 how that figure is read, in the reader's words: no metric, dimension or
 column names, keys, SQL or tool names unless asked how it was made. Grain,
@@ -446,7 +468,7 @@ Kubernetes contributor trend by month:
   metrics=total_contributors group_by=metric_time__month
   where={{ Dimension('activity_project_id__project_slug') }} = 'k8s' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-03-01'
 
-Kubernetes mentions by network this year (recipe 16):
+Kubernetes mentions by network this year (recipe 17):
   metrics=social_listening_mentions,social_listening_positive_mentions,social_listening_negative_mentions
   group_by=mention_key__social_network order_by=-social_listening_mentions
   where={{ Dimension('mention_key__project_slug') }} = 'k8s' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-01-01'

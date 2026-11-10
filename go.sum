@@ -60,8 +60,8 @@ github.com/linuxfoundation/lfx-v2-meeting-service v0.13.0 h1:jU1zo5UfAiajH3ZwZb1
 github.com/linuxfoundation/lfx-v2-meeting-service v0.13.0/go.mod h1:TOokKZxhEfqqVX1bRBMcXg/hIHYWWjOStrmkHc1Bs7o=
 github.com/linuxfoundation/lfx-v2-member-service v0.10.24 h1:Ae7d0qlh9x8di4HxC690YvufeMjY3AuhqRqvEay69OE=
 github.com/linuxfoundation/lfx-v2-member-service v0.10.24/go.mod h1:TromFwnIozWCNwT781GjFU4ybd0L9s/AxbnC6nLmQ2Q=
-github.com/linuxfoundation/lfx-v2-project-service v0.9.8 h1:2iKEl8uIhmlEWRKNmya3U6sO41wI4WcYUHN7M47T7a8=
-github.com/linuxfoundation/lfx-v2-project-service v0.9.8/go.mod h1:5pgcOQOT/vr6aGk8QxfltV1zrzoAsXZrQDPR53W5Kjo=
+github.com/linuxfoundation/lfx-v2-project-service v0.10.0 h1:ZFe+iVHNXemz8LzYWOHXmEFrRuiFPnKEp3OrjEecls0=
+github.com/linuxfoundation/lfx-v2-project-service v0.10.0/go.mod h1:KfuWPvf5pxwuceiLVDOAxNfa32HFZNTdJZWALsZDpM8=
 github.com/linuxfoundation/lfx-v2-query-service v0.4.31 h1:JgDQtmtMDgHFECSa/K16BVyzKm7Q3cq0l9rLjuUaRds=
 github.com/linuxfoundation/lfx-v2-query-service v0.4.31/go.mod h1:hVAZ/VK+H6wVJpo/9AM+7faYBADVTJNmRWvkKkmNpIQ=
 github.com/mitchellh/copystructure v1.2.0 h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa15WveJJGw=

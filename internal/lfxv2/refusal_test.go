@@ -281,6 +281,7 @@ func TestUpstreamStatus_TypedErrorNames(t *testing.T) {
 		"member NotFound":       {memberservice.MakeNotFound(errors.New("x")), http.StatusNotFound},
 		"member BadRequest":     {memberservice.MakeBadRequest(errors.New("x")), 0},
 		"project NotFound":      {&projectservice.NotFoundError{Message: "x"}, http.StatusNotFound},
+		"project Forbidden":     {&projectservice.ForbiddenError{Message: "x"}, http.StatusForbidden},
 		"project Conflict":      {&projectservice.ConflictError{Message: "x"}, 0},
 		"query NotFound":        {&querysvc.NotFoundError{Message: "x"}, http.StatusNotFound},
 		"query InternalError":   {&querysvc.InternalServerError{Message: "x"}, 0},

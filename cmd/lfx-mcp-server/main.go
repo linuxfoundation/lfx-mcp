@@ -175,6 +175,7 @@ var defaultTools = []string{
 	"create_meeting",
 	"update_meeting",
 	"delete_meeting",
+	"add_meeting_registrant",
 	"search_meeting_registrants",
 	"get_meeting_registrant",
 	"search_past_meeting_participants",
@@ -968,6 +969,9 @@ func newServer(cfg Config, serviceName string, callerToken *auth.TokenInfo) *mcp
 	}
 	if enabledTools["delete_meeting"] && canRead {
 		tools.RegisterDeleteMeeting(server)
+	}
+	if enabledTools["add_meeting_registrant"] && canRead {
+		tools.RegisterAddMeetingRegistrant(server)
 	}
 	if enabledTools["search_meeting_registrants"] && canRead {
 		tools.RegisterSearchMeetingRegistrants(server, cfg.CommitteesAsGroups)

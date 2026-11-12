@@ -336,6 +336,7 @@ rule yet and are returned as the services return them, pending product decisions
 | `create_meeting`             | Schedule a one-time or recurring meeting under a project, optionally inviting committees |
 | `update_meeting`             | Update a meeting; only the fields provided change (whole series for recurring meetings) |
 | `delete_meeting`             | Delete (cancel) a meeting and all its occurrences                 |
+| `add_meeting_registrant`     | Invite one person to a meeting by email; LFX sends them the invite |
 | `search_meeting_registrants` | Search meeting registrants; filter by meeting, committee, project (non-staff callers: per meeting) |
 | `get_meeting_registrant`     | Get a meeting registrant by UID                                   |
 

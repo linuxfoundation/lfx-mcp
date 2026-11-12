@@ -328,7 +328,9 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		meetingURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		refusalAwareDecoder("code"), // Its 401/403 bodies require "code" as well as "message".
+		// Its 401/403 bodies require "code" as well as "message"; meeting
+		// records are cleaned before the client validates them.
+		meetingRecordDecoder(refusalAwareDecoder("code")),
 		false,
 	)
 

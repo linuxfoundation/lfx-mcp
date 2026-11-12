@@ -328,12 +328,15 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		meetingURL.Host,
 		httpClient,
 		goahttp.RequestEncoder,
-		refusalAwareDecoder("code"), // Its 401/403 bodies require "code" as well as "message".
+		// Its 401/403 bodies require "code" as well as "message"; meeting
+		// records are cleaned before the client validates them.
+		meetingRecordDecoder(refusalAwareDecoder("code")),
 		false,
 	)
 
-	// The generated meeting-service constructor requires every endpoint. We only
-	// call GetItxPastMeeting today; the rest are passed to satisfy the signature.
+	// The generated meeting-service constructor requires every endpoint. We call
+	// GetItxPastMeeting and the meeting create/get/update/delete endpoints; the
+	// rest are passed to satisfy the signature.
 	clients.Meeting = meetingservice.NewClient(
 		meetingHTTPClient.Readyz(),
 		meetingHTTPClient.Livez(),

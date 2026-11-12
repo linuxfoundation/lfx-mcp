@@ -132,6 +132,8 @@ var nonPeopleTools = []string{
 	"create_group", "update_group", "delete_group", "update_group_settings",
 	"create_group_member", "update_group_member", "delete_group_member",
 	"create_membership_key_contact", "update_membership_key_contact", "delete_membership_key_contact",
+	// Meeting writes return a field-by-field summary with no people records.
+	"create_meeting", "update_meeting", "delete_meeting", "add_meeting_registrant",
 	"send_email", "assign_discord_role",
 	// Discord lookups: gated per project to its writers by AuthorizeProject
 	// (RelationWriter); outside this rule's scope.

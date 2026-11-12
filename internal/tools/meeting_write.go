@@ -7,6 +7,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	meetingservice "github.com/linuxfoundation/lfx-v2-meeting-service/gen/meeting_service"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	goahttp "goa.design/goa/v3/http"
 )
 
 // --- Meeting write args ---
@@ -108,6 +110,17 @@ type DeleteMeetingArgs struct {
 	MeetingID string `json:"meeting_id" jsonschema:"ID of the meeting to delete (the uid / meeting_id from search_meetings or get_meeting)"`
 }
 
+// AddMeetingRegistrantArgs defines the input parameters for the
+// add_meeting_registrant tool.
+type AddMeetingRegistrantArgs struct {
+	MeetingID string  `json:"meeting_id" jsonschema:"ID of the meeting (the uid / meeting_id from search_meetings, get_meeting or create_meeting)"`
+	Email     string  `json:"email" jsonschema:"Email address the invite is sent to"`
+	FirstName string  `json:"first_name" jsonschema:"Invitee first name (required by LFX with an email)"`
+	LastName  string  `json:"last_name" jsonschema:"Invitee last name (required by LFX with an email)"`
+	Org       *string `json:"org,omitempty" jsonschema:"Invitee organization"`
+	JobTitle  *string `json:"job_title,omitempty" jsonschema:"Invitee job title"`
+}
+
 // --- Registration ---
 
 // RegisterCreateMeeting registers the create_meeting tool with the MCP server.
@@ -163,6 +176,21 @@ func RegisterDeleteMeeting(server *mcp.Server) {
 			OpenWorldHint:   boolPtr(true),
 		},
 	}, handleDeleteMeeting)
+}
+
+// RegisterAddMeetingRegistrant registers the add_meeting_registrant tool
+// with the MCP server.
+func RegisterAddMeetingRegistrant(server *mcp.Server) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "add_meeting_registrant",
+		Description: "Invite one person to an LFX meeting by email. LFX emails them a calendar invite with their personal join link, for every occurrence of a recurring meeting. Use committee_uids on create_meeting or update_meeting to invite a whole committee instead. Requires writer permission on the project or meeting.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Add Meeting Registrant",
+			ReadOnlyHint:    false,
+			DestructiveHint: boolPtr(false),
+			OpenWorldHint:   boolPtr(true),
+		},
+	}, handleAddMeetingRegistrant)
 }
 
 // --- Handlers ---
@@ -240,7 +268,15 @@ func handleCreateMeeting(ctx context.Context, req *mcp.CallToolRequest, args Cre
 	result, err := meetingConfig.Clients.Meeting.CreateItxMeeting(ctx, payload)
 	if err != nil {
 		logger.ErrorContext(ctx, "CreateItxMeeting failed", "error", err, "project_uid", args.ProjectUID)
-		return meetingToolError(friendlyAPIError("failed to create meeting", err)), nil, nil
+		msg := friendlyAPIError("failed to create meeting", err)
+		var clientErr *goahttp.ClientError
+		if errors.As(err, &clientErr) && clientErr.Name == "validation_error" {
+			// The service answered but its reply could not be read, so the
+			// meeting may exist. Say so, so the caller does not retry blindly
+			// and create a duplicate.
+			msg += "\nLFX may have created the meeting even though its reply could not be read. Use search_meetings with this project_uid and title to check before trying again."
+		}
+		return meetingToolError(msg), nil, nil
 	}
 
 	logger.InfoContext(ctx, "create_meeting succeeded", "project_uid", args.ProjectUID, "meeting_id", ptrStr(result.ID))
@@ -359,6 +395,62 @@ func handleDeleteMeeting(ctx context.Context, req *mcp.CallToolRequest, args Del
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Meeting %s successfully deleted.", args.MeetingID)}},
+	}, nil, nil
+}
+
+func handleAddMeetingRegistrant(ctx context.Context, req *mcp.CallToolRequest, args AddMeetingRegistrantArgs) (*mcp.CallToolResult, any, error) {
+	logger := newToolLogger(ctx, req)
+
+	if meetingConfig == nil {
+		logger.ErrorContext(ctx, "meeting tools not configured")
+		return meetingToolError("Error: meeting tools not configured"), nil, nil
+	}
+	switch {
+	case args.MeetingID == "":
+		return meetingToolError("Error: meeting_id is required"), nil, nil
+	case !strings.Contains(args.Email, "@"):
+		return meetingToolError("Error: email must be an email address"), nil, nil
+	case strings.TrimSpace(args.FirstName) == "" || strings.TrimSpace(args.LastName) == "":
+		return meetingToolError("Error: first_name and last_name are required"), nil, nil
+	}
+
+	ctx, errResult := meetingWriteAuth(ctx, req)
+	if errResult != nil {
+		return errResult, nil, nil
+	}
+
+	email := strings.ToLower(strings.TrimSpace(args.Email))
+	logger.InfoContext(ctx, "adding meeting registrant", "meeting_id", args.MeetingID)
+
+	result, err := meetingConfig.Clients.Meeting.CreateItxRegistrant(ctx, &meetingservice.CreateItxRegistrantPayload{
+		Version:   strPtr("1"),
+		MeetingID: args.MeetingID,
+		Email:     &email,
+		FirstName: strPtr(strings.TrimSpace(args.FirstName)),
+		LastName:  strPtr(strings.TrimSpace(args.LastName)),
+		Org:       args.Org,
+		JobTitle:  args.JobTitle,
+	})
+	if err != nil {
+		logger.ErrorContext(ctx, "CreateItxRegistrant failed", "error", err, "meeting_id", args.MeetingID)
+		return meetingToolError(friendlyAPIError("failed to add registrant", err)), nil, nil
+	}
+
+	logger.InfoContext(ctx, "add_meeting_registrant succeeded", "meeting_id", args.MeetingID, "registrant_uid", ptrStr(result.UID))
+
+	summary := map[string]string{
+		"meeting_id":     args.MeetingID,
+		"registrant_uid": derefStr(result.UID),
+		"email":          email,
+		"first_name":     derefStr(result.FirstName),
+		"last_name":      derefStr(result.LastName),
+	}
+	prettyJSON, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		return meetingToolError(fmt.Sprintf("Error: failed to format result: %v", err)), nil, nil
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "Registrant added; LFX sends them the invite.\n" + string(prettyJSON)}},
 	}, nil, nil
 }
 

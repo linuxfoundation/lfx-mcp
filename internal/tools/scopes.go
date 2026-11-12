@@ -119,6 +119,7 @@ var ManageScopeTools = map[string]bool{
 	"create_meeting":                true,
 	"update_meeting":                true,
 	"delete_meeting":                true,
+	"add_meeting_registrant":        true,
 	"list_discord_roles":            true,
 	"find_discord_role":             true,
 	"find_discord_user":             true,

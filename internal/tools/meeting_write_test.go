@@ -274,9 +274,150 @@ func TestDeleteMeeting_RequiresID(t *testing.T) {
 }
 
 func TestMeetingWriteTools_AreManageScoped(t *testing.T) {
-	for _, name := range []string{"create_meeting", "update_meeting", "delete_meeting"} {
+	for _, name := range []string{"create_meeting", "update_meeting", "delete_meeting", "add_meeting_registrant"} {
 		if !ManageScopeTools[name] {
 			t.Errorf("%s mutates data and must be in ManageScopeTools", name)
 		}
+	}
+}
+
+// privateMeeting is shaped like what the live service returned for a
+// private, one-time meeting with reminders off: empty public_link,
+// password and timestamps, reminder time stored as 0, and an empty
+// recurrence. The generated client rejects all of these as-is.
+const privateMeeting = `{
+  "id": "91550996118",
+  "project_uid": "proj-1",
+  "title": "lfx-mcp write test",
+  "start_time": "2026-11-19T16:00:00Z",
+  "duration": 30,
+  "timezone": "America/New_York",
+  "visibility": "private",
+  "restricted": true,
+  "meeting_type": "Other",
+  "auto_email_reminder_enabled": false,
+  "auto_email_reminder_time": 0,
+  "early_join_time_minutes": 10,
+  "recurrence": {"type": 0},
+  "public_link": "",
+  "password": "",
+  "created_at": "",
+  "next_occurrence_start_time": "",
+  "owner": {"username": "dawnwages", "email": "", "profile_picture": ""}
+}`
+
+func TestCreateMeeting_PrivateMeetingReplyIsReadable(t *testing.T) {
+	api := setupMeetingWriteTest(t)
+	api.RespondStatus("/itx/meetings", http.StatusCreated, privateMeeting)
+
+	res, _, err := handleCreateMeeting(fullViewCtx(), stubCallToolRequest(), CreateMeetingArgs{
+		ProjectUID: "proj-1", Title: "lfx-mcp write test", StartTime: "2026-11-19T16:00:00Z",
+		Duration: 30, Timezone: "America/New_York", Visibility: "private",
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("a created private meeting must be reported as created: %s", allResultText(t, res))
+	}
+	if !strings.Contains(allResultText(t, res), `"meeting_id": "91550996118"`) {
+		t.Errorf("result should carry the meeting ID:\n%s", allResultText(t, res))
+	}
+}
+
+func TestUpdateMeeting_PrivateMeetingOmitsUnsetFields(t *testing.T) {
+	api := setupMeetingWriteTest(t)
+	path := "/itx/meetings/91550996118"
+	api.Handle(http.MethodGet, path, func(stubAPIRequest) stubAPIResponse {
+		return stubAPIResponse{Status: http.StatusOK, Body: privateMeeting}
+	})
+	api.Handle(http.MethodPut, path, func(stubAPIRequest) stubAPIResponse {
+		return stubAPIResponse{Status: http.StatusNoContent}
+	})
+
+	res, _, err := handleUpdateMeeting(fullViewCtx(), stubCallToolRequest(), UpdateMeetingArgs{
+		MeetingID: "91550996118", Title: strPtr("lfx-mcp write test (updated)"),
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("update of a private meeting failed: %s", allResultText(t, res))
+	}
+	var put *stubAPIRequest
+	for _, r := range api.RequestsTo(path) {
+		if r.Method == http.MethodPut {
+			r := r
+			put = &r
+		}
+	}
+	if put == nil {
+		t.Fatal("want a PUT to the meeting")
+	}
+	body := requestBody(t, *put)
+	if body["title"] != "lfx-mcp write test (updated)" || body["visibility"] != "private" || body["duration"] != float64(30) {
+		t.Errorf("PUT must carry the new title and keep the rest, got %v", body)
+	}
+	for _, k := range []string{"auto_email_reminder_time", "recurrence"} {
+		if _, ok := body[k]; ok {
+			t.Errorf("PUT must omit unset %s, got %v", k, body[k])
+		}
+	}
+}
+
+func TestCreateMeeting_UnreadableReplyWarnsAboutDuplicates(t *testing.T) {
+	api := setupMeetingWriteTest(t)
+	// A reply the cleanup cannot fix: an invalid visibility value.
+	api.RespondStatus("/itx/meetings", http.StatusCreated, `{"id":"1","visibility":"secret"}`)
+
+	res, _, _ := handleCreateMeeting(fullViewCtx(), stubCallToolRequest(), CreateMeetingArgs{
+		ProjectUID: "p", Title: "T", StartTime: "2026-11-19T16:00:00Z", Duration: 30, Timezone: "UTC", Visibility: "private",
+	})
+	if !res.IsError {
+		t.Fatal("want a tool error")
+	}
+	if !strings.Contains(allResultText(t, res), "may have created the meeting") {
+		t.Errorf("must warn that the meeting may exist:\n%s", allResultText(t, res))
+	}
+}
+
+func TestAddMeetingRegistrant_SendsDirectInvite(t *testing.T) {
+	api := setupMeetingWriteTest(t)
+	path := "/itx/meetings/" + writeMeetingID + "/registrants"
+	api.RespondStatus(path, http.StatusCreated, `{"uid":"reg-1","type":"","email":"ada@example.org","first_name":"Ada","last_name":"Lovelace","created_at":""}`)
+
+	res, _, err := handleAddMeetingRegistrant(fullViewCtx(), stubCallToolRequest(), AddMeetingRegistrantArgs{
+		MeetingID: writeMeetingID, Email: " Ada@Example.org ", FirstName: "Ada", LastName: "Lovelace",
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("add registrant failed: %s", allResultText(t, res))
+	}
+	r := api.LastRequest()
+	if r.Method != http.MethodPost || r.Path != path {
+		t.Fatalf("want POST %s, got %s %s", path, r.Method, r.Path)
+	}
+	assertExchangedAuth(t, r)
+	body := requestBody(t, r)
+	if body["email"] != "ada@example.org" || body["first_name"] != "Ada" || body["last_name"] != "Lovelace" {
+		t.Errorf("unexpected body %v", body)
+	}
+	if _, ok := body["host"]; ok {
+		t.Error("the tool must never set host")
+	}
+	if !strings.Contains(allResultText(t, res), `"registrant_uid": "reg-1"`) {
+		t.Errorf("result should carry the registrant UID:\n%s", allResultText(t, res))
+	}
+}
+
+func TestAddMeetingRegistrant_RejectsMissingFields(t *testing.T) {
+	for name, args := range map[string]AddMeetingRegistrantArgs{
+		"no meeting": {Email: "a@b.c", FirstName: "A", LastName: "B"},
+		"bad email":  {MeetingID: "1", Email: "ada", FirstName: "A", LastName: "B"},
+		"no last":    {MeetingID: "1", Email: "a@b.c", FirstName: "A"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := setupMeetingWriteTest(t)
+			res, _, _ := handleAddMeetingRegistrant(fullViewCtx(), stubCallToolRequest(), args)
+			if !res.IsError {
+				t.Fatal("want a tool error")
+			}
+			if n := len(api.Requests()); n != 0 {
+				t.Errorf("must not call the API, saw %d requests", n)
+			}
+		})
 	}
 }

@@ -1,5 +1,4 @@
 # Copyright The Linux Foundation and each contributor to LFX.
 # SPDX-License-Identifier: MIT
 
-# lfx-reviewer is the agentic-review machine user (auto-merge pilot); either owner satisfies code-owner review
-* @emsearcy @lfx-reviewer
+* @emsearcy

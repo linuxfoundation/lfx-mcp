@@ -74,12 +74,21 @@ func TestStrictAwareDecoder_TolerantWithoutStrictContext(t *testing.T) {
 	}
 }
 
+// errorMessage is deliberately narrower than the real error body so
+// unexpected_new_field would trip DisallowUnknownFields if the non-2xx guard
+// in strictAwareDecoder were ever removed; map[string]any would not catch
+// that, since DisallowUnknownFields only rejects fields a struct doesn't
+// declare.
+type errorMessage struct {
+	Message string `json:"message"`
+}
+
 func TestStrictAwareDecoder_IgnoresNon2xxEvenWhenStrict(t *testing.T) {
 	ctx := WithStrictDecoding(context.Background())
 	resp := newJSONResponse(ctx, http.StatusNotFound, `{"message":"not found","unexpected_new_field":"x"}`)
 
 	decode := strictAwareDecoder(refusalAwareDecoder())
-	var out map[string]any
+	var out errorMessage
 	if err := decode(resp).Decode(&out); err != nil {
 		t.Fatalf("a non-2xx response must not be strictly decoded, got: %v", err)
 	}

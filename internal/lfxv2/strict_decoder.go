@@ -111,15 +111,41 @@ func strictAwareDecoder(inner func(*http.Response) goahttp.Decoder) func(*http.R
 
 // isJSONResponse reports whether resp's Content-Type is (or defaults to)
 // application/json, the only content type DisallowUnknownFields applies to.
+//
+// This only inspects the literal header, not Goa's content-negotiation
+// fallback: goahttp.ResponseEncoder (the server side of every Goa HTTP
+// service, including every LFX v2 service this module's clients call) always
+// writes an explicit Content-Type on every response, defaulting to
+// application/json only when negotiation doesn't resolve to something else —
+// it never leaves the header absent or sets an unrecognized value that then
+// falls back to JSON on the wire. A response can only arrive here without a
+// recognized JSON content type if the handler's own Goa design declares a
+// different one for that response (checked for the committee-service GETs
+// this module marks strict: none do), or an intermediary (proxy, gateway)
+// rewrites or strips the header after the service sets it. Matching Goa's
+// internal fallback selection here would mask that second case — the one
+// scenario where the Content-Type header genuinely doesn't describe the
+// body — behind another assumption instead of surfacing it. If this decoder
+// is reused against a Goa service whose design sets a non-default
+// Content-Type on a GET this fetch-merge-put pattern reads, verify that
+// endpoint's actual response the same way before trusting isJSONResponse's
+// absent-header default for it.
 func isJSONResponse(resp *http.Response) bool {
 	ct := resp.Header.Get("Content-Type")
 	if ct == "" {
-		// goahttp.ResponseDecoder defaults to JSON when unset.
+		// goahttp.ResponseDecoder defaults to JSON when unset; this only
+		// happens here if something between the service and this client
+		// stripped the header the service set, not because the service left
+		// it off.
 		return true
 	}
 	mediaType, _, err := mime.ParseMediaType(ct)
 	if err != nil {
 		return false
 	}
+	// +json is accepted to match goahttp.ResponseEncoder's own fallback
+	// (e.g. "application/vnd.committee+json" encodes the same as
+	// application/json), not because any LFX v2 service in use today
+	// declares such a type.
 	return mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
 }

@@ -596,8 +596,10 @@ func handleUpdateCommittee(ctx context.Context, req *mcp.CallToolRequest, args U
 
 	logger.InfoContext(ctx, "updating committee", "uid", args.UID)
 
-	// Fetch current state for merge.
-	current, err := clients.Committee.GetCommitteeBase(ctx, &committeeservice.GetCommitteeBasePayload{
+	// Fetch current state for merge. Strict decoding refuses the write rather
+	// than silently drop a field the merge below does not know to carry
+	// forward onto the full-replace PUT.
+	current, err := clients.Committee.GetCommitteeBase(lfxv2.WithStrictDecoding(ctx), &committeeservice.GetCommitteeBasePayload{
 		UID: &args.UID,
 	})
 	if err != nil {
@@ -721,8 +723,10 @@ func handleUpdateCommitteeSettings(ctx context.Context, req *mcp.CallToolRequest
 
 	logger.InfoContext(ctx, "updating committee settings", "uid", args.UID)
 
-	// Fetch current state for merge.
-	current, err := clients.Committee.GetCommitteeSettings(ctx, &committeeservice.GetCommitteeSettingsPayload{
+	// Fetch current state for merge. Strict decoding refuses the write rather
+	// than silently drop a field the merge below does not know to carry
+	// forward onto the full-replace PUT.
+	current, err := clients.Committee.GetCommitteeSettings(lfxv2.WithStrictDecoding(ctx), &committeeservice.GetCommitteeSettingsPayload{
 		UID: &args.UID,
 	})
 	if err != nil {
@@ -811,7 +815,9 @@ func handleDeleteCommittee(ctx context.Context, req *mcp.CallToolRequest, args D
 
 	logger.InfoContext(ctx, "deleting committee", "uid", args.UID)
 
-	// Fetch current state to obtain the ETag required by the API.
+	// Fetch current state to obtain the ETag required by the API. Delete only
+	// reads current.Etag from this response, so strict decoding is not
+	// applied here: there is no merge-and-PUT for it to protect.
 	current, err := clients.Committee.GetCommitteeBase(ctx, &committeeservice.GetCommitteeBasePayload{
 		UID: &args.UID,
 	})
@@ -1003,8 +1009,10 @@ func handleUpdateCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 
 	logger.InfoContext(ctx, "updating committee member", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 
-	// Fetch current state for merge.
-	current, err := clients.Committee.GetCommitteeMember(ctx, &committeeservice.GetCommitteeMemberPayload{
+	// Fetch current state for merge. Strict decoding refuses the write rather
+	// than silently drop a field the merge below does not know to carry
+	// forward onto the full-replace PUT.
+	current, err := clients.Committee.GetCommitteeMember(lfxv2.WithStrictDecoding(ctx), &committeeservice.GetCommitteeMemberPayload{
 		Version:   "1",
 		UID:       args.CommitteeUID,
 		MemberUID: args.MemberUID,
@@ -1149,7 +1157,9 @@ func handleDeleteCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 
 	logger.InfoContext(ctx, "deleting committee member", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 
-	// Fetch current state to obtain the ETag required by the API.
+	// Fetch current state to obtain the ETag required by the API. Delete only
+	// reads current.Etag from this response, so strict decoding is not
+	// applied here: there is no merge-and-PUT for it to protect.
 	current, err := clients.Committee.GetCommitteeMember(ctx, &committeeservice.GetCommitteeMemberPayload{
 		Version:   "1",
 		UID:       args.CommitteeUID,

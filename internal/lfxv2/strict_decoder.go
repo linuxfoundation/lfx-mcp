@@ -1,6 +1,8 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
+// Package lfxv2 provides client utilities for LFX v2 APIs, including strict
+// response decoding for fetch-merge-put writes.
 package lfxv2
 
 import (
@@ -119,5 +121,5 @@ func isJSONResponse(resp *http.Response) bool {
 	if err != nil {
 		return false
 	}
-	return mediaType == "application/json"
+	return mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
 }

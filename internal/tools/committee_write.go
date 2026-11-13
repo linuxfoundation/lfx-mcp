@@ -815,10 +815,10 @@ func handleDeleteCommittee(ctx context.Context, req *mcp.CallToolRequest, args D
 
 	logger.InfoContext(ctx, "deleting committee", "uid", args.UID)
 
-	// Fetch current state to obtain the ETag required by the API. Strict
-	// decoding is applied here for consistency with the other fetch-then-PUT
-	// handlers, even though delete only reads the ETag from this response.
-	current, err := clients.Committee.GetCommitteeBase(lfxv2.WithStrictDecoding(ctx), &committeeservice.GetCommitteeBasePayload{
+	// Fetch current state to obtain the ETag required by the API. Delete only
+	// reads current.Etag from this response, so strict decoding is not
+	// applied here: there is no merge-and-PUT for it to protect.
+	current, err := clients.Committee.GetCommitteeBase(ctx, &committeeservice.GetCommitteeBasePayload{
 		UID: &args.UID,
 	})
 	if err != nil {
@@ -1157,10 +1157,10 @@ func handleDeleteCommitteeMember(ctx context.Context, req *mcp.CallToolRequest, 
 
 	logger.InfoContext(ctx, "deleting committee member", "committee_uid", args.CommitteeUID, "member_uid", args.MemberUID)
 
-	// Fetch current state to obtain the ETag required by the API. Strict
-	// decoding is applied here for consistency with the other fetch-then-PUT
-	// handlers, even though delete only reads the ETag from this response.
-	current, err := clients.Committee.GetCommitteeMember(lfxv2.WithStrictDecoding(ctx), &committeeservice.GetCommitteeMemberPayload{
+	// Fetch current state to obtain the ETag required by the API. Delete only
+	// reads current.Etag from this response, so strict decoding is not
+	// applied here: there is no merge-and-PUT for it to protect.
+	current, err := clients.Committee.GetCommitteeMember(ctx, &committeeservice.GetCommitteeMemberPayload{
 		Version:   "1",
 		UID:       args.CommitteeUID,
 		MemberUID: args.MemberUID,

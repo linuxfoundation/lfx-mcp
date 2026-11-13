@@ -303,7 +303,16 @@ func TestUpdateCommitteeMember_GetFailureMakesNoPut(t *testing.T) {
 // A field this client's generated type does not know about must refuse the
 // update rather than merge the GET's known fields over it and PUT, silently
 // erasing the unknown one. See lfx-mcp#196.
-func TestUpdateCommitteeMember_UnknownFieldOnGetRefusesWrite(t *testing.T) {
+//
+// This test exercises the WithStrictDecoding/strictAwareDecoder integration
+// through the Goa-generated committee client; handleUpdateCommitteeMember is
+// just the one fetch-merge-put handler chosen to carry it. It is not proof
+// that every fetch-merge-put handler wires strict decoding in — the decoder's
+// own behavior is covered directly in internal/lfxv2/strict_decoder_test.go.
+// If handleUpdateCommitteeMember ever stops using WithStrictDecoding, update
+// this test to exercise a different fetch-merge-put handler instead of
+// deleting it.
+func TestUpdateCommitteeMember_GoaClientRefusesUnknownFieldOnGet(t *testing.T) {
 	api := setupCommitteeTest(t)
 	path := fmt.Sprintf("/committees/%s/members/%s", updateMemberCommitteeUID, updateMemberUID)
 	api.Handle(http.MethodGet, path, func(stubAPIRequest) stubAPIResponse {

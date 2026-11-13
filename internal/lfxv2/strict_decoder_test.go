@@ -5,6 +5,7 @@ package lfxv2
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -81,5 +82,68 @@ func TestStrictAwareDecoder_IgnoresNon2xxEvenWhenStrict(t *testing.T) {
 	var out map[string]any
 	if err := decode(resp).Decode(&out); err != nil {
 		t.Fatalf("a non-2xx response must not be strictly decoded, got: %v", err)
+	}
+}
+
+// newResponseWithContentType is like newJSONResponse but sets (or omits) an
+// arbitrary Content-Type, for exercising isJSONResponse's media-type branches.
+func newResponseWithContentType(ctx context.Context, contentType, body string) *http.Response {
+	req := httptest.NewRequest(http.MethodGet, "http://committee.test/committees/c", nil).WithContext(ctx)
+	header := http.Header{}
+	if contentType != "" {
+		header.Set("Content-Type", contentType)
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     header,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Request:    req,
+	}
+}
+
+func TestStrictAwareDecoder_PlusJSONSuffixIsStrict(t *testing.T) {
+	ctx := WithStrictDecoding(context.Background())
+	resp := newResponseWithContentType(ctx, "application/vnd.committee+json", `{"name":"Example","unexpected_new_field":"x"}`)
+
+	decode := strictAwareDecoder(refusalAwareDecoder())
+	var out knownFields
+	err := decode(resp).Decode(&out)
+	if err == nil {
+		t.Fatal("want an error for an unknown field under a +json content type")
+	}
+	if !strings.Contains(err.Error(), "unexpected_new_field") {
+		t.Errorf("error should name the unknown field, got: %v", err)
+	}
+}
+
+func TestStrictAwareDecoder_NonJSONContentTypeSkipsStrictDecoding(t *testing.T) {
+	ctx := WithStrictDecoding(context.Background())
+	resp := newResponseWithContentType(ctx, "text/plain", `{"name":"Example","unexpected_new_field":"x"}`)
+
+	decode := strictAwareDecoder(refusalAwareDecoder())
+	var out knownFields
+	err := decode(resp).Decode(&out)
+	// goahttp.ResponseDecoder doesn't know how to decode text/plain at all, so
+	// this still errors; the point of this test is that it must not be a
+	// strictUnknownFieldsError, since isJSONResponse should route a non-JSON
+	// content type to the inner (non-strict) decoder regardless.
+	var unknownFieldErr *strictUnknownFieldsError
+	if errors.As(err, &unknownFieldErr) {
+		t.Fatalf("a non-JSON content type must not be strictly decoded, got: %v", err)
+	}
+}
+
+func TestStrictAwareDecoder_StrictWhenContentTypeAbsent(t *testing.T) {
+	ctx := WithStrictDecoding(context.Background())
+	resp := newResponseWithContentType(ctx, "", `{"name":"Example","unexpected_new_field":"x"}`)
+
+	decode := strictAwareDecoder(refusalAwareDecoder())
+	var out knownFields
+	err := decode(resp).Decode(&out)
+	if err == nil {
+		t.Fatal("want an error for an unknown field when Content-Type is absent, since goahttp.ResponseDecoder defaults to JSON")
+	}
+	if !strings.Contains(err.Error(), "unexpected_new_field") {
+		t.Errorf("error should name the unknown field, got: %v", err)
 	}
 }

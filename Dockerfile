@@ -29,8 +29,9 @@ RUN go build -o /go/bin/lfx-mcp-server -trimpath -ldflags="-w -s -X main.Version
 # Run our go binary standalone
 FROM cgr.dev/chainguard/static:latest
 
-# Implicit with base image; setting explicitly for linters.
-USER nonroot
+# Implicit with base image; setting explicitly for linters. Numeric UID
+# (rather than the "nonroot" alias) per hadolint DL3066.
+USER 65532
 
 COPY --from=builder /go/bin/lfx-mcp-server /cmd/lfx-mcp-server
 

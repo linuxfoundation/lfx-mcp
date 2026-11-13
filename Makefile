@@ -20,6 +20,10 @@ LDFLAGS=-ldflags="-s -w -X main.Version=$(VERSION)"
 DOCKER_IMAGE=linuxfoundation/lfx-mcp/lfx-mcp-server
 DOCKER_TAG=local
 
+# Run MegaLinter locally via Docker (matches CI Go flavor at v10.1.0).
+# Keep this digest in sync with .github/workflows/mega-linter.yml.
+MEGALINTER_IMAGE := ghcr.io/oxsecurity/megalinter-go@sha256:42e091a4bcbe9141fe420c2520ed7addf75ae60a0c9d42e3df1278eef1c90a88  # v10.1.0
+
 # Default target
 all: clean check build
 
@@ -107,10 +111,9 @@ ko-build:
 	@echo "Building ko image..."
 	KO_DOCKER_REPO=$(DOCKER_IMAGE) VERSION=$(VERSION) ko build -L --bare --tags local ./cmd/lfx-mcp-server
 
-# Run MegaLinter locally via Docker (matches CI Go flavor at v9).
 megalinter:
-	docker pull oxsecurity/megalinter-go:v9
-	docker run --rm --platform linux/amd64 -v '$(CURDIR):/tmp/lint:rw' oxsecurity/megalinter-go:v9
+	docker pull $(MEGALINTER_IMAGE)
+	docker run --rm --platform linux/amd64 -e GOTOOLCHAIN=auto -v '$(CURDIR):/tmp/lint:rw' $(MEGALINTER_IMAGE)
 
 # Show help
 help:

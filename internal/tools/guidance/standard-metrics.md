@@ -152,10 +152,7 @@ family's default window or a bare period series rather than a hand-picked
 start_date: a computed start clips the first period. Do not compute a
 start_date by counting back N years from today for "last N years": that
 arithmetic is the mistake the rule exists to prevent; a bare period=year
-series returns every year and the reader picks. The same discipline applies
-to the answer: report every row the series returned, or say how many rows
-there are and which ones you show; do not trim the table to a rounder
-window when writing up.
+series returns every year and the reader picks.
 
 Every result carries an `applied` block: metric, by, kind (window or
 at-date), project, subprojects, org, subsidiaries, start_date, end_date,
@@ -198,9 +195,9 @@ subsidiaries=separate needs by=org and subprojects=separate needs
 by=project — on any other grouping the call is rejected; combined folds the
 hierarchy and keeps that grouping's rows, and by=total is what asks for one
 figure. With no org named, subsidiaries=combined on a by=org reading is one
-row per parent organization, resolved to the top of each chain. MOST
-QUESTIONS WANT BOTH the headline and the breakdown — two calls, combined
-then separate. Never derive one from the other: distinct counts do not sum.
+row per parent organization, resolved to the top of each chain. The headline
+is combined, the breakdown is separate.
+Never derive one from the other: distinct counts do not sum.
 
 ## Inventory
 
@@ -295,20 +292,17 @@ the project with excluded.
 Everything in this document is working knowledge: it shapes the call and
 how you read the result. The ANSWER carries the figure, one line on what it
 covers (from the applied block: scope, window or date, definition), and
-only the caveats that change how THIS figure is read — an unattributed row,
-a distinct count that must not be summed, a partial last period, a
-future-dated end, maintainership read as of today, a date-based membership
-reading — in the reader's words: "ranked by GitHub identity", not a note on
-display names and keys. Column names, keys, engines, SQL and the other tools
-stay out unless the reader asks how a figure was made. Vocabulary, grains,
-hierarchy depth, coverage, snapshot mechanics and version notes are said
-only when they qualify THIS figure or change the conclusion; when unsure
-whether a note belongs, leave it out. A flagged row (partial_last_period,
+only the caveats that change how THIS figure is read, in the reader's words.
+Column names, keys, engines, SQL and the other tools
+stay out unless the reader asks how a figure was made.
+A flagged row (partial_last_period,
 includes_future_dated) is reported with the applied block's wording, never
 dropped or explained with calendar arithmetic of your own. "How many members
 does the LF have" → member_organizations, no project: the figure, "distinct
 member organizations across the LF today", and the offer of memberships
-(project-account pairs) or the breakdown by foundation.
+(project-account pairs) or the breakdown by foundation. The full reading of
+how an answer is worded and sourced is in the LFX playbook skills
+(lfx-data-querying), where they are installed.
 
 ## Reading results
 

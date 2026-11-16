@@ -222,14 +222,13 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 		"report it as a floor",
 		"as PEOPLE, not talks",
 		"TALKS BY TOPIC",
-		"total_accepted_proposals grouped by speaker_key__session_title",
-		"Each row is one distinct title, not necessarily one talk",
-		"different sessions with the same title collapse into one row",
-		"The metric\ncounts accepted speaker slots, not talks; never sum it as a talk count",
-		"Report the distinct matching titles as a FLOOR for talks, not an exact\nsession count",
-		"The data holds the call-for-proposals sessions only",
-		"the Accepted filter is required",
-		"Bevy events carry no session titles",
+		"total_accepted_sessions, which counts each accepted session once",
+		"Group by\nspeaker_key__session_title to read the titles back",
+		"the per-title figures add up",
+		"COVERAGE: the\nmetric counts the call-for-proposals sessions",
+		"fall back to a title hash",
+		"chapter-event speakers\ncarry no session and add nothing",
+		"never present it as a talk count",
 		"event_id__project_name is\nthe foundation that ran the event, not what a talk was about",
 		"on non-activity metrics a subtree is project__project_path LIKE '%/<slug>/%'",
 		"cross-domain joins no standard metric or\n  dimension expresses",
@@ -277,7 +276,11 @@ func TestSemanticLayerGuidanceContent(t *testing.T) {
 			t.Errorf("semantic layer guidance missing %q", want)
 		}
 	}
-	for _, gone := range []string{"Each row is one talk", "count rows for talks"} {
+	for _, gone := range []string{
+		"Each row is one talk", "count rows for talks",
+		// the title-grain reading: titles reported as a floor for talks
+		"FLOOR for talks", "distinct matching titles", "Bevy events carry no session titles",
+	} {
 		if strings.Contains(text, gone) {
 			t.Errorf("semantic layer guidance still equates titles with sessions: %q", gone)
 		}
@@ -452,7 +455,7 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 		"FLOOR: the account is resolved from the proposal's company field",
 		"There is\n  no event filter: by=event and a window is how one event is isolated",
 		"this counts PEOPLE, not sessions",
-		"talks by title are a semantic-layer query (TALKS BY TOPIC in the semantic-layer guidance)",
+		"sessions counted once each are total_accepted_sessions on the semantic layer (TALKS BY TOPIC in the semantic-layer guidance)",
 		"One figure, at-date: memberships, project=cncf",
 		"A series, LF-wide: new_members, period=year, no project",
 		"An org with subsidiaries: contributions, org=International Business\n  Machines Corporation, subsidiaries=combined",
@@ -542,6 +545,13 @@ func TestStandardMetricsGuidanceContent(t *testing.T) {
 	for _, gone := range []string{"since/until", "takes as_of", "FLOW", "SNAPSHOT", "US-Pacific", "display name — \"top", "one-hop"} {
 		if strings.Contains(text, gone) {
 			t.Errorf("standard metric guidance still says %q, which the contract removed", gone)
+		}
+	}
+	// Talks are sessions counted once each on the semantic layer, not titles
+	// reported as a floor.
+	for _, gone := range []string{"talks by title", "reported as a floor"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("standard metric guidance still reads talks at title grain: %q", gone)
 		}
 	}
 }

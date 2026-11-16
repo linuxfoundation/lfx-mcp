@@ -48,6 +48,8 @@ rather than treating it as an MCP access problem.
 
 - see a private committee, meeting, mailing list, or organization's membership data unless you take part in it,
   or have been granted explicit access to the project or committee it belongs to;
+- see a mailing list's members unless you manage or audit that mailing list (you always see your own
+  subscriptions); this follows the platform's intended rule and is stricter than what LFX Self Serve shows today;
 - access LFX Insights or other Linux Foundation analytics and reporting data;
 - make changes your LFX roles do not allow.
 

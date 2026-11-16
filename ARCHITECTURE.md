@@ -133,8 +133,10 @@ etc.) pass the LFX token (CTE token for end-user callers; MCP-server M2M token f
 directly to LFX API calls. Authorization is handled natively by LFX and its OpenFGA backend. The
 people tools additionally call the V2 access-check (and the committee settings and query-service
 endpoints) with the same caller token to decide, per record, what LFX Self Serve would show that
-caller on screen, and narrow their results to it (see "People data for non-staff callers" in
-`AGENTS.md`); that shaping never widens what LFX returned. A tool reports an
+caller on screen (for mailing-list members, the platform's intended rule instead: only the list's
+managers and auditors, plus each caller's own subscriptions, which is stricter than today's
+screen), and narrow their results to it (see
+"People data for non-staff callers" in `AGENTS.md`); that shaping never widens what LFX returned. A tool reports an
 upstream error through `friendlyAPIError` (`internal/tools/helpers.go`), which reads the HTTP
 status with `lfxv2.UpstreamStatus` and returns a tool error, never a JSON-RPC error:
 

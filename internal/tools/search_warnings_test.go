@@ -295,6 +295,7 @@ func TestSearchTools_ErrorCarriesNoStructuredContent(t *testing.T) {
 		args     map[string]any
 	}{
 		{"search_meetings", setupMeetingLookupTest, func(s *mcp.Server) { RegisterSearchMeetings(s, false) }, map[string]any{"project_uid": "p"}},
+		{"search_meeting_attachments", setupMeetingLookupTest, RegisterSearchMeetingAttachments, map[string]any{"meeting_kind": "upcoming", "meeting_id": "m"}},
 		{"search_mailing_lists", setupMailingListTest, RegisterSearchMailingLists, map[string]any{"project_uid": "p"}},
 		{"search_projects", setupProjectTest, RegisterSearchProjects, map[string]any{"name": "p"}},
 	} {
@@ -355,6 +356,7 @@ func TestSearchTools_PublishWarningsOutputSchema(t *testing.T) {
 		{"search_past_meetings", func(s *mcp.Server) { RegisterSearchPastMeetings(s, false) }},
 		{"search_past_meetings", func(s *mcp.Server) { RegisterSearchPastMeetings(s, true) }},
 		{"search_past_meeting_summaries", RegisterSearchPastMeetingSummaries},
+		{"search_meeting_attachments", RegisterSearchMeetingAttachments},
 		{"search_mailing_lists", RegisterSearchMailingLists},
 		{"search_mailing_list_members", RegisterSearchMailingListMembers},
 		{"search_b2b_orgs", RegisterSearchB2bOrgs},

@@ -1,0 +1,1 @@
+GET /query/resources/count filters_or=email:subscriber@example.test&tags_all=project_uid:P1&type=groupsio_member&v=1

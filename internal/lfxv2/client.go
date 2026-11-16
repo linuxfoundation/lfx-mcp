@@ -222,8 +222,8 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		committeeURL.Scheme,
 		committeeURL.Host,
 		httpClient,
-		goahttp.RequestEncoder,
-		refusalAwareDecoder(),
+		committeeRequestEncoder,
+		strictAwareDecoder(refusalAwareDecoder()),
 		false,
 	)
 

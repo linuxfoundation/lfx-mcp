@@ -1,0 +1,1 @@
+GET /query/resources page_size=10&sort=name_asc&tags_all=project_uid:P1&type=groupsio_member&v=1

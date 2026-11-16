@@ -1,0 +1,1 @@
+GET /query/resources name=Sam&page_size=25&sort=name_asc&tags_all=mailing_list_uid:145670&type=groupsio_member&v=1

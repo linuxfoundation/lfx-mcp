@@ -110,6 +110,8 @@ var staffOnlyTools = []string{
 	"query_lfx_standard_metrics",
 	"read_lfx_semantic_layer_guidance",
 	"read_lfx_standard_metrics_guidance",
+	"search_lfx_meetups",
+	"query_lfx_meetup_analytics",
 }
 
 // nonPeopleTools are the tools newServer may register whose results carry no
@@ -139,6 +141,8 @@ var nonPeopleTools = []string{
 	// Staff-only Lens tools: registered for isStaff callers only.
 	"query_lfx_lens", "explore_lfx_semantic_layer", "query_lfx_semantic_layer",
 	"query_lfx_standard_metrics", "read_lfx_semantic_layer_guidance", "read_lfx_standard_metrics_guidance",
+	// Meetup tools: events and aggregates, no person records.
+	"search_lfx_meetups", "query_lfx_meetup_analytics",
 	// Out of the rule's scope until the product decides what LFX Self Serve
 	// shows for them (README "People data"): member records, membership key
 	// contacts, org committee seats, and project settings (writers,
@@ -318,6 +322,30 @@ func TestNewServer_LensToolsAreStaffOnly_MachineAccounts(t *testing.T) {
 		}
 		if forMachineNoScope[name] {
 			t.Errorf("%s is listed for a machine account with no read/manage scope; the machine marker must not bypass scope checks", name)
+		}
+	}
+}
+
+// TestNewServer_MeetupToolsAreInDefaultsForStaff pins the meetup tools'
+// place among the defaults: a staff caller on a server built from
+// defaultTools lists both, and a non-staff read-scoped caller on the same
+// server lists neither, exactly like the other lens-backed tools. Without
+// this, dropping a name from defaultTools, or loosening its gate, would go
+// unnoticed.
+func TestNewServer_MeetupToolsAreInDefaultsForStaff(t *testing.T) {
+	reader := &auth.TokenInfo{Scopes: []string{tools.ScopeRead}}
+	staff := &auth.TokenInfo{
+		Scopes: []string{tools.ScopeRead},
+		Extra:  map[string]any{tools.ClaimLFStaff: true},
+	}
+	forStaffDefaults := listedToolsFor(t, defaultTools, staff)
+	forReaderDefaults := listedToolsFor(t, defaultTools, reader)
+	for _, name := range []string{"search_lfx_meetups", "query_lfx_meetup_analytics"} {
+		if !forStaffDefaults[name] {
+			t.Errorf("%s is not listed for a staff reader on a defaultTools server; it must be a default tool", name)
+		}
+		if forReaderDefaults[name] {
+			t.Errorf("%s is listed for a non-staff reader on a defaultTools server; it must be staff-only", name)
 		}
 	}
 }

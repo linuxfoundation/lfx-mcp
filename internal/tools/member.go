@@ -38,14 +38,15 @@ func SetMemberConfig(cfg *MemberConfig) {
 
 // SearchMembersArgs defines the input parameters for the search_members tool.
 type SearchMembersArgs struct {
-	ProjectUID      string `json:"project_uid,omitempty" jsonschema:"Filter by project UUID. At least one of project_uid or b2b_org_uid is strongly recommended."`
-	B2bOrgUID       string `json:"b2b_org_uid,omitempty" jsonschema:"Filter by B2B organization UID. At least one of project_uid or b2b_org_uid is strongly recommended."`
+	Summary         bool   `json:"summary,omitempty" jsonschema:"Summarise membership terms instead of listing records: earliest start, current term and history per organisation and project; incomplete results are partial."`
+	ProjectUID      string `json:"project_uid,omitempty" jsonschema:"Project UUID."`
+	B2bOrgUID       string `json:"b2b_org_uid,omitempty" jsonschema:"B2B organization UID."`
 	SearchName      string `json:"search_name,omitempty" jsonschema:"Search memberships by member company name (typeahead)."`
 	TierUID         string `json:"tier_uid,omitempty" jsonschema:"Filter by exact tier+range UID (each employee-count range has a distinct UID)."`
 	TierName        string `json:"tier_name,omitempty" jsonschema:"Filter by exact tier product name, e.g. 'Silver ISV Member'. Must match the full name as stored."`
 	IncludeInactive bool   `json:"include_inactive,omitempty" jsonschema:"When true, include memberships with non-Active statuses (e.g. Purchased, Expired, Completed). Defaults to false (Active memberships only)."`
 	PageSize        int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)."`
-	PageToken       string `json:"page_token,omitempty" jsonschema:"Opaque pagination token from a previous search response."`
+	PageToken       string `json:"page_token,omitempty" jsonschema:"Opaque token from the same scope and mode (list or summary)."`
 }
 
 // GetMemberMembershipArgs defines the input parameters for the get_member_membership tool.
@@ -68,9 +69,15 @@ type GetMembershipKeyContactArgs struct {
 
 // memberSearchResult is the output type for the search_members tool.
 type memberSearchResult struct {
-	Resources []membershipView `json:"resources"`
-	PageToken *string          `json:"page_token,omitempty"`
-	Warnings  []string         `json:"warnings,omitempty"`
+	// Non-nil empty slices emit [] in their mode; nil omits the other mode.
+	Resources []membershipView        `json:"resources,omitzero"`
+	Summaries []membershipSummaryView `json:"summaries,omitzero"`
+	// TermsTotal is the cumulative records returned across summary reads, not
+	// a deduplicated count. Pointers retain zero/false in summary mode only.
+	TermsTotal *uint64  `json:"terms_total,omitempty"`
+	Complete   *bool    `json:"complete,omitempty"`
+	PageToken  *string  `json:"page_token,omitempty"`
+	Warnings   []string `json:"warnings,omitempty"`
 }
 
 // membershipView is a shaped view of a project_membership resource returned by
@@ -194,7 +201,7 @@ func toKeyContactView(c *memberservice.ProjectKeyContactResponse) keyContactView
 func RegisterSearchMembers(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_members",
-		Description: "List and search project memberships. At least one of project_uid or b2b_org_uid is strongly recommended — an unfiltered search across all memberships is unlikely to be useful. Returns Active memberships by default; set include_inactive=true to also include memberships with other statuses (e.g. Purchased, Expired, Completed). Supports search_name for company name typeahead, tier_name for exact tier product name filtering, tier_uid for exact tier+range filtering, and cursor-based pagination via page_token. Also accepts b2b_org_uid to list all memberships for a given org across all projects.",
+		Description: "List memberships or summarise their terms, scoped by project_uid and/or b2b_org_uid (required for summary). Lists Active records by default; include_inactive adds other statuses. List filters: company search_name, exact tier_name or tier_uid. With summary=true, reads to the end and ignores list filters and page_size; complete=false marks partial results. Supports page_token continuation.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Members",
 			ReadOnlyHint: true,
@@ -262,6 +269,10 @@ func handleSearchMembers(ctx context.Context, req *mcp.CallToolRequest, args Sea
 	pageSize := args.PageSize
 	if pageSize <= 0 {
 		pageSize = 10
+	}
+
+	if args.Summary {
+		return readMembershipSummaries(ctx, req, args)
 	}
 
 	resourceType := memberResourceType

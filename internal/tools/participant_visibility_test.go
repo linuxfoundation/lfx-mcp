@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -655,9 +656,10 @@ func TestParticipants_CountOnlyFollowsTheView(t *testing.T) {
 		if out["count"] != float64(12) || out["complete"] != true {
 			t.Errorf("count = %v complete = %v", out["count"], out["complete"])
 		}
-		if note, _ := out["note"].(string); !strings.Contains(note, strings.TrimSpace(participantCountScopeNote)) {
-			t.Errorf("note must say which meetings are counted: %q", note)
+		if out["note"] != callerVisibilityNote {
+			t.Errorf("note must be only the visibility sentence: %q", out["note"])
 		}
+		assertCountWarnings(t, out, []string{participantCountRecordsWarning, participantCountScopeWarning})
 		counts := api.RequestsTo(countPath)
 		if len(counts) != 2 || counts[0].Query.Get("parent") != "past_meeting:"+pastOrganized || counts[1].Query.Get("parent") != "past_meeting:"+pastPublic {
 			t.Errorf("only shown meetings are counted: %+v", counts)
@@ -670,8 +672,35 @@ func TestParticipants_CountOnlyFollowsTheView(t *testing.T) {
 		if res.IsError || len(api.Requests()) != 1 {
 			t.Fatalf("full view counts the scope in one call: %s", allResultText(t, res))
 		}
-		if note, _ := resultJSON(t, res)["note"].(string); strings.Contains(note, strings.TrimSpace(participantCountScopeNote)) {
-			t.Error("full view carries no scope note")
+		assertCountWarnings(t, resultJSON(t, res), []string{participantCountRecordsWarning})
+	})
+	t.Run("date range over own-only meetings counts nothing and claims no absence", func(t *testing.T) {
+		// Every resolved past meeting is own-only: no count is read, and the
+		// zero must not say no participant record is visible, since the
+		// caller's own records in those meetings are.
+		api := setupParticipantTest(t)
+		api.GrantRelations()
+		api.Respond(resourcesPath, page([]string{pastMeetingDoc(pastHidden)}, ""))
+		api.Respond(resourcesPath, pastDocs(pastHidden))
+		res, structured, err := handleSearchPastMeetingParticipants(context.Background(), stubCallToolRequest(), SearchPastMeetingParticipantsArgs{ProjectUID: "P1", DateFrom: "2026-06-01", CountOnly: true})
+		if err != nil || res.IsError {
+			t.Fatalf("unexpected error: %v %s", err, allResultText(t, res))
+		}
+		if n := len(api.RequestsTo(countPath)); n != 0 {
+			t.Errorf("no count may be read for an own-only meeting, got %d", n)
+		}
+		out := resultJSON(t, res)
+		if out["count"] != float64(0) || out["complete"] != true || out["note"] != callerVisibilityNote {
+			t.Errorf("unexpected result: %v", out)
+		}
+		wantWarnings := []string{participantCountZeroScopeWarning, participantCountRecordsWarning, participantCountScopeWarning}
+		assertCountWarnings(t, out, wantWarnings)
+		if text := allResultText(t, res); strings.Contains(text, "are visible to you") {
+			t.Errorf("a scoped zero must not claim no record is visible: %s", text)
+		}
+		want := countResult{Complete: true, Visibility: "caller", Note: callerVisibilityNote, Warnings: wantWarnings}
+		if !reflect.DeepEqual(structured, want) {
+			t.Errorf("structured result = %+v, want %+v", structured, want)
 		}
 	})
 }

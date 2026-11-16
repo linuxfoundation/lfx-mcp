@@ -39,7 +39,7 @@ const (
 )
 
 // coverageNote travels with every audit result.
-const coverageNote = "Counts cover committees, members and memberships indexed in LFX v2 and visible to your identity; a zero can be an access effect or a roster not yet onboarded — never report a project as having no seats from this result alone. Run under an identity with project-level audit rights for a program view."
+const coverageNote = "Counts cover committees, members and memberships indexed in LFX v2 and visible to you; a zero can be an access effect or a roster not yet onboarded — never report a project as having no seats from this result alone. Run under an identity with project-level audit rights for a program view."
 
 // errGroupedCountsMissing is returned when a count answered without groups
 // although records matched: the server ignored group_by, so the audit

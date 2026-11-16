@@ -138,7 +138,7 @@ func RegisterSearchCommitteeMembers(server *mcp.Server, asGroups bool) {
 	if asGroups {
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "search_group_members",
-			Description: "Search for LFX group (also called committee) members. Optionally filter by group UID, project UID, and/or name. The authoritative source for committee rosters. You get the member list LFX Self Serve shows you: the list for groups you manage or that share their member list with you, otherwise their chairs. Count with count_lfx_resources; full-list records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid set, an empty result carries a roster-coverage note saying whether the project has any committee onboarded into LFX v2; an empty result never proves that a person or organization holds no seat.",
+			Description: "Search LFX group (also called committee) members. The authoritative source for committee rosters. You get the member list LFX Self Serve shows you: the list for groups you manage or that share their member list with you, otherwise their chairs. Count with count_lfx_resources; full-list records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_id keeps one organization's members by stored id; organization_name matches the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid, empty results warn about roster coverage in LFX v2; they never prove a person or organization holds no seat.",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Group Members",
 				ReadOnlyHint: true,
@@ -148,7 +148,7 @@ func RegisterSearchCommitteeMembers(server *mcp.Server, asGroups bool) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_committee_members",
-		Description: "Search for LFX committee members. Optionally filter by committee UID, project UID, and/or name. The authoritative source for committee rosters. You get the member list LFX Self Serve shows you: the list for committees you manage or that share their member list with you, otherwise their chairs. Count with count_lfx_resources; full-list records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_name keeps one organization's members and must equal the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid set, an empty result carries a roster-coverage note saying whether the project has any committee onboarded into LFX v2; an empty result never proves that a person or organization holds no seat.",
+		Description: "Search LFX committee members. The authoritative source for committee rosters. You get the member list LFX Self Serve shows you: the list for committees you manage or that share their member list with you, otherwise their chairs. Count with count_lfx_resources; full-list records carry organization, role, voting status, term dates if recorded, no country. Filters combine with AND: a record must match every filter given. organization_id keeps one organization's members by stored id; organization_name matches the stored spelling (copy it from a roster row or get_org_committee_seats). With project_uid, empty results warn about roster coverage in LFX v2; they never prove a person or organization holds no seat.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:        "Search Committee Members",
 			ReadOnlyHint: true,
@@ -198,6 +198,7 @@ type GetGroupMemberArgs struct {
 type SearchCommitteeMembersArgs struct {
 	CommitteeUID     string `json:"committee_uid,omitempty" jsonschema:"Optional UID of the committee to filter members by"`
 	ProjectUID       string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter committee members by project"`
+	OrganizationID   string `json:"organization_id,omitempty" jsonschema:"Exact stored organization id on the seat (the organization_id tag); keeps one organization's members"`
 	OrganizationName string `json:"organization_name,omitempty" jsonschema:"Exact stored organization name on the seat, as a roster row or a get_org_committee_seats row spells it; keeps one organization's members"`
 	Name             string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
 	PageSize         int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
@@ -208,6 +209,7 @@ type SearchCommitteeMembersArgs struct {
 type SearchGroupMembersArgs struct {
 	GroupUID         string `json:"group_uid,omitempty" jsonschema:"Optional UID of the group to filter members by"`
 	ProjectUID       string `json:"project_uid,omitempty" jsonschema:"Optional project UID to filter group members by project"`
+	OrganizationID   string `json:"organization_id,omitempty" jsonschema:"Exact stored organization id on the seat (the organization_id tag); keeps one organization's members"`
 	OrganizationName string `json:"organization_name,omitempty" jsonschema:"Exact stored organization name on the seat, as a roster row or a get_org_committee_seats row spells it; keeps one organization's members"`
 	Name             string `json:"name,omitempty" jsonschema:"Name or partial name of the member to search for"`
 	PageSize         int    `json:"page_size,omitempty" jsonschema:"Number of results per page (default 10, max 100)"`
@@ -241,6 +243,7 @@ func handleSearchCommitteeMembersGroupMode(ctx context.Context, req *mcp.CallToo
 	return searchCommitteeMembers(ctx, req, SearchCommitteeMembersArgs{
 		CommitteeUID:     args.GroupUID,
 		ProjectUID:       args.ProjectUID,
+		OrganizationID:   args.OrganizationID,
 		OrganizationName: args.OrganizationName,
 		Name:             args.Name,
 		PageSize:         args.PageSize,
@@ -548,6 +551,9 @@ func searchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args 
 	if args.ProjectUID != "" {
 		tags = append(tags, fmt.Sprintf("project_uid:%s", args.ProjectUID))
 	}
+	if args.OrganizationID != "" {
+		tags = append(tags, "organization_id:"+args.OrganizationID)
+	}
 	if args.OrganizationName != "" {
 		tags = append(tags, "organization_name:"+args.OrganizationName)
 	}
@@ -563,7 +569,7 @@ func searchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args 
 		payload.PageToken = &args.PageToken
 	}
 
-	logger.InfoContext(ctx, "searching committee members", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "organization_name", args.OrganizationName, "name", args.Name, "page_size", pageSize)
+	logger.InfoContext(ctx, "searching committee members", "committee_uid", args.CommitteeUID, "project_uid", args.ProjectUID, "organization_id", args.OrganizationID, "organization_name", args.OrganizationName, "name", args.Name, "page_size", pageSize)
 
 	// Without full view, the result follows what LFX Self Serve shows the
 	// caller of each group (people_visibility.go). The views are decided
@@ -574,17 +580,18 @@ func searchCommitteeMembers(ctx context.Context, req *mcp.CallToolRequest, args 
 	// that cannot be narrowed (no scope, or a project whose clause would
 	// exceed the filter cap) is refused rather than read and emptied. A filter
 	// that can probe for a person is accepted only where every list it runs
-	// over is shown: organization_name where the member lists are shown;
-	// name only where the caller manages every group, because the query
-	// matches it against the username too, a field the Members tab does not
-	// show.
+	// over is shown: organization_id and organization_name where the member
+	// lists are shown (over a chairs-only roster either one would probe
+	// whether an organization holds a seat); name only where the caller
+	// manages every group, because the query matches it against the username
+	// too, a field the Members tab does not show.
 	fullView := HasFullView(ctx)
 	var views map[string]rosterView
 	noVisibleGroups := false
 	if !fullView {
-		hasPersonFilter := args.Name != "" || args.OrganizationName != ""
+		hasPersonFilter := args.Name != "" || args.OrganizationID != "" || args.OrganizationName != ""
 		singular, uidArg := committeeTerms(committeeNoun)
-		refusal := fmt.Sprintf("Error: name is available for a %s you manage (set %s) or a project all of whose %ss you manage (set project_uid); organization_name for a %s, or a project's %ss, whose member lists LFX Self Serve shows you.", singular, uidArg, singular, singular, singular)
+		refusal := fmt.Sprintf("Error: name is available for a %s you manage (set %s) or a project all of whose %ss you manage (set project_uid); organization_id or organization_name for a %s, or a project's %ss, whose member lists LFX Self Serve shows you.", singular, uidArg, singular, singular, singular)
 		scopeRefusal := fmt.Sprintf("Error: %s members are available per %s or project as LFX Self Serve shows them to you: set %s or project_uid.", singular, singular, uidArg)
 		var uids []string
 		switch {

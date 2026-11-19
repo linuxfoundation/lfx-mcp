@@ -1,4 +1,5 @@
 # Copyright The Linux Foundation and each contributor to LFX.
 # SPDX-License-Identifier: MIT
 
-* @emsearcy
+# Any one owner's approval satisfies code-owner review; lfx-one is the LFX review agent's account
+* @emsearcy @jordane @niravpatel27 @josep-reyero @lfx-one

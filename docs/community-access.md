@@ -15,6 +15,9 @@ established operational responsibilities. It is also for organization leadership
 contacts on a project's membership agreement) or an OSPO administrator, requesting access to their organization's
 own data.
 
+Linux Foundation staff do not need to file a request: every LF staff account can already sign in to the LFX MCP
+Server. Staff connect a client as described below.
+
 ## What you can see and do
 
 If your request is approved, Linux Foundation staff will grant you the appropriate permission within the LFX

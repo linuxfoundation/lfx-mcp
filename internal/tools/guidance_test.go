@@ -304,6 +304,9 @@ func TestSemanticLayerGuidanceMentionList(t *testing.T) {
 		// the rest of the call and its caveats
 		"social_listening_mentions grouped by the entity mention_key",
 		"mention_key__relevance_score and metric_time__day",
+		// the one list that groups by a bare entity, against the general rule
+		"The bare entity is deliberate: the rule is never to group by one because it returns raw IDs (Query syntax), and here the raw ID is what is wanted — the mention's identity",
+		"Keep mention_key in group_by: without it mentions whose other fields match collapse into one row and the order loses its tie-break",
 		"there is no LF-wide text list",
 		"a misspelled literal is zero rows and no error",
 		"the same call returns the same rows; inside a day the order is by key — stable, not newest first",

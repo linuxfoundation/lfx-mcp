@@ -432,6 +432,10 @@ SQL. social_listening_mentions grouped by the entity mention_key, so one row
 is one mention and the metric reads 1, with mention_key__title,
 mention_key__url, mention_key__body_excerpt, mention_key__social_network,
 mention_key__sentiment, mention_key__relevance_score and metric_time__day.
+The bare entity is deliberate: the rule is never to group by one because it
+returns raw IDs (Query syntax), and here the raw ID is what is wanted — the
+mention's identity. Keep mention_key in group_by: without it mentions whose
+other fields match collapse into one row and the order loses its tie-break.
 REQUIRED on every call: a project filter, a metric_time window and a limit
 (SCOPE above; there is no LF-wide text list — LF-wide counts are the
 standard metric's). Narrow with mention_key__sentiment and

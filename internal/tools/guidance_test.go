@@ -313,7 +313,8 @@ func TestSemanticLayerGuidanceMentionList(t *testing.T) {
 		"never by dropping the limit",
 		"Never list the values of the text dimensions",
 		"mention_key__body_excerpt is the start of the post, cut in the model — a bounded excerpt, and the url has the rest; nothing downstream cuts or rewrites text",
-		"A title can be empty or missing",
+		"A post with no title has an empty mention_key__title",
+		"and one with no text an empty excerpt: empty strings, not NULL",
 		"rows are what individual authors posted; counts and trends are the standard metrics' (one definition, one routing)",
 	} {
 		if !strings.Contains(text, want) {

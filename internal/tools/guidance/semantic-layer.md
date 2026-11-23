@@ -447,10 +447,11 @@ dropping the limit. Never list the values of the text dimensions
 (get_dimension_values on the title, the url or the excerpt). TEXT:
 mention_key__body_excerpt is the start of the post, cut in the model — a
 bounded excerpt, and the url has the rest; nothing downstream cuts or
-rewrites text. A title can be empty or missing (a comment or a short post
-has none): normal, keep the row. READING: rows are what individual authors
-posted; counts and trends are the standard metrics' (one definition, one
-routing).
+rewrites text. A post with no title has an empty mention_key__title (a
+comment or a short post), and one with no text an empty excerpt: empty
+strings, not NULL — normal, keep the row. READING: rows are what individual
+authors posted; counts and trends are the standard metrics' (one definition,
+one routing).
 
 17. WHAT GOES IN THE ANSWER. These recipes are working knowledge. The answer
 is the figure, one line on what it covers, and only the caveats that change

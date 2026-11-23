@@ -309,7 +309,7 @@ func TestSemanticLayerGuidanceMentionList(t *testing.T) {
 		"the same call returns the same rows; inside a day the order is by key — stable, not newest first",
 		"truncated true means the window holds more mentions than the limit — say the list is a cut",
 		"skip the mention_key values already read",
-		"a day that alone exceeds the limit needs a higher limit or a narrower filter",
+		"a day that alone fills or exceeds the limit needs a higher limit or a narrower filter",
 		"never by dropping the limit",
 		"Never list the values of the text dimensions",
 		"mention_key__body_excerpt is the start of the post, cut in the model — a bounded excerpt, and the url has the rest; nothing downstream cuts or rewrites text",

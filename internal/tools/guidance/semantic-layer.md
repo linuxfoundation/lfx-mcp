@@ -467,7 +467,9 @@ network filter the NULL rows sort first, so the list is not a ranking; there
 is no ranking across networks — say so. Older records have no count even
 there: a result that holds a NULL follower value is not a ranking whatever
 the filter — narrow the window to the records that have counts, or say so.
-TEXT:
+The ranked list is a top-N: truncated true is expected there, and paging by
+window is for the day order only — for more ranks raise the limit (leave the
+excerpt out past 30). TEXT:
 mention_key__body_excerpt is the start of the post, cut in the model — a
 bounded excerpt, and the url has the rest; nothing downstream cuts or
 rewrites text. A post with no title has an empty mention_key__title (a

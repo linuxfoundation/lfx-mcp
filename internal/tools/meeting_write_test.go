@@ -421,3 +421,156 @@ func TestAddMeetingRegistrant_RejectsMissingFields(t *testing.T) {
 		})
 	}
 }
+
+// --- Strict read before update_meeting's full-replace PUT ---
+
+// recurringMeeting is a stored recurring meeting whose occurrences carry the
+// title and description fields the meeting service returns per occurrence.
+const recurringMeeting = `{
+  "id": "91461158520",
+  "project_uid": "proj-1",
+  "title": "AAIF Security WG",
+  "start_time": "2026-12-01T16:00:00Z",
+  "duration": 60,
+  "timezone": "America/New_York",
+  "visibility": "public",
+  "meeting_type": "Technical",
+  "recurrence": {"type": 2, "repeat_interval": 1, "weekly_days": "3"},
+  "occurrences": [
+    {"occurrence_id": "1764604800000", "start_time": "2026-12-01T16:00:00Z", "duration": 60, "title": "AAIF Security WG", "description": "Weekly sync"},
+    {"occurrence_id": "1765209600000", "start_time": "2026-12-08T16:00:00Z", "duration": 60, "title": "AAIF Security WG: planning", "description": "Roadmap"}
+  ]
+}`
+
+// stubMeetingForUpdate serves getBodies in order for GET on the meeting (the
+// last one repeats) and accepts the PUT. It returns the meeting's path.
+func stubMeetingForUpdate(api *stubLFXAPI, meetingID string, getBodies ...string) string {
+	path := "/itx/meetings/" + meetingID
+	gets := 0
+	api.Handle(http.MethodGet, path, func(stubAPIRequest) stubAPIResponse {
+		body := getBodies[min(gets, len(getBodies)-1)]
+		gets++
+		return stubAPIResponse{Status: http.StatusOK, Body: body}
+	})
+	api.Handle(http.MethodPut, path, func(stubAPIRequest) stubAPIResponse {
+		return stubAPIResponse{Status: http.StatusNoContent}
+	})
+	return path
+}
+
+// putRequests returns the PUT requests the fake saw for path.
+func putRequests(api *stubLFXAPI, path string) []stubAPIRequest {
+	var puts []stubAPIRequest
+	for _, r := range api.RequestsTo(path) {
+		if r.Method == http.MethodPut {
+			puts = append(puts, r)
+		}
+	}
+	return puts
+}
+
+// withJSONField returns the JSON object doc with one more top-level member.
+func withJSONField(t *testing.T, doc, member string) string {
+	t.Helper()
+	i := strings.LastIndex(doc, "}")
+	if i < 0 {
+		t.Fatalf("not a JSON object: %s", doc)
+	}
+	return doc[:i] + "," + member + "}"
+}
+
+func TestUpdateMeeting_StrictReadRefusesUnknownTopLevelField(t *testing.T) {
+	api := setupMeetingWriteTest(t)
+	path := stubMeetingForUpdate(api, writeMeetingID, withJSONField(t, storedMeeting, `"brand_new": 1`))
+
+	res, _, _ := handleUpdateMeeting(fullViewCtx(), stubCallToolRequest(), UpdateMeetingArgs{
+		MeetingID: writeMeetingID, Title: strPtr("Renamed"),
+	})
+	if !res.IsError {
+		t.Fatalf("want a tool error, got %s", allResultText(t, res))
+	}
+	if text := allResultText(t, res); !strings.Contains(text, "does not know about") {
+		t.Errorf("the error must carry the strict-decoding refusal, got:\n%s", text)
+	}
+	if n := len(putRequests(api, path)); n != 0 {
+		t.Fatalf("an unknown field on the read must stop the update, saw %d PUT(s)", n)
+	}
+}
+
+func TestUpdateMeeting_StrictReadRefusesUnknownNestedField(t *testing.T) {
+	api := setupMeetingWriteTest(t)
+	nested := strings.Replace(recurringMeeting, `"description": "Roadmap"`, `"description": "Roadmap", "brand_new": true`, 1)
+	if nested == recurringMeeting {
+		t.Fatal("fixture was not changed")
+	}
+	path := stubMeetingForUpdate(api, writeMeetingID, nested)
+
+	res, _, _ := handleUpdateMeeting(fullViewCtx(), stubCallToolRequest(), UpdateMeetingArgs{
+		MeetingID: writeMeetingID, Title: strPtr("Renamed"),
+	})
+	if !res.IsError {
+		t.Fatalf("want a tool error, got %s", allResultText(t, res))
+	}
+	if text := allResultText(t, res); !strings.Contains(text, "does not know about") {
+		t.Errorf("the error must carry the strict-decoding refusal, got:\n%s", text)
+	}
+	if n := len(putRequests(api, path)); n != 0 {
+		t.Fatalf("an unknown nested field on the read must stop the update, saw %d PUT(s)", n)
+	}
+}
+
+func TestUpdateMeeting_StrictReadAcceptsOccurrenceTitleAndDescription(t *testing.T) {
+	api := setupMeetingWriteTest(t)
+	path := stubMeetingForUpdate(api, writeMeetingID, recurringMeeting)
+
+	res, _, err := handleUpdateMeeting(fullViewCtx(), stubCallToolRequest(), UpdateMeetingArgs{
+		MeetingID: writeMeetingID, Title: strPtr("Renamed"),
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("a recurring meeting whose occurrences carry title and description must update: err=%v result=%s", err, allResultText(t, res))
+	}
+	puts := putRequests(api, path)
+	if len(puts) != 1 {
+		t.Fatalf("want one PUT, saw %d", len(puts))
+	}
+	if body := requestBody(t, puts[0]); body["title"] != "Renamed" {
+		t.Errorf("PUT must carry the new title, got %v", body["title"])
+	}
+}
+
+func TestUpdateMeeting_StrictReadCleansBeforeDecoding(t *testing.T) {
+	api := setupMeetingWriteTest(t)
+	// privateMeeting carries public_link "" and auto_email_reminder_time 0,
+	// which the generated client rejects unless the record is cleaned first.
+	path := stubMeetingForUpdate(api, "91550996118", privateMeeting)
+
+	res, _, err := handleUpdateMeeting(fullViewCtx(), stubCallToolRequest(), UpdateMeetingArgs{
+		MeetingID: "91550996118", Title: strPtr("Renamed"),
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("the record must be cleaned before the strict decode: err=%v result=%s", err, allResultText(t, res))
+	}
+	if n := len(putRequests(api, path)); n != 1 {
+		t.Fatalf("want one PUT, saw %d", n)
+	}
+}
+
+func TestUpdateMeeting_ReadBackIsTolerant(t *testing.T) {
+	api := setupMeetingWriteTest(t)
+	// The read before the PUT is clean; the read-back after it carries a
+	// field this client does not know.
+	path := stubMeetingForUpdate(api, writeMeetingID, storedMeeting, withJSONField(t, storedMeeting, `"brand_new": 1`))
+
+	res, _, err := handleUpdateMeeting(fullViewCtx(), stubCallToolRequest(), UpdateMeetingArgs{
+		MeetingID: writeMeetingID, Title: strPtr("Renamed"),
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("a saved update must be reported as saved whatever the read-back carries: err=%v result=%s", err, allResultText(t, res))
+	}
+	if n := len(putRequests(api, path)); n != 1 {
+		t.Fatalf("want one PUT, saw %d", n)
+	}
+	if !strings.Contains(allResultText(t, res), "Meeting updated.") {
+		t.Errorf("want the update headline, got:\n%s", allResultText(t, res))
+	}
+}

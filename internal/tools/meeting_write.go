@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	meetingservice "github.com/linuxfoundation/lfx-v2-meeting-service/gen/meeting_service"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -326,7 +327,10 @@ func handleUpdateMeeting(ctx context.Context, req *mcp.CallToolRequest, args Upd
 
 	// The meeting service replaces the whole meeting on update, so start from
 	// the stored meeting and overlay only the fields the caller supplied.
-	current, err := clients.Meeting.GetItxMeeting(ctx, &meetingservice.GetItxMeetingPayload{
+	// The read is strict: a field the service returns that this client
+	// version does not know would be dropped here and erased by the PUT, so
+	// the update is refused instead.
+	current, err := clients.Meeting.GetItxMeeting(lfxv2.WithStrictDecoding(ctx), &meetingservice.GetItxMeetingPayload{
 		Version:   strPtr("1"),
 		MeetingID: args.MeetingID,
 	})
@@ -352,7 +356,9 @@ func handleUpdateMeeting(ctx context.Context, req *mcp.CallToolRequest, args Upd
 	logger.InfoContext(ctx, "update_meeting succeeded", "meeting_id", args.MeetingID)
 
 	// Read back the stored meeting so the caller sees what was saved. If the
-	// read fails, the update itself still succeeded.
+	// read fails, the update itself still succeeded. This read is not strict:
+	// nothing is written from it, and a field this client version does not
+	// know must not turn a saved update into an error.
 	updated, err := clients.Meeting.GetItxMeeting(ctx, &meetingservice.GetItxMeetingPayload{
 		Version:   strPtr("1"),
 		MeetingID: args.MeetingID,

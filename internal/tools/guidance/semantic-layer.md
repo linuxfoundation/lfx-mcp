@@ -439,9 +439,11 @@ other fields match collapse into one row and the order loses its tie-break.
 REQUIRED on every call: a project filter, a metric_time window and a limit
 (SCOPE above; there is no LF-wide text list — LF-wide counts are the
 standard metric's). For a project that has projects under it use the subtree
-or the foundation form: mention_key__project_slug is that project's own
-mentions only, where the standard metric's project covers the tree by
-default, so the two disagree. Narrow with mention_key__sentiment and
+form (the foundation form covers the whole foundation, sibling trees
+included, so it fits only when the project is the foundation):
+mention_key__project_slug is that project's own mentions only, where the
+standard metric's project covers the tree by default, so the two disagree.
+Narrow with mention_key__sentiment and
 mention_key__social_network in the stored spellings above; a misspelled
 literal is zero rows and no error, so check the spelling before reporting
 none. order_by=-metric_time__day,mention_key: the same call returns the same
@@ -462,7 +464,10 @@ order_by=-social_listening_total_author_followers,mention_key, with a
 mention_key__social_network filter on a network that stores follower counts
 ('Twitter' does). On a network without them every value is NULL, and with no
 network filter the NULL rows sort first, so the list is not a ranking; there
-is no ranking across networks — say so. TEXT:
+is no ranking across networks — say so. Older records have no count even
+there: a result that holds a NULL follower value is not a ranking whatever
+the filter — narrow the window to the records that have counts, or say so.
+TEXT:
 mention_key__body_excerpt is the start of the post, cut in the model — a
 bounded excerpt, and the url has the rest; nothing downstream cuts or
 rewrites text. A post with no title has an empty mention_key__title (a

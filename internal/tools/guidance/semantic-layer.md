@@ -461,17 +461,20 @@ excerpt). LATEST: the newest posts are this list with a small limit — the
 standard metric's day series gives the day, not the post; the grain is the
 day, so the latest is the newest day's posts. TOP POSTS by audience: add
 social_listening_total_author_followers to metrics and
-order_by=-social_listening_total_author_followers,mention_key, with a
-mention_key__social_network filter on a network that stores follower counts
-('Twitter' does). On a network without them every value is NULL, and with no
-network filter the NULL rows sort first, so the list is not a ranking; there
-is no ranking across networks — say so. Older records have no count even
-there: a result that holds a NULL follower value is not a ranking whatever
-the filter — narrow the window to the records that have counts, or say so.
-The ranked list is a top-N: truncated true is expected there, and paging by
-window is for the day order only — for more ranks raise the limit (leave the
-excerpt out past 30). TEXT:
-mention_key__body_excerpt is the start of the post, cut in the model — a
+order_by=-social_listening_total_author_followers,mention_key, and in where
+{{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL
+— the one place a metric goes in where. Many posts have no follower count
+and NULL sorts first: without that filter the limit fills with posts that
+cannot be ranked. The ranking covers only the posts that have a count, on a
+network that stores follower counts ('Twitter' does); there is no ranking
+across networks — say so. TOP ACCOUNTS by audience: the same where, with
+social_listening_avg_author_followers grouped by mention_key__author alone
+and order_by=-social_listening_avg_author_followers,mention_key__author —
+one row per account; what an account said is the list with
+{{ Dimension('mention_key__author') }} = '<username>'. The ranked list is a
+top-N: truncated true is expected there, and paging by window is for the day
+order only — for more ranks raise the limit (leave the excerpt out past 30).
+TEXT: mention_key__body_excerpt is the start of the post, cut in the model — a
 bounded excerpt, and the url has the rest; nothing downstream cuts or
 rewrites text. A post with no title has an empty mention_key__title (a
 comment or a short post), and one with no text an empty excerpt: empty
@@ -507,11 +510,17 @@ Negative Kubernetes mentions on Reddit, one row per mention (recipe 16):
   order_by=-metric_time__day,mention_key limit=30
   where={{ Dimension('mention_key__project_slug') }} = 'k8s' AND {{ Dimension('mention_key__sentiment') }} = 'negative' AND {{ Dimension('mention_key__social_network') }} = 'Reddit' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-10-01'
 
-Most-followed posts about a foundation's projects on one network (recipe 16):
+Most-followed posts about a foundation's projects (recipe 16):
   metrics=social_listening_mentions,social_listening_total_author_followers
   group_by=mention_key,mention_key__author,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__project_slug,metric_time__day
   order_by=-social_listening_total_author_followers,mention_key limit=10
-  where={{ Dimension('project__project_path') }} LIKE '%/aswf/%' AND {{ Dimension('mention_key__social_network') }} = 'Twitter' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01'
+  where={{ Dimension('project__project_path') }} LIKE '%/aswf/%' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01' AND {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL
+
+Most-followed accounts that posted about a foundation's projects (recipe 16):
+  metrics=social_listening_avg_author_followers,social_listening_mentions
+  group_by=mention_key__author
+  order_by=-social_listening_avg_author_followers,mention_key__author limit=10
+  where={{ Dimension('project__foundation_slug') }} = 'aswf' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01' AND {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL
 
 Org share of PyTorch code activity (recipe 2):
   metrics=code_contribution_activities group_by=activity_project_id__organization_name

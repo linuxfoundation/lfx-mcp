@@ -558,6 +558,32 @@ func TestUpdateMeeting_StrictReadRefusesUnknownFieldTheCleaningRemoves(t *testin
 	}
 }
 
+// An object or an array where the client expects a number is the decoder's
+// own error, reported before any unknown name that follows. The update is
+// refused all the same.
+func TestUpdateMeeting_StrictReadRefusesWrongContainerBeforeUnknownField(t *testing.T) {
+	for name, wrong := range map[string]string{"an object": `{}`, "an array": `[]`} {
+		t.Run(name, func(t *testing.T) {
+			api := setupMeetingWriteTest(t)
+			stored := strings.Replace(storedMeeting, `"duration": 60`, `"duration": `+wrong, 1)
+			if stored == storedMeeting {
+				t.Fatal("fixture was not changed")
+			}
+			path := stubMeetingForUpdate(api, writeMeetingID, withJSONField(t, stored, `"brand_new": ""`))
+
+			res, _, _ := handleUpdateMeeting(fullViewCtx(), stubCallToolRequest(), UpdateMeetingArgs{
+				MeetingID: writeMeetingID, Title: strPtr("Renamed"),
+			})
+			if !res.IsError {
+				t.Fatalf("want a tool error, got %s", allResultText(t, res))
+			}
+			if n := len(putRequests(api, path)); n != 0 {
+				t.Fatalf("a record the client cannot read must stop the update, saw %d PUT(s)", n)
+			}
+		})
+	}
+}
+
 func TestUpdateMeeting_StrictReadAcceptsOccurrenceTitleAndDescription(t *testing.T) {
 	api := setupMeetingWriteTest(t)
 	path := stubMeetingForUpdate(api, writeMeetingID, recurringMeeting)

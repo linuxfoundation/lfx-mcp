@@ -110,9 +110,12 @@ func strictDecode(body io.Reader, v any) error {
 // checkFieldNames reports a member name in body, at any depth, that the type
 // v points to does not know. It looks at names only: the body is rewritten
 // token by token with every value that is not an object or an array replaced
-// by null, so a value the type would reject cannot hide a name that follows
-// it, and a member that appears twice is checked both times. A body that
-// cannot be read to the end of its first JSON value is refused: nothing
+// by null, so a string, number or boolean the type would reject cannot hide
+// a name that follows it, and a member that appears twice is checked both
+// times. An object or an array where the type expects something else is
+// still an error, the decoder's own, and it is the one reported even when an
+// unknown name follows: the response is refused either way. A body that
+// cannot be read to the end of its first JSON value is refused too: nothing
 // vouches for the names in it. An empty body is left for the value decode
 // to report.
 func checkFieldNames(body []byte, v any) error {

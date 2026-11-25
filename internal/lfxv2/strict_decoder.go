@@ -108,44 +108,100 @@ func strictDecode(body io.Reader, v any) error {
 }
 
 // checkFieldNames reports a member name in body, at any depth, that the type
-// v points to does not know. It looks at names only: every value that is not
-// an object or an array is replaced by null before decoding, so a value the
-// type would reject cannot hide a name that follows it. A body that is not
-// JSON is left for the value decode to report.
+// v points to does not know. It looks at names only: the body is rewritten
+// token by token with every value that is not an object or an array replaced
+// by null, so a value the type would reject cannot hide a name that follows
+// it, and a member that appears twice is checked both times. A body that
+// cannot be read to the end of its first JSON value is refused: nothing
+// vouches for the names in it. An empty body is left for the value decode
+// to report.
 func checkFieldNames(body []byte, v any) error {
 	t := reflect.TypeOf(v)
 	if t == nil || t.Kind() != reflect.Pointer {
 		return nil
 	}
-	var doc any
-	if err := json.Unmarshal(body, &doc); err != nil {
-		return nil
-	}
-	names, err := json.Marshal(namesOnly(doc))
+	names, err := namesOnly(body)
 	if err != nil {
-		return err
+		return fmt.Errorf("reading the field names of the response: %w", err)
+	}
+	if names == nil {
+		return nil
 	}
 	return strictDecode(bytes.NewReader(names), reflect.New(t.Elem()).Interface())
 }
 
-// namesOnly returns doc with its objects and arrays kept and every other
-// value replaced by null.
-func namesOnly(doc any) any {
-	switch t := doc.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(t))
-		for name, value := range t {
-			out[name] = namesOnly(value)
+// namesOnly returns the first JSON value in body with its objects, arrays
+// and member names kept, in order, and every other value replaced by null.
+// It returns nil for an empty body.
+func namesOnly(body []byte) ([]byte, error) {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	// Numbers are never converted, so one outside float64's range is still
+	// a value like any other.
+	dec.UseNumber()
+
+	// One frame per open object or array: whether it is an object, and how
+	// many tokens it has received (names and values alternate in an object).
+	type frame struct {
+		object bool
+		tokens int
+	}
+	var (
+		out   bytes.Buffer
+		stack []frame
+	)
+	// place writes the separator before the next token of the innermost
+	// open container and reports whether that token is a member name.
+	place := func() (name bool) {
+		if len(stack) == 0 {
+			return false
 		}
-		return out
-	case []any:
-		out := make([]any, len(t))
-		for i, value := range t {
-			out[i] = namesOnly(value)
+		f := &stack[len(stack)-1]
+		name = f.object && f.tokens%2 == 0
+		switch {
+		case f.object && !name:
+			out.WriteByte(':')
+		case f.tokens > 0:
+			out.WriteByte(',')
 		}
-		return out
-	default:
-		return nil
+		f.tokens++
+		return name
+	}
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF && out.Len() == 0 {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		switch t := tok.(type) {
+		case json.Delim:
+			switch t {
+			case '{', '[':
+				place()
+				out.WriteByte(byte(t))
+				stack = append(stack, frame{object: t == '{'})
+			default:
+				out.WriteByte(byte(t))
+				stack = stack[:len(stack)-1]
+			}
+		case string:
+			if place() {
+				quoted, err := json.Marshal(t)
+				if err != nil {
+					return nil, err
+				}
+				out.Write(quoted)
+			} else {
+				out.WriteString("null")
+			}
+		default:
+			place()
+			out.WriteString("null")
+		}
+		if len(stack) == 0 {
+			return out.Bytes(), nil
+		}
 	}
 }
 

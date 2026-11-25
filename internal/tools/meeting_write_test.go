@@ -535,6 +535,8 @@ func TestUpdateMeeting_StrictReadRefusesUnknownFieldTheCleaningRemoves(t *testin
 		"empty string in an occurrence":    inOccurrence,
 		"inside a one-time's recurrence":   withJSONField(t, storedMeeting, `"recurrence": {"type": 0, "brand_new": 1}`),
 		"empty string in a private record": withJSONField(t, privateMeeting, `"brand_new": ""`),
+		"beside a number too large":        withJSONField(t, storedMeeting, `"recurrence": {"type": 0, "brand_new": 1e400}`),
+		"in a member given twice":          withJSONField(t, storedMeeting, `"recurrence": {"type": 0, "brand_new": 1}, "recurrence": {"type": 0}`),
 	} {
 		t.Run(name, func(t *testing.T) {
 			api := setupMeetingWriteTest(t)
@@ -804,7 +806,7 @@ func TestMeetingWriteTools_Descriptions(t *testing.T) {
 		}
 		regs = append(regs,
 			registration{"create_meeting", func(s *mcp.Server) { RegisterCreateMeeting(s, asGroups) }, "For a project you manage or are meeting coordinator of, or when you manage every " + unit + " listed.", createCeiling},
-			registration{"update_meeting", func(s *mcp.Server) { RegisterUpdateMeeting(s, asGroups) }, "For meetings you organize.", 223},
+			registration{"update_meeting", func(s *mcp.Server) { RegisterUpdateMeeting(s, asGroups) }, "For meetings you organize.", 221},
 		)
 	}
 	regs = append(regs,
@@ -823,6 +825,9 @@ func TestMeetingWriteTools_Descriptions(t *testing.T) {
 		}
 		if n := len(tool.Description); n > reg.ceiling {
 			t.Errorf("%s: description is %d bytes, ceiling %d", reg.tool, n, reg.ceiling)
+		}
+		if reg.tool == "update_meeting" && !strings.Contains(tool.Description, "Omitted fields keep their value, except as show_meeting_attendees says.") {
+			t.Errorf("update_meeting: the description must not promise that every omitted field keeps its value:\n%s", tool.Description)
 		}
 		if reg.tool == "create_meeting" || reg.tool == "update_meeting" {
 			got := schemaPropertyDescription(t, tool, "show_meeting_attendees")

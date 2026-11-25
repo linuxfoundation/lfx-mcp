@@ -334,11 +334,22 @@ rule yet and are returned as the services return them, pending product decisions
 | `search_meetings`            | Search meetings by project, committee, date; upcoming occurrences; only_mine for the caller's own meetings, as in LFX Self Serve's My Meetings |
 | `get_meeting`                | Get a meeting by UID                                              |
 | `create_meeting`             | Schedule a one-time or recurring meeting under a project, optionally inviting committees |
-| `update_meeting`             | Update a meeting; only the fields provided change (whole series for recurring meetings) |
+| `update_meeting`             | Update a meeting; omitted fields keep their value, attendee sharing aside (whole series for recurring meetings) |
 | `delete_meeting`             | Delete (cancel) a meeting and all its occurrences                 |
 | `add_meeting_registrant`     | Invite one person to a meeting by email; LFX sends them the invite |
 | `search_meeting_registrants` | Search meeting registrants; filter by meeting, committee, project (non-staff callers: per meeting) |
 | `get_meeting_registrant`     | Get a meeting registrant by UID                                   |
+
+`create_meeting` and `update_meeting` apply the attendee-sharing rule LFX
+Self Serve applies when it saves a meeting: a Board meeting does not share
+its guest list, a meeting that stops being a Board meeting starts with
+sharing off unless the update sets `show_meeting_attendees`, and a new
+restricted meeting shares it only when asked. The result shows the saved
+value, and says so when a request to share was not kept.
+
+`update_meeting` reads the meeting before it writes it back. If the meeting
+service returns a field this server version does not know, the update is
+refused and nothing is written: upgrade the server and try again.
 
 ### Past Meeting Data
 

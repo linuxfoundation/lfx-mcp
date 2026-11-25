@@ -160,7 +160,7 @@ func RegisterCreateMeeting(server *mcp.Server, asGroups bool) {
 func RegisterUpdateMeeting(server *mcp.Server, asGroups bool) {
 	tool := &mcp.Tool{
 		Name:        "update_meeting",
-		Description: "Update an existing LFX meeting. Only the fields provided change; everything else keeps its current value. For a recurring meeting this changes the whole series. Registrants are emailed the update. " + meetingOrganizerAccessClause,
+		Description: "Update an existing LFX meeting. Omitted fields keep their value, except as show_meeting_attendees says. For a recurring meeting this changes the whole series. Registrants are emailed the update. " + meetingOrganizerAccessClause,
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Update Meeting",
 			ReadOnlyHint:    false,

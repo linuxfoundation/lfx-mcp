@@ -64,11 +64,45 @@ func TestMeetingClient_StrictAwareOverCleaning(t *testing.T) {
 		"in a recurrence":    `{"id":"91461158520","project_uid":"proj-1","title":"T","visibility":"private","recurrence":{"type":0,"brand_new":1}}`,
 		"after a bad value":  `{"id":"91461158520","project_uid":"proj-1","title":"T","visibility":"private","duration":"sixty","brand_new":1}`,
 		"null unknown field": `{"id":"91461158520","project_uid":"proj-1","title":"T","visibility":"private","brand_new":null}`,
+		"number too large":   `{"id":"91461158520","project_uid":"proj-1","title":"T","visibility":"private","recurrence":{"type":0,"brand_new":1e400}}`,
+		"member given twice": `{"id":"91461158520","project_uid":"proj-1","title":"T","visibility":"private","recurrence":{"type":0,"brand_new":1},"recurrence":{"type":0}}`,
 	} {
 		body = removed
 		err := get(WithStrictDecoding(context.Background()))
 		if err == nil || !strings.Contains(err.Error(), "does not know about") {
 			t.Errorf("%s: a strict read must refuse the unknown field, got: %v", name, err)
+		}
+	}
+
+	// A body whose names cannot be read is refused, not passed on to the
+	// cleaning: here the record breaks off inside the recurrence.
+	body = `{"id":"91461158520","project_uid":"proj-1","title":"T","visibility":"private","recurrence":{"type":0,"brand_new":`
+	if err := get(WithStrictDecoding(context.Background())); err == nil {
+		t.Error("a strict read must refuse a record that breaks off")
+	}
+}
+
+func TestNamesOnly(t *testing.T) {
+	for body, want := range map[string]string{
+		`{"a":1,"b":"x","c":true,"d":null}`:      `{"a":null,"b":null,"c":null,"d":null}`,
+		`{"a":{"b":[1,{"c":""}],"d":[]},"e":{}}`: `{"a":{"b":[null,{"c":null}],"d":[]},"e":{}}`,
+		`{"a":1e400,"a":{"b":2}}`:                `{"a":null,"a":{"b":null}}`,
+		`{"quote\"d":1}`:                         `{"quote\"d":null}`,
+		`[{"a":1},2,"x"]`:                        `[{"a":null},null,null]`,
+		`"x"`:                                    `null`,
+		` {"a" : 1} {"b":2}`:                     `{"a":null}`,
+	} {
+		got, err := namesOnly([]byte(body))
+		if err != nil || string(got) != want {
+			t.Errorf("namesOnly(%s) = %s, %v; want %s", body, got, err, want)
+		}
+	}
+	if got, err := namesOnly(nil); got != nil || err != nil {
+		t.Errorf("an empty body has no names to check, got %s, %v", got, err)
+	}
+	for _, body := range []string{`{"a":`, `{"a":1,}`, `{"a" 1}`, `[1,`} {
+		if got, err := namesOnly([]byte(body)); err == nil {
+			t.Errorf("namesOnly(%s) = %s, want an error", body, got)
 		}
 	}
 }

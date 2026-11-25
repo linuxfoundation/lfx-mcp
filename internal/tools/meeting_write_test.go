@@ -6,6 +6,7 @@ package tools
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -574,6 +575,175 @@ func TestUpdateMeeting_ReadBackIsTolerant(t *testing.T) {
 	}
 	if !strings.Contains(allResultText(t, res), "Meeting updated.") {
 		t.Errorf("want the update headline, got:\n%s", allResultText(t, res))
+	}
+}
+
+// --- The attendee-sharing rule LFX Self Serve's server applies on write ---
+
+// attendeesInBody reports the show_meeting_attendees member of a request
+// body: its value, and whether it was sent at all.
+func attendeesInBody(t *testing.T, r stubAPIRequest) (value, sent bool) {
+	t.Helper()
+	raw, sent := requestBody(t, r)["show_meeting_attendees"]
+	if !sent {
+		return false, false
+	}
+	value, ok := raw.(bool)
+	if !ok {
+		t.Fatalf("show_meeting_attendees must be a boolean, got %v", raw)
+	}
+	return value, true
+}
+
+func TestCreateMeeting_AttendeeSharingRule(t *testing.T) {
+	cases := []struct {
+		name        string
+		meetingType *string
+		restricted  *bool
+		show        *bool
+		wantSent    bool
+		wantValue   bool
+		wantNote    bool
+	}{
+		{name: "board with an explicit yes", meetingType: strPtr("Board"), show: boolPtr(true), wantSent: true, wantValue: false, wantNote: true},
+		{name: "board with no choice", meetingType: strPtr("Board"), wantSent: true, wantValue: false},
+		{name: "board with an explicit no", meetingType: strPtr("Board"), show: boolPtr(false), wantSent: true, wantValue: false},
+		{name: "restricted with no choice", meetingType: strPtr("Technical"), restricted: boolPtr(true), wantSent: true, wantValue: false},
+		{name: "restricted with an explicit yes", meetingType: strPtr("Technical"), restricted: boolPtr(true), show: boolPtr(true), wantSent: true, wantValue: true},
+		{name: "restricted board with an explicit yes", meetingType: strPtr("Board"), restricted: boolPtr(true), show: boolPtr(true), wantSent: true, wantValue: false, wantNote: true},
+		{name: "technical with an explicit yes", meetingType: strPtr("Technical"), show: boolPtr(true), wantSent: true, wantValue: true},
+		{name: "nothing set", wantSent: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			api := setupMeetingWriteTest(t)
+			api.RespondStatus("/itx/meetings", http.StatusCreated, storedMeeting)
+
+			res, _, err := handleCreateMeeting(fullViewCtx(), stubCallToolRequest(), CreateMeetingArgs{
+				ProjectUID: "proj-1", Title: "T", StartTime: "2026-12-01T16:00:00Z", Duration: 30,
+				Timezone: "UTC", Visibility: "private",
+				MeetingSettingsArgs: MeetingSettingsArgs{
+					MeetingType: tc.meetingType, Restricted: tc.restricted, ShowMeetingAttendees: tc.show,
+				},
+			})
+			if err != nil || res.IsError {
+				t.Fatalf("create failed: err=%v result=%s", err, allResultText(t, res))
+			}
+			value, sent := attendeesInBody(t, api.LastRequest())
+			if sent != tc.wantSent || value != tc.wantValue {
+				t.Errorf("show_meeting_attendees sent=%v value=%v, want sent=%v value=%v", sent, value, tc.wantSent, tc.wantValue)
+			}
+			if got := strings.Contains(allResultText(t, res), attendeeSharingNotKeptNote); got != tc.wantNote {
+				t.Errorf("note present=%v, want %v:\n%s", got, tc.wantNote, allResultText(t, res))
+			}
+		})
+	}
+}
+
+func TestIsBoardMeetingType_NormalizesLikeSelfServe(t *testing.T) {
+	for value, want := range map[string]bool{"Board": true, "board": true, " Board ": true, "BOARD": true, "Technical": false, "None": false, "": false, "Boards": false} {
+		if got := isBoardMeetingType(strPtr(value)); got != want {
+			t.Errorf("isBoardMeetingType(%q) = %v, want %v", value, got, want)
+		}
+	}
+	if isBoardMeetingType(nil) {
+		t.Error("a meeting with no type is not a Board meeting")
+	}
+}
+
+// meetingWith returns storedMeeting with its meeting_type replaced and
+// show_meeting_attendees set to shared.
+func meetingWith(t *testing.T, meetingType string, shared bool) string {
+	t.Helper()
+	doc := strings.Replace(storedMeeting, `"meeting_type": "Technical"`, `"meeting_type": `+string(mustJSON(t, meetingType)), 1)
+	if doc == storedMeeting && meetingType != "Technical" {
+		t.Fatal("fixture was not changed")
+	}
+	return withJSONField(t, doc, `"show_meeting_attendees": `+string(mustJSON(t, shared)))
+}
+
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	out, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return out
+}
+
+// The stored types here are the spellings the meeting client accepts on a
+// read; isBoardMeetingType's own test covers the other spellings.
+func TestUpdateMeeting_AttendeeSharingRule(t *testing.T) {
+	cases := []struct {
+		name       string
+		storedType string
+		storedShow bool
+		argType    *string
+		argShow    *bool
+		wantValue  bool
+		wantNote   bool
+	}{
+		{name: "stored board, nothing about sharing", storedType: "Board", storedShow: true, wantValue: false},
+		{name: "stored board, explicit yes", storedType: "Board", argShow: boolPtr(true), wantValue: false, wantNote: true},
+		{name: "leaves board with no choice", storedType: "Board", storedShow: true, argType: strPtr("Technical"), wantValue: false},
+		{name: "leaves board with an explicit yes", storedType: "Board", argType: strPtr("Technical"), argShow: boolPtr(true), wantValue: true},
+		{name: "technical keeps its stored yes", storedType: "Technical", storedShow: true, wantValue: true},
+		{name: "technical keeps its stored no", storedType: "Technical", storedShow: false, wantValue: false},
+		{name: "becomes board with a stored yes", storedType: "Technical", storedShow: true, argType: strPtr("Board"), wantValue: false},
+		{name: "becomes board with an explicit yes", storedType: "Technical", argType: strPtr("Board"), argShow: boolPtr(true), wantValue: false, wantNote: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			api := setupMeetingWriteTest(t)
+			path := stubMeetingForUpdate(api, writeMeetingID, meetingWith(t, tc.storedType, tc.storedShow))
+
+			res, _, err := handleUpdateMeeting(fullViewCtx(), stubCallToolRequest(), UpdateMeetingArgs{
+				MeetingID: writeMeetingID, Title: strPtr("Renamed"),
+				MeetingSettingsArgs: MeetingSettingsArgs{MeetingType: tc.argType, ShowMeetingAttendees: tc.argShow},
+			})
+			if err != nil || res.IsError {
+				t.Fatalf("update failed: err=%v result=%s", err, allResultText(t, res))
+			}
+			puts := putRequests(api, path)
+			if len(puts) != 1 {
+				t.Fatalf("want one PUT, saw %d", len(puts))
+			}
+			value, sent := attendeesInBody(t, puts[0])
+			if !sent || value != tc.wantValue {
+				t.Errorf("show_meeting_attendees sent=%v value=%v, want it sent as %v", sent, value, tc.wantValue)
+			}
+			if got := strings.Contains(allResultText(t, res), attendeeSharingNotKeptNote); got != tc.wantNote {
+				t.Errorf("note present=%v, want %v:\n%s", got, tc.wantNote, allResultText(t, res))
+			}
+		})
+	}
+}
+
+func TestMeetingWriteResult_ShowsSavedAttendeeSharing(t *testing.T) {
+	api := setupMeetingWriteTest(t)
+	stubMeetingForUpdate(api, writeMeetingID, meetingWith(t, "Technical", true))
+
+	res, _, err := handleUpdateMeeting(fullViewCtx(), stubCallToolRequest(), UpdateMeetingArgs{
+		MeetingID: writeMeetingID, Title: strPtr("Renamed"),
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("update failed: err=%v result=%s", err, allResultText(t, res))
+	}
+	if !strings.Contains(allResultText(t, res), `"show_meeting_attendees": true`) {
+		t.Errorf("the result must show the saved attendee-sharing value:\n%s", allResultText(t, res))
+	}
+}
+
+// TestMeetingWriteTools_KnownGapComments keeps the marker the repository uses
+// to find every rule a tool applies in place of the owning service (see
+// "Known gaps" in AGENTS.md) on both places this file applies one.
+func TestMeetingWriteTools_KnownGapComments(t *testing.T) {
+	src, err := os.ReadFile("meeting_write.go")
+	if err != nil {
+		t.Fatalf("read meeting_write.go: %v", err)
+	}
+	if n := strings.Count(string(src), "// Known gap: "); n < 2 {
+		t.Errorf("want the Known gap marker at the create and the update rule, found %d", n)
 	}
 }
 

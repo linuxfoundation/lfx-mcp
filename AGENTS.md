@@ -382,6 +382,17 @@ filtered calls, with their upstream requests. Regenerate a golden only from
 a checkout that predates the people rules, never from the branch under
 test.
 
+### Known gaps: a rule a tool applies in place of the owning service
+
+When the owning service does not enforce a rule and LFX Self Serve applies
+it in its own code, a tool may apply the same rule. Mark every such place
+with a comment that starts `// Known gap: `, so that
+`grep -rn "Known gap:" internal/` lists them all. The comment states the rule
+the tool applies, where LFX Self Serve applies it, and what removes it
+(normally: the owning service enforces the rule). It does not describe what
+a caller of the API could obtain. Remove the code and the comment together
+when the service enforces the rule.
+
 ### Tool Implementation Steps
 
 1. **Create a new file** in `internal/tools/` (e.g., `my_tool.go`)

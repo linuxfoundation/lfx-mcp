@@ -522,6 +522,40 @@ func TestUpdateMeeting_StrictReadRefusesUnknownNestedField(t *testing.T) {
 	}
 }
 
+// The cleaning before the client's validation removes empty strings and a
+// recurrence that is not one. An unknown field inside what it removes must
+// still stop the update.
+func TestUpdateMeeting_StrictReadRefusesUnknownFieldTheCleaningRemoves(t *testing.T) {
+	inOccurrence := strings.Replace(recurringMeeting, `"description": "Roadmap"`, `"description": "Roadmap", "brand_new": ""`, 1)
+	if inOccurrence == recurringMeeting {
+		t.Fatal("fixture was not changed")
+	}
+	for name, stored := range map[string]string{
+		"empty string at the top level":    withJSONField(t, storedMeeting, `"brand_new": ""`),
+		"empty string in an occurrence":    inOccurrence,
+		"inside a one-time's recurrence":   withJSONField(t, storedMeeting, `"recurrence": {"type": 0, "brand_new": 1}`),
+		"empty string in a private record": withJSONField(t, privateMeeting, `"brand_new": ""`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := setupMeetingWriteTest(t)
+			path := stubMeetingForUpdate(api, writeMeetingID, stored)
+
+			res, _, _ := handleUpdateMeeting(fullViewCtx(), stubCallToolRequest(), UpdateMeetingArgs{
+				MeetingID: writeMeetingID, Title: strPtr("Renamed"),
+			})
+			if !res.IsError {
+				t.Fatalf("want a tool error, got %s", allResultText(t, res))
+			}
+			if text := allResultText(t, res); !strings.Contains(text, "does not know about") {
+				t.Errorf("the error must carry the strict-decoding refusal, got:\n%s", text)
+			}
+			if n := len(putRequests(api, path)); n != 0 {
+				t.Fatalf("an unknown field on the read must stop the update, saw %d PUT(s)", n)
+			}
+		})
+	}
+}
+
 func TestUpdateMeeting_StrictReadAcceptsOccurrenceTitleAndDescription(t *testing.T) {
 	api := setupMeetingWriteTest(t)
 	path := stubMeetingForUpdate(api, writeMeetingID, recurringMeeting)
@@ -749,36 +783,33 @@ func TestMeetingWriteTools_KnownGapComments(t *testing.T) {
 
 // --- Descriptions ---
 
-// meetingWriteDescriptionCeiling is the measured size of the longest
-// description of the four tools (create_meeting, committee mode). A change
-// that grows a description past it has to move this number in the same
-// change, with its reason.
-const meetingWriteDescriptionCeiling = 352
-
 // showMeetingAttendeesTextCeiling is the measured size of the
 // show_meeting_attendees parameter text.
 const showMeetingAttendeesTextCeiling = 77
 
 func TestMeetingWriteTools_Descriptions(t *testing.T) {
+	// ceiling is the measured size of each description. A change that
+	// grows one has to move its number in the same change, with its reason.
 	type registration struct {
 		tool     string
 		register func(*mcp.Server)
 		clause   string
+		ceiling  int
 	}
 	var regs []registration
 	for _, asGroups := range []bool{false, true} {
-		unit := "committee"
+		unit, createCeiling := "committee", 352
 		if asGroups {
-			unit = "group"
+			unit, createCeiling = "group", 336
 		}
 		regs = append(regs,
-			registration{"create_meeting", func(s *mcp.Server) { RegisterCreateMeeting(s, asGroups) }, "For a project you manage or are meeting coordinator of, or when you manage every " + unit + " listed."},
-			registration{"update_meeting", func(s *mcp.Server) { RegisterUpdateMeeting(s, asGroups) }, "For meetings you organize."},
+			registration{"create_meeting", func(s *mcp.Server) { RegisterCreateMeeting(s, asGroups) }, "For a project you manage or are meeting coordinator of, or when you manage every " + unit + " listed.", createCeiling},
+			registration{"update_meeting", func(s *mcp.Server) { RegisterUpdateMeeting(s, asGroups) }, "For meetings you organize.", 223},
 		)
 	}
 	regs = append(regs,
-		registration{"delete_meeting", RegisterDeleteMeeting, "For meetings you organize."},
-		registration{"add_meeting_registrant", RegisterAddMeetingRegistrant, "For meetings you organize."},
+		registration{"delete_meeting", RegisterDeleteMeeting, "For meetings you organize.", 179},
+		registration{"add_meeting_registrant", RegisterAddMeetingRegistrant, "For meetings you organize.", 274},
 	)
 
 	for _, reg := range regs {
@@ -790,8 +821,8 @@ func TestMeetingWriteTools_Descriptions(t *testing.T) {
 		if !strings.HasSuffix(tool.Description, reg.clause) {
 			t.Errorf("%s: the description must end with %q:\n%s", reg.tool, reg.clause, tool.Description)
 		}
-		if n := len(tool.Description); n > meetingWriteDescriptionCeiling {
-			t.Errorf("%s: description is %d bytes, ceiling %d", reg.tool, n, meetingWriteDescriptionCeiling)
+		if n := len(tool.Description); n > reg.ceiling {
+			t.Errorf("%s: description is %d bytes, ceiling %d", reg.tool, n, reg.ceiling)
 		}
 		if reg.tool == "create_meeting" || reg.tool == "update_meeting" {
 			got := schemaPropertyDescription(t, tool, "show_meeting_attendees")

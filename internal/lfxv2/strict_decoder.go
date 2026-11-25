@@ -6,12 +6,14 @@
 package lfxv2
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
+	"reflect"
 	"strings"
 
 	goahttp "goa.design/goa/v3/http"
@@ -73,13 +75,28 @@ func (e *strictUnknownFieldsError) Unwrap() error {
 // strictJSONDecoder is a goahttp.Decoder that decodes JSON with
 // DisallowUnknownFields, turning an unknown field into a
 // strictUnknownFieldsError.
+//
+// original is the body as the service sent it and body what the inner
+// decoder factory left to decode, which differs when that factory rewrites
+// the body (the meeting client's record cleaning removes members). The
+// field names are checked on original, so a member the rewrite removed is
+// still seen; the values are decoded from body.
 type strictJSONDecoder struct {
-	body io.Reader
+	original []byte
+	body     io.Reader
 }
 
 // Decode implements goahttp.Decoder.
 func (d strictJSONDecoder) Decode(v any) error {
-	dec := json.NewDecoder(d.body)
+	if err := checkFieldNames(d.original, v); err != nil {
+		return err
+	}
+	return strictDecode(d.body, v)
+}
+
+// strictDecode decodes body into v with DisallowUnknownFields.
+func strictDecode(body io.Reader, v any) error {
+	dec := json.NewDecoder(body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		if strings.HasPrefix(err.Error(), unknownFieldErrorPrefix) {
@@ -90,22 +107,73 @@ func (d strictJSONDecoder) Decode(v any) error {
 	return nil
 }
 
+// checkFieldNames reports a member name in body, at any depth, that the type
+// v points to does not know. It looks at names only: every value that is not
+// an object or an array is replaced by null before decoding, so a value the
+// type would reject cannot hide a name that follows it. A body that is not
+// JSON is left for the value decode to report.
+func checkFieldNames(body []byte, v any) error {
+	t := reflect.TypeOf(v)
+	if t == nil || t.Kind() != reflect.Pointer {
+		return nil
+	}
+	var doc any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return nil
+	}
+	names, err := json.Marshal(namesOnly(doc))
+	if err != nil {
+		return err
+	}
+	return strictDecode(bytes.NewReader(names), reflect.New(t.Elem()).Interface())
+}
+
+// namesOnly returns doc with its objects and arrays kept and every other
+// value replaced by null.
+func namesOnly(doc any) any {
+	switch t := doc.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for name, value := range t {
+			out[name] = namesOnly(value)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, value := range t {
+			out[i] = namesOnly(value)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
 // strictAwareDecoder wraps a Goa response decoder factory (such as one
 // returned by refusalAwareDecoder) so that a successful (2xx) JSON response to
 // a request whose context was marked by WithStrictDecoding is decoded with
 // DisallowUnknownFields instead of the inner factory's decoder. Every other
 // response — non-2xx status, non-JSON content, or a request not marked
 // strict — is decoded exactly as the inner factory would.
+//
+// The inner factory still runs for a strict response, because it may rewrite
+// the body before the values are decoded. The field names are checked on the
+// body as it arrived, read here before the inner factory sees it.
 func strictAwareDecoder(inner func(*http.Response) goahttp.Decoder) func(*http.Response) goahttp.Decoder {
 	return func(resp *http.Response) goahttp.Decoder {
-		base := inner(resp)
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return base
+			return inner(resp)
 		}
 		if resp.Request == nil || !isStrictDecoding(resp.Request.Context()) || !isJSONResponse(resp) {
-			return base
+			return inner(resp)
 		}
-		return strictJSONDecoder{body: resp.Body}
+		original, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return errDecoder{err: err}
+		}
+		resp.Body = io.NopCloser(bytes.NewReader(original))
+		inner(resp)
+		return strictJSONDecoder{original: original, body: resp.Body}
 	}
 }
 

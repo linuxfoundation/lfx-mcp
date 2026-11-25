@@ -1,6 +1,7 @@
 // Copyright The Linux Foundation and contributors.
 // SPDX-License-Identifier: MIT
 
+// Package lfxv2 provides client utilities for interacting with LFX v2 APIs, including OAuth2 token exchange.
 package lfxv2
 
 import (
@@ -53,5 +54,21 @@ func TestMeetingClient_StrictAwareOverCleaning(t *testing.T) {
 	}
 	if err := get(context.Background()); err != nil {
 		t.Fatalf("a read not marked strict must tolerate the unknown field: %v", err)
+	}
+
+	// The cleaning removes an empty string and a recurrence that is not one;
+	// a strict read must see an unknown name inside either before that.
+	for name, removed := range map[string]string{
+		"empty string":       `{"id":"91461158520","project_uid":"proj-1","title":"T","visibility":"private","brand_new":""}`,
+		"in an occurrence":   `{"id":"91461158520","project_uid":"proj-1","title":"T","visibility":"private","occurrences":[{"occurrence_id":"1","brand_new":""}]}`,
+		"in a recurrence":    `{"id":"91461158520","project_uid":"proj-1","title":"T","visibility":"private","recurrence":{"type":0,"brand_new":1}}`,
+		"after a bad value":  `{"id":"91461158520","project_uid":"proj-1","title":"T","visibility":"private","duration":"sixty","brand_new":1}`,
+		"null unknown field": `{"id":"91461158520","project_uid":"proj-1","title":"T","visibility":"private","brand_new":null}`,
+	} {
+		body = removed
+		err := get(WithStrictDecoding(context.Background()))
+		if err == nil || !strings.Contains(err.Error(), "does not know about") {
+			t.Errorf("%s: a strict read must refuse the unknown field, got: %v", name, err)
+		}
 	}
 }

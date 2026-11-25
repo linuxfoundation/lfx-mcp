@@ -330,10 +330,10 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		goahttp.RequestEncoder,
 		// Its 401/403 bodies require "code" as well as "message"; meeting
 		// records are cleaned before the client validates them. The strict
-		// wrapper is outermost: it runs the cleaning first and then, for a
-		// call marked with WithStrictDecoding (the read before
-		// update_meeting's full-replace PUT), decodes the cleaned body and
-		// refuses a field this client version does not know.
+		// wrapper is outermost: for a call marked with WithStrictDecoding
+		// (the read before update_meeting's full-replace PUT) it refuses a
+		// field this client version does not know, looking at the record as
+		// the service sent it, and decodes the cleaned record.
 		strictAwareDecoder(meetingRecordDecoder(refusalAwareDecoder("code"))),
 		false,
 	)

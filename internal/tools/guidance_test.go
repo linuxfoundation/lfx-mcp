@@ -337,9 +337,13 @@ func TestSemanticLayerGuidanceMentionList(t *testing.T) {
 		"{{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL — the one place a metric goes in where",
 		"Many posts have no follower count and NULL sorts first: without that filter the limit fills with posts that cannot be ranked",
 		"The ranking covers only the posts that have a count",
+		// the whole ranking sentence, so the clause that joins the order and the filter cannot drop out
+		"order_by=-social_listening_total_author_followers,mention_key, and in where {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL",
 		// the accounts with the largest audience, and what one of them said
 		"TOP ACCOUNTS by audience: the same where, with social_listening_avg_author_followers grouped by mention_key__author alone and order_by=-social_listening_avg_author_followers,mention_key__author",
 		"what an account said is the list with {{ Dimension('mention_key__author') }} = '<username>'",
+		// the grain of the account ranking
+		"order_by=-social_listening_avg_author_followers,mention_key__author — one row per account; what an account said",
 		"The ranked list is a top-N: truncated true is expected there, and paging by window is for the day order only",
 		"for more ranks raise the limit (leave the excerpt out past 30)",
 		// third-party text reaches the reader as data
@@ -364,11 +368,13 @@ func TestSemanticLayerGuidanceMentionList(t *testing.T) {
 		"  order_by=-metric_time__day,mention_key limit=30\n",
 		"  where={{ Dimension('mention_key__project_slug') }} = 'k8s' AND {{ Dimension('mention_key__sentiment') }} = 'negative' AND {{ Dimension('mention_key__social_network') }} = 'Reddit' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-10-01'\n",
 		// the most-followed posts, on a subtree, posts without a count left out
+		"Most-followed posts about a foundation's projects (recipe 16):\n",
 		"  metrics=social_listening_mentions,social_listening_total_author_followers\n",
 		"  group_by=mention_key,mention_key__author,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__project_slug,metric_time__day\n",
 		"  order_by=-social_listening_total_author_followers,mention_key limit=10\n",
 		"  where={{ Dimension('project__project_path') }} LIKE '%/aswf/%' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01' AND {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL\n",
 		// the most-followed accounts, on the foundation form
+		"Most-followed accounts that posted about a foundation's projects (recipe 16):\n",
 		"  metrics=social_listening_avg_author_followers,social_listening_mentions\n",
 		"  group_by=mention_key__author\n",
 		"  order_by=-social_listening_avg_author_followers,mention_key__author limit=10\n",

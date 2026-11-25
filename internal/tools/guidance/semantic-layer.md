@@ -429,8 +429,9 @@ The feed is young — group by metric_time__year before comparing years.
 WHAT WAS SAID (what people posted about a project, its negative feedback,
 one network's posts): a list of mentions is one query here, not generated
 SQL. social_listening_mentions grouped by the entity mention_key, so one row
-is one mention and the metric reads 1, with mention_key__title,
-mention_key__url, mention_key__body_excerpt, mention_key__social_network,
+is one mention and the metric reads 1, with mention_key__author (the posting
+account's username on that network), mention_key__title, mention_key__url,
+mention_key__body_excerpt, mention_key__social_network,
 mention_key__sentiment, mention_key__relevance_score and metric_time__day.
 The bare entity is deliberate: the rule is never to group by one because it
 returns raw IDs (Query syntax), and here the raw ID is what is wanted — the
@@ -502,13 +503,13 @@ Kubernetes mentions by network this year (recipe 16):
 
 Negative Kubernetes mentions on Reddit, one row per mention (recipe 16):
   metrics=social_listening_mentions
-  group_by=mention_key,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__social_network,mention_key__sentiment,mention_key__relevance_score,metric_time__day
+  group_by=mention_key,mention_key__author,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__social_network,mention_key__sentiment,mention_key__relevance_score,metric_time__day
   order_by=-metric_time__day,mention_key limit=30
   where={{ Dimension('mention_key__project_slug') }} = 'k8s' AND {{ Dimension('mention_key__sentiment') }} = 'negative' AND {{ Dimension('mention_key__social_network') }} = 'Reddit' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-10-01'
 
 Most-followed posts about a foundation's projects on one network (recipe 16):
   metrics=social_listening_mentions,social_listening_total_author_followers
-  group_by=mention_key,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__project_slug,metric_time__day
+  group_by=mention_key,mention_key__author,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__project_slug,metric_time__day
   order_by=-social_listening_total_author_followers,mention_key limit=10
   where={{ Dimension('project__project_path') }} LIKE '%/aswf/%' AND {{ Dimension('mention_key__social_network') }} = 'Twitter' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01'
 

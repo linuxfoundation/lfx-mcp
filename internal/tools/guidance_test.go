@@ -297,6 +297,8 @@ func TestSemanticLayerGuidanceMentionList(t *testing.T) {
 		"order_by=-metric_time__day,mention_key",
 		"a project filter, a metric_time window and a limit",
 		"page by moving the window",
+		// who posted: the account's username, shown on this staff-only surface
+		"with mention_key__author (the posting account's username on that network), mention_key__title",
 		// the three text dimensions, as the layer serves them
 		"mention_key__title",
 		"mention_key__url",
@@ -343,9 +345,8 @@ func TestSemanticLayerGuidanceMentionList(t *testing.T) {
 			t.Errorf("recipe 16 mention list missing %q", want)
 		}
 	}
-	// The carve-out is gone, and the list does not name the author: who
-	// posted is people data with its own review, and the url carries it.
-	for _, gone := range []string{"Free-text feeds", "still goes to query_lfx_lens", "mention_key__author"} {
+	// The carve-out is gone.
+	for _, gone := range []string{"Free-text feeds", "still goes to query_lfx_lens"} {
 		if strings.Contains(text, gone) {
 			t.Errorf("recipe 16 still says %q", gone)
 		}
@@ -353,12 +354,12 @@ func TestSemanticLayerGuidanceMentionList(t *testing.T) {
 	// The worked examples, line for line as a caller copies them.
 	for _, line := range []string{
 		"  metrics=social_listening_mentions\n",
-		"  group_by=mention_key,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__social_network,mention_key__sentiment,mention_key__relevance_score,metric_time__day\n",
+		"  group_by=mention_key,mention_key__author,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__social_network,mention_key__sentiment,mention_key__relevance_score,metric_time__day\n",
 		"  order_by=-metric_time__day,mention_key limit=30\n",
 		"  where={{ Dimension('mention_key__project_slug') }} = 'k8s' AND {{ Dimension('mention_key__sentiment') }} = 'negative' AND {{ Dimension('mention_key__social_network') }} = 'Reddit' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-10-01'\n",
 		// the most-followed posts, on a subtree and one network
 		"  metrics=social_listening_mentions,social_listening_total_author_followers\n",
-		"  group_by=mention_key,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__project_slug,metric_time__day\n",
+		"  group_by=mention_key,mention_key__author,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__project_slug,metric_time__day\n",
 		"  order_by=-social_listening_total_author_followers,mention_key limit=10\n",
 		"  where={{ Dimension('project__project_path') }} LIKE '%/aswf/%' AND {{ Dimension('mention_key__social_network') }} = 'Twitter' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01'\n",
 	} {

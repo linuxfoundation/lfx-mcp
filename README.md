@@ -20,7 +20,7 @@ The LFX MCP Server is available as a hosted, production service at:
 https://mcp.lfx.dev/mcp
 ```
 
-You sign in through LFX with your Linux Foundation account (LFID) the first time you connect. Sign-in succeeds only when your account has been enabled for MCP access and you use one of the supported clients below; to request access, see [Using the LFX MCP Server as a community member](docs/community-access.md). After sign-in, what you can see and do follows your LFX permissions; some analytics tools are available only to Linux Foundation staff (see [LFX Lens](#lfx-lens)).
+You sign in through LFX with your Linux Foundation account (LFID) the first time you connect. Sign-in succeeds only when your account has been enabled for MCP access and you use one of the supported clients below; Linux Foundation staff accounts are enabled already, and everyone else can request access as described in [Using the LFX MCP Server as a community member](docs/community-access.md). After sign-in, what you can see and do follows your LFX permissions; some analytics tools are available only to Linux Foundation staff (see [LFX Lens](#lfx-lens)).
 
 **The following clients are set up to work with the LFX MCP Server.** Client-specific instructions (menu paths, settings names, etc.) are subject to change as vendors update their products; consult the client's own documentation if the steps below no longer match what you see. Please file an issue to request additional client support.
 

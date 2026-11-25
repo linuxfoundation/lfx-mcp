@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/linuxfoundation/lfx-mcp/internal/lfxv2"
 	meetingservice "github.com/linuxfoundation/lfx-v2-meeting-service/gen/meeting_service"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -51,7 +52,7 @@ type MeetingSettingsArgs struct {
 	Recurrence               *MeetingRecurrenceArgs `json:"recurrence,omitempty" jsonschema:"How the meeting repeats; omit for a one-time meeting (on update, omit to keep the current recurrence)"`
 	AutoEmailReminderEnabled *bool                  `json:"auto_email_reminder_enabled,omitempty" jsonschema:"Whether registrants get an automatic email reminder"`
 	AutoEmailReminderTime    *int                   `json:"auto_email_reminder_time,omitempty" jsonschema:"Minutes before the meeting to send the email reminder"`
-	ShowMeetingAttendees     *bool                  `json:"show_meeting_attendees,omitempty" jsonschema:"Whether guests can see each other on the meeting page and in calendar invites"`
+	ShowMeetingAttendees     *bool                  `json:"show_meeting_attendees,omitempty" jsonschema:"Whether guests can see each other on the meeting page; off for Board meetings"`
 }
 
 // CreateMeetingArgs defines the input parameters for the create_meeting tool.
@@ -123,11 +124,23 @@ type AddMeetingRegistrantArgs struct {
 
 // --- Registration ---
 
+// meetingOrganizerAccessClause says who may update or delete a meeting or add
+// a registrant to it. "Meetings you organize" is the wording the read tools
+// use for the same access: the project's writers and meeting coordinators,
+// and the writers of a committee linked to the meeting.
+const meetingOrganizerAccessClause = "For meetings you organize."
+
+// meetingCreateAccessClause says who may create a meeting; unit is
+// "committee" or "group", following the tool's terminology mode.
+func meetingCreateAccessClause(unit string) string {
+	return "For a project you manage or are meeting coordinator of, or when you manage every " + unit + " listed."
+}
+
 // RegisterCreateMeeting registers the create_meeting tool with the MCP server.
 func RegisterCreateMeeting(server *mcp.Server, asGroups bool) {
 	tool := &mcp.Tool{
 		Name:        "create_meeting",
-		Description: "Schedule a new LFX meeting (committee call, working group session) under a project. Creates the Zoom meeting and, when committee_uids is set, invites those committees' members, who get calendar invites by email. Supports one-time and recurring meetings. Requires writer permission on the project.",
+		Description: "Schedule a new LFX meeting (committee call, working group session) under a project. Creates the Zoom meeting and, when committee_uids is set, invites those committees' members, who get calendar invites by email. Supports one-time and recurring meetings. " + meetingCreateAccessClause("committee"),
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Create Meeting",
 			ReadOnlyHint:    false,
@@ -136,7 +149,7 @@ func RegisterCreateMeeting(server *mcp.Server, asGroups bool) {
 		},
 	}
 	if asGroups {
-		tool.Description = "Schedule a new LFX meeting (group call, working group session) under a project. Creates the Zoom meeting and, when group_uids is set, invites those groups' members, who get calendar invites by email. Supports one-time and recurring meetings. Requires writer permission on the project."
+		tool.Description = "Schedule a new LFX meeting (group call, working group session) under a project. Creates the Zoom meeting and, when group_uids is set, invites those groups' members, who get calendar invites by email. Supports one-time and recurring meetings. " + meetingCreateAccessClause("group")
 		mcp.AddTool(server, tool, handleCreateMeetingGroupMode)
 		return
 	}
@@ -147,7 +160,7 @@ func RegisterCreateMeeting(server *mcp.Server, asGroups bool) {
 func RegisterUpdateMeeting(server *mcp.Server, asGroups bool) {
 	tool := &mcp.Tool{
 		Name:        "update_meeting",
-		Description: "Update an existing LFX meeting. Only the fields provided change; everything else keeps its current value. For a recurring meeting this changes the whole series. Registrants are emailed the update. Requires writer permission on the project.",
+		Description: "Update an existing LFX meeting. Omitted fields keep their value, except as show_meeting_attendees says. For a recurring meeting this changes the whole series. Registrants are emailed the update. " + meetingOrganizerAccessClause,
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Update Meeting",
 			ReadOnlyHint:    false,
@@ -167,7 +180,7 @@ func RegisterUpdateMeeting(server *mcp.Server, asGroups bool) {
 func RegisterDeleteMeeting(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "delete_meeting",
-		Description: "Delete (cancel) an LFX meeting, including every occurrence of a recurring meeting. Registrants are notified that it is cancelled. This cannot be undone. Requires writer permission on the project.",
+		Description: "Delete (cancel) an LFX meeting, including every occurrence of a recurring meeting. Registrants are notified that it is cancelled. This cannot be undone. " + meetingOrganizerAccessClause,
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Delete Meeting",
 			ReadOnlyHint:    false,
@@ -183,7 +196,7 @@ func RegisterDeleteMeeting(server *mcp.Server) {
 func RegisterAddMeetingRegistrant(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "add_meeting_registrant",
-		Description: "Invite one person to an LFX meeting by email. LFX emails them a calendar invite with their personal join link, for every occurrence of a recurring meeting. Use committee_uids on create_meeting or update_meeting to invite a whole committee instead. Requires writer permission on the project or meeting.",
+		Description: "Invite one person to an LFX meeting by email. LFX emails them a calendar invite with their personal join link, for every occurrence of a recurring meeting. Use committee_uids on create_meeting or update_meeting to invite a whole committee instead. " + meetingOrganizerAccessClause,
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Add Meeting Registrant",
 			ReadOnlyHint:    false,
@@ -237,6 +250,15 @@ func handleCreateMeeting(ctx context.Context, req *mcp.CallToolRequest, args Cre
 	}
 
 	s := args.MeetingSettingsArgs
+
+	// Known gap: the meeting service does not enforce that a Board meeting
+	// never shares its guest list, nor that a restricted meeting shares it
+	// only on an explicit choice (it passes show_meeting_attendees through).
+	// LFX Self Serve applies this rule in its own server (createMeeting in
+	// meeting.service.ts, isShowMeetingAttendeesLocked), so this tool applies
+	// the same rule. Remove when the meeting service enforces it.
+	showAttendees, sharingNotKept := attendeeSharingOnCreate(s.MeetingType, s.Restricted, s.ShowMeetingAttendees)
+
 	payload := &meetingservice.CreateItxMeetingPayload{
 		Version:                  strPtr("1"),
 		XSync:                    boolPtr(true),
@@ -260,7 +282,7 @@ func handleCreateMeeting(ctx context.Context, req *mcp.CallToolRequest, args Cre
 		Recurrence:               recurrenceFromArgs(s.Recurrence),
 		AutoEmailReminderEnabled: s.AutoEmailReminderEnabled,
 		AutoEmailReminderTime:    s.AutoEmailReminderTime,
-		ShowMeetingAttendees:     s.ShowMeetingAttendees,
+		ShowMeetingAttendees:     showAttendees,
 	}
 
 	logger.InfoContext(ctx, "creating meeting", "project_uid", args.ProjectUID, "start_time", args.StartTime)
@@ -281,7 +303,7 @@ func handleCreateMeeting(ctx context.Context, req *mcp.CallToolRequest, args Cre
 
 	logger.InfoContext(ctx, "create_meeting succeeded", "project_uid", args.ProjectUID, "meeting_id", ptrStr(result.ID))
 
-	return meetingWriteResult(ctx, "Meeting created.", meetingSummaryFromResponse(result))
+	return meetingWriteResult(ctx, meetingWriteHeadline("Meeting created.", sharingNotKept), meetingSummaryFromResponse(result))
 }
 
 func handleUpdateMeetingGroupMode(ctx context.Context, req *mcp.CallToolRequest, args UpdateMeetingGroupArgs) (*mcp.CallToolResult, any, error) {
@@ -326,7 +348,10 @@ func handleUpdateMeeting(ctx context.Context, req *mcp.CallToolRequest, args Upd
 
 	// The meeting service replaces the whole meeting on update, so start from
 	// the stored meeting and overlay only the fields the caller supplied.
-	current, err := clients.Meeting.GetItxMeeting(ctx, &meetingservice.GetItxMeetingPayload{
+	// The read is strict: a field the service returns that this client
+	// version does not know would be dropped here and erased by the PUT, so
+	// the update is refused instead.
+	current, err := clients.Meeting.GetItxMeeting(lfxv2.WithStrictDecoding(ctx), &meetingservice.GetItxMeetingPayload{
 		Version:   strPtr("1"),
 		MeetingID: args.MeetingID,
 	})
@@ -337,6 +362,13 @@ func handleUpdateMeeting(ctx context.Context, req *mcp.CallToolRequest, args Upd
 
 	payload := updatePayloadFromCurrent(args.MeetingID, current)
 	applyMeetingUpdate(payload, args)
+
+	// Known gap: the meeting service does not enforce that a Board meeting
+	// never shares its guest list (it passes show_meeting_attendees through).
+	// LFX Self Serve applies this rule in its own server (updateMeeting in
+	// meeting.service.ts, isShowMeetingAttendeesLocked), so this tool applies
+	// the same rule. Remove when the meeting service enforces it.
+	sharingNotKept := applyAttendeeSharingOnUpdate(payload, current.MeetingType, args.ShowMeetingAttendees)
 
 	if msg := validateMeetingSchedule(payload.StartTime, payload.Timezone, payload.Visibility); msg != "" {
 		return meetingToolError(msg), nil, nil
@@ -352,16 +384,18 @@ func handleUpdateMeeting(ctx context.Context, req *mcp.CallToolRequest, args Upd
 	logger.InfoContext(ctx, "update_meeting succeeded", "meeting_id", args.MeetingID)
 
 	// Read back the stored meeting so the caller sees what was saved. If the
-	// read fails, the update itself still succeeded.
+	// read fails, the update itself still succeeded. This read is not strict:
+	// nothing is written from it, and a field this client version does not
+	// know must not turn a saved update into an error.
 	updated, err := clients.Meeting.GetItxMeeting(ctx, &meetingservice.GetItxMeetingPayload{
 		Version:   strPtr("1"),
 		MeetingID: args.MeetingID,
 	})
 	if err != nil {
 		logger.WarnContext(ctx, "GetItxMeeting after update failed", "error", err, "meeting_id", args.MeetingID)
-		return meetingWriteResult(ctx, "Meeting updated.", meetingSummaryFromUpdatePayload(payload))
+		return meetingWriteResult(ctx, meetingWriteHeadline("Meeting updated.", sharingNotKept), meetingSummaryFromUpdatePayload(payload))
 	}
-	return meetingWriteResult(ctx, "Meeting updated.", meetingSummaryFromResponse(updated))
+	return meetingWriteResult(ctx, meetingWriteHeadline("Meeting updated.", sharingNotKept), meetingSummaryFromResponse(updated))
 }
 
 func handleDeleteMeeting(ctx context.Context, req *mcp.CallToolRequest, args DeleteMeetingArgs) (*mcp.CallToolResult, any, error) {
@@ -478,8 +512,66 @@ func meetingToolError(text string) *mcp.CallToolResult {
 	}
 }
 
+// boardMeetingType is the meeting type whose guest list is never shared.
+const boardMeetingType = "Board"
+
+// attendeeSharingNotKeptNote tells the caller that its explicit
+// show_meeting_attendees=true was not kept. The reason is LFX Self Serve's
+// own note for the same control.
+const attendeeSharingNotKeptNote = "Attendee sharing is off: not available for board meetings."
+
+// isBoardMeetingType reports whether t names the Board meeting type. Like
+// LFX Self Serve, it trims and ignores case: stored values are not
+// normalized upstream.
+func isBoardMeetingType(t *string) bool {
+	return t != nil && strings.EqualFold(strings.TrimSpace(*t), boardMeetingType)
+}
+
+// attendeeSharingOnCreate returns the show_meeting_attendees value to send
+// for a new meeting, and whether an explicit true from the caller was not
+// kept. A Board meeting never shares its guest list. A restricted meeting
+// shares it only when the caller explicitly asked. Anything else is sent as
+// the caller gave it.
+func attendeeSharingOnCreate(meetingType *string, restricted, show *bool) (*bool, bool) {
+	explicitYes := show != nil && *show
+	if isBoardMeetingType(meetingType) {
+		return boolPtr(false), explicitYes
+	}
+	if restricted != nil && *restricted && !explicitYes {
+		return boolPtr(false), false
+	}
+	return show, false
+}
+
+// applyAttendeeSharingOnUpdate applies the Board rule to the merged update
+// payload p and reports whether an explicit true from the caller was not
+// kept. storedType is the meeting's type before the update and callerValue
+// the show_meeting_attendees the caller sent, if any. A meeting that is a
+// Board meeting after the update never shares its guest list. A meeting that
+// stops being one starts with sharing off unless the caller chose: a value
+// stored on a Board meeting was never the organizer's choice.
+func applyAttendeeSharingOnUpdate(p *meetingservice.UpdateItxMeetingPayload, storedType *string, callerValue *bool) bool {
+	switch {
+	case isBoardMeetingType(p.MeetingType):
+		p.ShowMeetingAttendees = boolPtr(false)
+		return callerValue != nil && *callerValue
+	case callerValue == nil && isBoardMeetingType(storedType):
+		p.ShowMeetingAttendees = boolPtr(false)
+	}
+	return false
+}
+
+// meetingWriteHeadline returns headline, followed by the attendee-sharing
+// note when the caller's explicit choice was not kept.
+func meetingWriteHeadline(headline string, sharingNotKept bool) string {
+	if sharingNotKept {
+		return headline + " " + attendeeSharingNotKeptNote
+	}
+	return headline
+}
+
 var (
-	meetingTypes         = []string{"Board", "Maintainers", "Marketing", "Technical", "Legal", "Other", "None"}
+	meetingTypes         = []string{boardMeetingType, "Maintainers", "Marketing", "Technical", "Legal", "Other", "None"}
 	artifactVisibilities = []string{"meeting_hosts", "meeting_participants", "public"}
 )
 
@@ -552,6 +644,11 @@ func recurrenceFromArgs(r *MeetingRecurrenceArgs) *meetingservice.Recurrence {
 		EndTimes:       r.EndTimes,
 		EndDateTime:    r.EndDateTime,
 	}
+}
+
+// derefBool returns the value b points to, or false when b is nil.
+func derefBool(b *bool) bool {
+	return b != nil && *b
 }
 
 func derefInt(i *int) int {
@@ -663,15 +760,18 @@ func applyMeetingUpdate(p *meetingservice.UpdateItxMeetingPayload, a UpdateMeeti
 // built field by field so that call credentials (passcode, join-page
 // password, host details) are never echoed, matching what get_meeting trims.
 type meetingWriteSummary struct {
-	MeetingID               string                    `json:"meeting_id,omitempty"`
-	ProjectUID              string                    `json:"project_uid,omitempty"`
-	Title                   string                    `json:"title,omitempty"`
-	StartTime               string                    `json:"start_time,omitempty"`
-	Duration                int                       `json:"duration,omitempty"`
-	Timezone                string                    `json:"timezone,omitempty"`
-	Visibility              string                    `json:"visibility,omitempty"`
-	Restricted              *bool                     `json:"restricted,omitempty"`
-	MeetingType             string                    `json:"meeting_type,omitempty"`
+	MeetingID   string `json:"meeting_id,omitempty"`
+	ProjectUID  string `json:"project_uid,omitempty"`
+	Title       string `json:"title,omitempty"`
+	StartTime   string `json:"start_time,omitempty"`
+	Duration    int    `json:"duration,omitempty"`
+	Timezone    string `json:"timezone,omitempty"`
+	Visibility  string `json:"visibility,omitempty"`
+	Restricted  *bool  `json:"restricted,omitempty"`
+	MeetingType string `json:"meeting_type,omitempty"`
+	// ShowMeetingAttendees is always present: the meeting service leaves the
+	// flag out of a record when it is off, so a missing flag reads as false.
+	ShowMeetingAttendees    bool                      `json:"show_meeting_attendees"`
 	CommitteeUIDs           []string                  `json:"committee_uids,omitempty"`
 	Recurrence              *meetingRecurrenceSummary `json:"recurrence,omitempty"`
 	NextOccurrenceStartTime string                    `json:"next_occurrence_start_time,omitempty"`
@@ -729,6 +829,7 @@ func meetingSummaryFromResponse(r *meetingservice.ITXZoomMeetingResponse) meetin
 		Visibility:              derefStr(r.Visibility),
 		Restricted:              r.Restricted,
 		MeetingType:             derefStr(r.MeetingType),
+		ShowMeetingAttendees:    derefBool(r.ShowMeetingAttendees),
 		CommitteeUIDs:           committeeUIDs(r.Committees),
 		Recurrence:              recurrenceSummary(r.Recurrence),
 		NextOccurrenceStartTime: derefStr(r.NextOccurrenceStartTime),
@@ -741,17 +842,18 @@ func meetingSummaryFromResponse(r *meetingservice.ITXZoomMeetingResponse) meetin
 
 func meetingSummaryFromUpdatePayload(p *meetingservice.UpdateItxMeetingPayload) meetingWriteSummary {
 	return meetingWriteSummary{
-		MeetingID:     p.MeetingID,
-		ProjectUID:    p.ProjectUID,
-		Title:         p.Title,
-		StartTime:     p.StartTime,
-		Duration:      p.Duration,
-		Timezone:      p.Timezone,
-		Visibility:    p.Visibility,
-		Restricted:    p.Restricted,
-		MeetingType:   derefStr(p.MeetingType),
-		CommitteeUIDs: committeeUIDs(p.Committees),
-		Recurrence:    recurrenceSummary(p.Recurrence),
+		MeetingID:            p.MeetingID,
+		ProjectUID:           p.ProjectUID,
+		Title:                p.Title,
+		StartTime:            p.StartTime,
+		Duration:             p.Duration,
+		Timezone:             p.Timezone,
+		Visibility:           p.Visibility,
+		Restricted:           p.Restricted,
+		MeetingType:          derefStr(p.MeetingType),
+		ShowMeetingAttendees: derefBool(p.ShowMeetingAttendees),
+		CommitteeUIDs:        committeeUIDs(p.Committees),
+		Recurrence:           recurrenceSummary(p.Recurrence),
 	}
 }
 

@@ -52,7 +52,7 @@ type MeetingSettingsArgs struct {
 	Recurrence               *MeetingRecurrenceArgs `json:"recurrence,omitempty" jsonschema:"How the meeting repeats; omit for a one-time meeting (on update, omit to keep the current recurrence)"`
 	AutoEmailReminderEnabled *bool                  `json:"auto_email_reminder_enabled,omitempty" jsonschema:"Whether registrants get an automatic email reminder"`
 	AutoEmailReminderTime    *int                   `json:"auto_email_reminder_time,omitempty" jsonschema:"Minutes before the meeting to send the email reminder"`
-	ShowMeetingAttendees     *bool                  `json:"show_meeting_attendees,omitempty" jsonschema:"Whether guests can see each other on the meeting page and in calendar invites"`
+	ShowMeetingAttendees     *bool                  `json:"show_meeting_attendees,omitempty" jsonschema:"Whether guests can see each other on the meeting page; off for Board meetings"`
 }
 
 // CreateMeetingArgs defines the input parameters for the create_meeting tool.
@@ -124,11 +124,23 @@ type AddMeetingRegistrantArgs struct {
 
 // --- Registration ---
 
+// meetingOrganizerAccessClause says who may update or delete a meeting or add
+// a registrant to it. "Meetings you organize" is the wording the read tools
+// use for the same access: the project's writers and meeting coordinators,
+// and the writers of a committee linked to the meeting.
+const meetingOrganizerAccessClause = "For meetings you organize."
+
+// meetingCreateAccessClause says who may create a meeting; unit is
+// "committee" or "group", following the tool's terminology mode.
+func meetingCreateAccessClause(unit string) string {
+	return "For a project you manage or are meeting coordinator of, or when you manage every " + unit + " listed."
+}
+
 // RegisterCreateMeeting registers the create_meeting tool with the MCP server.
 func RegisterCreateMeeting(server *mcp.Server, asGroups bool) {
 	tool := &mcp.Tool{
 		Name:        "create_meeting",
-		Description: "Schedule a new LFX meeting (committee call, working group session) under a project. Creates the Zoom meeting and, when committee_uids is set, invites those committees' members, who get calendar invites by email. Supports one-time and recurring meetings. Requires writer permission on the project.",
+		Description: "Schedule a new LFX meeting (committee call, working group session) under a project. Creates the Zoom meeting and, when committee_uids is set, invites those committees' members, who get calendar invites by email. Supports one-time and recurring meetings. " + meetingCreateAccessClause("committee"),
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Create Meeting",
 			ReadOnlyHint:    false,
@@ -137,7 +149,7 @@ func RegisterCreateMeeting(server *mcp.Server, asGroups bool) {
 		},
 	}
 	if asGroups {
-		tool.Description = "Schedule a new LFX meeting (group call, working group session) under a project. Creates the Zoom meeting and, when group_uids is set, invites those groups' members, who get calendar invites by email. Supports one-time and recurring meetings. Requires writer permission on the project."
+		tool.Description = "Schedule a new LFX meeting (group call, working group session) under a project. Creates the Zoom meeting and, when group_uids is set, invites those groups' members, who get calendar invites by email. Supports one-time and recurring meetings. " + meetingCreateAccessClause("group")
 		mcp.AddTool(server, tool, handleCreateMeetingGroupMode)
 		return
 	}
@@ -148,7 +160,7 @@ func RegisterCreateMeeting(server *mcp.Server, asGroups bool) {
 func RegisterUpdateMeeting(server *mcp.Server, asGroups bool) {
 	tool := &mcp.Tool{
 		Name:        "update_meeting",
-		Description: "Update an existing LFX meeting. Only the fields provided change; everything else keeps its current value. For a recurring meeting this changes the whole series. Registrants are emailed the update. Requires writer permission on the project.",
+		Description: "Update an existing LFX meeting. Only the fields provided change; everything else keeps its current value. For a recurring meeting this changes the whole series. Registrants are emailed the update. " + meetingOrganizerAccessClause,
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Update Meeting",
 			ReadOnlyHint:    false,
@@ -168,7 +180,7 @@ func RegisterUpdateMeeting(server *mcp.Server, asGroups bool) {
 func RegisterDeleteMeeting(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "delete_meeting",
-		Description: "Delete (cancel) an LFX meeting, including every occurrence of a recurring meeting. Registrants are notified that it is cancelled. This cannot be undone. Requires writer permission on the project.",
+		Description: "Delete (cancel) an LFX meeting, including every occurrence of a recurring meeting. Registrants are notified that it is cancelled. This cannot be undone. " + meetingOrganizerAccessClause,
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Delete Meeting",
 			ReadOnlyHint:    false,
@@ -184,7 +196,7 @@ func RegisterDeleteMeeting(server *mcp.Server) {
 func RegisterAddMeetingRegistrant(server *mcp.Server) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "add_meeting_registrant",
-		Description: "Invite one person to an LFX meeting by email. LFX emails them a calendar invite with their personal join link, for every occurrence of a recurring meeting. Use committee_uids on create_meeting or update_meeting to invite a whole committee instead. Requires writer permission on the project or meeting.",
+		Description: "Invite one person to an LFX meeting by email. LFX emails them a calendar invite with their personal join link, for every occurrence of a recurring meeting. Use committee_uids on create_meeting or update_meeting to invite a whole committee instead. " + meetingOrganizerAccessClause,
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "Add Meeting Registrant",
 			ReadOnlyHint:    false,

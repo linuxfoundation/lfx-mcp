@@ -747,6 +747,64 @@ func TestMeetingWriteTools_KnownGapComments(t *testing.T) {
 	}
 }
 
+// --- Descriptions ---
+
+// meetingWriteDescriptionCeiling is the measured size of the longest
+// description of the four tools (create_meeting, committee mode). A change
+// that grows a description past it has to move this number in the same
+// change, with its reason.
+const meetingWriteDescriptionCeiling = 352
+
+// showMeetingAttendeesTextCeiling is the measured size of the
+// show_meeting_attendees parameter text.
+const showMeetingAttendeesTextCeiling = 77
+
+func TestMeetingWriteTools_Descriptions(t *testing.T) {
+	type registration struct {
+		tool     string
+		register func(*mcp.Server)
+		clause   string
+	}
+	var regs []registration
+	for _, asGroups := range []bool{false, true} {
+		unit := "committee"
+		if asGroups {
+			unit = "group"
+		}
+		regs = append(regs,
+			registration{"create_meeting", func(s *mcp.Server) { RegisterCreateMeeting(s, asGroups) }, "For a project you manage or are meeting coordinator of, or when you manage every " + unit + " listed."},
+			registration{"update_meeting", func(s *mcp.Server) { RegisterUpdateMeeting(s, asGroups) }, "For meetings you organize."},
+		)
+	}
+	regs = append(regs,
+		registration{"delete_meeting", RegisterDeleteMeeting, "For meetings you organize."},
+		registration{"add_meeting_registrant", RegisterAddMeetingRegistrant, "For meetings you organize."},
+	)
+
+	for _, reg := range regs {
+		tool := listRegisteredTool(t, reg.tool, reg.register)
+		t.Logf("%s description: %d UTF-8 bytes", reg.tool, len(tool.Description))
+		if strings.Contains(tool.Description, "writer permission") {
+			t.Errorf("%s: the description must not name writer permission, which is not the rule:\n%s", reg.tool, tool.Description)
+		}
+		if !strings.HasSuffix(tool.Description, reg.clause) {
+			t.Errorf("%s: the description must end with %q:\n%s", reg.tool, reg.clause, tool.Description)
+		}
+		if n := len(tool.Description); n > meetingWriteDescriptionCeiling {
+			t.Errorf("%s: description is %d bytes, ceiling %d", reg.tool, n, meetingWriteDescriptionCeiling)
+		}
+		if reg.tool == "create_meeting" || reg.tool == "update_meeting" {
+			got := schemaPropertyDescription(t, tool, "show_meeting_attendees")
+			if strings.Contains(got, "calendar invites") || !strings.Contains(got, "Board") {
+				t.Errorf("%s: show_meeting_attendees must name the Board rule and not calendar invites, got %q", reg.tool, got)
+			}
+			if n := len(got); n > showMeetingAttendeesTextCeiling {
+				t.Errorf("%s: show_meeting_attendees text is %d bytes, ceiling %d", reg.tool, n, showMeetingAttendeesTextCeiling)
+			}
+		}
+	}
+}
+
 // --- The update's merge carries every field of the payload ---
 
 // updatePayloadFieldsNotFromStored lists the UpdateItxMeetingPayload fields

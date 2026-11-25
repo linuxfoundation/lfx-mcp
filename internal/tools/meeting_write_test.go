@@ -6,9 +6,11 @@ package tools
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
+	meetingservice "github.com/linuxfoundation/lfx-v2-meeting-service/gen/meeting_service"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -572,5 +574,81 @@ func TestUpdateMeeting_ReadBackIsTolerant(t *testing.T) {
 	}
 	if !strings.Contains(allResultText(t, res), "Meeting updated.") {
 		t.Errorf("want the update headline, got:\n%s", allResultText(t, res))
+	}
+}
+
+// --- The update's merge carries every field of the payload ---
+
+// updatePayloadFieldsNotFromStored lists the UpdateItxMeetingPayload fields
+// updatePayloadFromCurrent does not take from the stored meeting, each with
+// its reason. Any other field must be carried, or a full-replace PUT erases
+// it.
+var updatePayloadFieldsNotFromStored = map[string]string{
+	"BearerToken": "set by the auth interceptor",
+	"Version":     "API version, a constant",
+	"XSync":       "request option, a constant",
+	"MeetingID":   "the path parameter, from the caller",
+	"UpdateNote":  "a note for this update only, from the caller",
+	"Owner":       "left unset so the service keeps the stored owner",
+}
+
+// fillNonZero sets v, and everything it holds, to a non-zero value.
+func fillNonZero(t *testing.T, v reflect.Value) {
+	t.Helper()
+	switch v.Kind() {
+	case reflect.Pointer:
+		v.Set(reflect.New(v.Type().Elem()))
+		fillNonZero(t, v.Elem())
+	case reflect.String:
+		v.SetString("x")
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v.SetInt(1)
+	case reflect.Bool:
+		v.SetBool(true)
+	case reflect.Slice:
+		s := reflect.MakeSlice(v.Type(), 1, 1)
+		fillNonZero(t, s.Index(0))
+		v.Set(s)
+	case reflect.Struct:
+		for i := range v.NumField() {
+			if v.Field(i).CanSet() {
+				fillNonZero(t, v.Field(i))
+			}
+		}
+	default:
+		t.Fatalf("fillNonZero: add kind %s (type %s)", v.Kind(), v.Type())
+	}
+}
+
+// TestUpdatePayloadFromCurrent_CarriesEveryField walks the update payload
+// type. Strict decoding refuses a field the client does not know; this
+// refuses the other way to lose one: a field the client knows that the
+// merge does not copy from the stored meeting. It fails when a client bump
+// adds a payload field, until the merge carries it or it is listed above.
+func TestUpdatePayloadFromCurrent_CarriesEveryField(t *testing.T) {
+	stored := &meetingservice.ITXZoomMeetingResponse{}
+	fillNonZero(t, reflect.ValueOf(stored).Elem())
+	storedType := reflect.TypeOf(*stored)
+
+	payload := reflect.ValueOf(updatePayloadFromCurrent("m-1", stored)).Elem()
+	seen := map[string]bool{}
+	for i := range payload.NumField() {
+		name := payload.Type().Field(i).Name
+		seen[name] = true
+		if _, exempt := updatePayloadFieldsNotFromStored[name]; exempt {
+			continue
+		}
+		if _, ok := storedType.FieldByName(name); !ok {
+			t.Errorf("payload field %s has no field of that name on the stored meeting: carry it from where it lives, or list it with its reason", name)
+			continue
+		}
+		if payload.Field(i).IsZero() {
+			t.Errorf("payload field %s is not carried from the stored meeting, so an update would erase it", name)
+		}
+	}
+	for name := range updatePayloadFieldsNotFromStored {
+		if !seen[name] {
+			t.Errorf("%s is listed as not carried but is no longer a payload field: remove it from the list", name)
+		}
 	}
 }

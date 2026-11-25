@@ -646,6 +646,11 @@ func recurrenceFromArgs(r *MeetingRecurrenceArgs) *meetingservice.Recurrence {
 	}
 }
 
+// derefBool returns the value b points to, or false when b is nil.
+func derefBool(b *bool) bool {
+	return b != nil && *b
+}
+
 func derefInt(i *int) int {
 	if i == nil {
 		return 0
@@ -755,16 +760,18 @@ func applyMeetingUpdate(p *meetingservice.UpdateItxMeetingPayload, a UpdateMeeti
 // built field by field so that call credentials (passcode, join-page
 // password, host details) are never echoed, matching what get_meeting trims.
 type meetingWriteSummary struct {
-	MeetingID               string                    `json:"meeting_id,omitempty"`
-	ProjectUID              string                    `json:"project_uid,omitempty"`
-	Title                   string                    `json:"title,omitempty"`
-	StartTime               string                    `json:"start_time,omitempty"`
-	Duration                int                       `json:"duration,omitempty"`
-	Timezone                string                    `json:"timezone,omitempty"`
-	Visibility              string                    `json:"visibility,omitempty"`
-	Restricted              *bool                     `json:"restricted,omitempty"`
-	MeetingType             string                    `json:"meeting_type,omitempty"`
-	ShowMeetingAttendees    *bool                     `json:"show_meeting_attendees,omitempty"`
+	MeetingID   string `json:"meeting_id,omitempty"`
+	ProjectUID  string `json:"project_uid,omitempty"`
+	Title       string `json:"title,omitempty"`
+	StartTime   string `json:"start_time,omitempty"`
+	Duration    int    `json:"duration,omitempty"`
+	Timezone    string `json:"timezone,omitempty"`
+	Visibility  string `json:"visibility,omitempty"`
+	Restricted  *bool  `json:"restricted,omitempty"`
+	MeetingType string `json:"meeting_type,omitempty"`
+	// ShowMeetingAttendees is always present: the meeting service leaves the
+	// flag out of a record when it is off, so a missing flag reads as false.
+	ShowMeetingAttendees    bool                      `json:"show_meeting_attendees"`
 	CommitteeUIDs           []string                  `json:"committee_uids,omitempty"`
 	Recurrence              *meetingRecurrenceSummary `json:"recurrence,omitempty"`
 	NextOccurrenceStartTime string                    `json:"next_occurrence_start_time,omitempty"`
@@ -822,7 +829,7 @@ func meetingSummaryFromResponse(r *meetingservice.ITXZoomMeetingResponse) meetin
 		Visibility:              derefStr(r.Visibility),
 		Restricted:              r.Restricted,
 		MeetingType:             derefStr(r.MeetingType),
-		ShowMeetingAttendees:    r.ShowMeetingAttendees,
+		ShowMeetingAttendees:    derefBool(r.ShowMeetingAttendees),
 		CommitteeUIDs:           committeeUIDs(r.Committees),
 		Recurrence:              recurrenceSummary(r.Recurrence),
 		NextOccurrenceStartTime: derefStr(r.NextOccurrenceStartTime),
@@ -844,7 +851,7 @@ func meetingSummaryFromUpdatePayload(p *meetingservice.UpdateItxMeetingPayload) 
 		Visibility:           p.Visibility,
 		Restricted:           p.Restricted,
 		MeetingType:          derefStr(p.MeetingType),
-		ShowMeetingAttendees: p.ShowMeetingAttendees,
+		ShowMeetingAttendees: derefBool(p.ShowMeetingAttendees),
 		CommitteeUIDs:        committeeUIDs(p.Committees),
 		Recurrence:           recurrenceSummary(p.Recurrence),
 	}

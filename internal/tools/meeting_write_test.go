@@ -796,6 +796,55 @@ func TestMeetingWriteResult_ShowsSavedAttendeeSharing(t *testing.T) {
 	}
 }
 
+// The meeting service leaves show_meeting_attendees out of a record when it
+// is off, so the result has to say false itself.
+func TestMeetingWriteResult_ShowsAttendeeSharingOffWhenTheRecordOmitsIt(t *testing.T) {
+	if strings.Contains(storedMeeting, "show_meeting_attendees") {
+		t.Fatal("the fixture must not carry show_meeting_attendees")
+	}
+	const want = `"show_meeting_attendees": false`
+
+	t.Run("create", func(t *testing.T) {
+		api := setupMeetingWriteTest(t)
+		api.RespondStatus("/itx/meetings", http.StatusCreated, storedMeeting)
+		res, _, err := handleCreateMeeting(fullViewCtx(), stubCallToolRequest(), CreateMeetingArgs{
+			ProjectUID: "proj-1", Title: "T", StartTime: "2026-12-01T16:00:00Z", Duration: 30,
+			Timezone: "UTC", Visibility: "private",
+			MeetingSettingsArgs: MeetingSettingsArgs{MeetingType: strPtr("Board")},
+		})
+		if err != nil || res.IsError {
+			t.Fatalf("create failed: err=%v result=%s", err, allResultText(t, res))
+		}
+		if !strings.Contains(allResultText(t, res), want) {
+			t.Errorf("the result must show attendee sharing as off:\n%s", allResultText(t, res))
+		}
+	})
+
+	t.Run("update", func(t *testing.T) {
+		api := setupMeetingWriteTest(t)
+		stubMeetingForUpdate(api, writeMeetingID, storedMeeting)
+		res, _, err := handleUpdateMeeting(fullViewCtx(), stubCallToolRequest(), UpdateMeetingArgs{
+			MeetingID: writeMeetingID, Title: strPtr("Renamed"),
+		})
+		if err != nil || res.IsError {
+			t.Fatalf("update failed: err=%v result=%s", err, allResultText(t, res))
+		}
+		if !strings.Contains(allResultText(t, res), want) {
+			t.Errorf("the result must show attendee sharing as off:\n%s", allResultText(t, res))
+		}
+	})
+
+	t.Run("update summarised from what was sent", func(t *testing.T) {
+		out, err := json.Marshal(meetingSummaryFromUpdatePayload(&meetingservice.UpdateItxMeetingPayload{MeetingID: writeMeetingID}))
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if !strings.Contains(string(out), `"show_meeting_attendees":false`) {
+			t.Errorf("the summary must show attendee sharing as off: %s", out)
+		}
+	})
+}
+
 // TestMeetingWriteTools_KnownGapComments keeps the marker the repository uses
 // to find every rule a tool applies in place of the owning service (see
 // "Known gaps" in AGENTS.md) on both places this file applies one.

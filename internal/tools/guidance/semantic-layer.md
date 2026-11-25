@@ -465,13 +465,17 @@ order_by=-social_listening_total_author_followers,mention_key, and in where
 {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL
 — the one place a metric goes in where. Many posts have no follower count
 and NULL sorts first: without that filter the limit fills with posts that
-cannot be ranked. The ranking covers only the posts that have a count, on a
-network that stores follower counts ('Twitter' does); there is no ranking
-across networks — say so. TOP ACCOUNTS by audience: the same where, with
+cannot be ranked. The ranking covers only the posts that have a count; keep
+it to one network with a mention_key__social_network filter on a network
+that stores follower counts ('Twitter' does) — usernames and audiences are
+per network, and there is no ranking across networks — say so. TOP ACCOUNTS
+by audience: the same where (the filter stays at mention grain: Metric()
+groups by an entity, and the author is not one), with
 social_listening_avg_author_followers grouped by mention_key__author alone
 and order_by=-social_listening_avg_author_followers,mention_key__author —
 one row per account; what an account said is the list with
-{{ Dimension('mention_key__author') }} = '<username>'. The ranked list is a
+{{ Dimension('mention_key__author') }} = '<username>' and the same network
+filter. The ranked list is a
 top-N: truncated true is expected there, and paging by window is for the day
 order only — for more ranks raise the limit (leave the excerpt out past 30).
 TEXT: mention_key__body_excerpt is the start of the post, cut in the model — a
@@ -510,17 +514,17 @@ Negative Kubernetes mentions on Reddit, one row per mention (recipe 16):
   order_by=-metric_time__day,mention_key limit=30
   where={{ Dimension('mention_key__project_slug') }} = 'k8s' AND {{ Dimension('mention_key__sentiment') }} = 'negative' AND {{ Dimension('mention_key__social_network') }} = 'Reddit' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-10-01'
 
-Most-followed posts about a foundation's projects (recipe 16):
+Most-followed posts about a foundation's projects on one network (recipe 16):
   metrics=social_listening_mentions,social_listening_total_author_followers
   group_by=mention_key,mention_key__author,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__project_slug,metric_time__day
   order_by=-social_listening_total_author_followers,mention_key limit=10
-  where={{ Dimension('project__project_path') }} LIKE '%/aswf/%' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01' AND {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL
+  where={{ Dimension('project__project_path') }} LIKE '%/aswf/%' AND {{ Dimension('mention_key__social_network') }} = 'Twitter' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01' AND {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL
 
-Most-followed accounts that posted about a foundation's projects (recipe 16):
+Most-followed accounts that posted about a foundation's projects on one network (recipe 16):
   metrics=social_listening_avg_author_followers,social_listening_mentions
   group_by=mention_key__author
   order_by=-social_listening_avg_author_followers,mention_key__author limit=10
-  where={{ Dimension('project__foundation_slug') }} = 'aswf' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01' AND {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL
+  where={{ Dimension('project__foundation_slug') }} = 'aswf' AND {{ Dimension('mention_key__social_network') }} = 'Twitter' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01' AND {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL
 
 Org share of PyTorch code activity (recipe 2):
   metrics=code_contribution_activities group_by=activity_project_id__organization_name

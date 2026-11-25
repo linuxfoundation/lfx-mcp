@@ -332,10 +332,21 @@ func TestSemanticLayerGuidanceMentionList(t *testing.T) {
 		"the standard metric's day series gives the day, not the post",
 		"TOP POSTS by audience: add social_listening_total_author_followers to metrics and order_by=-social_listening_total_author_followers,mention_key",
 		"a network that stores follower counts ('Twitter' does)",
-		"with no network filter the NULL rows sort first, so the list is not a ranking",
 		"there is no ranking across networks",
-		"Older records have no count even there: a result that holds a NULL follower value is not a ranking whatever the filter",
-		"narrow the window to the records that have counts, or say so",
+		// posts without a follower count are left out by a filter, the one metric in where
+		"{{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL — the one place a metric goes in where",
+		"Many posts have no follower count and NULL sorts first: without that filter the limit fills with posts that cannot be ranked",
+		"The ranking covers only the posts that have a count",
+		// one network: usernames and audiences are per network
+		"keep it to one network with a mention_key__social_network filter on a network that stores follower counts ('Twitter' does) — usernames and audiences are per network",
+		// the whole ranking sentence, so the clause that joins the order and the filter cannot drop out
+		"order_by=-social_listening_total_author_followers,mention_key, and in where {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL",
+		// the accounts with the largest audience, and what one of them said
+		"TOP ACCOUNTS by audience: the same where (the filter stays at mention grain: Metric() groups by an entity, and the author is not one), with social_listening_avg_author_followers grouped by mention_key__author alone and order_by=-social_listening_avg_author_followers,mention_key__author",
+		"what an account said is the list with {{ Dimension('mention_key__author') }} = '<username>'",
+		"{{ Dimension('mention_key__author') }} = '<username>' and the same network filter",
+		// the grain of the account ranking
+		"order_by=-social_listening_avg_author_followers,mention_key__author — one row per account; what an account said",
 		"The ranked list is a top-N: truncated true is expected there, and paging by window is for the day order only",
 		"for more ranks raise the limit (leave the excerpt out past 30)",
 		// third-party text reaches the reader as data
@@ -346,7 +357,9 @@ func TestSemanticLayerGuidanceMentionList(t *testing.T) {
 		}
 	}
 	// The carve-out is gone.
-	for _, gone := range []string{"Free-text feeds", "still goes to query_lfx_lens"} {
+	// The ranking no longer rests on narrowing the window: records without a
+	// follower count are not only old ones.
+	for _, gone := range []string{"Free-text feeds", "still goes to query_lfx_lens", "Older records have no count", "narrow the window to the records that have counts"} {
 		if strings.Contains(text, gone) {
 			t.Errorf("recipe 16 still says %q", gone)
 		}
@@ -357,11 +370,18 @@ func TestSemanticLayerGuidanceMentionList(t *testing.T) {
 		"  group_by=mention_key,mention_key__author,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__social_network,mention_key__sentiment,mention_key__relevance_score,metric_time__day\n",
 		"  order_by=-metric_time__day,mention_key limit=30\n",
 		"  where={{ Dimension('mention_key__project_slug') }} = 'k8s' AND {{ Dimension('mention_key__sentiment') }} = 'negative' AND {{ Dimension('mention_key__social_network') }} = 'Reddit' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-10-01'\n",
-		// the most-followed posts, on a subtree and one network
+		// the most-followed posts, on a subtree, posts without a count left out
+		"Most-followed posts about a foundation's projects on one network (recipe 16):\n",
 		"  metrics=social_listening_mentions,social_listening_total_author_followers\n",
 		"  group_by=mention_key,mention_key__author,mention_key__title,mention_key__url,mention_key__body_excerpt,mention_key__project_slug,metric_time__day\n",
 		"  order_by=-social_listening_total_author_followers,mention_key limit=10\n",
-		"  where={{ Dimension('project__project_path') }} LIKE '%/aswf/%' AND {{ Dimension('mention_key__social_network') }} = 'Twitter' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01'\n",
+		"  where={{ Dimension('project__project_path') }} LIKE '%/aswf/%' AND {{ Dimension('mention_key__social_network') }} = 'Twitter' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01' AND {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL\n",
+		// the most-followed accounts, on the foundation form
+		"Most-followed accounts that posted about a foundation's projects on one network (recipe 16):\n",
+		"  metrics=social_listening_avg_author_followers,social_listening_mentions\n",
+		"  group_by=mention_key__author\n",
+		"  order_by=-social_listening_avg_author_followers,mention_key__author limit=10\n",
+		"  where={{ Dimension('project__foundation_slug') }} = 'aswf' AND {{ Dimension('mention_key__social_network') }} = 'Twitter' AND {{ TimeDimension('metric_time','DAY') }} >= '2026-11-01' AND {{ Metric('social_listening_total_author_followers', group_by=['mention_key']) }} IS NOT NULL\n",
 	} {
 		if !strings.Contains(semanticLayerGuidance, line) {
 			t.Errorf("mention list worked example missing the line %q", line)

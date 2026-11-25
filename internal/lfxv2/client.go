@@ -329,8 +329,12 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		httpClient,
 		goahttp.RequestEncoder,
 		// Its 401/403 bodies require "code" as well as "message"; meeting
-		// records are cleaned before the client validates them.
-		meetingRecordDecoder(refusalAwareDecoder("code")),
+		// records are cleaned before the client validates them. The strict
+		// wrapper is outermost: for a call marked with WithStrictDecoding
+		// (the read before update_meeting's full-replace PUT) it refuses a
+		// field this client version does not know, looking at the record as
+		// the service sent it, and decodes the cleaned record.
+		strictAwareDecoder(meetingRecordDecoder(refusalAwareDecoder("code"))),
 		false,
 	)
 
@@ -347,12 +351,14 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		meetingHTTPClient.GetItxMeetingCount(),
 		meetingHTTPClient.CreateItxRegistrant(),
 		meetingHTTPClient.SelfRegisterItxMeeting(),
+		meetingHTTPClient.SelfUnregisterItxMeeting(),
 		meetingHTTPClient.GetItxRegistrant(),
 		meetingHTTPClient.UpdateItxRegistrant(),
 		meetingHTTPClient.DeleteItxRegistrant(),
 		meetingHTTPClient.GetItxJoinLink(),
 		meetingHTTPClient.GetItxRegistrantIcs(),
 		meetingHTTPClient.ResendItxRegistrantInvitation(),
+		meetingHTTPClient.SelfResendItxRegistrantInvitation(),
 		meetingHTTPClient.ResendItxMeetingInvitations(),
 		meetingHTTPClient.RegisterItxCommitteeMembers(),
 		meetingHTTPClient.UpdateItxOccurrence(),
@@ -364,9 +370,11 @@ func NewClients(_ context.Context, cfg ClientConfig) (*Clients, error) {
 		meetingHTTPClient.UpdateItxPastMeeting(),
 		meetingHTTPClient.GetItxPastMeetingSummary(),
 		meetingHTTPClient.UpdateItxPastMeetingSummary(),
+		meetingHTTPClient.GetItxPastMeetingChat(),
 		meetingHTTPClient.CreateItxPastMeetingParticipant(),
 		meetingHTTPClient.UpdateItxPastMeetingParticipant(),
 		meetingHTTPClient.DeleteItxPastMeetingParticipant(),
+		meetingHTTPClient.GetItxMeetingAttachments(),
 		meetingHTTPClient.CreateItxMeetingAttachment(),
 		meetingHTTPClient.GetItxMeetingAttachment(),
 		meetingHTTPClient.UpdateItxMeetingAttachment(),
